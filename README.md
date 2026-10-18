@@ -1,6 +1,6 @@
-# led-matrix: Distributed LED Matrix Video Wall
+# Led_Matrix: Distributed LED Matrix Video Wall
 
-[![Build firmware](https://github.com/WetzUmbrella/led-matrix/actions/workflows/build.yml/badge.svg)](https://github.com/WetzUmbrella/led-matrix/actions/workflows/build.yml)
+[![Build firmware](https://github.com/WetzUmbrella/Led_Matrix/actions/workflows/build.yml/badge.svg)](https://github.com/WetzUmbrella/Led_Matrix/actions/workflows/build.yml)
 
 *INF2004 Embedded Systems project overview*
 *Last updated: 2026-10-01 (router mode, board numbers, auto-split by panel count)*
@@ -141,7 +141,7 @@ sync messages go over WiFi, never pixels.
 ## Repo layout
 
 ```
-led-matrix/
+Led_Matrix/
 ├── .github/workflows/build.yml   CI: builds all firmware on every push
 ├── boardtest/        ESP32 board test (ESP-IDF)
 ├── ledwall_sync/     Pico W coordinator (Pico SDK)
