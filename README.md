@@ -270,6 +270,16 @@ idf.py -p /dev/ttyACM0 flash monitor
 | `CMakeCache.txt ... different directory` | Build folder copied from elsewhere: delete `build/` (`idf.py fullclean`) |
 | `/dev/ttyACM0: No such file` | Board not attached to WSL (`usbipd attach`) |
 
+## Team (SE15)
+
+| Member | Subsystem |
+|---|---|
+| Ong Jolyn | PC dashboard and media |
+| Wong Kok Sheng Benjamin | Pico W coordination |
+| Cheston Leroy Ong | Tile communication and storage |
+| Ahsanul | Synchronisation and playback control |
+| Chua Jia Jun | Display and orientation |
+
 ## History
 
 An earlier ESP-NOW controller/peer design (one board pushing quadrant data to
