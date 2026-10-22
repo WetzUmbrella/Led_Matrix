@@ -18,9 +18,11 @@ The Depends-on column of T-B4-03 lists four tasks: T-B5-01, T-B4-02, T-B3-03, T-
 |---|---|---|
 | T-B5-01 | Jia Jun | gptimer one-shot tick at 60 fps and the test pin that the ISR drives each tick; records the spare GPIO used as test pin |
 | T-B3-03 | Cheston | tile Network Task and the Time Sync queue that delivers beacons to `timesync` |
-| T-B2-02 | Benjamin | Pico beacon broadcast with the relative schedule and early timestamp |
+| T-B2-02 | Benjamin | Pico beacon broadcast: absolute 100 ms schedule (`next_beacon_us += 100000` from `time_us_64()`), t_p = `time_us_64()` read immediately before `udp_sendto` with no other work in between, beacon {session_id, seq, t_p} encoded with `proto_encode_beacon()`, `cyw43_arch_poll()` each loop pass (poll mode; OD-01, Benjamin, decides between poll and background) |
 
 The plan lists all four as dependencies; the three above plus T-B4-02 must all be merged into the build flashed on both tiles (and T-B2-02 on the Pico).
+
+**Request to Jia Jun (T-B5-01), needed for a verdict with tick identity (section 4b):** under the existing `DE_W10_TEST_PATTERN` flag, drive the test pin as a pulse, not a toggle: rising edge at tick n, high for 1 ms on ordinary ticks and 4 ms on every tick with n mod 64 == 0 **(plan choice, to be agreed with Jia Jun against T-B5-01; reasons in section 4b)**. Only the rising edge is measured, so how the falling edge is timed (a second alarm or `de_task` clearing the pin) is Jia Jun's choice. The flag is deleted in T-B5-02 as the plan already states. Until the marker exists, the tool can only give a conditional verdict (section 6).
 
 ## 3. Wiring
 
@@ -50,11 +52,19 @@ Resolution arithmetic:
 - T-B5-01 tick check on the same rig (Jia Jun's row, IFM-5c interval): "every interval 16.67 ms +/- 1 ms". The +/- 1 ms band is 1,000 samples wide at 1 MHz, and one interval is known to within 2 us, so the same rate serves that check as well. That check is T-B5-01's own 30 min acceptance test, not part of the T-B4-03 verdict.
 - Data size for 10 min on sigrok: 600 s x 1,000,000 samples/s = 600,000,000 samples, stored by libsigrok at 1 byte per sample for up to 8 logic channels, compressed inside the `.sr` file. Saleae stores transitions only.
 
+## 4b. Tick-identity marker (plan choice, to be agreed with Jia Jun)
+
+Edge timing alone measures skew modulo one tick: a true skew s reads as s minus the nearest whole multiple of 1,000,000 / 60 us. A true 13 ms reads as 13 - 16.667 = -3.667 ms, and any absolute skew within 5 ms of k x 16.67 ms reads as a pass, so the "no pair at or above 16.67 ms" condition can never fire without a tick reference. The marker supplies that reference.
+
+- Marker every 64 ticks (n mod 64 == 0) **(plan choice)**: the same period as the `DE_W10_TEST_PATTERN` moving pixel (LED n mod 64, T-B5-01), so marker and video agree. The tool matches markers between tiles within half a marker cycle, 32 ticks = 32 x 16.667 ms = 533 ms, which is far above any skew the rig is meant to measure.
+- Ordinary tick pulse 1 ms, marker pulse 4 ms, threshold `--marker-min-us 2500` (halfway) **(plan choice)**: both widths are far longer than the 1 us sample period (1,000 and 4,000 samples), and both end well before the next tick 16.67 ms later, so every rising edge stays clean.
+- With markers the tool numbers each rising edge as cycle x 64 + ticks since the preceding marker on its own channel, pairs edges by equal tick number, and reports the true skew of any size: a whole-tick slip reads as at least 16.67 ms and fails both conditions.
+
 ## 5. Capture procedure (10 min)
 
 Before starting, on both tiles: flash the build that contains T-B3-03, T-B4-02 and T-B5-01 with `DE_W10_TEST_PATTERN` on (T-B5-01 row), and the Pico build with T-B2-02. Origin = 0 in Pico time (rig build only, T-B4-03 row). Let both tiles reach a stable sync state (OD-10 is not yet settled; record in the log how long you waited) before starting the capture.
 
-Also record a slow-motion phone video of both tiles side by side for at least 10 s (plan choice: long enough to see the pixel pass several positions) during the capture: the moving pixel (LED n mod 64, T-B5-01 row) shows whether both tiles are on the same tick n (section 7).
+Also record a slow-motion phone video of both tiles side by side for at least 10 s (plan choice: long enough to see the pixel pass several positions) during the capture. The video is supporting evidence only; the primary tick-identity check is marker mode (sections 4b and 6). Video criterion **(plan choice)**: the pixel positions match in at least half of the video frames and are never two or more positions apart (counting 63 to 0 as one position). Reason: at a skew of at most 5 ms, which is less than one tick, the two tiles are at most one tick apart at any instant, so positions differ by at most one and only for at most 5 / 16.67 = 30 % of each tick; a one-tick slip makes them differ in nearly 100 % of frames, and a slip of two or more ticks shows positions two or more apart.
 
 ### 5a. Saleae Logic 2
 
@@ -96,30 +106,36 @@ If a USB FX2 board cannot sustain 1 MHz for 600 s (sigrok reports a sample loss 
 
 ## 6. Analysis command
 
-From the repo root, for a Saleae export:
+From the repo root, for a Saleae export, with the marker of section 4b in the firmware (verdict with tick identity):
 
 ```
-python3 pc/tools/skew_analyse.py docs/week10/skew_2tile/skew_2tile.csv --ch-a "Channel 0" --ch-b "Channel 1" --out docs/week10/skew_2tile/skew_pairs.csv --plot docs/week10/skew_2tile/skew_plot.png | tee docs/week10/skew_2tile/skew_report.txt
+python3 pc/tools/skew_analyse.py docs/week10/skew_2tile/skew_2tile.csv --ch-a "Channel 0" --ch-b "Channel 1" --marker --out docs/week10/skew_2tile/skew_pairs.csv --plot docs/week10/skew_2tile/skew_plot.png | tee docs/week10/skew_2tile/skew_report.txt
 ```
 
 For a sigrok or PulseView export:
 
 ```
-python3 pc/tools/skew_analyse.py docs/week10/skew_2tile/skew_2tile.csv --ch-a D0 --ch-b D1 --out docs/week10/skew_2tile/skew_pairs.csv --plot docs/week10/skew_2tile/skew_plot.png | tee docs/week10/skew_2tile/skew_report.txt
+python3 pc/tools/skew_analyse.py docs/week10/skew_2tile/skew_2tile.csv --ch-a D0 --ch-b D1 --marker --out docs/week10/skew_2tile/skew_pairs.csv --plot docs/week10/skew_2tile/skew_plot.png | tee docs/week10/skew_2tile/skew_report.txt
 ```
 
+If the firmware has no marker yet, run the same command without `--marker` (edge-timing mode). The verdict is then at best `CONDITIONAL PASS` and every verdict line carries "TICK IDENTITY NOT CHECKED", because the skew is measured modulo one tick (section 4b). A conditional pass does not meet T-B4-03 on its own.
+
 - The format is detected from the file (`--format saleae` or `--format sigrok` forces it). For a sigrok CSV without the `; Samplerate:` comment, add `--samplerate 1000000`.
+- Marker options: `--marker-period 64` and `--marker-min-us 2500` are the defaults (plan choice, section 4b); change them only to match what Jia Jun implements.
 - `--plot` needs matplotlib; everything else is Python standard library.
-- Exit status: 0 PASS, 1 FAIL, 2 bad input. Check it with `echo $?` straight after the command (with `tee`, use `echo ${PIPESTATUS[0]}`).
-- Output: one `UNPAIRED channel=<name> tick=<k> t=<s>` line per edge with no partner, a counts line, `median_abs_skew_ms`, `p99_abs_skew_ms` (nearest rank: the value at rank ceil(0.99 x N) of the sorted absolute skews, no interpolation), `max_abs_skew_ms`, the count of pairs at or above 16.67 ms, and the verdict.
+- Exit status: 0 PASS (marker mode only), 1 FAIL, 2 bad input, 3 CONDITIONAL PASS (edge-timing mode). Check it with `echo ${PIPESTATUS[0]}` straight after the command (the pipe to `tee` hides `$?`).
+- Output: one `UNPAIRED channel=<name> tick=<k> t=<s>` line per edge with no partner, a counts line with the mode, `median_abs_skew_ms`, `p99_abs_skew_ms` (nearest rank: the value at rank ceil(0.99 x N) of the sorted absolute skews, no interpolation), `max_abs_skew_ms`, the count of pairs at or above 16.67 ms, `TICK IDENTITY CHECKED` with the marker counts (marker mode), and the verdict.
 - Verdict rule (T-B4-03): PASS only if max absolute skew is at most 5 ms and no pair is at or above 16.67 ms. A maximum above 5 ms starts T-B4-07.
 
-Pairing method: each edge on tile A is paired with the nearest edge on tile B when both are each other's nearest neighbour and they lie less than half a tick period (1,000,000 / 60 / 2 us) apart. A missing edge is logged with its channel and tick and does not shift the pairing of later edges. A capture that starts with a pin already high gives no rising edge at the start (the first sample sets the level only).
+Pairing methods:
+- Marker mode: edges are paired by equal tick number (section 4b). A missing edge is logged with its channel and tick and does not shift other pairs.
+- Edge-timing mode: each edge on tile A is paired with the nearest edge on tile B when both are each other's nearest neighbour and they lie less than half a tick period (1,000,000 / 60 / 2 us) apart. A missing edge is logged with its channel and tick and does not shift the pairing of later edges.
+- Both modes: a capture that starts with a pin already high gives no rising edge at the start (the first sample sets the level only).
 
 ## 7. Points for Ahsanul and Jia Jun to settle before the first capture
 
-1. **Pulse or toggle.** T-B4-03 says the test pin "pulses at tick n" and the tool "pairs rising edges"; T-B5-01 says "The ISR toggles the test pin". With a toggle, a rising edge comes every second tick, so the default `--edges rising` measures every second tick. Run a second pass with `--edges both`, which treats every edge as a tick; in that mode a pair joining a rising and a falling edge is reported as a NOTE (the two pins started at different levels), not as a failure. Use `--edges both` only on a toggling pin. The plan rows differ in wording; this file does not choose between them.
-2. **Whole-tick slips.** Pairing within half a tick means no pair can show an absolute skew of half a tick or more: a tile one whole tick behind looks aligned on the analyser. The 16.67 ms rule is applied to every pair as the plan states, and the slow-motion video of the moving pixel (LED n mod 64, T-B5-01) is the check that both tiles are on the same tick n. Keep the video as part of the evidence.
+1. **Pulse or toggle.** T-B4-03 says the test pin "pulses at tick n" and the tool "pairs rising edges"; T-B5-01 says "The ISR toggles the test pin". The marker request in section 2 asks for a pulse under `DE_W10_TEST_PATTERN`, which matches T-B4-03. If the pin stays a toggle, marker mode cannot run: the default `--edges rising` then measures every second tick, and a second pass with `--edges both` treats every edge as a tick (a pair joining a rising and a falling edge is reported as a NOTE, not as a failure). Use `--edges both` only on a toggling pin. Both of these are edge-timing mode, so the verdict stays conditional. The plan rows differ in wording; this file does not choose between them.
+2. **Skew modulo one tick.** Without markers the tool measures skew modulo one tick: a true 13 ms reads as 3.667 ms, a tile one whole tick behind reads as aligned, and the 16.67 ms condition cannot fire. Marker mode (section 4b) is the tick-identity check that makes the verdict complete; the video is supporting evidence with the section 5 criterion.
 3. **Unpaired edges.** The verdict follows the plan row (skew only). Any `UNPAIRED` line is a missed or extra tick on one tile and belongs in the log; T-B5-01's missed-tick counter should explain it.
 
 ## 8. Evidence files (in this folder)
@@ -131,7 +147,7 @@ Pairing method: each edge on tile A is paired with the nearest edge on tile B wh
 | `skew_pairs.csv` | pairs: tick, t_a_s, t_b_s, skew_ms ("skew CSV") |
 | `skew_plot.png` | skew against tick ("plot") |
 | `skew_report.txt` | analyser output with median, p99, max and verdict |
-| `skew_video.mp4` | slow-motion video of both tiles (section 7 point 2) |
+| `skew_video.mp4` | slow-motion video of both tiles, supporting evidence (section 5 criterion) |
 
 ## 9. Format sources
 
