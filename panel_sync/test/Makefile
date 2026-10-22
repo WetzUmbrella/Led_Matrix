@@ -1,7 +1,7 @@
 # Host build of the timesync core tests (T-B4-02). No ESP-IDF needed.
 #   make        build and run test_timesync
 #   make asan   same with -fsanitize=address,undefined
-CC      ?= gcc
+CC      = gcc
 CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -DTIMESYNC_HOST_TEST -I../main
 SRC     = test_timesync.c ../main/timesync_core.c
 
