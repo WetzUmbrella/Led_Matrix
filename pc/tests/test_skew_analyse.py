@@ -341,3 +341,26 @@ def test_marker_mode_without_markers_is_bad_input(tmp_path, capsys):
     rc = sa.main([str(cap), "--ch-a", "Channel 0", "--ch-b", "Channel 1",
                   "--out", str(tmp_path / "p.csv"), "--marker"])
     assert rc == sa.EXIT_BAD_INPUT
+
+
+@pytest.mark.parametrize("kind", ["saleae", "sigrok_time"])
+def test_pure_one_tick_slip_marker_mode_fails_on_5ms_only(tmp_path, kind, capsys):
+    """Tile B exactly one tick behind, no further skew: 16,666.67 us is under
+    the plan's 16.67 ms (16,670 us), so the hard-limit count is 0 and the
+    FAIL comes from the 5 ms condition. Edges are not put on a 10 us grid
+    here, so the slip stays below 16,670 us."""
+    a, b = [], []
+    for n in range(MARKER_TICKS):
+        w = MARKER_US if n % 64 == 0 else PULSE_US
+        ta = START_US + n * TICK_US
+        a.append((ta, ta + w))
+        tb = START_US + (n + 1) * TICK_US
+        b.append((tb, tb + w))
+    rc, rows = run(tmp_path, kind, a, b, extra=("--marker",))
+    text = capsys.readouterr().out
+    assert rc == sa.EXIT_FAIL
+    assert max_ms(text) == pytest.approx(16.667, abs=0.002)
+    assert max_ms(text) * 1000 < sa.SKEW_HARD_LIMIT_US
+    assert "pairs_at_or_above_16.67ms=0" in text
+    assert verdict_lines(text)[0].startswith("VERDICT: FAIL")
+    assert len(rows) == MARKER_TICKS

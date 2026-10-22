@@ -58,7 +58,7 @@ Edge timing alone measures skew modulo one tick: a true skew s reads as s minus 
 
 - Marker every 64 ticks (n mod 64 == 0) **(plan choice)**: the same period as the `DE_W10_TEST_PATTERN` moving pixel (LED n mod 64, T-B5-01), so marker and video agree. The tool matches markers between tiles within half a marker cycle, 32 ticks = 32 x 16.667 ms = 533 ms, which is far above any skew the rig is meant to measure.
 - Ordinary tick pulse 1 ms, marker pulse 4 ms, threshold `--marker-min-us 2500` (halfway) **(plan choice)**: both widths are far longer than the 1 us sample period (1,000 and 4,000 samples), and both end well before the next tick 16.67 ms later, so every rising edge stays clean.
-- With markers the tool numbers each rising edge as cycle x 64 + ticks since the preceding marker on its own channel, pairs edges by equal tick number, and reports the true skew of any size: a whole-tick slip reads as at least 16.67 ms and fails both conditions.
+- With markers the tool numbers each rising edge as cycle x 64 + ticks since the preceding marker on its own channel, pairs edges by equal tick number, and reports the true skew of any size: a whole-tick slip reads as a skew of at least one tick. A pure one-tick slip is 1,000,000 / 60 = 16,666.67 us, just under the plan's 16.67 ms (16,670 us), so it fails on the 5 ms condition only; a one-tick slip plus 3.33 us or more of further skew, or a slip of two or more ticks, also meets the 16.67 ms condition.
 
 ## 5. Capture procedure (10 min)
 
