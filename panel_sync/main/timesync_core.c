@@ -279,7 +279,8 @@ int64_t now_corrected(ts_reader_t *r)
 
 // Local alarm time for tick n, read only through ts_read_snapshot() (RAR-3).
 // With nothing published yet it returns the Pico-time deadline unchanged,
-// which is what the T-B5-01 stub returns.
+// matching the T-B5-01 stub behaviour (local time); the signature is a
+// proposal to be agreed with Jia Jun (T-B5-01).
 int64_t deadline_local(ts_reader_t *r, int64_t origin_us, uint64_t n)
 {
     int64_t t_p = ts_deadline_pico(origin_us, n);

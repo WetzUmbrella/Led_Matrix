@@ -7,7 +7,9 @@
 // so tile_net and the host tests can include it.
 //
 // Reader functions (from timesync_core.h), each reading only through
-// ts_read_snapshot() (RAR-3). Each reading task owns one ts_reader_t:
+// ts_read_snapshot() (RAR-3). Each reading task owns one ts_reader_t.
+// Proposed interface, to be agreed with Jia Jun (T-B5-01); see
+// timesync_DEFENCE.md, "Open interface items":
 //   int64_t  now_corrected(ts_reader_t *r);
 //   int64_t  deadline_local(ts_reader_t *r, int64_t origin_us, uint64_t n);
 //   uint32_t frame_index(int64_t t_us, int64_t origin_us, uint32_t frame_count);
@@ -35,6 +37,7 @@ typedef struct {
 // the published clock.
 void timesync_task(void *q_timesync);
 
-// Called by the Display Engine task (de_task, not the ISR) once per tick, so
-// the Time Sync Task runs one slew step per tick. Safe before the task starts.
+// Proposed (to be agreed with Jia Jun, T-B5-01): called by the Display
+// Engine task (de_task, not the ISR) once per tick, so the Time Sync Task
+// runs one slew step per tick. Safe before the task starts.
 void timesync_notify_tick(void);

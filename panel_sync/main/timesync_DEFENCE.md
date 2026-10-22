@@ -37,7 +37,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 6. One slew step per Display Engine tick
 
 - Source: IFM-4b, "slew at most 100 us per tick"; T-B5-01 (display_engine re-arms a one-shot every tick); PostTri SRM row "Corrected Pico time and drift estimate", "never read in the ISR".
-- Choice: `de_task` calls `timesync_notify_tick()` once per tick (task context, not the ISR); the Time Sync Task wakes, drains the queue and runs one `ts_tick()`. Several pending notifications still give one step. Without notifications it wakes every 100 ms (plan choice: one beacon period at 10 Hz) and still steps at most once. This adds one call to T-B5-01's `de_task` that the T-B5-01 row does not list; Jia Jun confirms it.
+- Choice: `de_task` calls `timesync_notify_tick()` once per tick (task context, not the ISR); the Time Sync Task wakes, drains the queue and runs one `ts_tick()`. Several pending notifications still give one step. Without notifications it wakes every 100 ms (plan choice: one beacon period at 10 Hz) and still steps at most once. This is Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01): the T-B5-01 row does not list this call (open interface item 2).
 - Examiner: "If the Time Sync Task is delayed past a tick by WiFi (priority 23) on core 0, does the 100 us bound still hold, and what does the delay cost?"
 
 ## 7. Reference moves to the tick time on every publication
@@ -61,7 +61,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 10. Last good snapshot is per reader
 
 - Source: RAR-3, "Clock offset: sequence counter; Jia Jun must use the same reader function if the Display Engine reads it on core 1."; T-B4-02, "`now_corrected()` and `deadline_local(n)` read only through `ts_read_snapshot()`, and `display_engine` uses the same function (RAR-3)."
-- Choice: each reading task owns a `ts_reader_t` that holds its own last good snapshot and SYNC_STALE count, so Playback Control (core 0) and the Display Engine (core 1) never share mutable reader state. `now_corrected(r)` and `deadline_local(r, origin, n)` therefore take the reader as a parameter. This makes the signature differ from the bare `deadline_local(n)` in the row; T-B5-01's stub copies this signature.
+- Choice: each reading task owns a `ts_reader_t` that holds its own last good snapshot and SYNC_STALE count, so Playback Control (core 0) and the Display Engine (core 1) never share mutable reader state. `now_corrected(r)` and `deadline_local(r, origin, n)` therefore take the reader as a parameter. These signatures differ from the bare `deadline_local(n)` in the row. They are Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01) before his stub fixes a signature (open interface item 1).
 - Examiner: "Two readers on different cores call `ts_read_snapshot()` at once. Which data do they share, and can either corrupt the other's result?"
 
 ## 11. Forced-interleaving hook compiled out of firmware
@@ -79,7 +79,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 13. Tick deadline computed from n every time, rounded up
 
 - Source: VA-4.5, "Tick n at origin + n x 1,000,000 / 60 us, computed in integers every frame, re-armed as a one-shot each frame; never a free-running 60 Hz timer (rounding to 16,667 us drifts 20 us/s, about 12 ms in 10 min)."; T-B5-01, "computed in 64-bit integers each frame (never by adding 16,667 us)".
-- Choice: `ts_deadline_pico(origin, n)` = origin + ceil(n x 1,000,000 / 60), from n each call, with n split as 60q + r so every 60 ticks are exactly 1,000,000 us. Rounding up is a (plan choice) so that `frame_index(ts_deadline_pico(o, n), o, fc) == n mod fc` for every n: a truncated deadline (origin + 16,666 us for n = 1) falls 0.67 us before frame 1 starts and `frame_index` returns 0. The T-B4-04 host test ("frame_index at t = origin + k x 1,000,000 / 60 equals k mod 600") passes only with the rounded-up value; this is flagged to the orchestrator.
+- Choice: `ts_deadline_pico(origin, n)` = origin + ceil(n x 1,000,000 / 60), from n each call, with n split as 60q + r so every 60 ticks are exactly 1,000,000 us. Rounding up is a (plan choice) so that `frame_index(ts_deadline_pico(o, n), o, fc) == n mod fc` for every n: a truncated deadline (origin + 16,666 us for n = 1) falls 0.67 us before frame 1 starts and `frame_index` returns 0. The T-B4-04 host test ("frame_index at t = origin + k x 1,000,000 / 60 equals k mod 600") passes only with the rounded-up value (open interface item 3).
 - Examiner: "Why is a 16,667 us period wrong but a 16,666 or 16,667 us interval between consecutive deadlines right?"
 
 ## 14. Integer ranges (documented in `timesync_core.c`)
@@ -104,6 +104,14 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - Source: VC-1 current state, "`panel_sync.c:76` `portMUX_TYPE lock`; writer `panel_sync.c:201-210`; reader `panel_sync.c:222-231`"; T-B4-02, "removes `lock`, `get_render_state` (`panel_sync.c:76,201-210,218-232`)".
 - Choice: not removed in this commit. `get_render_state` is passed to `render_start()` at `panel_sync.c:241` and called through `get_state` at `render.c:120`; `lock` guards the beacon writer at `panel_sync.c:201-210`. Removing them breaks the build until T-B5-01 replaces the render path and T-B3-03 replaces `sync_rx_task`; they are deleted with those callers.
 - Examiner: "Until they are removed, which clock does the 30 fps prototype use, and does any of it touch the new seqlock?"
+
+## Open interface items
+
+These are Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01) and, for item 3, with the T-B4-04 test wording. None is settled.
+
+1. Signatures: `now_corrected(ts_reader_t *r)`, `deadline_local(ts_reader_t *r, int64_t origin_us, uint64_t n)` and `frame_index(int64_t t_us, int64_t origin_us, uint32_t frame_count)` differ from the row's bare `now_corrected()`, `deadline_local(n)` and `frame_index(t)`. The T-B5-01 stub signature follows whatever is agreed.
+2. `timesync_notify_tick()` called once per tick from `de_task` (task context, not the ISR), so the slew runs one step per tick. The T-B5-01 row does not list this call.
+3. Tick deadline rounded up, origin + ceil(n x 1,000,000 / 60) (plan choice), so that `frame_index(ts_deadline_pico(o, n), o, fc) == n mod fc`. With truncation, k = 1 gives origin + 16,666 us and `frame_index` returns 0, so the T-B4-04 host test wording "t = origin + k x 1,000,000 / 60" holds only if t is taken from `ts_deadline_pico()` or rounded up.
 
 ## Questions for Ahsanul before Tribunal 2
 
