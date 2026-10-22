@@ -1,0 +1,12 @@
+diff --git a/ledwall_sync/main.c b/ledwall_sync/main.c
+index 8ed428a..8e7310e 100644
+--- a/ledwall_sync/main.c
++++ b/ledwall_sync/main.c
+@@ -120,6 +120,7 @@ static void hello_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
+                        const ip_addr_t *addr, u16_t port)
+ {
+     hello_t h;
++    printf("HELLO tot_len=%u from %s\n", p->tot_len, ipaddr_ntoa(addr));   /* T-B4-01 log, local only */
+     if (p->tot_len == sizeof(h) &&
+         pbuf_copy_partial(p, &h, sizeof(h), 0) == sizeof(h) &&
+         h.magic == HELLO_MAGIC && h.id != 0) {

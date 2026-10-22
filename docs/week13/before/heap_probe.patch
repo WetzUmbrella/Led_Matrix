@@ -1,0 +1,24 @@
+diff --git a/panel_sync/main/panel_sync.c b/panel_sync/main/panel_sync.c
+index c236cd7..77a78d9 100644
+--- a/panel_sync/main/panel_sync.c
++++ b/panel_sync/main/panel_sync.c
+@@ -18,6 +18,7 @@
+ #include "esp_log.h"
+ #include "esp_timer.h"
+ #include "esp_mac.h"
++#include "esp_heap_caps.h"   /* T-B3-01 probe, local only */
+ #include "nvs_flash.h"
+ #include "nvs.h"
+ #include "lwip/sockets.h"
+@@ -93,6 +94,11 @@ static void wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
+     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+         ip_event_got_ip_t *e = (ip_event_got_ip_t *)data;
+         ESP_LOGI(TAG, "joined %s, IP " IPSTR, WIFI_SSID, IP2STR(&e->ip_info.ip));
++        /* T-B3-01 probe, local only: never commit */
++        ESP_LOGI(TAG, "HEAP largest_internal=%u free_internal=%u largest_spiram=%u",
++                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
++                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
++                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+     }
+ }
+ 

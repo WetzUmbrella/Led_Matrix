@@ -1,0 +1,23 @@
+# HOST RESULT (x86_64, gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0), not the Xtensa target.
+# Source: docs/week13/before/sizeof.c, structs copied verbatim from panel_sync/main/panel_sync.c:52-69 at 45e038c.
+# Command: gcc -std=c11 -Wall -Wextra -o sizeof docs/week13/before/sizeof.c && ./sizeof
+#
+# When the host value equals the Xtensa value: only if the field types and the packing are the same on both.
+# They are the same here by construction:
+#   - both structs carry __attribute__((packed)) (panel_sync.c:52 and :65), so GCC inserts no padding
+#     between fields or at the end on any target; sizeof is the plain sum of the field sizes;
+#   - every field is an exact-width <stdint.h> type (uint32_t is exactly 4 B, uint8_t exactly 1 B on every
+#     target that defines them); there is no int, long, enum, pointer, bool or bit-field whose size could differ;
+#   - MAX_NODES is the same macro value (8) on both builds.
+# The ESP-IDF compiler (xtensa-esp32s3-elf-gcc) is GCC and honours the packed attribute, so the Xtensa value
+# should equal the host value. The target-compiler confirmation is BENCH.md step S-2 (sizeof_xtensa.txt);
+# until it runs, the "on target" cells in before_after.md stay blank.
+#
+# Field sums (derived, from the struct definitions):
+#   beacon_t (panel_sync.c:52-63): magic 4 + version 1 + seq 4 + cmd 1 + frame_no 4 + layout_ver 1
+#            + count 1 + cols 1 + rows 1 + ids[MAX_NODES] 8 x 4 = 32  ->  18 + 32 = 50 B (derived)
+#   hello_t  (panel_sync.c:65-69): magic 4 + id 4 + board 1  ->  9 B (derived)
+#
+# Program output:
+sizeof(beacon_t) = 50
+sizeof(hello_t) = 9
