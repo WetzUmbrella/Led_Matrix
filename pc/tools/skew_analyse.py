@@ -17,11 +17,24 @@ than half a tick period apart. An edge with no partner is reported as
 UNPAIRED with its channel and estimated tick, and it never shifts the pairing
 of later edges, because every pair is decided by time, not by list position.
 
-Limit of edge timing: with a half-tick pairing window no pair can show an
-absolute skew of half a tick or more, so a whole-tick slip between the tiles
-looks aligned. The 16.67 ms condition is still applied to every pair as the
-plan states; the tick identity check is the slow-motion video of the T-B5-01
-moving pixel (see docs/week10/skew_2tile/RIG.md).
+Limit of edge timing (default mode): pairing within half a tick measures
+skew modulo one tick. A true skew of s reads as s minus the nearest whole
+multiple of 1,000,000 / 60 us, so any absolute skew within 5 ms of k x 16.67 ms
+(for example a true 13 ms reads as 3.667 ms) reads as a pass, and the
+"no pair at or above 16.67 ms" test can never fire. Without a tick-identity
+reference every verdict therefore carries "TICK IDENTITY NOT CHECKED" and a
+PASS is only conditional (exit code 3).
+
+Marker mode (--marker): tick identity from the test pin itself. Under
+DE_W10_TEST_PATTERN the pin gives a short pulse at every tick and a wider
+marker pulse at every tick n with n mod N == 0 (N and the widths are plan
+choices to be agreed with Jia Jun against T-B5-01; see RIG.md). The tool
+finds the markers on each channel (high time at or above --marker-min-us),
+numbers every rising edge as cycle x N + ticks since the preceding marker,
+matches the first marker of tile B to the nearest marker of tile A (so the
+two tiles must be within N/2 ticks of each other), and pairs edges by equal
+tick number. The skew is then the true skew of any size, so a whole-tick
+slip and any skew at or above 16.67 ms fail.
 
 Edge modes: 'rising' (default, the T-B4-03 wording) uses rising edges only.
 'both' treats every edge as a tick and is meant only for a pin that toggles
@@ -36,7 +49,8 @@ Statistics on absolute skew:
        list (1-based), no interpolation;
   max: largest absolute skew.
 
-Exit codes: 0 PASS, 1 FAIL, 2 bad input.
+Exit codes: 0 PASS (marker mode, tick identity checked), 1 FAIL, 2 bad input,
+3 conditional PASS (skew modulo one tick passes; tick identity not checked).
 
 Standard library only.
 """
@@ -58,6 +72,17 @@ PAIR_WINDOW_US = TICK_PERIOD_US / 2      # half a tick period
 EXIT_PASS = 0
 EXIT_FAIL = 1
 EXIT_BAD_INPUT = 2
+EXIT_PASS_CONDITIONAL = 3
+
+# Marker mode defaults (plan choice, to be agreed with Jia Jun against
+# T-B5-01): marker every N = 64 ticks, matching the n mod 64 moving pixel of
+# DE_W10_TEST_PATTERN; a pulse whose high time is at least 2.5 ms is a marker
+# (halfway between the proposed 1 ms tick pulse and 4 ms marker pulse).
+MARKER_PERIOD_TICKS = 64
+MARKER_MIN_US = 2_500.0
+NO_TICK_ID = ("TICK IDENTITY NOT CHECKED: skew measured modulo one tick "
+              "(1,000,000 / 60 us); a skew within 5 ms of a whole number of "
+              "ticks reads as a pass; run with --marker for tick identity")
 
 # sigrok CSV time column labels (libsigrok src/output/csv.c, xlabels[]):
 # index i means the time column is in units of 1 / 1000**i seconds.
@@ -274,6 +299,98 @@ def p99_nearest_rank(sorted_values):
     return sorted_values[max(rank, 1) - 1]
 
 
+def summarise(rows, result):
+    abs_skews = sorted(abs(r["skew_us"]) for r in rows)
+    result["pairs"] = rows
+    if abs_skews:
+        result["median_us"] = statistics.median(abs_skews)
+        result["p99_us"] = p99_nearest_rank(abs_skews)
+        result["max_us"] = abs_skews[-1]
+        result["over_hard_limit"] = sum(1 for s in abs_skews if s >= SKEW_HARD_LIMIT_US)
+        result["passed"] = (result["max_us"] <= SKEW_TARGET_US
+                            and result["over_hard_limit"] == 0)
+    else:
+        result["passed"] = False
+    return result
+
+
+def extract_pulses(times, values):
+    """Return [(rise_us, high_us or None)] for every rising edge; high_us is
+    None when the pulse has not ended before the capture ends or goes unknown."""
+    out = []
+    prev = None
+    for t, v in zip(times, values):
+        if v is None:
+            prev = None  # an open pulse keeps width None
+            continue
+        if prev is not None and v != prev:
+            if v == 1:
+                out.append([t, None])
+            elif out and out[-1][1] is None:
+                out[-1][1] = t - out[-1][0]
+        prev = v
+    return [tuple(p) for p in out]
+
+
+def number_ticks(pulses, period_ticks, marker_min_us, name):
+    """Give every rising edge a tick number from the markers on its channel.
+    Returns (labels, marker_times, marker_cycles)."""
+    markers = [t for t, w in pulses if w is not None and w >= marker_min_us]
+    if not markers:
+        raise BadInput(f"marker mode: no marker pulse (high >= {marker_min_us:.0f} us) "
+                       f"on channel {name}")
+    cycle_us = period_ticks * TICK_PERIOD_US
+    cycles = [0]
+    for prev, cur in zip(markers, markers[1:]):
+        steps = round((cur - prev) / cycle_us)
+        if steps < 1 or abs((cur - prev) - steps * cycle_us) > TICK_PERIOD_US / 2:
+            raise BadInput(f"marker mode: markers on channel {name} at "
+                           f"{prev / 1e6:.6f} s and {cur / 1e6:.6f} s are not a whole "
+                           f"number of {period_ticks}-tick cycles apart")
+        cycles.append(cycles[-1] + steps)
+    labels = []
+    for t, _ in pulses:
+        k = bisect.bisect_right(markers, t) - 1
+        k = max(k, 0)
+        labels.append(cycles[k] * period_ticks
+                      + int(round((t - markers[k]) / TICK_PERIOD_US)))
+    return labels, markers, cycles
+
+
+def analyse_marker(times, va, vb, period_ticks=MARKER_PERIOD_TICKS,
+                   marker_min_us=MARKER_MIN_US):
+    pa = extract_pulses(times, va)
+    pb = extract_pulses(times, vb)
+    la, ma, ca = number_ticks(pa, period_ticks, marker_min_us, "A")
+    lb, mb, cb = number_ticks(pb, period_ticks, marker_min_us, "B")
+    j = _nearest(ma, mb[0])
+    if abs(ma[j] - mb[0]) >= period_ticks * TICK_PERIOD_US / 2:
+        raise BadInput("marker mode: first marker on B is not within half a marker "
+                       "cycle of any marker on A")
+    shift = (ca[j] - cb[0]) * period_ticks
+    lb = [l + shift for l in lb]
+    by_a, by_b = {}, {}
+    dup = []
+    for (t, _), l in zip(pa, la):
+        if l in by_a:
+            dup.append(("A", t, l))
+        else:
+            by_a[l] = t
+    for (t, _), l in zip(pb, lb):
+        if l in by_b:
+            dup.append(("B", t, l))
+        else:
+            by_b[l] = t
+    rows = [{"tick": l, "t_a_us": by_a[l], "t_b_us": by_b[l],
+             "skew_us": by_b[l] - by_a[l], "pol_a": 1, "pol_b": 1}
+            for l in sorted(set(by_a) & set(by_b))]
+    unpaired = ([("A", by_a[l], l) for l in sorted(set(by_a) - set(by_b))]
+                + [("B", by_b[l], l) for l in sorted(set(by_b) - set(by_a))] + dup)
+    result = {"edges_a": len(pa), "edges_b": len(pb), "unpaired": unpaired,
+              "polarity_mismatch": 0, "markers_a": len(ma), "markers_b": len(mb)}
+    return summarise(rows, result)
+
+
 def analyse(times, va, vb, edges="rising", window_us=PAIR_WINDOW_US):
     ea = extract_edges(times, va, edges)
     eb = extract_edges(times, vb, edges)
@@ -288,22 +405,12 @@ def analyse(times, va, vb, edges="rising", window_us=PAIR_WINDOW_US):
     for t_a, t_b, pa, pb in pairs:
         rows.append({"tick": tick((t_a + t_b) / 2), "t_a_us": t_a, "t_b_us": t_b,
                      "skew_us": t_b - t_a, "pol_a": pa, "pol_b": pb})
-    abs_skews = sorted(abs(r["skew_us"]) for r in rows)
     result = {
-        "edges_a": len(ea), "edges_b": len(eb), "pairs": rows,
+        "edges_a": len(ea), "edges_b": len(eb),
         "unpaired": [("A", t, tick(t)) for t, _ in ua] + [("B", t, tick(t)) for t, _ in ub],
         "polarity_mismatch": sum(1 for r in rows if r["pol_a"] != r["pol_b"]),
     }
-    if abs_skews:
-        result["median_us"] = statistics.median(abs_skews)
-        result["p99_us"] = p99_nearest_rank(abs_skews)
-        result["max_us"] = abs_skews[-1]
-        result["over_hard_limit"] = sum(1 for s in abs_skews if s >= SKEW_HARD_LIMIT_US)
-        result["passed"] = (result["max_us"] <= SKEW_TARGET_US
-                            and result["over_hard_limit"] == 0)
-    else:
-        result["passed"] = False
-    return result
+    return summarise(rows, result)
 
 
 def write_pairs_csv(path, rows):
@@ -344,6 +451,12 @@ def main(argv=None):
                     help="rising (T-B4-03 wording) or both (each edge of a toggling pin is a tick)")
     ap.add_argument("--out", default="skew_pairs.csv", help="pairs CSV to write")
     ap.add_argument("--plot", help="optional PNG of skew against tick (needs matplotlib)")
+    ap.add_argument("--marker", action="store_true",
+                    help="tick identity from marker pulses (pulse pins only, rising edges)")
+    ap.add_argument("--marker-period", type=int, default=MARKER_PERIOD_TICKS,
+                    help="ticks between markers (default 64, plan choice)")
+    ap.add_argument("--marker-min-us", type=float, default=MARKER_MIN_US,
+                    help="minimum high time of a marker pulse in us (default 2500, plan choice)")
     args = ap.parse_args(argv)
 
     try:
@@ -357,7 +470,12 @@ def main(argv=None):
             times, va, vb = read_sigrok(lines, args.ch_a, args.ch_b, rate)
         if not times:
             raise BadInput("capture holds no data rows")
-        res = analyse(times, va, vb, args.edges)
+        if args.marker:
+            if args.edges != "rising":
+                raise BadInput("--marker needs --edges rising (pulse pins)")
+            res = analyse_marker(times, va, vb, args.marker_period, args.marker_min_us)
+        else:
+            res = analyse(times, va, vb, args.edges)
         if not res["pairs"]:
             raise BadInput(f"no edge pairs found (edges A={res['edges_a']}, "
                            f"B={res['edges_b']}); check channel names and --edges")
@@ -371,7 +489,8 @@ def main(argv=None):
     for ch, t, k in sorted(res["unpaired"], key=lambda u: u[1]):
         name = args.ch_a if ch == "A" else args.ch_b
         print(f"UNPAIRED channel={name} tick={k} t={t / 1e6:.9f} s")
-    print(f"format={fmt} edges={args.edges} edges_a={res['edges_a']} "
+    mode = "marker" if args.marker else "edge-timing"
+    print(f"format={fmt} mode={mode} edges={args.edges} edges_a={res['edges_a']} "
           f"edges_b={res['edges_b']} pairs={len(res['pairs'])} "
           f"unpaired={len(res['unpaired'])}")
     if args.edges == "both" and res["polarity_mismatch"]:
@@ -381,10 +500,20 @@ def main(argv=None):
           f"max_abs_skew_ms={res['max_us'] / 1e3:.3f}")
     print(f"pairs_at_or_above_16.67ms={res['over_hard_limit']}")
     print(f"pairs_csv={args.out}")
+    if args.marker:
+        print(f"TICK IDENTITY CHECKED: markers_a={res['markers_a']} "
+              f"markers_b={res['markers_b']} every {args.marker_period} ticks")
+        if res["passed"]:
+            print("VERDICT: PASS (max absolute skew <= 5 ms and no pair >= 16.67 ms)")
+            return EXIT_PASS
+        print("VERDICT: FAIL (needs max absolute skew <= 5 ms and no pair >= 16.67 ms)")
+        return EXIT_FAIL
     if res["passed"]:
-        print("VERDICT: PASS (max absolute skew <= 5 ms and no pair >= 16.67 ms)")
-        return EXIT_PASS
-    print("VERDICT: FAIL (needs max absolute skew <= 5 ms and no pair >= 16.67 ms)")
+        print("VERDICT: CONDITIONAL PASS (skew modulo one tick: max absolute skew <= 5 ms); "
+              + NO_TICK_ID)
+        return EXIT_PASS_CONDITIONAL
+    print("VERDICT: FAIL (needs max absolute skew <= 5 ms and no pair >= 16.67 ms); "
+          + NO_TICK_ID)
     return EXIT_FAIL
 
 

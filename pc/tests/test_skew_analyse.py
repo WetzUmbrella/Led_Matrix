@@ -19,29 +19,41 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 import skew_analyse as sa  # noqa: E402
 
 TICK_US = 1_000_000 / 60
-PULSE_US = 1_000          # synthetic pulse width (test value)
+PULSE_US = 1_000          # synthetic tick pulse width (test value)
+MARKER_US = 4_000         # synthetic marker pulse width (test value, RIG.md proposal)
 START_US = 3_000          # first tick in the synthetic capture (test value)
 N_TICKS = 40
-END_US = START_US + N_TICKS * TICK_US + 2_000
 
 
-def pulses(skew_us, drop=None, extra_high_at_start=False):
+def grid(t):
+    """Round to 10 us so that the 100 kHz sample grid holds every edge."""
+    return round(t / 10) * 10
+
+
+def pulses(skew_us, drop=None, extra_high_at_start=False, n_ticks=N_TICKS,
+           marker_every=None, slip_ticks=0):
     """Return two lists of (rise_us, fall_us) intervals for channels A and B.
-    Rises are rounded to 10 us so that the 100 kHz sample grid holds them."""
-    def grid(t):
-        return round(t / 10) * 10
+    Tile B shows its tick n at A's tick n + slip_ticks, plus skew_us. With
+    marker_every, ticks with n mod marker_every == 0 get a MARKER_US pulse."""
+    def width(n):
+        return MARKER_US if marker_every and n % marker_every == 0 else PULSE_US
 
     a, b = [], []
-    for n in range(N_TICKS):
+    for n in range(n_ticks):
         ta = grid(START_US + n * TICK_US)
-        a.append((ta, ta + PULSE_US))
+        a.append((ta, ta + width(n)))
         if drop is None or n != drop:
-            b.append((ta + skew_us, ta + skew_us + PULSE_US))
+            tb = grid(START_US + (n + slip_ticks) * TICK_US) + skew_us
+            b.append((tb, tb + width(n)))
     if extra_high_at_start:
         # Both pins already high when the capture starts (mid-pulse).
         a.insert(0, (0, 500))
         b.insert(0, (0, 700))
     return a, b
+
+
+def end_of(a, b):
+    return max(f for _, f in a + b) + 2_000
 
 
 def level(intervals, t):
@@ -53,7 +65,8 @@ def change_times(a, b):
     for r, f in a + b:
         ts.add(r)
         ts.add(f)
-    return sorted(t for t in ts if t < END_US)
+    end = end_of(a, b)
+    return sorted(t for t in ts if t < end)
 
 
 def write_saleae(path, a, b):
@@ -84,13 +97,18 @@ def write_sigrok_time(path, a, b):
 def write_sigrok_rows(path, a, b):
     rate = 100_000
     step = 1e6 / rate
+    end = end_of(a, b)
+    changes = change_times(a, b)
+    states = [(t, level(a, t), level(b, t)) for t in changes]
     with open(path, "w", newline="") as f:
         sigrok_comments(f, "100 kHz")
         f.write("logic,logic\n")
-        n = 0
-        while n * step < END_US:
+        n, k = 0, 0
+        while n * step < end:
             t = n * step
-            f.write(f"{level(a, t)},{level(b, t)}\n")
+            while k + 1 < len(states) and states[k + 1][0] <= t:
+                k += 1
+            f.write(f"{states[k][1]},{states[k][2]}\n")
             n += 1
     return "D0", "D1"
 
@@ -122,14 +140,15 @@ def test_format_autodetect(tmp_path, kind):
 def test_clean_1ms_skew_passes(tmp_path, kind, capsys):
     rc, rows = run(tmp_path, kind, *pulses(1_000))
     text = capsys.readouterr().out
-    assert rc == sa.EXIT_PASS
+    assert rc == sa.EXIT_PASS_CONDITIONAL
     assert len(rows) == N_TICKS
     assert all(abs(float(r["skew_ms"]) - 1.0) < 1e-6 for r in rows)
     assert "max_abs_skew_ms=1.000" in text
     assert "median_abs_skew_ms=1.000" in text
     assert "p99_abs_skew_ms=1.000" in text
     assert "UNPAIRED" not in text
-    assert "VERDICT: PASS" in text
+    assert "VERDICT: CONDITIONAL PASS" in text
+    assert "TICK IDENTITY NOT CHECKED" in text
     assert [int(r["tick"]) for r in rows] == list(range(N_TICKS))
 
 
@@ -140,6 +159,7 @@ def test_6ms_skew_fails(tmp_path, kind, capsys):
     assert rc == sa.EXIT_FAIL
     assert len(rows) == N_TICKS
     assert "max_abs_skew_ms=6.000" in text
+    assert "TICK IDENTITY NOT CHECKED" in text
     assert "VERDICT: FAIL" in text
 
 
@@ -156,7 +176,7 @@ def test_dropped_edge_logged_and_others_paired(tmp_path, kind, capsys):
     ticks = [int(r["tick"]) for r in rows]
     assert ticks == [n for n in range(N_TICKS) if n != drop]
     assert all(abs(float(r["skew_ms"]) - 1.0) < 1e-6 for r in rows)
-    assert rc == sa.EXIT_PASS
+    assert rc == sa.EXIT_PASS_CONDITIONAL
 
 
 @pytest.mark.parametrize("kind", list(WRITERS))
@@ -164,7 +184,7 @@ def test_capture_starting_mid_pulse(tmp_path, kind, capsys):
     a, b = pulses(1_000, extra_high_at_start=True)
     rc, rows = run(tmp_path, kind, a, b)
     text = capsys.readouterr().out
-    assert rc == sa.EXIT_PASS
+    assert rc == sa.EXIT_PASS_CONDITIONAL
     assert len(rows) == N_TICKS
     assert "UNPAIRED" not in text
     assert f"edges_a={N_TICKS} edges_b={N_TICKS}" in text
@@ -195,7 +215,7 @@ def test_both_edges_mode_on_toggling_pins(tmp_path, capsys, inverted):
     a, b = toggles(1_000, inverted)
     rc, rows = run(tmp_path, "saleae", a, b, extra=("--edges", "both"))
     text = capsys.readouterr().out
-    assert rc == sa.EXIT_PASS
+    assert rc == sa.EXIT_PASS_CONDITIONAL
     assert all(abs(float(r["skew_ms"]) - 1.0) < 1e-6 for r in rows)
     assert "max_abs_skew_ms=1.000" in text
     assert ("NOTE:" in text) == inverted
@@ -226,5 +246,98 @@ def test_plot_written(tmp_path, capsys):
     png = tmp_path / "skew.png"
     rc = sa.main([str(cap), "--ch-a", "Channel 0", "--ch-b", "Channel 1",
                   "--out", str(tmp_path / "p.csv"), "--plot", str(png)])
-    assert rc == sa.EXIT_PASS
+    assert rc == sa.EXIT_PASS_CONDITIONAL
     assert png.stat().st_size > 0
+
+
+# Marker mode (tick identity). 200 ticks hold markers at ticks 0, 64, 128 and
+# 192 with the default period of 64 ticks (plan choice, RIG.md section 4b).
+MARKER_TICKS = 200
+
+
+def max_ms(text):
+    return float(text.split("max_abs_skew_ms=")[1].split()[0])
+
+
+def verdict_lines(text):
+    return [l for l in text.splitlines() if l.startswith("VERDICT")]
+
+
+@pytest.mark.parametrize("kind", list(WRITERS))
+def test_13ms_skew_edge_mode_warns(tmp_path, kind, capsys):
+    """Without markers a true 13 ms skew folds to 13 - 16.667 = -3.667 ms:
+    no bare PASS, the verdict carries the tick-identity warning."""
+    rc, rows = run(tmp_path, kind, *pulses(13_000, n_ticks=MARKER_TICKS, marker_every=64))
+    text = capsys.readouterr().out
+    assert rc == sa.EXIT_PASS_CONDITIONAL
+    # 16.667 - 13 = 3.667 ms; tick times sit on a 10 us grid, hence the tolerance
+    assert max_ms(text) == pytest.approx(3.667, abs=0.02)
+    (v,) = verdict_lines(text)
+    assert v.startswith("VERDICT: CONDITIONAL PASS")
+    assert "TICK IDENTITY NOT CHECKED" in v
+
+
+@pytest.mark.parametrize("kind", list(WRITERS))
+def test_13ms_skew_marker_mode_fails(tmp_path, kind, capsys):
+    rc, rows = run(tmp_path, kind, *pulses(13_000, n_ticks=MARKER_TICKS, marker_every=64),
+                   extra=("--marker",))
+    text = capsys.readouterr().out
+    assert rc == sa.EXIT_FAIL
+    assert "max_abs_skew_ms=13.000" in text
+    assert "TICK IDENTITY CHECKED" in text
+    assert verdict_lines(text)[0].startswith("VERDICT: FAIL")
+    assert all(abs(float(r["skew_ms"]) - 13.0) < 1e-6 for r in rows)
+
+
+@pytest.mark.parametrize("kind", list(WRITERS))
+def test_1ms_skew_marker_mode_passes(tmp_path, kind, capsys):
+    rc, rows = run(tmp_path, kind, *pulses(1_000, n_ticks=MARKER_TICKS, marker_every=64),
+                   extra=("--marker",))
+    text = capsys.readouterr().out
+    assert rc == sa.EXIT_PASS
+    assert len(rows) == MARKER_TICKS
+    assert [int(r["tick"]) for r in rows] == list(range(MARKER_TICKS))
+    assert "max_abs_skew_ms=1.000" in text
+    assert "UNPAIRED" not in text
+    assert "TICK IDENTITY CHECKED: markers_a=4 markers_b=4" in text
+    assert verdict_lines(text) == [
+        "VERDICT: PASS (max absolute skew <= 5 ms and no pair >= 16.67 ms)"]
+
+
+@pytest.mark.parametrize("kind", list(WRITERS))
+def test_whole_tick_slip_marker_mode_fails(tmp_path, kind, capsys):
+    """Tile B one whole tick behind plus 1 ms: edge timing alone reads 1 ms,
+    marker mode reads 16.667 + 1 = 17.667 ms and fails on both conditions."""
+    a, b = pulses(1_000, n_ticks=MARKER_TICKS, marker_every=64, slip_ticks=1)
+    rc_edge, _ = run(tmp_path, kind, a, b)
+    edge_text = capsys.readouterr().out
+    assert rc_edge == sa.EXIT_PASS_CONDITIONAL
+    assert "TICK IDENTITY NOT CHECKED" in edge_text
+    rc, rows = run(tmp_path, kind, a, b, extra=("--marker",))
+    text = capsys.readouterr().out
+    assert rc == sa.EXIT_FAIL
+    assert max_ms(text) == pytest.approx(17.667, abs=0.02)
+    assert "pairs_at_or_above_16.67ms=" in text
+    over = int(text.split("pairs_at_or_above_16.67ms=")[1].split()[0])
+    assert over == len(rows) > 0
+
+
+def test_marker_mode_dropped_edge(tmp_path, capsys):
+    rc, rows = run(tmp_path, "saleae",
+                   *pulses(1_000, drop=70, n_ticks=MARKER_TICKS, marker_every=64),
+                   extra=("--marker",))
+    text = capsys.readouterr().out
+    assert rc == sa.EXIT_PASS
+    unpaired = [l for l in text.splitlines() if l.startswith("UNPAIRED")]
+    assert len(unpaired) == 1 and "tick=70" in unpaired[0]
+    assert len(rows) == MARKER_TICKS - 1
+
+
+def test_marker_mode_without_markers_is_bad_input(tmp_path, capsys):
+    rc = sa.main([str(tmp_path / "x.csv"), "--ch-a", "D0", "--ch-b", "D1", "--marker"])
+    assert rc == sa.EXIT_BAD_INPUT
+    cap = tmp_path / "c.csv"
+    write_saleae(cap, *pulses(1_000))
+    rc = sa.main([str(cap), "--ch-a", "Channel 0", "--ch-b", "Channel 1",
+                  "--out", str(tmp_path / "p.csv"), "--marker"])
+    assert rc == sa.EXIT_BAD_INPUT
