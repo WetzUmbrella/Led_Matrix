@@ -4,3 +4,5 @@
 **/sdkconfig.old
 **/dependencies.lock
 **/wifi_secrets.h
+__pycache__/
+.pytest_cache/
