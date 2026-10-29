@@ -7,13 +7,13 @@
 #               any test runs.
 CC      = gcc
 CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -DTIMESYNC_HOST_TEST -I../main
-SRC     = test_timesync.c ../main/timesync.c
+SRC     = test_main.c test_timesync.c ../main/timesync.c
 
 .PHONY: run asan clean
 run: test_timesync
 	./test_timesync
 
-test_timesync: $(SRC) ../main/timesync.h
+test_timesync: $(SRC) test_main.h test_timesync.h ../main/timesync.h
 	$(CC) $(CFLAGS) -o $@ $(SRC)
 
 asan: $(SRC)
