@@ -18,3 +18,5 @@ panel_sync/test/test_timesync.h
 panel_sync/test/test_timesync.c
 panel_sync/main/tile_net.h
 panel_sync/main/tile_net.c
+panel_sync/main/display_engine.h
+panel_sync/main/display_engine.c
