@@ -18,7 +18,8 @@
  *
  * PROVISIONAL (OD-07, owner Benjamin): every width not fixed by PostTri
  * (type 5, session_id 8, seq 16, Node ID 4, format_version 2, chunk index 7,
- * NACK reason 2, layout 2, failure policy 1, coordinator state 4 bits), the
+ * NACK reason 2, layout 2, failure policy 1; coordinator state 4 bits is
+ * derived, ceil(log2 12)), the
  * type codes in T-B2-01 row order, contiguous packing from bit 0, a node_id
  * in every message a tile sends, ref_seq in NACK and BUSY, acked_seq in
  * TELEMETRY_ACK, frame_rate left off the wire (one valid value, 0 bits), and
@@ -108,8 +109,9 @@
 /** ASSET_CHUNK payload bytes, except the last chunk (T-B2-01). */
 #define PROTO_CHUNK_PAYLOAD_MAX 1024u
 
-/** Largest chunk index: 1023 x 96 B needs 96 chunks of 1,024 B. */
-#define PROTO_CHUNK_INDEX_MAX 95u
+/** Largest chunk index: the 600-frame 8-bit DE_PROFILE asset (OD-15) is
+ *  115,200 B = 113 chunks of 1,024 B; 1023 packed frames need 96. */
+#define PROTO_CHUNK_INDEX_MAX 112u
 
 /** Bits of the common header: type, session_id, seq (29). */
 #define PROTO_HEADER_BITS                                                      \
@@ -317,7 +319,7 @@ typedef struct
 typedef struct
 {
     proto_header_t  header;
-    uint8_t         chunk_index; /**< 0 to 95. */
+    uint8_t         chunk_index; /**< 0 to 112. */
     uint16_t        payload_len; /**< 1 to 1,024 bytes. */
     uint8_t const * p_payload;   /**< Encode: source; decode: points into
                                       the received buffer. */
@@ -328,7 +330,7 @@ typedef struct
 {
     proto_header_t header;
     uint8_t        node_id;     /**< 1 to 9. */
-    uint8_t        chunk_index; /**< 0 to 95. */
+    uint8_t        chunk_index; /**< 0 to 112. */
 } proto_chunk_ack_t;
 
 /** NACK, tile to sender (VC-5, VA-3.6). */
