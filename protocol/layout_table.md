@@ -10,7 +10,7 @@ This file is the single source of every wire field (plan section 0.1). `common/p
 
 | Rule | Value | Source |
 |---|---|---|
-| Bit numbering | Bit 0 is the least significant bit of byte 0; bit 8k + j is bit j of byte k. A field of width w at offset o occupies bits o to o + w - 1, its least significant bit at o. | VB-2a, LDC-4 ("little-endian") |
+| Bit numbering | Bit 0 is the least significant bit of byte 0; bit 8k + j is bit j of byte k. A field of width w at offset o occupies bits o to o + w - 1, its least significant bit at o. | plan choice (OD-07, owner Benjamin); it fixes the byte order VB-2a and LDC-4 require ("little-endian") and makes OD-05 option (a) the matching nibble order |
 | Byte order | Every multi-byte field is little-endian (a consequence of the bit numbering). | VB-2a, LDC-4 |
 | Packing | Explicit shifts and masks only (`proto_put_bits()`, `proto_get_bits()`; Python `int.to_bytes(..., "little")`). No wire struct is passed to `sendto`, `udp_sendto` or `recvfrom`; no `__attribute__((packed))`; no bit-field in any wire type. | VB-2a, VB-2b, VC-9 |
 | Layout | Fields follow one another with no gap, starting at bit 0; the message is padded with zero bits to a whole byte. Exception: the ASSET_CHUNK payload starts on the next byte boundary. | plan choice (OD-07) |
@@ -76,22 +76,22 @@ The map is always 9 positions in row-major order of a 3x3 grid; a 1x1 layout use
 | frame_count | 31 | 10 | 1 to 1023 | frames in the asset | VB-4b, VC-3 |
 | crc32 | 41 | 32 | 0 to 2^32 - 1 | zlib CRC32 over this tile's packed payload | LDC-1, VB-1 |
 
-The manifest's session is the header session_id (VC-5 "beside session_id and CRC32"). frame_rate is not on the wire: its only valid value is 60 (T-B1-03), which needs 0 bits by the width rule; every decoder reports `PROTO_FRAME_RATE` 60 **(plan choice, OD-07 open item)**. Payload length = frame_count x 96 B (VC-5).
+The manifest's session is the header session_id (VC-5 "beside session_id and CRC32"). frame_rate is not on the wire: its only valid value is 60 (T-B1-03), which needs 0 bits by the width rule; the constant `PROTO_FRAME_RATE` (60) stands in for it on both sides **(plan choice, OD-07 open item)**. Payload length = frame_count x 96 B (VC-5).
 
 ### ASSET_CHUNK (type 4, C to T)
 
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
-| chunk_index | 29 | 7 | 0 to 95 | chunk number | T-B2-01, LDC-8 |
+| chunk_index | 29 | 7 | 0 to 112 | chunk number | T-B2-01, LDC-8 |
 
-Bits 36 to 39 are zero padding. The payload, 1 to 1,024 bytes, starts at byte 5 and runs to the end of the datagram, so its length is the datagram length minus 5. A 600-frame asset is 57 chunks, the last of 256 B = 57,600 - 56 x 1,024 **(derived)**; a 1023-frame asset is 1023 x 96 = 98,208 B, 96 chunks, so the largest index is 95 **(derived)**.
+Bits 36 to 39 are zero padding. The payload, 1 to 1,024 bytes, starts at byte 5 and runs to the end of the datagram, so its length is the datagram length minus 5. A 600-frame asset is 57 chunks, the last of 256 B = 57,600 - 56 x 1,024 **(derived)**; a 1023-frame packed asset is 1023 x 96 = 98,208 B, 96 chunks; the 600-frame 8-bit asset of the `DE_PROFILE` build (OD-15) is 115,200 B, 113 chunks, so the largest index is 112 **(derived)**. The same range lets the PC send the whole 115,200 B VC-5 test payload, which the tile NACKs by length (T-X-08 case 5).
 
 ### CHUNK_ACK (type 5, T to C)
 
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
 | node_id | 29 | 4 | 1 to 9 | sender | sender field plan choice |
-| chunk_index | 33 | 7 | 0 to 95 | chunk acknowledged | T-B3-05 "each chunk is ACKed by index" |
+| chunk_index | 33 | 7 | 0 to 112 | chunk acknowledged | T-B3-05 "each chunk is ACKed by index" |
 
 ### NACK (type 6, T to C or P)
 
@@ -273,19 +273,19 @@ Every field and every shared packed word, with its valid range, bits before (the
 | session_id | header | 0 to 255 | 32 (`uint32_t` ID, rule) | 8 | shifts and masks | plan choice; CRC32 also checked, so a reused ID never reuses an asset alone |
 | seq | header | 0 to 65,535, wrap-aware | 32 (`uint32_t seq`, `panel_sync.c:55` at the tag) | 16 | shifts and masks | 109.2 min wrap at 10 Hz with a wrap-aware comparison |
 | Node ID | messages from tiles; map | 1 to 9 (0 = blank in the map) | 32 (`uint32_t` ID, rule; the tag's `board` was `uint8_t`) | 4 | shifts and masks | 9 nodes plus blank, ceil(log2 10) = 4 |
-| t_p, t_start, t_resume | BEACON, START_AT, RESUME_AT | 0 to 2^64 - 1 us | 32 (the tag beacon carried `frame_no`, no time) | 64 | shifts and masks | see justification row J1 |
+| t_p, t_start, t_resume | BEACON, START_AT, RESUME_AT | 0 to 2^64 - 1 us | 64 (`uint64_t` time, rule; tile times were 64-bit at the tag, `panel_sync.c:78`) | 64 | shifts and masks | see justification row J1 |
 | frame_count, frame index | MANIFEST, RESUME_AT, tile RAM | 0 to 1023 (frame_count 1 to 1023) | 32 (`uint32_t frame_no`, `panel_sync.c:57` at the tag) | 10 | shifts and masks | J3 |
 | slew | tile RAM (`timesync`), not on the wire | -100 to +100 us per tick | none at the tag (the clock was stepped) | 8 (`int8_t`) | C type | J2 |
 | CRC32 | REGISTER, MANIFEST, ASSET_READY | 0 to 2^32 - 1 | 32 | 32 | shifts and masks | zlib CRC32 is 32 bits |
 | format_version | MANIFEST | 0 to 3 | 8 (`uint8_t version`, `panel_sync.c:54`) | 2 | shifts and masks | 4 codes (section 5.4) |
-| chunk index | ASSET_CHUNK, CHUNK_ACK | 0 to 95 | 32 (counter, rule) | 7 | shifts and masks | 96 chunks for 1023 frames |
+| chunk index | ASSET_CHUNK, CHUNK_ACK | 0 to 112 | 32 (counter, rule) | 7 | shifts and masks | 113 chunks for the 8-bit 600-frame asset, ceil(log2 113) = 7 |
 | NACK reason | NACK | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | 4 reasons |
 | layout | SESSION_CONFIG | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 layouts |
 | failure policy | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 policies |
 | readiness bitmap | STATUS; Pico RAM | 9 bits | 72 (9 x `uint8_t` flag, rule) | 9 on the wire, one `uint16_t` in RAM | shifts and masks; single writer in poll context | VC-11b |
 | online bitmap | STATUS; Pico RAM | 9 bits | 72 (rule) | 9 on the wire, one `uint16_t` in RAM | as above | as readiness |
 | coordinator state | STATUS | 0 to 11 | 8 (enum, rule) | 4 | shifts and masks | 12 states, ceil(log2 12) = 4 |
-| fault word | TELEMETRY; tile RAM | 32 bits | none at the tag | 32 | `_Atomic uint32_t`, fetch-or and fetch-and (`fault_word`, T-B3-06) | LDC-2; bit map OD-12 |
+| fault word | TELEMETRY; tile RAM | 32 bits | 32 (`uint32_t`, rule; no fault word at the tag) | 32 | `_Atomic uint32_t`, fetch-or and fetch-and (`fault_word`, T-B3-06) | LDC-2; bit map OD-12 |
 | orientation | TELEMETRY; tile RAM | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | VB-5c |
 | display state | TELEMETRY; tile RAM | 0 to 6 | 8 (enum, rule) | 3 | shifts and masks | VB-5c, 7 states |
 | raw IMU sample | tile RAM | -32,768 to 32,767 per axis | none | 16 per axis | C type | VB-5c: raw readings stay 16-bit |
@@ -299,7 +299,7 @@ Every field and every shared packed word, with its valid range, bits before (the
 
 - **J1, 64-bit time (VB-4a, LDC-6).** A 32-bit microsecond counter wraps after 2^32 us = 4,294.97 s = 71.6 min. Keeping 64 bits costs 4 extra bytes per beacon, 4 B x 10 Hz = 40 B/s. A wrap inside a show would need wrap handling in every comparison of t_p, t_start and t_resume; 40 B/s is not worth that risk.
 - **J2, `int8_t` slew (VC-2).** The slew is -100 to +100 us per tick: 201 values need 8 bits, and the sign needs the eighth bit, so the Version B figure of 7 bits was wrong. A 2 ms correction takes 2,000 / 100 = 20 ticks.
-- **J3, 10-bit frame index (VB-4b, VC-3).** 1024 values hold 0 to 1023; at 60 fps that is 17.05 s of animation. `asset_builder` rejects a GIF that needs more than 1023 frames and says why (T-B1-02); an 18 s GIF is rejected.
+- **J3, 10-bit frame index (VB-4b, VC-3).** 10 bits hold 0 to 1023; 1023 frames at 60 fps = 17.05 s of animation. `asset_builder` rejects a GIF that needs more than 1023 frames and says why (T-B1-02); an 18 s GIF is rejected.
 - **J4, state enum widths (T-B2-01).** Each state enum is ceil(log2(number of states in its W6 statechart)): coordinator 12 states = 4 bits, display 7 states = 3 bits.
 
 ## 8. What the codec does not check
@@ -318,9 +318,10 @@ The receiver checks session_id against its session and seq against the last acce
 
 ## 10. For Benjamin to confirm before the freeze (OD-07)
 
-1. Every width marked plan choice: type 5, session_id 8, seq 16, Node ID 4, format_version 2, chunk index 7, NACK reason 2, layout 2, policy 1, coordinator state 4.
+1. Every width marked plan choice: type 5, session_id 8, seq 16, Node ID 4, format_version 2, chunk index 7, NACK reason 2, layout 2, policy 1. (Coordinator state 4 and display state 3 are derived by the T-B2-01 rule, ceil(log2 states).)
+1a. The bit numbering of section 1 (bit 0 = least significant bit of byte 0), which also fixes OD-05 option (a).
 2. seq comparison rule and counter scope (per sender, or per sender and type).
-3. Maximum asset size: chunk index 7 bits holds 1023 frames packed; the `DE_PROFILE` 8-bit asset at 600 frames needs 113 chunks, which does not fit (OD-15 detail: whether that asset is uploaded by chunks at all).
+3. Maximum asset size: chunk index 0 to 112 holds every packed asset up to 1023 frames (96 chunks) and the 600-frame 8-bit `DE_PROFILE` asset (113 chunks, OD-15). An 8-bit asset above 600 frames would need 8 bits.
 4. node_id in every message a tile sends (REGISTER, HEARTBEAT, CHUNK_ACK, NACK, BUSY, ASSET_READY, SYNC_READY, TELEMETRY). The source IP address is not a Node ID, and the Pico registry is indexed by Node ID (T-B2-03).
 5. ref_seq in NACK and BUSY, and acked_seq in TELEMETRY_ACK separate from the PC's header seq.
 6. frame_rate left off the wire.

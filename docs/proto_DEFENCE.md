@@ -27,19 +27,19 @@ Each entry gives the choice, the PostTri row it comes from (inventory ID and wor
 ## 4. Contiguous packing, padded to a whole byte
 
 - Source: CB-0, "applies to states, shared task and ISR data, queue messages and payloads (binary)"; change requirement "only the number of bits required to represent its valid range".
-- Choice: fields follow each other with no gap; the last byte is padded with zeros. Bytes saved against the before rows (`layout_table.md` section 4): BEACON 50 B to 12 B, TELEMETRY 15 B to 9 B, STATUS 28 B to 7 B. Exception: the ASSET_CHUNK payload starts on a byte boundary (section 6). (plan choice)
+- Choice: fields follow each other with no gap; the last byte is padded with zeros. Against the before rows (`layout_table.md` section 4): STATUS 28 B to 7 B for the same three fields; TELEMETRY 15 B to 9 B, although the after row also carries a 4-bit node_id the before row lacks; BEACON 50 B to 12 B is not like for like, because the tag beacon also carried magic, version, a frame number and 36 B of layout fields (`layout_ver`, `count`, `cols`, `rows`, `ids[8]`) that now travel once in SESSION_CONFIG, while the new beacon carries the 64-bit t_p the tag lacked. Exception: the ASSET_CHUNK payload starts on a byte boundary (section 6). (plan choice)
 - Examiner: "Your BEACON is 93 bits. How many bytes go on air, and what is in the last 3 bits?"
 
 ## 5. Valid-range checks on both sides
 
 - Source: VC-5, "On an unknown version or wrong length it NACKs with a reason code"; T-B2-01, "GIFs over 1023 frames rejected on the PC".
-- Choice: each encoder returns 0 and each decoder returns false for a field outside its row's range (Node ID 0 or 10 to 15, frame_count 0, chunk index 96 to 127, layout 3, coordinator state 12 to 15, display state 7) and for a wrong length or type. An unknown format_version is a valid wire value: the tile decodes it and then NACKs (T-B3-05), so the codec does not hide the case VC-5 must test. session_id and seq are the receiver's checks, not the codec's.
+- Choice: each encoder returns 0 and each decoder returns false for a field outside its row's range (Node ID 0 or 10 to 15, frame_count 0, chunk index 113 to 127, layout 3, coordinator state 12 to 15, display state 7) and for a wrong length or type. An unknown format_version is a valid wire value: the tile decodes it and then NACKs (T-B3-05), so the codec does not hide the case VC-5 must test. session_id and seq are the receiver's checks, not the codec's.
 - Examiner: "A MANIFEST arrives with format_version 0. Which layer rejects it, what goes back to the PC, and why is the codec not that layer?"
 
 ## 6. ASSET_CHUNK payload on a byte boundary, length from the datagram
 
 - Source: T-B2-01, "ASSET_CHUNK (chunk index, 1,024 B payload; last chunk 256 B = 57,600 - 56 x 1,024 **(derived)**)"; LDC-8.
-- Choice: header and 7-bit chunk index take 36 bits; 4 zero bits pad to byte 5; the payload follows and its length is the datagram length minus 5. The decoder returns a pointer into the received buffer, so a 1,024 B chunk is never copied bit by bit. The largest index is 95 (1023 frames x 96 B = 98,208 B = 96 chunks). (plan choice)
+- Choice: header and 7-bit chunk index take 36 bits; 4 zero bits pad to byte 5; the payload follows and its length is the datagram length minus 5. The decoder returns a pointer into the received buffer, so a 1,024 B chunk is never copied bit by bit. The largest index is 112: the 600-frame 8-bit `DE_PROFILE` asset (OD-15) is 113 chunks, and the whole 115,200 B VC-5 payload must be sendable so the tile can NACK it by length; 1023 packed frames need only 96. (plan choice)
 - Examiner: "Why not bit-pack the payload straight after the 7-bit index, and what would that cost the tile per chunk?"
 
 ## 7. Packed frame nibble order, OD-05 option (a)
@@ -63,7 +63,7 @@ Each entry gives the choice, the PostTri row it comes from (inventory ID and wor
 ## 10. frame_rate left off the wire
 
 - Source: T-B1-03, "Manifest {session_id, format_version, frame_count (10 bits), frame_rate 60, CRC32 per tile}"; change requirement valid-range rule.
-- Choice: frame_rate has one valid value, 60, which needs 0 bits; the decoder reports `PROTO_FRAME_RATE` 60. If a second rate is ever allowed it needs a new format_version. PROVISIONAL (OD-07 open item 6).
+- Choice: frame_rate has one valid value, 60, which needs 0 bits; the constant `PROTO_FRAME_RATE` (60) stands in for it on both sides; no struct carries it. If a second rate is ever allowed it needs a new format_version. PROVISIONAL (OD-07 open item 6).
 - Examiner: "The plan lists frame_rate in the manifest. Defend leaving it out, and say what changes if the PC wanted to send a 30 fps asset."
 
 ## 11. Message type codes in row order
