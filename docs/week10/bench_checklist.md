@@ -70,3 +70,9 @@ Pass criterion of the rig (copied from the T-B4-03 row): "10 min capture (W6 sec
 | B9 | If max absolute skew is above 5 ms | Ahsanul (Benjamin) | Start T-B4-07 (plan: "A maximum above 5 ms starts T-B4-07") | n/a | `docs/week10/skew_2tile/skew_report.txt` cited in the T-B4-07 design note |
 
 Optional on the same rig (Jia Jun's own T-B5-01 acceptance, not part of T-B4-03): "Logic analyser on the test pin for 30 min: every interval 16.67 ms +/- 1 ms (IFM-5c) and the missed-tick counter reads 0. Pass = both." At 1 MHz the +/- 1 ms band is 1,000 samples wide.
+
+## Part C: other Week 10 bench checks on the rig hardware
+
+| # | Step | Owner (support) | Commands | Pass criterion (copied from the plan row) | Evidence file |
+|---|---|---|---|---|---|
+| C1 | T-B5-04 boot log and task table (build with `b5/t-b5-04-tile-tasks` merged) | Jia Jun (Ahsanul) | Flash a tile from `panel_sync/`: `idf.py -p /dev/ttyACM<n> flash`; `idf.py -p /dev/ttyACM<n> monitor \| tee docs/week10/tile_tasks_boot.log`, press RESET once, leave after the `vTaskList` table; then `grep -E "LWIP_TCPIP_TASK_AFFINITY_CPU0\|GPTIMER_ISR_IRAM_SAFE\|RMT_ISR_IRAM_SAFE\|USE_TRACE_FACILITY\|STATS_FORMATTING_FUNCTIONS\|VTASKLIST_INCLUDE_COREID" panel_sync/sdkconfig >> docs/week10/tile_tasks_boot.log` | "Boot log and vTaskList() show the three tile tasks that exist in Week 10 at their table values (all (proposed), W6D-4a): Display Engine 20 on core 1, Time Sync 16 on core 0, Network 12 on core 0: 3 of 3 match; vTaskList() shows tiT (tcpip) on core 0; built sdkconfig contains the six options listed. Pass = all three." In the log: `display` 20 / 1, `timesync` 16 / 0, `tile_net` 12 / 0, `tiT` on 0, and the line `TILE_TASKS cpu_mhz=160 cycle_wrap_s=26.8` | `docs/week10/tile_tasks_boot.log` |
