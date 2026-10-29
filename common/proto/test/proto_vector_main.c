@@ -26,7 +26,10 @@
 
 #include "proto.h"
 
-#define FILE_MAX       (PROTO_ASSET_CHUNK_MAX_BYTES + 1u)
+#define FILE_MAX (PROTO_ASSET_CHUNK_MAX_BYTES + 1u)
+/* Large enough for the 115,200 B VC-5 payload vector, so the codec's own
+ * length rule, not the file reader, refuses it. */
+#define READ_MAX       (131072u)
 #define NIBBLE_BITS    4u
 #define FRAME_NIBBLES  192u
 #define ARG_MODE       1
@@ -51,7 +54,7 @@ static char const * const g_names[PROTO_TYPE_COUNT] = {
     "BEACON",    "START_AT",  "RESUME_AT",      "PAUSE",       "STOP",
     "STATUS",    "TELEMETRY", "TELEMETRY_ACK"};
 
-static uint8_t g_in[FILE_MAX];
+static uint8_t g_in[READ_MAX];
 static uint8_t g_out[FILE_MAX];
 static uint8_t g_payload[PROTO_CHUNK_PAYLOAD_MAX];
 
@@ -66,6 +69,8 @@ static void           print_u64 (char const * p_name, uint64_t value);
 static void           print_hex (uint8_t const * p_bytes, uint32_t len);
 static bool           decode_any (uint8_t const * p_buf, uint32_t len);
 static bool     decode_tile (uint8_t const * p_buf, uint32_t len, uint8_t type);
+static bool     decode_tile_upload (uint8_t const * p_buf, uint32_t len,
+                                    uint8_t type);
 static bool     decode_coordinator (uint8_t const * p_buf, uint32_t len,
                                     uint8_t type);
 static bool     decode_pc (uint8_t const * p_buf, uint32_t len, uint8_t type);
@@ -143,11 +148,12 @@ static bool read_file (char const * p_path, uint32_t * p_len)
 
     if (NULL != p_file)
     {
-        size_t const got = fread(g_in, 1u, FILE_MAX, p_file);
+        /* DEVIATION D-2: fread returns the C standard size_t. */
+        size_t const got = fread(g_in, 1u, READ_MAX, p_file);
 
-        /* got is at most FILE_MAX, which fits uint32_t. */
+        /* got is at most READ_MAX, which fits uint32_t. */
         *p_len = (uint32_t)got;
-        b_ok   = (got < FILE_MAX) && (0 == ferror(p_file));
+        b_ok   = (got < READ_MAX) && (0 == ferror(p_file));
         (void)fclose(p_file); /* Read only, nothing to flush. */
     }
 
@@ -163,6 +169,7 @@ static bool read_file (char const * p_path, uint32_t * p_len)
 static char const * find_arg (vector_args_t const * p_args, char const * p_key)
 {
     char const * p_value = NULL;
+    /* DEVIATION D-2: strlen returns the C standard size_t. */
     size_t const key_len = strlen(p_key);
 
     for (int32_t idx = 0; (NULL == p_value) && (idx < p_args->count); idx++)
@@ -273,12 +280,16 @@ static uint16_t arg_payload (vector_args_t const * p_args)
 
     if (NULL != p_hex)
     {
+        /* DEVIATION D-2: strlen returns the C standard size_t. */
         size_t const digits = strlen(p_hex);
 
         if ((0u == (digits % HEX_PAIR)) &&
             ((digits / HEX_PAIR) <= PROTO_CHUNK_PAYLOAD_MAX))
         {
-            for (size_t idx = 0u; idx < (digits / HEX_PAIR); idx++)
+            /* digits / 2 is at most 1,024 here, so it fits uint32_t. */
+            uint32_t const count_bytes = (uint32_t)(digits / HEX_PAIR);
+
+            for (uint32_t idx = 0u; idx < count_bytes; idx++)
             {
                 char pair[HEX_PAIR + 1u] = {p_hex[HEX_PAIR * idx],
                                             p_hex[(HEX_PAIR * idx) + 1u], '\0'};
@@ -288,7 +299,7 @@ static uint16_t arg_payload (vector_args_t const * p_args)
             }
 
             /* At most 1,024 bytes, which fits uint16_t. */
-            count = (uint16_t)(digits / HEX_PAIR);
+            count = (uint16_t)count_bytes;
         }
     }
 
@@ -363,6 +374,7 @@ static bool decode_any (uint8_t const * p_buf, uint32_t len)
     if (b_ok)
     {
         b_ok = decode_tile(p_buf, len, header.type) ||
+               decode_tile_upload(p_buf, len, header.type) ||
                decode_coordinator(p_buf, len, header.type) ||
                decode_pc(p_buf, len, header.type);
     }
@@ -427,6 +439,46 @@ static bool decode_tile (uint8_t const * p_buf, uint32_t len, uint8_t type)
         }
         break;
 
+        case PROTO_TYPE_TELEMETRY:
+        {
+            proto_telemetry_t msg;
+
+            b_ok = proto_decode_telemetry(p_buf, len, &msg);
+
+            if (b_ok)
+            {
+                print_header(&msg.header);
+                print_u64("node_id", msg.node_id);
+                print_u64("fault_word", msg.fault_word);
+                print_u64("orientation", msg.orientation);
+                print_u64("display_state", msg.display_state);
+            }
+        }
+        break;
+
+        default:
+            b_ok = false;
+            break;
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Decode and print a tile's reply to an upload or command
+ *         (CHUNK_ACK, NACK, BUSY, ASSET_READY).
+ * @param  p_buf  Bytes.
+ * @param  len    Length.
+ * @param  type   Header type code.
+ * @return true when the type is one of these and it decoded.
+ */
+static bool decode_tile_upload (uint8_t const * p_buf, uint32_t len,
+                                uint8_t type)
+{
+    bool b_ok = false;
+
+    switch (type)
+    {
         case PROTO_TYPE_CHUNK_ACK:
         {
             proto_chunk_ack_t msg;
@@ -484,23 +536,6 @@ static bool decode_tile (uint8_t const * p_buf, uint32_t len, uint8_t type)
                 print_header(&msg.header);
                 print_u64("node_id", msg.node_id);
                 print_u64("crc32", msg.crc32);
-            }
-        }
-        break;
-
-        case PROTO_TYPE_TELEMETRY:
-        {
-            proto_telemetry_t msg;
-
-            b_ok = proto_decode_telemetry(p_buf, len, &msg);
-
-            if (b_ok)
-            {
-                print_header(&msg.header);
-                print_u64("node_id", msg.node_id);
-                print_u64("fault_word", msg.fault_word);
-                print_u64("orientation", msg.orientation);
-                print_u64("display_state", msg.display_state);
             }
         }
         break;

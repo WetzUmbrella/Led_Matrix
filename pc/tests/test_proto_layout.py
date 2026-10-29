@@ -117,7 +117,7 @@ def test_payload_115200_does_not_match_a_600_frame_manifest() -> None:
     ("STATUS", {"readiness": 0, "online": 0, "state": 12}),
     ("TELEMETRY", {"node_id": 1, "fault_word": 0, "orientation": 0,
                    "display_state": 7}),
-    ("ASSET_CHUNK", {"chunk_index": 96, "payload": b"\x00"}),
+    ("ASSET_CHUNK", {"chunk_index": 113, "payload": b"\x00"}),
     ("ASSET_CHUNK", {"chunk_index": 0, "payload": b""}),
     ("ASSET_CHUNK", {"chunk_index": 0, "payload": bytes(1025)}),
     ("SESSION_CONFIG", {"layout": 3, "policy": 0, "node_map": [0] * 9}),

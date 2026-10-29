@@ -137,9 +137,10 @@ def test_c_and_python_agree_on_every_vector(tool: str) -> None:
     assert mismatches == []
 
 
-def test_c_rejects_the_115200_payload_as_a_chunk(tool: str) -> None:
-    """A whole 115,200 B payload is far over one ASSET_CHUNK; the C decoder
-    refuses it, and the tile must NACK it by length (VC-5)."""
+def test_c_decoder_refuses_the_115200_payload_by_length(tool: str) -> None:
+    """The C tool reads all 115,200 B and passes them to the codec, whose
+    length rule refuses them: far over one ASSET_CHUNK. The tile NACKs the
+    payload by length against the manifest (VC-5, T-X-08 case 5)."""
     path = os.path.join(VECTOR_DIR, "payload_115200.bin")
     result = subprocess.run([tool, "decode", path], capture_output=True)
     assert result.returncode == 1

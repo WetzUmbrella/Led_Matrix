@@ -37,7 +37,7 @@ FRAME_BYTES = 96
 FRAME_NIBBLES = 192
 NIBBLE_MAX = 8
 CHUNK_PAYLOAD_MAX = 1024
-CHUNK_INDEX_MAX = 95
+CHUNK_INDEX_MAX = 112
 CHUNK_HEAD_BYTES = 5
 
 #: One field: (name, width in bits, smallest valid value, largest valid
