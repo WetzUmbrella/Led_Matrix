@@ -6,7 +6,8 @@
 //    panel_sync/set_board_number.sh
 //  - the wall is the panels connected right now, lined up by board number (lowest = top-left),
 //    so the GIF splits by how many are on: 1=1x1, 2=2x1, 3=3x1, 4=2x2, 5-6=3x2, 7-8=4x2
-//  - broadcasts a beacon 10x/s with the frame clock AND the layout (who is in which slot)
+//  - broadcasts a BEACON {session_id, seq, t_p} 10x/s from coordinator_loop.c
+//    (T-B2-02, poll mode); the old frame-clock and layout beacon is gone
 
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +16,7 @@
 #include "lwip/pbuf.h"
 #include "lwip/udp.h"
 #include "dhcpserver.h"
+#include "coordinator_loop.h"
 
 #define USE_ROUTER       1             // 0 = Pico runs its own access point (max 4 panels)
 
@@ -33,28 +35,9 @@
 #define WIFI_PASS        "ledwall123"
 #define SYNC_PORT        4210          // Pico -> panels (broadcast)
 #define HELLO_PORT       4211          // panels -> Pico (unicast)
-#define SYNC_MAGIC       0x4C454457    // "LEDW"
 #define HELLO_MAGIC      0x48454C4F    // "HELO"
 #define PROTO_VERSION    3             // 3: HELLO carries the board number
-#define FPS              30
-#define BEACON_MS        100
-#define NODE_TIMEOUT_MS  5000          // generous: a few lost HELLOs must not kick a panel out
 #define MAX_NODES        8
-
-enum { CMD_PLAY = 1 };
-
-typedef struct __attribute__((packed)) {
-    uint32_t magic;
-    uint8_t  version;
-    uint32_t seq;
-    uint8_t  cmd;
-    uint32_t frame_no;
-    uint8_t  layout_ver;          // bumps every time a panel joins or leaves
-    uint8_t  count;               // panels in the wall
-    uint8_t  cols;
-    uint8_t  rows;
-    uint32_t ids[MAX_NODES];      // panel IDs in slot order (slot 0 = top-left)
-} beacon_t;
 
 typedef struct __attribute__((packed)) {
     uint32_t magic;
@@ -154,23 +137,6 @@ static void hello_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     pbuf_free(p);
 }
 
-// Drop any panel we haven't heard from. The rest close up and the GIF re-splits.
-static void expire_nodes(uint32_t now)
-{
-    bool changed = false;
-    for (int i = 0; i < MAX_NODES; i++) {
-        if (board_id[i] && now - board_seen[i] > NODE_TIMEOUT_MS) {
-            printf("LEAVE ESP-%d (%08lx)\n", i + 1, (unsigned long)board_id[i]);
-            board_id[i] = 0;
-            changed = true;
-        }
-    }
-    if (changed) {
-        layout_ver++;
-        print_layout();
-    }
-}
-
 #if USE_ROUTER
 // Join the router, retrying forever. Blocks until we have an IP from its DHCP.
 static void router_connect(void)
@@ -243,48 +209,8 @@ int main(void)
 
     printf("LEDWALL up. Beacons on %d, HELLOs on %d\n", SYNC_PORT, HELLO_PORT);
 
-    uint32_t start_ms = to_ms_since_boot(get_absolute_time());
-    uint32_t seq = 0;
-
-    while (true) {
-#if USE_ROUTER
-        // Lost the router? Rejoin. Beacons pause, but panels keep animating on their own clock.
-        if (seq % 10 == 0 &&
-            cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) != CYW43_LINK_UP) {
-            printf("Lost %s, rejoining\n", ROUTER_SSID);
-            router_connect();
-            bcast = router_bcast();
-        }
-#endif
-        uint32_t now = to_ms_since_boot(get_absolute_time());
-
-        beacon_t b;
-        memset(&b, 0, sizeof(b));
-        b.magic    = SYNC_MAGIC;
-        b.version  = PROTO_VERSION;
-        b.seq      = seq;
-        b.cmd      = CMD_PLAY;
-        b.frame_no = (uint32_t)((uint64_t)(now - start_ms) * FPS / 1000);
-
-        cyw43_arch_lwip_begin();
-        expire_nodes(now);
-        b.layout_ver = layout_ver;
-        uint32_t ids[MAX_NODES];
-        uint8_t boards[MAX_NODES];
-        b.count = (uint8_t)pack_wall(ids, boards);
-        layout_for(b.count, &b.cols, &b.rows);
-        memcpy(b.ids, ids, sizeof(ids));                // b.ids is packed (unaligned), so copy
-
-        struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, sizeof(b), PBUF_RAM);
-        if (p) {
-            memcpy(p->payload, &b, sizeof(b));
-            udp_sendto(tx, p, &bcast, SYNC_PORT);
-            pbuf_free(p);
-        }
-        cyw43_arch_lwip_end();
-
-        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, (seq / 5) & 1);
-        seq++;
-        sleep_ms(BEACON_MS);
-    }
+    // Beacons on an absolute 100 ms schedule, cyw43 polled every pass
+    // (T-B2-02). Never returns.
+    coordinator_loop_run(tx, &bcast);
+    return 0;
 }

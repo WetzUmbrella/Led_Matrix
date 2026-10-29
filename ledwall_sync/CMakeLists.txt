@@ -5,9 +5,10 @@ project(ledwall_sync C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 pico_sdk_init()
 
-add_executable(ledwall_sync main.c dhcpserver/dhcpserver.c)
-target_include_directories(ledwall_sync PRIVATE ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/dhcpserver)
-target_link_libraries(ledwall_sync pico_stdlib pico_cyw43_arch_lwip_threadsafe_background)
+add_executable(ledwall_sync main.c coordinator_loop.c ../common/proto/proto.c dhcpserver/dhcpserver.c)
+target_include_directories(ledwall_sync PRIVATE ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/dhcpserver ${CMAKE_CURRENT_LIST_DIR}/../common/proto)
+# Poll mode: T-B2-02, OD-01 PROVISIONAL (owner Benjamin).
+target_link_libraries(ledwall_sync pico_stdlib pico_cyw43_arch_lwip_poll)
 # Name shown in the router's client list (hyphens, not underscores: routers reject "_" in hostnames)
 target_compile_definitions(ledwall_sync PRIVATE CYW43_HOST_NAME="PICO-Main")
 pico_enable_stdio_usb(ledwall_sync 1)
