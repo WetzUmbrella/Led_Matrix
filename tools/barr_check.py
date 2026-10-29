@@ -306,11 +306,26 @@ def check_equality(src, index, out):
                                "constant on the right of %s%s" % (tok, note)))
 
 
+def statement_start(src, index):
+    """First line of the statement that line index belongs to: walk back
+    while the previous code line does not end a statement or block."""
+    start = index
+    while start > 0:
+        prev = src.code[start - 1].strip()
+        if (not prev) or src.preproc[start - 1] or prev.endswith(
+                (";", "{", "}")):
+            break
+        start -= 1
+    return start
+
+
 def has_comment_near(src, index):
-    """A comment on the same line or a comment-only line directly above."""
-    found = bool(src.comments[index].strip())
-    if (not found) and (index > 0):
-        found = src.comment_only[index - 1]
+    """A comment on any line of the statement, or a comment-only line
+    directly above the statement."""
+    start = statement_start(src, index)
+    found = any(src.comments[i].strip() for i in range(start, index + 1))
+    if (not found) and (start > 0):
+        found = src.comment_only[start - 1]
     return found
 
 
@@ -493,11 +508,12 @@ def check_declarator(src, decl, line, out, is_param, is_file_scope):
     if re.search(r"[A-Z]", name):
         out.append(Finding(src.path, line, "7.1.f",
                            "name '%s' contains uppercase" % name))
-    if (2 <= stars) and not name.startswith("pp_"):
+    bare = name[2:] if name.startswith("g_") else name
+    if (2 <= stars) and not bare.startswith("pp_"):
         out.append(Finding(src.path, line, "7.1.l",
                            "pointer-to-pointer '%s' does not start with pp_"
                            % name))
-    elif (1 == stars) and not name.startswith("p_"):
+    elif (1 == stars) and not bare.startswith("p_"):
         out.append(Finding(src.path, line, "7.1.k",
                            "pointer '%s' does not start with p_" % name))
     if is_file_scope and (not is_param) and not name.startswith("g_"):
@@ -540,7 +556,8 @@ def check_declaration(src, stmt, out, is_file_scope):
             declarator.append(item)
         name = check_declarator(src, declarator, part[0][1] if part else 0,
                                 out, False, is_file_scope)
-        if name and is_bool and not name.startswith("b_"):
+        bare = (name[2:] if (name and name.startswith("g_")) else name)
+        if name and is_bool and not bare.startswith("b_"):
             out.append(Finding(src.path, part[0][1], "7.1.m",
                                "bool variable '%s' does not start with b_"
                                % name))
