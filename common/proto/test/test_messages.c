@@ -15,7 +15,6 @@
 #include "test_messages.h"
 
 #include <inttypes.h>
-#include <stddef.h>
 #include <stdio.h>
 
 #include "proto.h"
@@ -79,6 +78,9 @@ static void           rt_commands (uint32_t corner);
 static void           rt_status (uint32_t corner);
 static void           rt_telemetry (uint32_t corner);
 static void           rt_telemetry_ack (uint32_t corner);
+static bool           reject_encode (void);
+static bool           reject_decode_range (void);
+static bool           reject_length_type (void);
 
 /**
  * @brief  Boundary set round trip for every message row.
@@ -228,6 +230,22 @@ bool test_messages_lengths (void)
  */
 bool test_messages_reject (void)
 {
+    bool const b_encode = reject_encode();
+    bool const b_range  = reject_decode_range();
+    bool const b_length = reject_length_type();
+
+    printf("    7 out-of-range encodes, 6 out-of-range decodes, wrong type, "
+           "wrong lengths and a short buffer refused\n");
+
+    return b_encode && b_range && b_length;
+}
+
+/**
+ * @brief  Encoders refuse out-of-range fields.
+ * @return true when every refusal happened.
+ */
+static bool reject_encode (void)
+{
     bool                   b_ok  = true;
     proto_header_t const   hdr   = header_at(CORNER_MIN);
     proto_heartbeat_t      beat  = {hdr, 0u};
@@ -237,13 +255,6 @@ bool test_messages_reject (void)
     proto_asset_chunk_t    chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
                                     g_payload};
     proto_session_config_t cfg   = {hdr, PROTO_LAYOUT_COUNT, 0u, {0u}};
-    proto_heartbeat_t      beat_out;
-    proto_manifest_t       man_out;
-    proto_status_t         stat_out;
-    proto_telemetry_t      tel_out;
-    proto_asset_chunk_t    chunk_out;
-    proto_session_config_t cfg_out;
-    proto_sync_ready_t     sync_out;
 
     /* Encoders refuse out-of-range fields. */
     b_ok =
@@ -273,10 +284,34 @@ bool test_messages_reject (void)
                __LINE__) &&
            b_ok;
 
+    return b_ok;
+}
+
+/**
+ * @brief  Decoders refuse out-of-range fields written straight into the
+ *         bits of a valid message.
+ * @return true when every refusal happened.
+ */
+static bool reject_decode_range (void)
+{
+    bool                         b_ok  = true;
+    proto_header_t const         hdr   = header_at(CORNER_MIN);
+    proto_heartbeat_t const      beat  = {hdr, 1u};
+    proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u};
+    proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
+    proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
+    proto_session_config_t const cfg   = {hdr, 0u, 0u, {0u}};
+    proto_heartbeat_t            beat_out;
+    proto_manifest_t             man_out;
+    proto_status_t               stat_out;
+    proto_telemetry_t            tel_out;
+    proto_asset_chunk_t          chunk_out;
+    proto_session_config_t       cfg_out;
+
     /* Decoders refuse out-of-range fields written straight into the bits:
      * Node ID 0, frame_count 0, coordinator state 12, display state 7,
-     * chunk index 96 and layout 3. */
-    beat.node_id = 1u;
+     * chunk index 113 and layout 3. */
     (void)proto_encode_heartbeat(&beat, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_NODE_BITS, 0u);
     b_ok = test_main_check(
@@ -284,7 +319,6 @@ bool test_messages_reject (void)
                __LINE__) &&
            b_ok;
 
-    man.frame_count = 1u;
     (void)proto_encode_manifest(&man, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS + PROTO_FORMAT_BITS,
                    PROTO_FRAME_BITS, 0u);
@@ -293,7 +327,6 @@ bool test_messages_reject (void)
                         __LINE__) &&
         b_ok;
 
-    stat.readiness = 0u;
     (void)proto_encode_status(&stat, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS + (2u * PROTO_BITMAP_BITS),
                    PROTO_COORD_STATE_BITS, PROTO_COORD_COUNT);
@@ -301,7 +334,6 @@ bool test_messages_reject (void)
                            __LINE__) &&
            b_ok;
 
-    tel.display_state = 0u;
     (void)proto_encode_telemetry(&tel, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_TELEMETRY_BITS - PROTO_DISPLAY_STATE_BITS,
                    PROTO_DISPLAY_STATE_BITS, PROTO_DISPLAY_COUNT);
@@ -310,7 +342,6 @@ bool test_messages_reject (void)
                         __LINE__) &&
         b_ok;
 
-    chunk.chunk_index = 0u;
     (void)proto_encode_asset_chunk(&chunk, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_CHUNK_BITS,
                    PROTO_CHUNK_INDEX_MAX + 1u);
@@ -319,7 +350,6 @@ bool test_messages_reject (void)
                            __LINE__) &&
            b_ok;
 
-    cfg.layout = 0u;
     (void)proto_encode_session_config(&cfg, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_LAYOUT_BITS,
                    PROTO_LAYOUT_COUNT);
@@ -328,7 +358,25 @@ bool test_messages_reject (void)
                            __LINE__) &&
            b_ok;
 
-    /* Wrong type, wrong length and a payload that is too long or empty. */
+    return b_ok;
+}
+
+/**
+ * @brief  Wrong type, wrong length, a chunk too long or empty, and a short
+ *         output buffer are refused.
+ * @return true when every refusal happened.
+ */
+static bool reject_length_type (void)
+{
+    bool                      b_ok  = true;
+    proto_header_t const      hdr   = header_at(CORNER_MIN);
+    proto_heartbeat_t const   beat  = {hdr, 1u};
+    proto_asset_chunk_t const chunk = {hdr, 0u, PROTO_CHUNK_PAYLOAD_MAX,
+                                       g_payload};
+    proto_heartbeat_t         beat_out;
+    proto_sync_ready_t        sync_out;
+    proto_asset_chunk_t       chunk_out;
+
     (void)proto_encode_heartbeat(&beat, g_buf, BUF_BYTES); /* Valid. */
     b_ok = test_main_check(
                !proto_decode_sync_ready(g_buf, LEN_SYNC_READY, &sync_out),
@@ -339,6 +387,17 @@ bool test_messages_reject (void)
                __LINE__) &&
            b_ok;
     b_ok = test_main_check(
+               0u == proto_encode_heartbeat(&beat, g_buf, LEN_HEARTBEAT - 1u),
+               __LINE__) &&
+           b_ok;
+
+    /* A valid full chunk in g_buf, so only the length decides. */
+    (void)proto_encode_asset_chunk(&chunk, g_buf, BUF_BYTES); /* Valid. */
+    b_ok = test_main_check(proto_decode_asset_chunk(
+                               g_buf, PROTO_ASSET_CHUNK_MAX_BYTES, &chunk_out),
+                           __LINE__) &&
+           b_ok;
+    b_ok = test_main_check(
                !proto_decode_asset_chunk(
                    g_buf, PROTO_ASSET_CHUNK_MAX_BYTES + 1u, &chunk_out),
                __LINE__) &&
@@ -347,12 +406,6 @@ bool test_messages_reject (void)
                !proto_decode_asset_chunk(g_buf, LEN_CHUNK_HEAD, &chunk_out),
                __LINE__) &&
            b_ok;
-    b_ok = test_main_check(
-               0u == proto_encode_heartbeat(&beat, g_buf, LEN_HEARTBEAT - 1u),
-               __LINE__) &&
-           b_ok;
-    printf("    7 out-of-range encodes, 6 out-of-range decodes, wrong type, "
-           "wrong lengths and a short buffer refused\n");
 
     return b_ok;
 }
@@ -540,7 +593,7 @@ static void rt_manifest (uint32_t corner)
 }
 
 /**
- * @brief  ASSET_CHUNK round trip: index 0 with 1 byte, index 95 with
+ * @brief  ASSET_CHUNK round trip: index 0 with 1 byte, index 112 with
  *         1,024 bytes.
  * @param  corner  0 or 1.
  */
