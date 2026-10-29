@@ -570,6 +570,32 @@ bool test_timesync_supp_arithmetic (void)
 
     b_ok = test_main_check(!timesync_sync_ready(), __LINE__) && b_ok;
 
+    /* timesync_next_tick(): the deadline before the answer is at or before
+     * t, the deadline of the answer is after t; t before origin gives 0. */
+    for (int64_t t_us = INT64_C(999000); t_us <= INT64_C(3000000);
+         t_us += INT64_C(997))
+    {
+        uint64_t const tick = timesync_next_tick(1000000, t_us);
+
+        b_ok = test_main_check(timesync_deadline_pico(1000000, tick) > t_us,
+                               __LINE__) &&
+               b_ok;
+
+        if (tick > 0u)
+        {
+            b_ok = test_main_check(timesync_deadline_pico(1000000, tick - 1u) <=
+                                       t_us,
+                                   __LINE__) &&
+                   b_ok;
+        }
+    }
+
+    b_ok = test_main_check((0u == timesync_next_tick(1000000, 999999)) &&
+                               (1u == timesync_next_tick(1000000, 1000000)) &&
+                               (2u == timesync_next_tick(1000000, 1016667)),
+                           __LINE__) &&
+           b_ok;
+
     return b_ok;
 }
 

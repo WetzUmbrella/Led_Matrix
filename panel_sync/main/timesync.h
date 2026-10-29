@@ -211,6 +211,17 @@ uint32_t timesync_frame_index (int64_t t_us, int64_t origin_us,
 int64_t timesync_deadline_pico (int64_t origin_us, uint64_t tick);
 
 /**
+ * @brief  The first tick strictly after t: the smallest n with
+ *         timesync_deadline_pico(origin, n) > t, 0 when t < origin. Lets the
+ *         Display Engine start (or restart after missed ticks) on the next
+ *         boundary of the shared timeline.
+ * @param  origin_us  Timeline origin in Pico time, microseconds.
+ * @param  t_us       Corrected Pico time, microseconds.
+ * @return Tick number.
+ */
+uint64_t timesync_next_tick (int64_t origin_us, int64_t t_us);
+
+/**
  * @brief  floor(dt x ppb / 10^9) without forming dt x ppb.
  * @param  dt_us      Elapsed time, microseconds.
  * @param  drift_ppb  Drift, parts per billion.
