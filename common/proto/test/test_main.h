@@ -4,9 +4,8 @@
  *          modules in common/proto/test (Barr-C 4.2.a: the header of
  *          test_main.c).
  *
- * Minimal implementation by Buddy 4 for T-B4-03. Owner: Benjamin, task
- * T-B2-01. Implemented: check and run functions. Not yet implemented: none
- * needed. Build and run: make -C common/proto/test
+ * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Check and run
+ * functions. Build and run: make -C common/proto/test
  */
 #ifndef TEST_MAIN_H
 #define TEST_MAIN_H

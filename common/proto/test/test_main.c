@@ -1,10 +1,9 @@
 /**
  * @file    test_main.c
- * @brief   Host test runner for common/proto (T-B2-01, beacon row).
+ * @brief   Host test runner for common/proto (T-B2-01).
  *
- * Minimal implementation by Buddy 4 for T-B4-03. Owner: Benjamin, task
- * T-B2-01. Implemented: runner for the beacon-row tests. Not yet
- * implemented: tests for the other message rows.
+ * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Runs the bit
+ * packing, BEACON and every-row message tests.
  * Build and run: make -C common/proto/test
  */
 #include "test_main.h"
@@ -13,6 +12,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "test_messages.h"
 #include "test_proto.h"
 
 /** One test. */
@@ -28,6 +28,13 @@ static test_case_t const g_cases[] = {
     {"beacon: reference bytes and T-B2-01 boundary set", test_proto_beacon},
     {"beacon: short buffer, wrong length and wrong type rejected",
      test_proto_beacon_reject},
+    {"messages: T-B2-01 boundary set, every row, 0 mismatches",
+     test_messages_boundary},
+    {"messages: encoded lengths equal layout_table.md section 4",
+     test_messages_lengths},
+    {"messages: out-of-range, wrong type and wrong length refused",
+     test_messages_reject},
+    {"le helpers: u16, u32, u64 little-endian", test_messages_le},
 };
 
 /** Number of tests. */
