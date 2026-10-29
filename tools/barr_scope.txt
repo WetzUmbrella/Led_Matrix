@@ -9,3 +9,5 @@ common/proto/test/test_main.h
 common/proto/test/test_main.c
 common/proto/test/test_proto.h
 common/proto/test/test_proto.c
+ledwall_sync/coordinator_loop.h
+ledwall_sync/coordinator_loop.c
