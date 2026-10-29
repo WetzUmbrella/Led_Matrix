@@ -1,4 +1,5 @@
-# Host build of the timesync core tests (T-B4-02). No ESP-IDF needed.
+# Host build of the timesync core tests (T-B4-02) and the fault word tests
+# (T-B3-06). No ESP-IDF needed.
 #   make        build and run test_timesync
 #   make asan   same with -fsanitize=address,undefined. The binary runs with
 #               address randomisation off (setarch -R): with high-entropy
@@ -6,14 +7,16 @@
 #               crash at start-up with AddressSanitizer:DEADLYSIGNAL before
 #               any test runs.
 CC      = gcc
-CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -DTIMESYNC_HOST_TEST -I../main
-SRC     = test_main.c test_timesync.c ../main/timesync.c
+CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -pthread -DTIMESYNC_HOST_TEST -I../main
+SRC     = test_main.c test_timesync.c ../main/timesync.c \
+          test_fault_word.c ../main/fault_word.c
 
 .PHONY: run asan clean
 run: test_timesync
 	./test_timesync
 
-test_timesync: $(SRC) test_main.h test_timesync.h ../main/timesync.h
+test_timesync: $(SRC) test_main.h test_timesync.h ../main/timesync.h \
+               test_fault_word.h ../main/fault_word.h
 	$(CC) $(CFLAGS) -o $@ $(SRC)
 
 asan: $(SRC)
