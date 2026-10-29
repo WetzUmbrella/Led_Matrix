@@ -1,11 +1,13 @@
 /**
  * @file    test_main.c
- * @brief   Host test runner for panel_sync (T-B4-02).
+ * @brief   Host test runner for panel_sync (T-B4-02, T-B3-06).
  *
  * Owner: Ahsanul (Buddy 4). Build and run: make -C panel_sync/test
  * The four counted tests are the four in the T-B4-02 row, with the row's pass
  * criteria. The supplementary checks cover the integer arithmetic ranges
- * documented in timesync.c; they are not part of "Pass = N of 4".
+ * documented in timesync.c; they are not part of "Pass = N of 4". The fault
+ * word tests (T-B3-06, implemented by Ahsanul (B4) for Cheston) are counted
+ * on their own line, "Fault word: Pass = N of 5".
  */
 #include "test_main.h"
 
@@ -13,6 +15,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "test_fault_word.h"
 #include "test_timesync.h"
 
 #ifndef TIMESYNC_HOST_TEST
@@ -39,6 +42,23 @@ static test_case_t const g_cases[] = {
 
 /** Number of counted tests (4). */
 #define CASE_COUNT ((uint32_t)(sizeof(g_cases) / sizeof(g_cases[0])))
+
+static test_case_t const g_faults[] = {
+    {"Test F1: fault_word_set and fault_word_snapshot",
+     test_fault_word_set_snapshot},
+    {"Test F2: ACK clears only the sent event bits",
+     test_fault_word_ack_events_only},
+    {"Test F3: condition bits clear only through their owner",
+     test_fault_word_condition_owner},
+    {"Test F4: VC-4 merge of repeats between send and ACK",
+     test_fault_word_merge_rule},
+    {"Test F5: two setters and a reporter, 0 lost (T-X-02 forerunner)",
+     test_fault_word_two_threads},
+};
+
+/** Number of counted fault word tests (5): the element count of a
+ *  five-entry array fits uint32_t. */
+#define FAULT_COUNT ((uint32_t)(sizeof(g_faults) / sizeof(g_faults[0])))
 
 /**
  * @brief  Record one check. Prints the line number when it fails.
@@ -74,7 +94,8 @@ bool test_main_run (char const * p_name, test_main_fn_t p_test)
 }
 
 /**
- * @brief  Run the four counted tests and the supplementary checks.
+ * @brief  Run the four counted tests, the supplementary checks and the
+ *         five fault word tests.
  * @return 0 when all pass, 1 otherwise.
  */
 int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
@@ -97,10 +118,24 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
 
     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
 
+    uint32_t fault_passed = 0u;
+
+    for (uint32_t idx = 0u; idx < FAULT_COUNT; idx++)
+    {
+        if (test_main_run(g_faults[idx].p_name, g_faults[idx].p_test))
+        {
+            fault_passed++;
+        }
+    }
+
+    printf("Fault word: Pass = %" PRIu32 " of %" PRIu32 "\n", fault_passed,
+           FAULT_COUNT);
+
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
-    if ((CASE_COUNT == passed) && b_supp && b_ready)
+    if ((CASE_COUNT == passed) && b_supp && b_ready &&
+        (FAULT_COUNT == fault_passed))
     {
         status = 0;
     }
