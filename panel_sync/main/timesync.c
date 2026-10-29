@@ -338,6 +338,35 @@ int64_t timesync_deadline_pico (int64_t origin_us, uint64_t tick)
 }
 
 /**
+ * @brief  The first tick strictly after t. With d = t - origin >= 0 and
+ *         n0 = floor(d x 60 / 10^6): n0 x 10^6 / 60 <= d, so the rounded-up
+ *         deadline of n0 is still <= t (d is an integer), while that of
+ *         n0 + 1 is > t. So the answer is n0 + 1, computed with the same split
+ *         as timesync_frame_index().
+ * @param  origin_us  Timeline origin, microseconds.
+ * @param  t_us       Corrected Pico time, microseconds.
+ * @return Tick number.
+ */
+uint64_t timesync_next_tick (int64_t origin_us, int64_t t_us)
+{
+    uint64_t tick = 0u;
+
+    if (t_us >= origin_us)
+    {
+        int64_t const delta = t_us - origin_us;
+        int64_t const quot  = delta / US_PER_S_S64;
+        int64_t const rem   = delta - (quot * US_PER_S_S64);
+        int64_t const frames =
+            (quot * FPS_S64) + ((rem * FPS_S64) / US_PER_S_S64);
+
+        /* delta >= 0, so frames >= 0 and fits uint64_t. */
+        tick = (uint64_t)frames + 1u;
+    }
+
+    return tick;
+}
+
+/**
  * @brief  floor((t - origin) x 60 / 1,000,000) mod frame_count, integers
  *         only. Split d = t - origin = q x 10^6 + r (0 <= r < 10^6, floor
  *         division) so the product never forms: frames = 60q +
