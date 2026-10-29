@@ -105,6 +105,7 @@ BODY_CASES = [
     ("3.3.a", "    g_count = 1u; g_count = 2u;\n"),
     ("7.1.k", "    uint32_t * value = &g_count;\n"),
     ("7.1.m", "    bool done_yet = false;\n"),
+    ("1.6.a", "    g_count =\n        (uint32_t)g_count;\n"),
     ("1.3.a", "    if (DEMO_LIMIT > g_count) g_count++;\n"),
 ]
 
@@ -126,6 +127,23 @@ FILE_CASES = [
 @pytest.mark.parametrize("rule,text", FILE_CASES)
 def test_file_level_violation_is_caught(tmp_path, rule, text):
     assert [rule] == run(tmp_path, c_file(file_level=text))
+
+
+CLEAN_FILE_CASES = [
+    "static bool g_b_ready = false;\n",
+    "static uint32_t * g_p_count = NULL;\n",
+]
+
+
+@pytest.mark.parametrize("text", CLEAN_FILE_CASES)
+def test_global_prefix_combines_with_pointer_and_bool(tmp_path, text):
+    assert [] == run(tmp_path, c_file(file_level=text))
+
+
+def test_cast_comment_above_multiline_statement(tmp_path):
+    body = ("    /* g_count is already a uint32_t. */\n"
+            "    g_count =\n        (uint32_t)g_count;\n")
+    assert [] == run(tmp_path, c_file(body=body))
 
 
 def test_pragma_once_is_caught(tmp_path):
