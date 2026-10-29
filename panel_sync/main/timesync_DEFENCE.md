@@ -1,13 +1,15 @@
 # timesync: design defence (T-B4-02)
 
-Owner: Ahsanul (Buddy 4). Files: `timesync_core.c/.h` (pure C, host-tested), `timesync.c/.h` (Time Sync Task), `panel_sync/test/test_timesync.c` (host tests, `make -C panel_sync/test`).
+Owner: Ahsanul (Buddy 4). Files: `timesync.c/.h` (pure C core plus the Time Sync Task under `#ifndef TIMESYNC_HOST_TEST`), `panel_sync/test/test_main.c/.h` and `test_timesync.c/.h` (host tests, `make -C panel_sync/test`). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviations D-1 and D-2 only).
+
+**Names.** Barr-C 6.1.i and 5.1.c require the module prefix on every public function and type, so the plan's names are implemented as: `now_corrected()` = `timesync_now_corrected()`, `frame_index(t)` = `timesync_frame_index()`, `deadline_local(n)` = `timesync_deadline_local()`, `ts_publish()` = `timesync_publish()`, `ts_read_snapshot()` = `timesync_read_snapshot()`. Quotations below keep the plan's wording.
 
 Each entry gives the design choice, the PostTri row it comes from (inventory ID and the row's wording, quoted from `Plan/commitment_inventory.md` or the T-B4-02 plan row), and the question an examiner is likely to ask. Numbers not in the plan are labelled (plan choice).
 
 ## 1. Input is a (t_p, t_l) pair, defined in `timesync.h`
 
 - Source: IFM-4a, "input (t_p, t_l) pairs from the Time Sync Queue"; T-B4-02, "Input is the (t_p, t_l) pair type defined in `timesync.h` and posted by `tile_net`, so this task needs no wire decoding."
-- Choice: `ts_pair_t { int64_t t_p; int64_t t_l; }`. The Time Sync Task receives the `q_timesync` queue (created by tile_net in T-B3-03) as its task parameter, so timesync holds no global reference to tile_net state.
+- Choice: `timesync_pair_t { int64_t t_p; int64_t t_l; }`. The Time Sync Task receives the `q_timesync` queue (created by tile_net in T-B3-03) as its task parameter, so timesync holds no global reference to tile_net state.
 - Examiner: "Where exactly is t_l taken, and how much of the receive latency is already inside it before the pair reaches your filter?" (the hook is OD-09, Cheston).
 
 ## 2. Minimum-delay filter over the last 16 beacons
@@ -25,7 +27,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 4. Slew of at most 100 us per tick, `int8_t`, never stepped
 
 - Source: VA-4.6, "Slew offset corrections instead of stepping the clock."; IFM-4b, "slew at most 100 us per tick (2 ms correction takes 20 frames) **(proposed)**"; VC-2, "Slew field becomes `int8_t`, range -100 to +100 us ... boundary unit test at -100, 0 and +100."
-- Choice: `ts_slew_clamp()` limits each request to -100..+100 and returns `int8_t`. Every tick publishes `applied + slew`. Host test 1 checks -100, 0, +100 unchanged and -101, +101 limited.
+- Choice: `timesync_slew_clamp()` limits each request to -100..+100 and returns `int8_t`. Every tick publishes `applied + slew`. Host test 1 checks -100, 0, +100 unchanged and -101, +101 limited.
 - Examiner: "Why `int8_t` and not 7 bits, and what is the largest correction rate in ppm that a 100 us per tick slew can follow at 60 fps?"
 
 ## 5. What "absorbed in exactly 20 ticks" means
@@ -37,7 +39,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 6. One slew step per Display Engine tick
 
 - Source: IFM-4b, "slew at most 100 us per tick"; T-B5-01 (display_engine re-arms a one-shot every tick); PostTri SRM row "Corrected Pico time and drift estimate", "never read in the ISR".
-- Choice: `de_task` calls `timesync_notify_tick()` once per tick (task context, not the ISR); the Time Sync Task wakes, drains the queue and runs one `ts_tick()`. Several pending notifications still give one step. Without notifications it wakes every 100 ms (plan choice: one beacon period at 10 Hz) and still steps at most once. This is Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01): the T-B5-01 row does not list this call (open interface item 2).
+- Choice: `de_task` calls `timesync_notify_tick()` once per tick (task context, not the ISR); the Time Sync Task wakes, drains the queue and runs one `timesync_tick()`. Several pending notifications still give one step. Without notifications it wakes every 100 ms (plan choice: one beacon period at 10 Hz) and still steps at most once. This is Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01): the T-B5-01 row does not list this call (open interface item 2).
 - Examiner: "If the Time Sync Task is delayed past a tick by WiFi (priority 23) on core 0, does the 100 us bound still hold, and what does the delay cost?"
 
 ## 7. Reference moves to the tick time on every publication
@@ -49,28 +51,28 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 8. Seqlock writer and reader, exactly as VC-1
 
 - Source: VC-1, "Writer: increment to odd, release fence, write fields, store even with release. Reader: acquire load, copy fields, acquire fence, reload; retry if odd or changed. After 3 failed retries keep the last good snapshot and set SYNC_STALE. Fields stored as relaxed 32-bit atomic halves (lock-free on Xtensa; a 64-bit `_Atomic` would take a lock)."; VB-4c, "Sequence counter with a single writer, acquire/release ordering, and no same-core higher-priority reader retry-looping."; LDC-5, CB-4.
-- Choice: `ts_publish()` and `ts_read_snapshot()` follow those steps line by line with C11 `<stdatomic.h>`. Offset and reference are two `_Atomic uint32_t` halves each; drift is one 32-bit word. The even value skips 0 on wrap because 0 means "never published"; wrap needs 2^31 publications (414 days at one per tick).
+- Choice: `timesync_publish()` and `timesync_read_snapshot()` follow those steps line by line with C11 `<stdatomic.h>`. Offset and reference are two `_Atomic uint32_t` halves each; drift is one 32-bit word. The even value skips 0 on wrap because 0 means "never published"; wrap needs 2^31 publications (414 days at one per tick).
 - Examiner: "Why is a plain 64-bit `_Atomic` not used, and what goes wrong on the S3 if the writer's release fence is removed?"
 
 ## 9. "3 failed retries" read as 3 failed attempts in total
 
 - Source: VC-1, "After 3 failed retries keep the last good snapshot and set SYNC_STALE."; T-B4-02 host test (4), "after 3 forced failures SYNC_STALE is set and the last good snapshot returned."
-- Choice: `TS_READ_ATTEMPTS = 3`. Reading "3 retries" as 1 attempt plus 3 retries would let a read succeed on a 4th attempt after 3 forced failures, which contradicts test (4); 3 attempts in total satisfies both rows. Test 4 also checks the boundary: 2 failures then a clean third attempt returns the newest set with SYNC_STALE clear.
+- Choice: `TIMESYNC_READ_ATTEMPTS = 3`. Reading "3 retries" as 1 attempt plus 3 retries would let a read succeed on a 4th attempt after 3 forced failures, which contradicts test (4); 3 attempts in total satisfies both rows. Test 4 also checks the boundary: 2 failures then a clean third attempt returns the newest set with SYNC_STALE clear.
 - Examiner: "Why bound the retries at all, rather than loop until the read is consistent?"
 
 ## 10. Last good snapshot is per reader
 
 - Source: RAR-3, "Clock offset: sequence counter; Jia Jun must use the same reader function if the Display Engine reads it on core 1."; T-B4-02, "`now_corrected()` and `deadline_local(n)` read only through `ts_read_snapshot()`, and `display_engine` uses the same function (RAR-3)."
-- Choice: each reading task owns a `ts_reader_t` that holds its own last good snapshot and SYNC_STALE count, so Playback Control (core 0) and the Display Engine (core 1) never share mutable reader state. `now_corrected(r)` and `deadline_local(r, origin, n)` therefore take the reader as a parameter. These signatures differ from the bare `deadline_local(n)` in the row. They are Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01) before his stub fixes a signature (open interface item 1).
-- Examiner: "Two readers on different cores call `ts_read_snapshot()` at once. Which data do they share, and can either corrupt the other's result?"
+- Choice: each reading task owns a `timesync_reader_t` that holds its own last good snapshot and SYNC_STALE count, so Playback Control (core 0) and the Display Engine (core 1) never share mutable reader state. `timesync_now_corrected(r)` and `timesync_deadline_local(r, origin, n)` therefore take the reader as a parameter. These signatures differ from the bare `timesync_deadline_local(n)` in the row. They are Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01) before his stub fixes a signature (open interface item 1).
+- Examiner: "Two readers on different cores call `timesync_read_snapshot()` at once. Which data do they share, and can either corrupt the other's result?"
 
 ## 11. Forced-interleaving hook compiled out of firmware
 
 - Source: VC-1, "Torn-read stress test extended to a core-1 reader and all three fields."; T-B4-02 host test (4), "forced writer interleaving: every snapshot equals a complete old or new set".
-- Choice: `TS_TEST_HOOK(point)` sits between writer and reader steps and expands to nothing unless `TIMESYNC_HOST_TEST` is defined. Test 4 drives it: a complete writer update at each reader step; a reader run while the writer is pre-empted at each of its steps (the PostTri Version C row 1 case: "A core-1 reader can also spin while the core-0 writer is pre-empted mid-update by the WiFi task"); exactly 3 forced failures; 200,000 pseudo-random interleavings (plan choice: enough to hit every hook combination many times; the on-target count belongs to T-X-05). Each set is derived from one counter, so a mix is detectable.
+- Choice: the static function `hook_point_reached(point)` sits between writer and reader steps. It calls the hook installed by `timesync_test_set_hook()` only when `TIMESYNC_HOST_TEST` is defined; in the firmware build it compiles to nothing (no symbol in the target object), so no function-like macro is needed (Barr-C 6.3.a). Test 4 drives it: a complete writer update at each reader step; a reader run while the writer is pre-empted at each of its steps (the PostTri Version C row 1 case: "A core-1 reader can also spin while the core-0 writer is pre-empted mid-update by the WiFi task"); exactly 3 forced failures; 200,000 pseudo-random interleavings (plan choice: enough to hit every hook combination many times; the on-target count belongs to T-X-05). Each set is derived from one counter, so a mix is detectable.
 - Examiner: "A host test on x86 runs on one thread. What does it prove about the ESP32-S3, and what does it leave to T-X-05?"
 
-## 12. `frame_index(t)` in integers, and before origin
+## 12. `timesync_frame_index()` in integers, and before origin
 
 - Source: W6D-1a, "frame = floor((t - origin) x FPS) mod frame_count with FPS = 60, t in corrected Pico time."; T-B4-02, "with t and origin in microseconds, `frame_index(t)` = floor((t - origin) x 60 / 1,000,000) mod frame_count, integers only."; critic log ruling 12.
 - Choice: d = t - origin is split by floor division into d = q x 10^6 + r with 0 <= r < 10^6, so frames = 60q + floor(60r / 10^6) and d x 60 is never formed. This is exact for every d that fits `int64_t`, which holds whenever t and origin are both non-negative. Before origin the floor and a non-negative modulo continue the timeline backwards (origin - 1 us gives frame_count - 1); Playback Control stays ARMED until t_start, so these frames are never shown. frame_count 0 returns 0. origin and frame_count are parameters, because the timeline belongs to Playback Control (T-B4-04).
@@ -79,18 +81,18 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 13. Tick deadline computed from n every time, rounded up
 
 - Source: VA-4.5, "Tick n at origin + n x 1,000,000 / 60 us, computed in integers every frame, re-armed as a one-shot each frame; never a free-running 60 Hz timer (rounding to 16,667 us drifts 20 us/s, about 12 ms in 10 min)."; T-B5-01, "computed in 64-bit integers each frame (never by adding 16,667 us)".
-- Choice: `ts_deadline_pico(origin, n)` = origin + ceil(n x 1,000,000 / 60), from n each call, with n split as 60q + r so every 60 ticks are exactly 1,000,000 us. Rounding up is a (plan choice) so that `frame_index(ts_deadline_pico(o, n), o, fc) == n mod fc` for every n: a truncated deadline (origin + 16,666 us for n = 1) falls 0.67 us before frame 1 starts and `frame_index` returns 0. The T-B4-04 host test ("frame_index at t = origin + k x 1,000,000 / 60 equals k mod 600") passes only with the rounded-up value (open interface item 3).
+- Choice: `timesync_deadline_pico(origin, n)` = origin + ceil(n x 1,000,000 / 60), from n each call, with n split as 60q + r so every 60 ticks are exactly 1,000,000 us. Rounding up is a (plan choice) so that `timesync_frame_index(timesync_deadline_pico(o, n), o, fc) == n mod fc` for every n: a truncated deadline (origin + 16,666 us for n = 1) falls 0.67 us before frame 1 starts and `timesync_frame_index` returns 0. The T-B4-04 host test ("frame_index at t = origin + k x 1,000,000 / 60 equals k mod 600") passes only with the rounded-up value (open interface item 3).
 - Examiner: "Why is a 16,667 us period wrong but a 16,666 or 16,667 us interval between consecutive deadlines right?"
 
-## 14. Integer ranges (documented in `timesync_core.c`)
+## 14. Integer ranges (documented in `timesync.c`)
 
 - Source: CB-4, "time stays 64-bit with justification"; PostTri Zoom 28:55 ("32-bit wraps after 71.6 minutes").
 - All times are signed 64-bit microseconds, assumed in [0, 2^62) (about 146,000 years).
-- `frame_index`: exact for every t - origin that fits `int64_t`.
-- `ts_deadline_pico`: exact for 0 <= n <= 60 x floor((INT64_MAX - 10^6 - max(origin, 0)) / 10^6) + 59, which is n <= 553,402,322,211,239 (about 292,000 years at 60 fps) for origin 0 and n <= 276,701,161,105,619 (about 146,000 years) for origin just below 2^62; above that it saturates at INT64_MAX.
-- `ts_scale_ppb` (drift x elapsed time): exact for |dt| < 2^31 x 10^9 us (about 68,000 years) at any `int32_t` drift.
-- `ts_local_from_pico` is a first-order inverse: within 2 us of the exact inverse for |drift| <= 50 ppm and |t - ref| <= 400 s; in use t - ref is about one tick.
-- The supplementary host checks compare `frame_index` and `ts_scale_ppb` against 128-bit references on 1,000,000 random inputs.
+- `timesync_frame_index`: exact for every t - origin that fits `int64_t`.
+- `timesync_deadline_pico`: exact for 0 <= n <= 60 x floor((INT64_MAX - 10^6 - max(origin, 0)) / 10^6) + 59, which is n <= 553,402,322,211,239 (about 292,000 years at 60 fps) for origin 0 and n <= 276,701,161,105,619 (about 146,000 years) for origin just below 2^62; above that it saturates at INT64_MAX.
+- `timesync_scale_ppb` (drift x elapsed time): exact for |dt| < 2^31 x 10^9 us (about 68,000 years) at any `int32_t` drift.
+- `timesync_local_from_pico` is a first-order inverse: within 2 us of the exact inverse for |drift| <= 50 ppm and |t - ref| <= 400 s; in use t - ref is about one tick.
+- The supplementary host checks compare `timesync_frame_index` and `timesync_scale_ppb` against 128-bit references on 1,000,000 random inputs.
 - Examiner: "Where would `(t - origin) * 60` overflow `int64_t`, and how did you avoid it without 128-bit arithmetic on the S3?"
 
 ## 15. SYNC_READY is a stub
@@ -109,9 +111,9 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 
 These are Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01) and, for item 3, with the T-B4-04 test wording. None is settled.
 
-1. Signatures: `now_corrected(ts_reader_t *r)`, `deadline_local(ts_reader_t *r, int64_t origin_us, uint64_t n)` and `frame_index(int64_t t_us, int64_t origin_us, uint32_t frame_count)` differ from the row's bare `now_corrected()`, `deadline_local(n)` and `frame_index(t)`. The T-B5-01 stub signature follows whatever is agreed.
+1. Signatures: `timesync_now_corrected(timesync_reader_t * p_reader)`, `timesync_deadline_local(timesync_reader_t * p_reader, int64_t origin_us, uint64_t tick)` and `timesync_frame_index(int64_t t_us, int64_t origin_us, uint32_t frame_count)` differ from the row's bare `now_corrected()`, `deadline_local(n)` and `frame_index(t)`: they carry the `timesync_` prefix (Barr-C 6.1.i) and a reader parameter (section 10). The T-B5-01 stub signature follows whatever is agreed.
 2. `timesync_notify_tick()` called once per tick from `de_task` (task context, not the ISR), so the slew runs one step per tick. The T-B5-01 row does not list this call.
-3. Tick deadline rounded up, origin + ceil(n x 1,000,000 / 60) (plan choice), so that `frame_index(ts_deadline_pico(o, n), o, fc) == n mod fc`. With truncation, k = 1 gives origin + 16,666 us and `frame_index` returns 0, so the T-B4-04 host test wording "t = origin + k x 1,000,000 / 60" holds only if t is taken from `ts_deadline_pico()` or rounded up.
+3. Tick deadline rounded up, origin + ceil(n x 1,000,000 / 60) (plan choice), so that `timesync_frame_index(timesync_deadline_pico(o, n), o, fc) == n mod fc`. With truncation, k = 1 gives origin + 16,666 us and `timesync_frame_index` returns 0, so the T-B4-04 host test wording "t = origin + k x 1,000,000 / 60" holds only if t is taken from `timesync_deadline_pico()` or rounded up.
 
 ## Questions for Ahsanul before Tribunal 2
 
