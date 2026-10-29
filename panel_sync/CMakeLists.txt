@@ -4,5 +4,8 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.16)
 
+# Shared wire layout (T-B2-01), also built by ledwall_sync.
+set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/../common/proto)
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(panel_sync)

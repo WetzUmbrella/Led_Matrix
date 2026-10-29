@@ -70,6 +70,11 @@ jobs:
           make -C panel_sync/test
           make -C panel_sync/test asan
 
+      - name: Host tests (common/proto), plain and with sanitizers
+        run: |
+          make -C common/proto/test
+          make -C common/proto/test asan
+
   pico:
     name: Pico W (ledwall_sync)
     runs-on: ubuntu-latest

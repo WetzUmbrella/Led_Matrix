@@ -3,3 +3,9 @@
 # A buddy opts a file in by adding it here once it passes both checks.
 docs/templates/module.h
 docs/templates/module.c
+common/proto/proto.h
+common/proto/proto.c
+common/proto/test/test_main.h
+common/proto/test/test_main.c
+common/proto/test/test_proto.h
+common/proto/test/test_proto.c
