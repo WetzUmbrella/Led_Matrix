@@ -1,0 +1,10 @@
+#!/bin/sh
+# Repo copy of the local guard; install with
+#   cp docs/tools/commit-msg .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
+# Rejects any commit message that carries an
+# AI attribution. A pushed trailer cannot be removed later.
+if grep -v '^#' "$1" | grep -qiE 'co-authored-by|claude|anthropic|generated with'; then
+    echo "commit-msg hook: message mentions Co-Authored-By, Claude, anthropic or Generated with; rejected." >&2
+    exit 1
+fi
+exit 0
