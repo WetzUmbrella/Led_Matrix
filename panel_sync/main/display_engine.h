@@ -12,7 +12,7 @@
  * per tick from de_task, and the DE_W10_TEST_PATTERN moving pixel.
  * Not yet implemented: frame buffers, swap, RMT start and preparation
  * (T-B5-02, T-B5-03), orientation, asset playback, the frame-timing
- * histogram (T-B5-07) and removal of render.c.
+ * histogram (T-B5-07). The prototype render.c/.h is deleted (T-B5-01).
  *
  * PROVISIONAL (test pin, owner Jia Jun): DE_TEST_PIN is GPIO4. The repo does
  * not record which spare GPIO reaches the board header; confirm it before

@@ -104,11 +104,11 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - Offline confirmation (plan choice): on the T-B3-03 10 min (t_p, t_l) log, the p99 window-to-window change of the 16-sample minimum must be at most 1 ms (a fifth of the 5 ms budget). If it is not, option (b) is reopened. [NEEDS MEASUREMENT: T-B3-03 log]
 - Examiner: "Beacons stop for 0.9 s. Does the tile still report SYNC_READY, and is that consistent with what Playback Control does in the same 0.9 s?"
 
-## 16. `lock` and `get_render_state` stay for now
+## 16. `lock` and `get_render_state` removed with their callers
 
 - Source: VC-1 current state, "`panel_sync.c:76` `portMUX_TYPE lock`; writer `panel_sync.c:201-210`; reader `panel_sync.c:222-231`"; T-B4-02, "removes `lock`, `get_render_state` (`panel_sync.c:76,201-210,218-232`)".
-- Choice: not removed in this commit. `get_render_state` is passed to `render_start()` at `panel_sync.c:241` and called through `get_state` at `render.c:120`; `lock` guards the beacon writer at `panel_sync.c:201-210`. Removing them breaks the build until T-B5-01 replaces the render path and T-B3-03 replaces `sync_rx_task`; they are deleted with those callers.
-- Examiner: "Until they are removed, which clock does the 30 fps prototype use, and does any of it touch the new seqlock?"
+- Choice: kept until their callers went, so every commit built. `95aaf07` (T-B4-03 wiring) removed `lock`, `get_render_state` and `sync_rx_task` once `tile_net` (T-B3-03) and `display_engine` (T-B5-01) replaced them; the unbuilt `render.c/.h` were deleted afterwards on `b5/t-b5-01-delete-render`. The portMUX snapshot (VC-10 rejected) no longer exists anywhere in the tile code.
+- Examiner: "Which code path reads the corrected clock now, and can any of it still take a portMUX section on core 1?"
 
 ## Open interface items
 
