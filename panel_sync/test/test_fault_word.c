@@ -9,8 +9,8 @@
  * two ESP32-S3 cores.
  *
  * DEVIATION D-1 (module-wide): C11 stdatomic.h for the shared test flags.
- * DEVIATION D-2 (module-wide): POSIX thread names, types and the int results
- * of pthread_create(), pthread_join() and sched_yield().
+ * The int results of pthread_create(), pthread_join() and sched_yield() are
+ * compared or discarded at once, so no int variable is declared.
  */
 #include "test_fault_word.h"
 
@@ -188,23 +188,28 @@ bool test_fault_word_two_threads (void)
 
     atomic_store_explicit(&g_running, F5_SETTERS, memory_order_release);
 
-    /* DEVIATION D-2: pthread_create() returns int. */
-    int status = pthread_create(&reporter, NULL, reporter_thread, NULL);
+    b_ok = test_main_check(
+               0 == pthread_create(&reporter, NULL, reporter_thread, NULL),
+               __LINE__) &&
+           b_ok;
 
     for (uint32_t idx = 0u; idx < F5_SETTERS; idx++)
     {
-        /* DEVIATION D-2: pthread_create() returns int. */
-        status |=
-            pthread_create(&setters[idx], NULL, setter_thread, &g_setters[idx]);
+        b_ok =
+            test_main_check(0 == pthread_create(&setters[idx], NULL,
+                                                setter_thread, &g_setters[idx]),
+                            __LINE__) &&
+            b_ok;
     }
 
     for (uint32_t idx = 0u; idx < F5_SETTERS; idx++)
     {
-        status |= pthread_join(setters[idx], NULL);
+        b_ok =
+            test_main_check(0 == pthread_join(setters[idx], NULL), __LINE__) &&
+            b_ok;
     }
 
-    status |= pthread_join(reporter, NULL);
-    b_ok = test_main_check(0 == status, __LINE__) && b_ok;
+    b_ok = test_main_check(0 == pthread_join(reporter, NULL), __LINE__) && b_ok;
 
     for (uint32_t idx = 0u; idx < F5_SETTERS; idx++)
     {
