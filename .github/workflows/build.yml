@@ -62,7 +62,7 @@ jobs:
       - name: barr_check on the files in tools/barr_scope.txt
         run: python3 tools/barr_check.py
 
-      - name: pytest (barr_check, skew_analyse)
+      - name: pytest (barr_check, skew_analyse, proto_layout and the C/Python vectors)
         run: python3 -m pytest -q tools/tests pc/tests
 
       - name: Host tests (timesync), plain and with sanitizers

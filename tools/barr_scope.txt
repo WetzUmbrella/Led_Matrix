@@ -11,6 +11,8 @@ common/proto/test/test_proto.h
 common/proto/test/test_proto.c
 common/proto/test/test_messages.h
 common/proto/test/test_messages.c
+common/proto/test/proto_vector_main.h
+common/proto/test/proto_vector_main.c
 panel_sync/main/tile_tasks.h
 panel_sync/main/timesync.h
 panel_sync/main/timesync.c
