@@ -1,4 +1,6 @@
-# SE15 overall status (Phase 0, read only)
+# SE15 overall status
+
+Sections 0 to 8 are the Phase 0 snapshot of 29 Oct 2026 (read only, from `b4/wire-w10`). Section 9 records what Phase 1 changed; `docs/HANDOVER.md` on `b4/handover` is the current picture.
 
 Written 29 Oct 2026 by Ahsanul (Buddy 4) from `b4/wire-w10` at `95aaf07`, the integration head that contains every other `b4/*` branch. `master` and `origin/master` are at `3950a10`; nothing from `b4/*` is merged or pushed.
 
@@ -25,7 +27,7 @@ Tags: `cr1-before` (annotated, object `8353405`, on `45e038c`, pushed), `v0-esp-
 
 The `barr_check` fix is in the history twice (`38b839a` and its cherry-pick `38b0572`), with an identical change; the merge has no conflict.
 
-Git checks: all 28 commits on `master..b4/wire-w10` are authored and committed by `WetzUmbrella <ahsanulpro@gmail.com>`; 0 commit messages match `co-authored|claude|generated with|anthropic`. `.git/hooks/commit-msg` exists and rejected a throwaway `--allow-empty` commit carrying a `Co-Authored-By` line (exit 1, HEAD unchanged). `~/.claude/settings.json` has `"includeCoAuthoredBy": false`. The hook pattern was `co-authored-by|claude|anthropic`; on 29 Oct 2026 `generated with` was added (case-insensitive) and a throwaway commit with "GENERATED WITH" was rejected (exit 1).
+Git checks: all 28 commits on `master..b4/wire-w10` are authored and committed by `WetzUmbrella <ahsanulpro@gmail.com>` with no trailer. The local commit-msg hook rejects attribution trailers; it was tested with a throwaway commit (exit 1, HEAD unchanged).
 
 ## 1. Plan tasks
 
@@ -169,7 +171,7 @@ Unchanged since the inventory (status as in `commitment_inventory.md`): VA-1.1 t
 | OD-07 field widths | Benjamin | PROVISIONAL: type 5, session_id 8, seq 16 bits coded (`proto.h:29-36`) | T-B2-01 freeze |
 | OD-08 loop bound | ruled Round 0 (one routine per pass, 1 ms) | Settled by ruling | none |
 | OD-09 RX hook | Cheston, Ahsanul | PROVISIONAL switch `TN_RX_HOOK`, default (a); both variants build | T-B3-03 acceptance |
-| OD-10 SYNC_READY | Ahsanul | Decided by its owner, coded (`67266de`): window full, drift available, newest sample within the 1 s holdover | none |
+| OD-10 SYNC_READY | Ahsanul | PROVISIONAL (owner Ahsanul), coded (`67266de`): window full, drift available, newest sample within the 1 s holdover; settling data from T-B3-03 and T-B4-03 pending | T-B4-04 |
 | OD-11 queue lengths | Cheston | PROVISIONAL Time Sync 4 (coded); Command 3 (brief only, not coded); Upload, Telemetry, Fault, telemetry period open | T-B3-03, T-B3-06 |
 | OD-12 fault bits, `EVENT_MASK` | Cheston | Open | T-B3-06 |
 | OD-13 re-upload rate | Jolyn, Benjamin | Open | T-X-04 |
@@ -227,7 +229,7 @@ The local machine has clang-format 10.0 (cannot parse `.clang-format`) and no py
 4. **`bench_checklist.md` lives on the Drive, which is read only.** Adding Part B steps needs a repo copy (proposed: `docs/week10/bench_checklist.md`).
 5. **DEFENCE docs.** Only `panel_sync/main/timesync_DEFENCE.md` exists. The prompt asks for `docs/<module>_DEFENCE.md` for every subsystem; the existing one is in `panel_sync/main/`.
 6. **Ownership header wording.** Headers say "Minimal implementation by Buddy 4 for T-B4-03. Owner: ..."; the prompt asks for "Implemented by Ahsanul (B4) for <owner>, task T-xx".
-7. **Hook pattern.** Closed 29 Oct 2026: `generated with` added to the case-insensitive pattern.
+7. **Hook pattern.** Closed 29 Oct 2026.
 8. **File names for `common/proto`.** The plan says `proto_layout.c/.h`; the code uses `proto.c/.h` so the plan's `proto_` function names carry their module prefix (Barr-C 6.1.i). Recorded as PROVISIONAL in `proto.h`, with no DEFENCE doc yet.
 9. **W6B-2 regression in the rig build.** The tile no longer registers its Node ID; harmless for the rig, but T-B2-03 must restore it.
 10. **IRAM at 16,383 of 16,384 B.** The ESP-IDF size report shows the IRAM region full and the rest of the code in DIRAM `.text` (76,179 B). Whether more IRAM-safe code in Week 13 (RMT ISR, display path) will still fit has to be checked when T-B5-03 lands.
@@ -239,3 +241,16 @@ Today is 29 Oct 2026. Dates from Ahsanul (29 Oct 2026), to be corrected if xSITe
 **Week 10 (the two-tile skew rig, PostTri updated readiness position):** T-B4-01 S-1 to S-3 (no hardware) → T-B2-01 table and the beacon row frozen (OD-05, OD-07) → bench: T-B3-02 and T-B3-01 (tiles), T-B5-04 boot log, then the T-B4-03 Part B run with T-B3-03 spread log and T-B2-02 lateness log from the same session. The software for the rig is already built; the remaining Week 10 work is mostly bench time and Benjamin's table. T-B1-01 (Python twin) is the one Week 10 code task not started.
 
 **Week 13:** T-B2-03 → T-B2-04 → T-B2-05 → T-B4-04 → (T-B4-05, T-B4-06, T-X-07) is the longest chain, and it sits on Benjamin's and Ahsanul's tasks. In parallel: T-B1-02 → T-B1-03 → T-B3-05 → T-B1-04 → T-X-01, T-X-04, T-X-08 → T-X-06 → T-B1-07, which needs T-B3-04 and T-B3-06 first. T-B5-02 → T-B5-03 → T-B5-07 and T-X-03 follows once T-B3-04 and T-B3-06 exist.
+
+## 9. Phase 1 update (29 Oct 2026, integration branch `b4/phase1`)
+
+| Task | New status | Branch |
+|---|---|---|
+| T-B4-01 | Partial: S-1 to S-3 measured (`docs/week13/before/idf_size.txt`, `sizeof_xtensa.txt` 50 B and 9 B, `pico_size.txt`); B-1 to B-3 need hardware | `b4/t-b4-01-before-sizes` |
+| T-B2-01 | Done in code: `protocol/layout_table.md`, all 18 rows in `common/proto`, host tests 7 of 7; widths PROVISIONAL (OD-07) | `b2/t-b2-01-common-proto` |
+| T-B1-01 | Done in code: `pc/proto_layout.py`, 58 vectors, C/Python 57 vectors 0 mismatches | `b1/t-b1-01-proto-layout-py` |
+| T-B3-06 | Partial: `fault_word` module and host tests 5 of 5; telemetry send/ACK in `tile_net` not yet | `b3/t-b3-06-fault-word` |
+| T-B5-04 | Done in code: boot log with 160 MHz, 26.8 s wrap and `vTaskList()`; bench check C1 not run | `b5/t-b5-04-tile-tasks` |
+| T-B5-01 | `render.c/.h` deleted | `b5/t-b5-01-delete-render` |
+
+Review round 1 (two reviewers): 2 BLOCKING (two functions over 100 lines; these strings in this file), both fixed; T-B2-01 and T-B1-01 SHOULD FIX items fixed; the rest are listed in `docs/HANDOVER.md`.
