@@ -13,23 +13,24 @@ The 8-bit timing baseline for STP-3 is not in this file: by the Round 0 ruling o
 
 | Item | Before | Label | Source or procedure | After |
 |---|---|---|---|---|
-| `sizeof(beacon_t)` on the target (Xtensa compiler) | | measured | `BENCH.md` S-2, `docs/week13/before/sizeof_xtensa.txt` | |
-| `sizeof(hello_t)` on the target (Xtensa compiler) | | measured | `BENCH.md` S-2, `docs/week13/before/sizeof_xtensa.txt` | |
+| `sizeof(beacon_t)` on the target (Xtensa compiler) | 50 B | measured | `BENCH.md` S-2, `docs/week13/before/sizeof_xtensa.txt` | |
+| `sizeof(hello_t)` on the target (Xtensa compiler) | 9 B | measured | `BENCH.md` S-2, `docs/week13/before/sizeof_xtensa.txt` | |
 | `sizeof(beacon_t)`, host x86_64 gcc | 50 B | measured on the host, not the target | `docs/week13/before/sizeof.txt` | |
 | `sizeof(hello_t)`, host x86_64 gcc | 9 B | measured on the host, not the target | `docs/week13/before/sizeof.txt` | |
 | `beacon_t` field sum (`panel_sync.c:52-63`) | 50 B | derived | magic 4 + version 1 + seq 4 + cmd 1 + frame_no 4 + layout_ver 1 + count 1 + cols 1 + rows 1 + ids 8 x 4 = 18 + 32 = 50 | |
 | `hello_t` field sum (`panel_sync.c:65-69`) | 9 B | derived | magic 4 + id 4 + board 1 = 9 | |
 | Beacon, on-air UDP payload bytes | | measured | `BENCH.md` B-2, `docs/week13/before/onair_before.pcapng` and `onair_before_beacon.txt` | |
 | HELLO, on-air UDP payload bytes (`p->tot_len`, `ledwall_sync/main.c:123`) | | measured | `BENCH.md` B-3, `docs/week13/before/onair_before_hello.log` | |
-| `panel_sync` static DRAM used | | measured | `BENCH.md` S-1, `docs/week13/before/idf_size.txt` | |
-| `panel_sync` static IRAM used | | measured | `BENCH.md` S-1, `docs/week13/before/idf_size.txt` | |
-| `ledwall_sync.elf` text / data / bss | | measured | `BENCH.md` S-3, `docs/week13/before/pico_size.txt` | |
+| `panel_sync` static DRAM used (DIRAM `.data` + `.bss`) | 34,864 B (19,416 + 15,448) | measured | `BENCH.md` S-1, `docs/week13/before/idf_size.txt` | |
+| `panel_sync` static IRAM used (IRAM region + DIRAM `.text`) | 90,750 B (16,383 + 74,367) | measured | `BENCH.md` S-1, `docs/week13/before/idf_size.txt` | |
+| `ledwall_sync.elf` text / data / bss | 340,304 / 0 / 50,944 B | measured | `BENCH.md` S-3, `docs/week13/before/pico_size.txt` | |
 | Free internal heap after WiFi (`heap_caps_get_free_size(MALLOC_CAP_INTERNAL)`), minimum of 10 boots | | measured | `BENCH.md` B-1, `docs/week13/before/heap_at_tag.log` | |
 | Largest internal block after WiFi (`heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)`), minimum of 10 boots | | measured | `BENCH.md` B-1, `docs/week13/before/heap_at_tag.log` | |
 
 Notes on section 1:
 
-- **Why the host `sizeof` is shown but the target cells stay blank.** Host and Xtensa agree by construction: both structs are `__attribute__((packed))` (`panel_sync.c:52`, `:65`), so GCC adds no padding on any target, and every field is an exact-width `uint32_t` or `uint8_t`, with no `int`, `enum`, pointer or bit-field whose size could change between targets. The plan still lists `sizeof` under "measured at the tag", and a target check costs one compiler command with no hardware (S-2), so the target cells wait for `sizeof_xtensa.txt` rather than copying the host value.
+- **Target `sizeof` (S-2, 29 Oct 2026).** `xtensa-esp32s3-elf-gcc` 13.2.0 (esp-13.2.0_20240530) gives 50 B and 9 B (`sizeof_xtensa.txt`), equal to the host values and the field sums, as expected: both structs are `__attribute__((packed))` (`panel_sync.c:52`, `:65`) and every field is an exact-width `uint32_t` or `uint8_t`.
+- **How the DRAM and IRAM cells are read (S-1).** On the ESP32-S3 the ESP-IDF v5.3 size report splits internal RAM into a 16,384 B IRAM region, filled first, and the shared DIRAM region, which holds the rest of the IRAM code (`.text`) beside DRAM `.data` and `.bss`. The tag already fills the IRAM region to 16,383 B, so the full region is the normal linker fill on this chip and not a sign of overflow; IRAM code is the IRAM region plus DIRAM `.text`. The after column is taken the same way.
 - The Pico's copies of the two structs (`ledwall_sync/main.c:46-63`) have the same field names, types, order and `packed` attribute as the tile's, so the beacon the Pico sends (`sizeof(b)` at `main.c:278-280`) has the same field sum.
 - Heap statistic: the minimum over 10 boots **(plan choice: T-B3-01 decides OD-04 from the minimum internal value, so before and after use the same statistic)**. Prototype state during the probe, from the T-B4-01 row: whole-GIF animation mapped from flash (`frames.c:66-71`) at 30 fps.
 

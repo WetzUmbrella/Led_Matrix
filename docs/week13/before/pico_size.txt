@@ -1,0 +1,4 @@
+# arm-none-eabi-size, ledwall_sync at 45e038ca2aa7d8386d5cb895838512d708e45b4d (cr1-before), Pico SDK 2.3.1, placeholder wifi_secrets.h as in CI
+# arm-none-eabi-gcc (15:9-2019-q4-0ubuntu1) 9.2.1 20191025 (release) [ARM/arm-9-branch revision 277599]
+   text	   data	    bss	    dec	    hex	filename
+ 340304	      0	  50944	 391248	  5f850	ledwall_sync.elf

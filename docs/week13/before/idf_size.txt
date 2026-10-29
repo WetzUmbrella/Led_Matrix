@@ -1,0 +1,23 @@
+# idf.py size, panel_sync at 45e038ca2aa7d8386d5cb895838512d708e45b4d (cr1-before), target esp32s3, placeholder wifi_secrets.h as in CI
+# ESP-IDF v5.3
+panel_sync.bin binary size 0xda140 bytes. Smallest app partition is 0x180000 bytes. 0xa5ec0 bytes (43%) free.
+Bootloader binary size 0x5260 bytes. 0x2da0 bytes (36%) free.
+                            Memory Type Usage Summary                             
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃ Memory Type/Section ┃ Used [bytes] ┃ Used [%] ┃ Remain [bytes] ┃ Total [bytes] ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+│ Flash Code          │       551878 │          │                │               │
+│    .text            │       551878 │          │                │               │
+│ Flash Data          │       231096 │          │                │               │
+│    .rodata          │       230840 │          │                │               │
+│    .appdesc         │          256 │          │                │               │
+│ DIRAM               │       109231 │    31.96 │         232529 │        341760 │
+│    .text            │        74367 │    21.76 │                │               │
+│    .data            │        19416 │     5.68 │                │               │
+│    .bss             │        15448 │     4.52 │                │               │
+│ IRAM                │        16383 │    99.99 │              1 │         16384 │
+│    .text            │        15356 │    93.73 │                │               │
+│    .vectors         │         1027 │     6.27 │                │               │
+│ RTC FAST            │           24 │     0.29 │           8168 │          8192 │
+│    .rtc_reserved    │           24 │     0.29 │                │               │
+└─────────────────────┴──────────────┴──────────┴────────────────┴───────────────┘

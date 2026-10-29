@@ -1,0 +1,5 @@
+# sizeof(beacon_t) and sizeof(hello_t) from the Xtensa compiler, structs copied verbatim from panel_sync.c:52-69 at 45e038c
+# xtensa-esp-elf-gcc (crosstool-NG esp-13.2.0_20240530) 13.2.0
+# nm -S -t d: the second column is the symbol size, which equals sizeof() on the target
+00000000 00000050 R sizeof_beacon_t
+00000052 00000009 R sizeof_hello_t
