@@ -131,5 +131,9 @@ void app_main(void)
     if (!display_engine_start()) {
         ESP_LOGE(TAG, "display_engine_start failed");
     }
+    // T-B5-04 acceptance: CPU frequency, cycle-counter wrap and vTaskList().
+    // xTaskCreatePinnedToCore() returns after the task exists, so all three
+    // tasks above are already in the list.
+    tile_tasks_log_boot();
     // app_main returns here; the tasks above own the tile.
 }

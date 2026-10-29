@@ -1,5 +1,5 @@
 idf_component_register(SRCS "panel_sync.c" "timesync.c" "tile_net.c" "display_engine.c"
-                         "fault_word.c"
+                         "fault_word.c" "tile_tasks.c"
                     INCLUDE_DIRS ".")
 
 # OD-09 receive hook for tile_net (T-B3-03): idf.py -DTN_RX_HOOK=2 build
