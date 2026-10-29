@@ -3,3 +3,9 @@
 # A buddy opts a file in by adding it here once it passes both checks.
 docs/templates/module.h
 docs/templates/module.c
+panel_sync/main/timesync.h
+panel_sync/main/timesync.c
+panel_sync/test/test_main.h
+panel_sync/test/test_main.c
+panel_sync/test/test_timesync.h
+panel_sync/test/test_timesync.c
