@@ -621,7 +621,9 @@ def check_tokens(src, out):
         if "{" == tok:
             words = [t[0] for t in stmt]
             is_init = bool(words) and (words[-1] in ("=", ",", "{"))
-            is_type = any(w in ("struct", "union", "enum") for w in words)
+            tags = ("struct", "union", "enum")
+            is_type = bool(words) and ((words[-1] in tags) or (
+                (len(words) > 1) and (words[-2] in tags)))
             if is_type and (not is_init) and (not in_aggregate):
                 if "typedef" in words:
                     pending_typedef = len(stack)

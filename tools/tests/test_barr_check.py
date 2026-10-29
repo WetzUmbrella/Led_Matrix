@@ -132,6 +132,8 @@ def test_file_level_violation_is_caught(tmp_path, rule, text):
 CLEAN_FILE_CASES = [
     "static bool g_b_ready = false;\n",
     "static uint32_t * g_p_count = NULL;\n",
+    "\nstatic void demo_send (struct demo_pcb * p_pcb)\n{\n"
+    "    (void)p_pcb; /* Unused in the fixture. */\n}\n",
 ]
 
 
