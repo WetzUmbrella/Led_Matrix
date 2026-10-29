@@ -5,7 +5,8 @@
  *
  * Minimal implementation by Buddy 4 for T-B4-03. Owner: Benjamin, task
  * T-B2-01. Implemented: proto_put_bits(), proto_get_bits(), the common header
- * (type, session_id, seq) and the BEACON row {session_id, seq, t_p}, with
+ * (type, session_id, seq) and the BEACON row {session_id, seq, t_p}
+ * including proto_beacon_set_t_p(), with
  * host tests. Not yet implemented: protocol/layout_table.md, the
  * byte-aligned proto_put_u16_le/u32_le/u64_le and proto_get_*_le helpers,
  * every other message row (REGISTER to TELEMETRY_ACK), the Python twin
@@ -119,6 +120,15 @@ uint64_t proto_get_bits (uint8_t const * p_buf, uint32_t bit_off,
  */
 uint32_t proto_encode_beacon (proto_beacon_t const * p_msg, uint8_t * p_buf,
                               uint32_t buf_len);
+
+/**
+ * @brief  Overwrite only the t_p field of an encoded BEACON, so the sender can
+ *         read time_us_64() after everything else is encoded (T-B2-02: t_p is
+ *         read immediately before udp_sendto).
+ * @param  p_buf  An encoded BEACON of PROTO_BEACON_BYTES bytes.
+ * @param  t_p    Pico time, microseconds.
+ */
+void proto_beacon_set_t_p (uint8_t * p_buf, uint64_t t_p);
 
 /**
  * @brief  Decode a BEACON. Rejects a datagram whose length is not

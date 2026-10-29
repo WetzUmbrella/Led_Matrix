@@ -115,6 +115,16 @@ uint32_t proto_encode_beacon (proto_beacon_t const * p_msg, uint8_t * p_buf,
 }
 
 /**
+ * @brief  Overwrite only the t_p field of an encoded BEACON.
+ * @param  p_buf  An encoded BEACON.
+ * @param  t_p    Pico time, microseconds.
+ */
+void proto_beacon_set_t_p (uint8_t * p_buf, uint64_t t_p)
+{
+    proto_put_bits(p_buf, BEACON_T_P, PROTO_TIME_BITS, t_p);
+}
+
+/**
  * @brief  Decode a BEACON.
  * @param  p_buf  Received bytes.
  * @param  len    Received length, bytes.

@@ -135,6 +135,15 @@ bool test_proto_beacon (void)
     b_ok = test_main_check(bytes_equal(buf, g_ref_max, PROTO_BEACON_BYTES),
                            __LINE__) &&
            b_ok;
+    /* Setting t_p after encoding gives the same bytes as encoding it. */
+    proto_beacon_t mid_zero = mid;
+
+    mid_zero.t_p = 0u;
+    (void)proto_encode_beacon(&mid_zero, buf, sizeof(buf)); /* Size known. */
+    proto_beacon_set_t_p(buf, mid.t_p);
+    b_ok = test_main_check(bytes_equal(buf, g_ref_mid, PROTO_BEACON_BYTES),
+                           __LINE__) &&
+           b_ok;
     printf("    93 bits, %" PRIu32 " bytes; reference vectors match\n",
            PROTO_BEACON_BYTES);
 
