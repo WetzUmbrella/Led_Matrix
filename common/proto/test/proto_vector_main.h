@@ -9,9 +9,6 @@
 #ifndef PROTO_VECTOR_MAIN_H
 #define PROTO_VECTOR_MAIN_H
 
-#include <stdbool.h>
-#include <stdint.h>
-
 #endif /* PROTO_VECTOR_MAIN_H */
 
 /*** end of file ***/

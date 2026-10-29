@@ -18,6 +18,7 @@ Usage: python3 pc/gen_vectors.py [output directory]
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -147,7 +148,15 @@ def write_vectors(out_dir: str) -> List[Dict[str, object]]:
     return vectors
 
 
+def main() -> None:
+    """Command line: optional output directory."""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("out_dir", nargs="?", default=DEFAULT_DIR,
+                        help="output directory (default protocol/vectors)")
+    args = parser.parse_args()
+    written = write_vectors(args.out_dir)
+    print("%d vectors written to %s" % (len(written), args.out_dir))
+
+
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_DIR
-    written = write_vectors(target)
-    print("%d vectors written to %s" % (len(written), target))
+    main()

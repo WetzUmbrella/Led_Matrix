@@ -21,7 +21,7 @@ Each entry gives the choice, the PostTri row it comes from and the examiner's li
 ## 3. Vectors in both directions
 
 - Source: T-B1-01 acceptance, "Python to C and C to Python: byte-for-byte equal for 100% of vectors. Pass = 0 mismatches."
-- Choice: 58 vectors: for each of the 18 rows a typical vector (every field non-zero and distinct, so a misplaced field changes the bytes), a minimum and a maximum (the T-B2-01 boundary set); the OD-05 worked frame and a full pattern frame; a manifest with format_version 0; and the 115,200 B payload. For each message vector the C tool decodes the Python bytes and prints the same fields, and encodes the same fields to the same bytes, which Python decodes back. Result 29 Oct 2026: 57 checked vectors (the payload is checked by length), 0 mismatches. A deliberate swap of two TELEMETRY fields in `proto.c` made the test fail, so the test can see a disagreement.
+- Choice: 58 vectors: for each of the 18 rows a typical vector (every field non-zero and distinct, so a misplaced field changes the bytes), a minimum and a maximum (the T-B2-01 boundary set); the OD-05 worked frame and a full pattern frame; a manifest with format_version 0; and the 115,200 B payload. For each message vector the C tool decodes the Python bytes and prints the same fields, and encodes the same fields to the same bytes, which Python decodes back. Result 29 Oct 2026: 57 checked vectors (the payload is checked by length), 0 mismatches. Mutation check (procedure, no log kept): swap the order of two TELEMETRY fields in `proto_encode_telemetry()`, rebuild the tool, run `pytest pc/tests/test_cross_lang.py`: it must fail with py->c and c->py mismatches; restore the file. Run on 29 Oct 2026: it failed as expected.
 - Examiner: "Your C and Python both come from one author. What does a cross-language test prove that a review cannot, and what would it miss?"
 
 ## 4. Vectors are regenerated and compared
@@ -39,8 +39,8 @@ Each entry gives the choice, the PostTri row it comes from and the examiner's li
 ## 6. Unknown format_version and the 115,200 B payload are valid inputs to the codec
 
 - Source: VC-5, "Test vectors with an unknown version and a 115,200 B payload must both give the NACK and no ASSET_READY."
-- Choice: the codec encodes and decodes format_version 0, because the tile must receive it to NACK it (T-B3-05, T-X-08 case 4). The 115,200 B payload is a file, not a message: it is too long for one ASSET_CHUNK, and against a 600-frame manifest it fails the length rule 600 x 96 = 57,600 B (T-X-08 case 5).
-- Examiner: "Walk the 115,200 B payload through the upload: how many chunks, and at which chunk does the tile know the length is wrong?"
+- Choice: the codec encodes and decodes format_version 0, because the tile must receive it to NACK it (T-B3-05, T-X-08 case 4). The 115,200 B payload is a file, not a message: it is too long for one ASSET_CHUNK (the C decoder refuses it by length), it needs 113 chunks, which the 0 to 112 chunk index allows, and against a 600-frame manifest it fails the length rule 600 x 96 = 57,600 B (T-X-08 case 5).
+- Examiner: "Walk the 115,200 B payload through the upload: how many chunks, and at which chunk index does the tile first know the payload is longer than frame_count x 96 B?"
 
 ## Open items
 
