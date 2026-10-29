@@ -41,6 +41,35 @@ jobs:
           name: panel_sync-bin
           path: panel_sync/build/panel_sync.bin
 
+  barr:
+    name: Barr-C and host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tools (clang-format pinned, see docs/coding_standard.md)
+        run: pip install clang-format==18.1.8 pytest==8.3.3
+
+      - name: clang-format on the files in tools/barr_scope.txt
+        run: |
+          files=$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' tools/barr_scope.txt)
+          clang-format --dry-run --Werror $files
+
+      - name: barr_check on the files in tools/barr_scope.txt
+        run: python3 tools/barr_check.py
+
+      - name: pytest (barr_check, skew_analyse)
+        run: python3 -m pytest -q tools/tests pc/tests
+
+      - name: Host tests (timesync), plain and with sanitizers
+        run: |
+          make -C panel_sync/test
+          make -C panel_sync/test asan
+
   pico:
     name: Pico W (ledwall_sync)
     runs-on: ubuntu-latest
