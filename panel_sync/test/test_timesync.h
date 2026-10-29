@@ -41,6 +41,14 @@ bool test_timesync_step_20_ticks (void);
 bool test_timesync_seqlock (void);
 
 /**
+ * @brief  OD-10 SYNC_READY rule: window not full gives false, no drift gives
+ *         false, all met gives true (also at exactly 1 s), and the newest
+ *         sample 1.1 s old gives false.
+ * @return true when every check passed.
+ */
+bool test_timesync_sync_ready (void);
+
+/**
  * @brief  Supplementary arithmetic checks (not counted in Pass = N of 4).
  * @return true when every check passed.
  */

@@ -92,13 +92,15 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     bool const b_supp =
         test_main_run("Supplementary arithmetic checks (not counted)",
                       test_timesync_supp_arithmetic);
+    bool const b_ready = test_main_run("OD-10 SYNC_READY rule (not counted)",
+                                       test_timesync_sync_ready);
 
     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
 
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
-    if ((CASE_COUNT == passed) && b_supp)
+    if ((CASE_COUNT == passed) && b_supp && b_ready)
     {
         status = 0;
     }

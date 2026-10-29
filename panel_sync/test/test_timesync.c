@@ -29,6 +29,9 @@
 #define TEST4_FAILS      3
 #define TEST4_RANDOM     200000u
 #define SUPP_RANDOM      1000000u
+#define READY_START_US   INT64_C(1000000)
+#define READY_DELAY_US   INT64_C(2000)
+#define READY_STALE_US   INT64_C(1100000)
 #define FRAMES_600       600u
 #define FRAME_TICKS      UINT64_C(1200)
 #define SET_SCALE        INT64_C(0x100000001)
@@ -395,6 +398,77 @@ bool test_timesync_seqlock (void)
                b_ok;
         b_ok = test_main_check(reader.stale_count == stale, __LINE__) && b_ok;
     }
+
+    return b_ok;
+}
+
+/**
+ * @brief  OD-10 SYNC_READY rule.
+ * @return true when every check passed.
+ */
+bool test_timesync_sync_ready (void)
+{
+    int64_t const newest = beacon_time(READY_START_US, TIMESYNC_WINDOW - 1u);
+
+    bool b_ok = true;
+
+    /* Window not full: 15 samples, checked at the newest sample's time. */
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < (TIMESYNC_WINDOW - 1u); idx++)
+    {
+        int64_t const t_p = beacon_time(READY_START_US, idx);
+
+        timesync_add_sample(t_p, t_p + READY_DELAY_US);
+    }
+
+    timesync_test_set_now_us(newest);
+    b_ok = test_main_check(!timesync_sync_ready(), __LINE__) && b_ok;
+    printf("    window 15 of 16: SYNC_READY %d\n", timesync_sync_ready());
+
+    /* Window full but no drift: every sample has the same local time, so the
+     * two half-window minima have zero span and drift cannot be computed. */
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        timesync_add_sample(beacon_time(READY_START_US, idx), newest);
+    }
+
+    int32_t drift = 0;
+
+    b_ok = test_main_check(!timesync_drift_estimate(&drift), __LINE__) && b_ok;
+    b_ok = test_main_check(!timesync_sync_ready(), __LINE__) && b_ok;
+    printf("    window full, no drift: SYNC_READY %d\n", timesync_sync_ready());
+
+    /* All met: window full, drift available, newest sample fresh. */
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        int64_t const t_p = beacon_time(READY_START_US, idx);
+
+        timesync_add_sample(t_p, t_p + READY_DELAY_US);
+    }
+
+    b_ok = test_main_check(timesync_drift_estimate(&drift), __LINE__) && b_ok;
+    b_ok = test_main_check(timesync_sync_ready(), __LINE__) && b_ok;
+    printf("    all met, newest 0 s old: SYNC_READY %d\n",
+           timesync_sync_ready());
+
+    /* Boundary: exactly the 1 s holdover old is still ready. */
+    timesync_test_set_now_us(newest + TIMESYNC_HOLDOVER_US);
+    b_ok = test_main_check(timesync_sync_ready(), __LINE__) && b_ok;
+    printf("    all met, newest 1.0 s old: SYNC_READY %d\n",
+           timesync_sync_ready());
+
+    /* Newest sample 1.1 s old: no longer ready. */
+    timesync_test_set_now_us(newest + READY_STALE_US);
+    b_ok = test_main_check(!timesync_sync_ready(), __LINE__) && b_ok;
+    printf("    all met, newest 1.1 s old: SYNC_READY %d\n",
+           timesync_sync_ready());
+
+    timesync_init();
 
     return b_ok;
 }

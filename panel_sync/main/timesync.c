@@ -35,6 +35,8 @@
 #define SEQ_EVEN_STEP  2u
 #define SEQ_FIRST_EVEN 2u
 #define SEQ_ODD_BIT    1u
+#define READY_WINDOW   0x1u
+#define READY_DRIFT    0x2u
 
 /** (plan choice) 100 ms: one beacon period at 10 Hz, so samples are still
  *  drained at the beacon rate when no tick notification arrives. */
@@ -63,6 +65,24 @@ typedef struct
     _Atomic uint32_t words[WORD_COUNT];
 } seqlock_t;
 
+/** Index of each 32-bit word of the SYNC_READY inputs. */
+typedef enum
+{
+    READY_NEWEST_LOW = 0,
+    READY_NEWEST_HIGH,
+    READY_FLAGS,
+    READY_WORD_COUNT
+} ready_word_t;
+
+/** SYNC_READY inputs (OD-10), published by the Time Sync Task with the same
+ *  seqlock steps as the VC-1 set but under their own counter, so the VC-1
+ *  set itself is unchanged. */
+typedef struct
+{
+    _Atomic uint32_t seq; /**< Even: stable. Odd: write in progress. */
+    _Atomic uint32_t words[READY_WORD_COUNT];
+} ready_lock_t;
+
 /** Writer state, used by the Time Sync Task only. */
 typedef struct
 {
@@ -83,6 +103,7 @@ typedef struct
 } writer_state_t;
 
 static seqlock_t      g_pub;
+static ready_lock_t   g_ready;
 static writer_state_t g_writer;
 
 #ifdef TIMESYNC_HOST_TEST
@@ -96,6 +117,7 @@ static _Atomic(TaskHandle_t) g_p_sync_task = NULL;
 #endif
 
 static void     hook_point_reached (timesync_hook_point_t point);
+static void     ready_publish (int64_t newest_t_l, uint32_t flags);
 static int64_t  floor_div (int64_t numerator, int64_t divisor);
 static uint32_t low_word (int64_t value);
 static uint32_t high_word (int64_t value);
@@ -372,6 +394,14 @@ void timesync_init (void)
     {
         atomic_store_explicit(&g_pub.words[word], 0u, memory_order_relaxed);
     }
+
+    atomic_store_explicit(&g_ready.seq, 0u, memory_order_relaxed);
+
+    /* READY_WORD_COUNT is a small positive enum constant (3). */
+    for (uint32_t word = 0u; word < (uint32_t)READY_WORD_COUNT; word++)
+    {
+        atomic_store_explicit(&g_ready.words[word], 0u, memory_order_relaxed);
+    }
 }
 
 /**
@@ -423,6 +453,20 @@ void timesync_add_sample (int64_t t_p, int64_t t_l)
             }
         }
     }
+
+    uint32_t flags = 0u;
+
+    if (TIMESYNC_WINDOW == g_writer.count)
+    {
+        flags |= READY_WINDOW;
+    }
+
+    if (g_writer.b_drift_valid)
+    {
+        flags |= READY_DRIFT;
+    }
+
+    ready_publish(t_l, flags);
 }
 
 /**
@@ -547,17 +591,50 @@ int64_t timesync_deadline_local (timesync_reader_t * p_reader,
 }
 
 /**
- * @brief  STUB. The SYNC_READY rule is open decision OD-10 (owner Ahsanul,
- *         due before T-B4-04; options: (a) window full and drift available,
- *         (b) (a) plus a spread bound from T-B3-03). No rule is invented here.
- *         Returns false: nothing in Week 10 gates on SYNC_READY (the T-B4-03
- *         rig uses origin = 0), and false keeps any early caller from
- *         treating an undecided rule as a stable clock.
- * @return false.
+ * @brief  SYNC_READY rule (OD-10): window full, drift available and the
+ *         newest sample no older than TIMESYNC_HOLDOVER_US. See timesync.h.
+ *         The inputs are read with acquire load, copy, acquire fence and
+ *         reload, at most TIMESYNC_READ_ATTEMPTS times; a read that never
+ *         sees a stable set returns false.
+ * @return true when the tile may report SYNC_READY.
  */
 bool timesync_sync_ready (void)
 {
-    return false;
+    int64_t const now_us  = timesync_platform_now_us();
+    bool          b_done  = false;
+    bool          b_ready = false;
+    uint32_t      attempt = 0u;
+
+    while ((!b_done) && (attempt < TIMESYNC_READ_ATTEMPTS))
+    {
+        uint32_t const seq_1 =
+            atomic_load_explicit(&g_ready.seq, memory_order_acquire);
+        uint32_t const newest_low = atomic_load_explicit(
+            &g_ready.words[READY_NEWEST_LOW], memory_order_relaxed);
+        uint32_t const newest_high = atomic_load_explicit(
+            &g_ready.words[READY_NEWEST_HIGH], memory_order_relaxed);
+        uint32_t const flags = atomic_load_explicit(&g_ready.words[READY_FLAGS],
+                                                    memory_order_relaxed);
+
+        atomic_thread_fence(memory_order_acquire);
+
+        uint32_t const seq_2 =
+            atomic_load_explicit(&g_ready.seq, memory_order_relaxed);
+
+        if ((0u == (seq_1 & SEQ_ODD_BIT)) && (seq_1 == seq_2))
+        {
+            int64_t const age_us = now_us - join_words(newest_low, newest_high);
+            uint32_t const needed = READY_WINDOW | READY_DRIFT;
+
+            b_ready = (0u != seq_1) && (needed == (flags & needed)) &&
+                      (age_us <= TIMESYNC_HOLDOVER_US);
+            b_done = true;
+        }
+
+        attempt++;
+    }
+
+    return b_ready;
 }
 
 /**
@@ -703,6 +780,39 @@ static void hook_point_reached (timesync_hook_point_t point)
 #else
     (void)point; /* No hook in the firmware build. */
 #endif
+}
+
+/**
+ * @brief  Publish the SYNC_READY inputs: increment to odd, release fence,
+ *         relaxed word stores, store even with release (the VC-1 steps).
+ *         Single writer: the Time Sync Task.
+ * @param  newest_t_l  Local time of the newest sample, microseconds.
+ * @param  flags       READY_WINDOW and READY_DRIFT bits.
+ */
+static void ready_publish (int64_t newest_t_l, uint32_t flags)
+{
+    /* Only this task writes seq, so a relaxed load reads its own last store. */
+    uint32_t const seq =
+        atomic_load_explicit(&g_ready.seq, memory_order_relaxed);
+
+    atomic_store_explicit(&g_ready.seq, seq + SEQ_STEP, memory_order_relaxed);
+    atomic_thread_fence(memory_order_release);
+    atomic_store_explicit(&g_ready.words[READY_NEWEST_LOW],
+                          low_word(newest_t_l), memory_order_relaxed);
+    atomic_store_explicit(&g_ready.words[READY_NEWEST_HIGH],
+                          high_word(newest_t_l), memory_order_relaxed);
+    atomic_store_explicit(&g_ready.words[READY_FLAGS], flags,
+                          memory_order_relaxed);
+
+    /* The even value skips 0 on wrap, because 0 means "never published". */
+    uint32_t even = seq + SEQ_EVEN_STEP;
+
+    if (0u == even)
+    {
+        even = SEQ_FIRST_EVEN;
+    }
+
+    atomic_store_explicit(&g_ready.seq, even, memory_order_release);
 }
 
 /**

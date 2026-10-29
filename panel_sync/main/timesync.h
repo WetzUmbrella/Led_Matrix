@@ -65,6 +65,11 @@
 /** Parts per billion: the drift unit. */
 #define TIMESYNC_PPB_PER_UNIT 1000000000u
 
+/** Clock holdover: 1 s (proposed, VA-4.3, W6D-2b). SYNC_READY needs a beacon
+ *  sample no older than this, and Playback Control (T-B4-04) pauses after
+ *  this long without beacons. Changed only by T-B4-05 (OD-19). */
+#define TIMESYNC_HOLDOVER_US INT64_C(1000000)
+
 /** Snapshot flag: a published set was copied at least once. */
 #define TIMESYNC_SNAP_VALID 0x1u
 
@@ -232,8 +237,23 @@ int64_t timesync_local_from_pico (timesync_snapshot_t const * p_snap,
                                   int64_t                     t_p);
 
 /**
- * @brief  SYNC_READY. Stub until OD-10 is decided; returns false.
- * @return Whether the clock estimate is stable enough for SYNC_READY.
+ * @brief  SYNC_READY rule (OD-10, decided by Ahsanul). True only when all
+ *         three hold:
+ *         1. the minimum-delay window is full (TIMESYNC_WINDOW samples);
+ *         2. a drift estimate is available;
+ *         3. the newest (t_p, t_l) sample is no older than
+ *            TIMESYNC_HOLDOVER_US (1 s, VA-4.3) at the local time of the
+ *            call, so a tile that stops receiving beacons stops reporting
+ *            ready.
+ *         The inputs are published by the Time Sync Task under their own
+ *         sequence counter, separate from the VC-1 set; a read that fails
+ *         TIMESYNC_READ_ATTEMPTS times returns false.
+ *         Offline confirmation (plan choice): on the T-B3-03 10 min
+ *         (t_p, t_l) log, the p99 window-to-window change of the 16-sample
+ *         minimum must be at most 1 ms. If it is not, OD-10 option (b), a
+ *         spread bound, is reopened.
+ *         Any task, never an ISR.
+ * @return true when the tile may report SYNC_READY.
  */
 bool timesync_sync_ready (void);
 
@@ -271,12 +291,6 @@ void timesync_test_set_hook (timesync_hook_fn_t p_hook);
  */
 void timesync_test_set_now_us (int64_t now_us);
 #endif
-
-/*
- * SYNC_READY rule: open decision OD-10 (Ahsanul, before T-B4-04). The rule is
- * recorded here once it is decided. Until then timesync_sync_ready() is a
- * stub.
- */
 
 /**
  * @brief  Time Sync Task (priority 16 on core 0, proposed, W6D-4a). It is the

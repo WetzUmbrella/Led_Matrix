@@ -95,11 +95,14 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - The supplementary host checks compare `timesync_frame_index` and `timesync_scale_ppb` against 128-bit references on 1,000,000 random inputs.
 - Examiner: "Where would `(t - origin) * 60` overflow `int64_t`, and how did you avoid it without 128-bit arithmetic on the S3?"
 
-## 15. SYNC_READY is a stub
+## 15. SYNC_READY rule (OD-10, decided)
 
-- Source: OD-10, "SYNC_READY rule (W6: "stable clock estimate"; PostTri gives no number)", options "(a) filter window full (16 beacons) and drift estimate available; (b) (a) plus a spread bound measured in T-B3-03", owner Ahsanul, before T-B4-04; T-B4-02, "SYNC_READY rule per OD-10."
-- Choice: `timesync_sync_ready()` returns false and cites OD-10. False because nothing in Week 10 gates on SYNC_READY (the T-B4-03 rig uses origin = 0) and false stops an early caller from treating an undecided rule as a stable clock. The rule is recorded in `timesync.h` once decided.
-- Examiner: "Which of options (a) and (b) would you choose, and what number from the T-B3-03 spread log would decide it?"
+- Source: OD-10, "SYNC_READY rule (W6: "stable clock estimate"; PostTri gives no number)", options "(a) filter window full (16 beacons) and drift estimate available; (b) (a) plus a spread bound measured in T-B3-03", owner Ahsanul; VA-4.3, "Holdover starts at 1 s".
+- Decision (Ahsanul, 29 Oct 2026): option (a) plus a freshness condition. `timesync_sync_ready()` is true only when the window is full, a drift estimate is available, and the newest (t_p, t_l) sample is no older than `TIMESYNC_HOLDOVER_US` (1 s) at the time of the call. Without the freshness condition a tile that stops receiving beacons keeps reporting ready. The rule is recorded in `timesync.h`.
+- Choice: the Time Sync Task publishes the three inputs (newest t_l, window-full and drift bits) under their own sequence counter with the VC-1 writer and reader steps, so a reader on another task never reads the writer's private state and the VC-1 set (offset, drift, reference) is unchanged. A read that never sees a stable set returns false. The 1 s value is the same constant Playback Control uses for holdover, changed only by T-B4-05 (OD-19).
+- Host tests (group "OD-10 SYNC_READY rule"): 15 of 16 samples gives false; a full window with zero span (no drift) gives false; all met gives true, also at exactly 1.0 s; the newest sample 1.1 s old gives false. A mutation that drops the freshness condition makes the 1.1 s case fail.
+- Offline confirmation (plan choice): on the T-B3-03 10 min (t_p, t_l) log, the p99 window-to-window change of the 16-sample minimum must be at most 1 ms (a fifth of the 5 ms budget). If it is not, option (b) is reopened. [NEEDS MEASUREMENT: T-B3-03 log]
+- Examiner: "Beacons stop for 0.9 s. Does the tile still report SYNC_READY, and is that consistent with what Playback Control does in the same 0.9 s?"
 
 ## 16. `lock` and `get_render_state` stay for now
 
