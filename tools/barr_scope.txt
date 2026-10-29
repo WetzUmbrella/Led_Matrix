@@ -10,6 +10,7 @@ common/proto/test/test_main.c
 common/proto/test/test_proto.h
 common/proto/test/test_proto.c
 panel_sync/main/tile_tasks.h
+panel_sync/main/tile_tasks.c
 panel_sync/main/timesync.h
 panel_sync/main/timesync.c
 panel_sync/test/test_main.h
