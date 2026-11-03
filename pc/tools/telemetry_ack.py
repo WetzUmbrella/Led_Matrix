@@ -38,6 +38,7 @@ from typing import Dict, List, Optional, TextIO, Tuple
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 ".."))
 import proto_layout as pl  # noqa: E402
+import telemetry  # noqa: E402
 
 #: Ports (layout_table.md section 11).
 TELEMETRY_PORT = 4215
@@ -68,11 +69,8 @@ def should_drop(count: int, drop_every: int) -> bool:
     return drop_every > 0 and count % drop_every == 0
 
 
-def make_ack(session_id: int, seq: int) -> bytes:
-    """TELEMETRY_ACK for the packet with header ``seq``. The PC's own header
-    seq is not used by the tile, so it repeats ``seq``."""
-    return pl.encode_telemetry_ack(session_id=session_id, seq=seq,
-                                   acked_seq=seq)
+#: TELEMETRY_ACK encoder shared with the dashboard's receiver.
+make_ack = telemetry.make_ack
 
 
 def track(node: NodeTrack, word: int, condition_bit: int) -> None:
