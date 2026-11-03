@@ -64,17 +64,21 @@ typedef struct
 } pb_timeline_lock_t;
 
 /* Core state: Playback Control Task only. */
-static playback_control_state_t g_state       = PLAYBACK_INITIALISING;
-static bool                     g_b_seq_known = false;
-static uint16_t                 g_last_seq    = 0u;
-static uint8_t                  g_session     = 0u;
-static bool                     g_b_session   = false;
-static int64_t                  g_origin_us   = 0;
-static int64_t                  g_target_us   = 0;
-static uint16_t                 g_frames      = 1u;
-static uint16_t                 g_hold_frame  = 0u;
-static bool                     g_b_lost_set  = false;
-static uint32_t                 g_rejected    = 0u;
+static playback_control_state_t g_state = PLAYBACK_INITIALISING;
+
+/* Copy of g_state for other tasks (asset_store, tile_net): written with
+ * release only where g_state changes, read with acquire (DEVIATION D-1). */
+static _Atomic uint32_t g_state_pub   = PLAYBACK_INITIALISING;
+static bool             g_b_seq_known = false;
+static uint16_t         g_last_seq    = 0u;
+static uint8_t          g_session     = 0u;
+static bool             g_b_session   = false;
+static int64_t          g_origin_us   = 0;
+static int64_t          g_target_us   = 0;
+static uint16_t         g_frames      = 1u;
+static uint16_t         g_hold_frame  = 0u;
+static bool             g_b_lost_set  = false;
+static uint32_t         g_rejected    = 0u;
 
 /* Written by the Playback Control Task, read by any task. */
 static pb_timeline_lock_t g_timeline;
@@ -97,7 +101,10 @@ static bool     pb_seq_newer (uint16_t seq, uint16_t last);
  */
 void playback_control_init (void)
 {
-    g_state       = PLAYBACK_INITIALISING;
+    g_state = PLAYBACK_INITIALISING;
+    /* Enum value 0 fits uint32_t. */
+    atomic_store_explicit(&g_state_pub, (uint32_t)PLAYBACK_INITIALISING,
+                          memory_order_release);
     g_b_seq_known = false;
     g_b_session   = false;
     g_origin_us   = 0;
@@ -194,7 +201,10 @@ bool playback_control_on_command (playback_control_command_t const * p_cmd,
  */
 playback_control_state_t playback_control_state (void)
 {
-    return g_state;
+    /* g_state_pub only ever holds a playback_control_state_t value. Any
+     * task may call this (acquire load of the published copy). */
+    return (playback_control_state_t)atomic_load_explicit(&g_state_pub,
+                                                          memory_order_acquire);
 }
 
 /**
@@ -460,6 +470,8 @@ static void pb_holdover (playback_control_inputs_t const * p_in)
 static void pb_set_state (playback_control_state_t state)
 {
     g_state = state;
+    /* An enum value of 0 to 8 fits uint32_t. */
+    atomic_store_explicit(&g_state_pub, (uint32_t)state, memory_order_release);
     pb_publish();
 }
 

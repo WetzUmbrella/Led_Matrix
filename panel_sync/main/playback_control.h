@@ -15,11 +15,12 @@
  * BEACON_LOSS condition through fault_word (RAR-1); the FreeRTOS wrapper
  * playback_task() at priority 15 on core 0 (tile_tasks.h), reading the
  * Command Queue of tile_net.
- * Not yet implemented: the asset input comes from asset_store, whose RAM
- * asset and session (T-B3-04, T-B3-05) do not exist yet, so on a tile the
- * core stays in WAITING FOR READINESS until they land (playback_task()
- * reads asset_store_active()); the Display Engine does not read the
- * timeline yet (T-B5-02, T-B5-03).
+ * Since 29 Oct 2026 (Jia Jun's session): the asset input is the RAM asset
+ * of asset_store (T-B3-04, T-B3-05, asset_store_active()); the Display
+ * Engine reads the timeline every tick (T-B5-02, T-B5-03); and
+ * playback_control_state() reads an atomic copy of the state, because
+ * asset_store (upload gate) and tile_net (comms statechart) call it from
+ * other tasks.
  *
  * PROVISIONAL (owner Ahsanul): CLOCK HOLDOVER is entered when the newest
  * beacon is older than 200 ms (two beacon periods, plan choice) and left
@@ -116,7 +117,7 @@ bool playback_control_on_command (playback_control_command_t const * p_cmd,
                                   playback_control_inputs_t const *  p_in);
 
 /**
- * @brief  Current state.
+ * @brief  Current state (any task: acquire load of the published copy).
  * @return The state.
  */
 playback_control_state_t playback_control_state (void);
