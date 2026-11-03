@@ -31,3 +31,11 @@ panel_sync/main/fault_word.h
 panel_sync/main/fault_word.c
 panel_sync/test/test_fault_word.h
 panel_sync/test/test_fault_word.c
+ledwall_sync/main.h
+ledwall_sync/main.c
+ledwall_sync/test/test_main.h
+ledwall_sync/test/test_main.c
+ledwall_sync/test/test_coord.h
+ledwall_sync/test/test_coord.c
+ledwall_sync/test/coordinator_port.h
+ledwall_sync/test/coordinator_port.c
