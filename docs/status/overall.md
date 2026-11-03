@@ -254,3 +254,53 @@ Today is 29 Oct 2026. Dates from Ahsanul (29 Oct 2026), to be corrected if xSITe
 | T-B5-01 | `render.c/.h` deleted | `b5/t-b5-01-delete-render` |
 
 Review round 1 (two reviewers): 2 BLOCKING (two functions over 100 lines; these strings in this file), both fixed; T-B2-01 and T-B1-01 SHOULD FIX items fixed; the rest are listed in `docs/HANDOVER.md`.
+
+## 10. Update after patches 09 to 15 (30 Oct 2026, Jia Jun's session)
+
+Same labels as section 1. **Done in code** = the code and its host tests meet the row; the hardware acceptance has not run (nothing has run on a board since patch 09). Work is in the hand-off patches (`patches/09` to `15`), uncommitted on top of `b4/handover`.
+
+| Task | Owner | State | Where | What is left |
+|---|---|---|---|---|
+| T-B1-01 | Jolyn | Done | branch b1/t-b1-01 | |
+| T-B1-02 | Jolyn | Done | patch 13 | pytest 4 of 4 is the whole acceptance |
+| T-B1-03 | Jolyn | Done | patch 13 | pytest 4 of 4 is the whole acceptance |
+| T-B1-04 | Jolyn | Done in code | patch 13 | bench F2 (10 uploads, 6 dropped) on a tile |
+| T-B1-05 | Jolyn | Done in code | patch 13 | (1) passes in pytest; (2) and (3) bench F9 |
+| T-B1-06 | Jolyn | Done in code | patch 13 | 14 of 14 on the PC; the photo on 2 tiles (F9) |
+| T-B1-07 | Jolyn | Done in code | patch 14 | re-run `evidence_index.py` after the bench runs; W6B-2 and W6B-11 have no plan task (orchestrator ruling) |
+| T-B2-01 | Benjamin | Done | patch 02 | |
+| T-B2-02 to T-B2-05 | Benjamin | Done in code | patch 03 | bench D1, D2, D7 |
+| T-B2-06 | Benjamin | Done in code | patch 07 | the load run with `sim_nodes.py` |
+| T-B2-07 | Benjamin | Not started (bench only) | procedure H1 | the 30 min router run |
+| T-B3-01 | Cheston | Done in code | patch 04 | bench D5 |
+| T-B3-02 | Cheston | Done in code | branch b4/phase1 | bench D6 (one tile already reports 4 MB, bench log) |
+| T-B3-03 | Cheston | Done in code | patch 04 | bench D4; the one-coordinator beacon filter (review log, BLOCKING for the bench) |
+| T-B3-04 | Cheston | Done in code | patch 11 | bench F4, F5 |
+| T-B3-05 | Cheston | Done in code | patch 11 | bench F3 |
+| T-B3-06 | Cheston | Done in code | patch 09 | bench E1 to E4 |
+| T-B4-01 | Ahsanul | Partial | branch b4/t-b4-01 | A5 to A7 on hardware |
+| T-B4-02 | Ahsanul | Done | branch b4/timesync-barr | |
+| T-B4-03 | Ahsanul | Done in code | rig and tools | bench Part B |
+| T-B4-04 | Ahsanul | Done in code | patch 05, 15 | on a tile with an asset (F4 to F9 exercise it) |
+| T-B4-05 | Ahsanul | Done in code (Pico test build) | patch 03 | bench H2 |
+| T-B4-06 | Ahsanul | Not started (bench only) | procedure H3 | 20 trials each |
+| T-B4-07 | Ahsanul | Not triggered | | only if a skew run exceeds 5 ms (H4) |
+| T-B5-01 | Jia Jun | Done in code | branch b4/wire-w10, patch 12 | the 30 min interval check (Part B note); confirm GPIO4 |
+| T-B5-02 | Jia Jun | Done in code | patch 12 | host test passes (192 of 192); the shipped-build NACK of format 1 on a tile (G7, `upload_faults.py` case 4) |
+| T-B5-03 | Jia Jun | Done in code | patch 12 | bench F6 |
+| T-B5-04 | Jia Jun | Done | branch b5/t-b5-04 | C1 passed on tile ESP-4, 29 Oct 2026 (`docs/week10/tile_tasks_boot.log`) |
+| T-B5-05 | Jia Jun | Done in code | patch 12 | host tests 3 of 3; bench F7 |
+| T-B5-06 | Jia Jun | Not started (bench only) | procedure `docs/week13/orientation_trials.md` | 80 trials |
+| T-B5-07 | Jia Jun | Done in code (test builds) | patch 14 | bench G8 to G10 |
+| T-B5-08 | Jia Jun | Not started (bench only) | procedure `docs/week13/power_thermal.md` | OD-22 limits first |
+| T-X-01 | Jolyn | Done in code | patch 14 | bench G1 |
+| T-X-02 | Cheston | Done in code (test build) | patch 14 | bench G2 |
+| T-X-03 | Jia Jun | Done in code (test build) | patch 14 | bench G3 |
+| T-X-04 | Benjamin | Partial | patch 14 | size table has 18 of 18 before and encoded-after cells; on-air column and the run (G4) |
+| T-X-05 | Ahsanul | Done in code (test build) | patch 14 | bench G5 |
+| T-X-06 | Benjamin | Partial | patch 14 | generated tables; heap, on-air and performance cells wait for D5, G4, G3; OD-17 lecturer answer |
+| T-X-07 | Ahsanul | Not started (bench only) | procedure G6 | 3-tile run |
+| T-X-08 | Cheston | Done in code | patch 14 | bench G7 |
+| T-X-09 | Cheston | Not started (bench only) | procedure `docs/final/soak_5tile.md` | Final |
+
+DEFENCE documents now exist for every module: `tile_net`, `asset_store`, `playback_control`, `display_engine`, `orientation` and the PC tools were added in patch 15, beside the earlier `timesync`, `fault_word`, `tile_tasks`, `proto`, `proto_layout` and `coordinator_loop` ones. Self-review: `docs/status/review_log.md` (round 0, not the independent review).

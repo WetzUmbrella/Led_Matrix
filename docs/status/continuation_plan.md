@@ -1,6 +1,6 @@
 # SE15 continuation plan
 
-Written 29 Oct 2026 at a planned safe stop of Ben's (Benjamin, B2) session. This session continued Ahsanul's Phase 1 work (`docs/HANDOVER.md`). Read this file first (updated 29 Oct 2026 after patch 09, T-B3-06; next is step 4); read `docs/HANDOVER.md` second for setup, rules and the open decisions table.
+Written 29 Oct 2026 at a planned safe stop of Ben's (Benjamin, B2) session. This session continued Ahsanul's Phase 1 work (`docs/HANDOVER.md`). Read this file first (updated 30 Oct 2026 after patch 15; next is section 5 step 1); read `docs/HANDOVER.md` second for setup, rules and the open decisions table.
 
 ## 1. Where everything is
 
@@ -35,8 +35,14 @@ The handoff folder holds:
 | 07 | T-B2-06 (Benjamin) | `pc/tools/sim_nodes.py` (nine simulated tiles: REGISTER burst, then 0.5 s heartbeats, staggered or burst) and its pytest. |
 | 08 | Ben's stop | This continuation plan. |
 | 09 | T-B3-06 telemetry (Cheston), 29 Oct 2026, Jia Jun's session | `tile_net`: TELEMETRY {seq, fault word, orientation, display state} every 1 s as a subnet broadcast to UDP 4215 (`tn_telemetry_send()`), TELEMETRY_ACK on UDP 4214 read by the Network Task each pass (`tn_poll_ack()`, `tn_on_telemetry_ack()` calling `fault_word_clear_events()`), Telemetry Queue length 2 drop-oldest with the producer's drop count carried in each item (`tile_net_post_status()`), `TN_STATS` gains `tel_sent`, `tel_acked`, `ack_unknown`, `tel_q_dropped`; test build `TN_TEST_INJECT_FAULTS` for VC-4. New `telemetry_book.c/.h` (pending-ACK ring of 4, host-testable). `display_engine` reports INITIALISING, IDLE, WAITING FOR NEXT TICK or FAULT (orientation 0 until T-B5-05). Host tests T1 to T5 (T5: VC-4 drop-every-third simulation with the real `fault_word`). `pc/tools/telemetry_ack.py` (VC-4 receiver, `--drop-every 3`) and its pytest. Bench checklist Part E (E1 to E4). `.gitignore` gains `**/build_vc4/`. |
+| 10 | Bench logs (Jia Jun) | `docs/week10/skew_2tile/bench_log.md` (two-Pico interference, download-mode resets) and `docs/week10/tile_tasks_boot.log` (C1 PASS on tile ESP-4). Raw logs in the hand-off folder `bench_logs_29oct/`. |
+| 11 | T-B3-04, T-B3-05 asset path (Cheston), 29 Oct 2026 | `asset_store`: Asset Storage Task (8, core 0), Upload Queue 4 and Reply Queue 8, flash writes only in the two upload states through counting wrappers, verify (format, length, session, CRC32 read back), RAM copy by the OD-04 rule published once (D-1), BUSY while playback may read it, cached asset reused at boot. New pure `asset_rx` (manifest rules, chunk map, zlib CRC32) with host tests A1 to A5. `tile_net`: MANIFEST and ASSET_CHUNK into the Upload Queue (NACK reason 3), replies to the PC or the Pico, REGISTER with the cached asset, comms statechart logged as `TN_COMMS`. `frames.c/.h` deleted. |
+| 12 | T-B5-02, T-B5-03, T-B5-05 (Jia Jun), 29 Oct 2026 | `display_engine`: two 192 B buffers, swap in a critical section, RMT (bytes encoder, no DMA) started on the tick, n + 1 prepared after, missed deadline when RMT is busy, lateness histogram; frames from the RAM asset and the playback timeline. New pure `display_frame` (unpack, rotation remap, tick-based frame index), `orient_filter` (quadrant, 26-sample debounce, IMU bit) and the `orientation` task (QMI8658 at 50 Hz, mailbox). Host tests D1 to D3, O1 to O3. `gif_frames.h`, `DE_W10_TEST_PATTERN` and the `led_strip` dependency deleted. |
+| 13 | T-B1-02 to T-B1-06 PC side (Jolyn), 29 to 30 Oct 2026 | `pc/asset_builder.py`, `uploader.py`, `telemetry.py`, `pico_link.py`, `dashboard.py`, `tests/numbered_pattern.py`, `tests/check_assets.py` and their pytest; `panel_sync/tools/` deleted; Pillow added to CI; bench checklist Part F. tile_net: upload replies go only to the uploader's address. asset_store: `ASSET_FLASH` counters every 60 s, BUSY count. |
+| 14 | T-X builds, tools, procedures, evidence (all), 30 Oct 2026 | Test builds `FAULT_STRESS` and `TS_STRESS` (`tile_stress.c`), `DE_DUMP_FRAMES`, `DE_PROFILE`, `DE_TEST_SLOW_PREP`, `DE_TEST_FLASH_ERASE`; `pc/tests/round_trip.py` (T-X-01), `upload_faults.py` (T-X-08), `pc/tools/gen_week13_docs.py` (T-X-06 and the T-X-04 size table; `before_after.md` After column filled), `pc/tools/evidence_index.py` (T-B1-07); 8-bit asset build and upload for T-X-03; wrong-session uploads rejected; procedures for T-B5-06, T-B5-08, T-X-09; bench checklist Parts G and H. |
+| 15 | DEFENCE documents, playback state copy, 30 Oct 2026 | `docs/tile_net_DEFENCE.md`, `asset_store_DEFENCE.md`, `playback_control_DEFENCE.md`, `display_engine_DEFENCE.md`, `orientation_DEFENCE.md`, `pc_tools_DEFENCE.md`; `playback_control_state()` reads an atomic copy (other tasks call it); self-review `docs/status/review_log.md`; `overall.md` section 10; HANDOVER note. |
 
-### Results at the stop (all run 29 Oct 2026 in this workspace)
+### Results at the stop (29 Oct 2026; after patch 15 see `docs/status/review_log.md`, "Checks at the end of the round")
 
 | Check | Result |
 |---|---|
@@ -73,27 +79,30 @@ The handoff folder holds:
 | Cheston (patch 09) | OD-11: telemetry period 1 s, Telemetry Queue 2 (Display Engine is its single producer), pending-ACK ring 4; no Fault queue (faults go through the fault word, RAR-1; length and policy still open); port 4214 polled by the Network Task in both OD-09 builds; VC-4 injection every 5 s of `FAULT_BIT_CRC_FAIL` | `panel_sync/main/tile_net.h`, `telemetry_book.h` |
 | Benjamin (patch 09) | TELEMETRY uses the tile's single header seq stream (shared with REGISTER, HEARTBEAT, SYNC_READY, NACK) | `panel_sync/main/tile_net.h` |
 | Jia Jun (patch 09) | Display Engine reports WAITING FOR NEXT TICK while the Week 10 loop ticks; orientation 0 until T-B5-05 | `display_engine.c` |
+| Cheston (patches 11, 14) | Upload Queue 4, Reply Queue 8; BUSY also in PAUSED and CLOCK HOLDOVER; frames partition header sector; a wrong-length chunk drops the upload; wrong-session uploads dropped without a NACK | `asset_store.h`, `tile_net.c` |
+| Ahsanul (patches 11, 15) | D-1 extended to `asset_store`; `playback_control_state()` reads an atomic copy; `TS_STRESS` readers are test tasks at the named priorities | `docs/coding_standard.md`, `playback_control.c`, `tile_stress.h` |
+| Jia Jun (patches 12, 14) | OD-16 RMT without DMA; LED numbering and rotation direction; quadrant mapping and 0.5 g threshold; QMI8658 register values; profiling pin GPIO5; status pattern; PREPARING/TRANSMITTING not reported | `display_engine.h`, `display_frame.h`, `orient_filter.h`, `orientation.h` |
+| Jolyn (patch 13) | OD-06 (a); OD-02 (b); upload window 4, 1 s manifest pause, 100 chunks/s; numbered-pattern encoding; dashboard as a command-line shell | `pc/asset_builder.py`, `pc/uploader.py`, `pc/dashboard.py` |
 | Ahsanul | 1.4.b complied with; 6.2.a counted strictly; D-1 extended to `playback_control`; holdover entry at 200 ms; FAULT on invalid frame_count; START_AT/RESUME_AT accepted in READY and all playing states | `docs/coding_standard.md`, `playback_control.h` |
 | Jia Jun | `vTaskList()` buffer 64 B per line; first tick waits for SYNC_READY; the Display Engine must read `playback_control_read_timeline()` in T-B5-02/03 | `tile_tasks.c`, `display_engine.c` |
 
-## 5. Next steps, in order
+## 5. Next steps, in order (rewritten 30 Oct 2026 after patch 15)
 
-1. **Review and commit what exists (Ahsanul).** Apply or commit patches 01 to 07 as in section 2. Done when every `b*/` branch builds in CI (the new `ledwall_sync` host-test step included).
-2. **Hardware, Week 10 (team).** Follow `SE15_hardware_test_steps.txt` and `docs/week10/bench_checklist.md` Parts B0, D1 to D7, C1, A5 to A7, then Part B. Flash builds from patch 04 or later (they register and heartbeat; earlier builds do not). Run `python3 pc/tools/sim_nodes.py --pico <ip>` for the T-B2-06 load test. Done when the evidence files named in the checklist exist.
-3. **DONE in patch 09 (bench Part E not run). T-B3-06 telemetry (Cheston).** `tile_net`: `tn_telemetry_send()` (TELEMETRY broadcast to port 4215 every telemetry period; OD-11 still open, propose 1 s), `tn_on_telemetry_ack()` on port 4214 calling `fault_word_clear_events()`, Telemetry Queue drop-oldest. Done when a host test of the send/ACK bookkeeping passes and the VC-4 drop-every-third test procedure is written.
-4. **T-B3-04 and T-B3-05 asset path (Cheston).** `asset_store`: RAM copy by the OD-04 rule, pointer published once, `asset_store_flash_allowed()`, chunk receive on port 4214, verification, ASSET_READY, `asset_store_active()` returning the real session and frame_count, REGISTER's cached values. This unblocks Playback Control on a tile. Done when the host-testable parts pass and both tile builds compile.
-5. **T-B5-02 and T-B5-03 frame path (Jia Jun).** `display_engine` reads `playback_control_read_timeline()` and the RAM asset; front/back buffers, swap, RMT on the tick, unpack into the back buffer; delete `DE_W10_TEST_PATTERN`, `frames.c/.h`, `gif_frames.h`. Measure IRAM again (`docs/week13/iram_budget.md` rule 4).
-6. **PC side (Jolyn, can run in parallel, `pc/` only).** T-B1-02 `asset_builder.py` resample (settle OD-06 first), T-B1-03 pack and manifest, T-B1-04 uploader (ports 4214/4215), T-B1-05 dashboard and `pico_link.py` (ports 4212/4213, SESSION_CONFIG with frame_count and CRCs, commands as section 10 item 11), T-B1-06 numbered pattern.
-7. **T-B5-05 orientation, T-X build options and procedures** (T-X-01 to T-X-09), then T-X-06 and T-B1-07 evidence documents.
-8. **DEFENCE docs still missing:** `tile_net`, `playback_control`, `asset_store` (style of `docs/coordinator_loop_DEFENCE.md`).
-9. **Independent review before Tribunal 2:** two fresh reviewers (Tribunal fidelity; Barr-C and integration) over everything; log in `docs/status/review_log.md` (that file does not exist yet; the Week10_Kickoff log is `inputs/w10_review_log.md`).
-10. **Update `docs/status/overall.md` and `docs/HANDOVER.md`** with the new task states.
+Steps 3 to 8 and 10 of the 29 Oct list are done in patches 09 to 15; `docs/status/overall.md` section 10 has every task's state.
+
+1. **Review and commit (Ahsanul).** Apply patches 01 to 15 in order on `b4/handover` (or commit file groups by task from section 3), one `b<n>/<task>` branch per task. Done when every branch builds in CI.
+2. **Independent review (step 9 of the old list, still open).** Two fresh reviewers (Tribunal fidelity; Barr-C and integration) over everything, logged as round 1 in `docs/status/review_log.md`. Round 0 there is only the implementing session's self-review.
+3. **Fix the BLOCKING bench item first:** tiles accept beacons from any Pico (review log; T-B2-04 with T-B3-03, Cheston and Benjamin). Until then, one Pico per router.
+4. **Hardware, Week 10 (team).** `docs/week10/bench_checklist.md` Parts B0, C1 (passed on ESP-4), D, A5 to A7, then Part B. Confirm the test pin GPIO4 is on the header first (Jia Jun).
+5. **Hardware, Week 13 (team).** Parts E, F, G and H, in that order; each step names its evidence file. Then re-run `python3 pc/tools/gen_week13_docs.py` (after filling measured cells) and `python3 pc/tools/evidence_index.py --inputs ../inputs`.
+6. **Owner decisions.** Every PROVISIONAL row of section 4, plus OD-22 (temperature limits, blocks T-B5-08), OD-13 (upload rate, from G4), OD-18 (from H1), OD-19 (from H2) and OD-17 (lecturer answer, for T-X-06).
+7. **Final:** T-X-09 soak (`docs/final/soak_5tile.md`); T-B4-07 only if a skew run exceeds 5 ms.
 
 ## 6. How to resume in a new Claude session
 
 1. Put this whole folder where the session can read it (or zip it and attach it).
 2. Give it `Led_Matrix/docs/prompts/SE15_Complete_All_Prompt.md` with these changes: the binding inputs are in `inputs/` instead of the Drive path; **do not commit** (or commit as yourself if you are the one committing, never as `WetzUmbrella` unless you are Ahsanul); keep one patch per task in `patches/`; update `docs/status/continuation_plan.md` after each task.
-3. Then add: "Current state: read `CONTINUATION_PLAN.md`; continue from section 5, step 3."
+3. Then add: "Current state: read `CONTINUATION_PLAN.md`; continue from section 5, step 1 (or step 2, the independent review, if the patches are already committed)."
 
 To make the next patch: `cd Led_Matrix && git add -A && git diff --cached --binary > ../patches/08-name.patch` covers everything since `b4/handover`; to get only the new task, diff against a stash or keep a copy of the tree before starting (this session used a checkpoint script that staged after each patch and diffed staged against working tree).
 

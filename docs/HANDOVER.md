@@ -1,5 +1,7 @@
 # SE15 handover (29 Oct 2026)
 
+**Update 30 Oct 2026 (Jia Jun's session).** Patches 09 to 15 continue from here: T-B3-06 telemetry, the asset path (T-B3-04/05), the frame path and orientation (T-B5-02/03/05), the PC tools (T-B1-02 to T-B1-07), the T-X test builds, tools and procedures, and DEFENCE documents for every module. Current state: `docs/status/continuation_plan.md` (read first) and `docs/status/overall.md` section 10; bench steps: `docs/week10/bench_checklist.md` Parts E to H. Built and tested on macOS as well as WSL: on a Mac the serial ports are `/dev/cu.usbmodem*`, `usbipd` is not needed, and the repository must sit in a path without spaces (ESP-IDF refuses one).
+
 Written by Ahsanul (Buddy 4) at the end of Phase 1, so a teammate with no context can carry on. **Build on `b4/phase1`** (integration head, contains every other `b*/` branch). `b4/handover` = `b4/phase1` plus this file, the hook copy and the prompt copy.
 
 ## 1. State
