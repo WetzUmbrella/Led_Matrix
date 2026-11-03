@@ -85,6 +85,18 @@
  },
  {
   "fields": {
+   "crc32": [
+    286331153,
+    572662306,
+    0,
+    858993459,
+    1145324612,
+    0,
+    0,
+    0,
+    0
+   ],
+   "frame_count": 600,
    "layout": 1,
    "node_map": [
     1,
@@ -102,14 +114,26 @@
    "session_id": 60
   },
   "file": "session_config_typical.bin",
-  "hex": "828746a22130040000",
+  "hex": "828746a22130040080654444448488888808000000c0cccccc0c1111111100000000000000000000000000000000",
   "kind": "message",
-  "length": 9,
+  "length": 46,
   "message": "SESSION_CONFIG",
   "name": "session_config_typical"
  },
  {
   "fields": {
+   "crc32": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "frame_count": 1,
    "layout": 0,
    "node_map": [
     0,
@@ -127,14 +151,26 @@
    "session_id": 0
   },
   "file": "session_config_min.bin",
-  "hex": "020000000000000000",
+  "hex": "02000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000",
   "kind": "message",
-  "length": 9,
+  "length": 46,
   "message": "SESSION_CONFIG",
   "name": "session_config_min"
  },
  {
   "fields": {
+   "crc32": [
+    4294967295,
+    4294967295,
+    4294967295,
+    4294967295,
+    4294967295,
+    4294967295,
+    4294967295,
+    4294967295,
+    4294967295
+   ],
+   "frame_count": 1023,
    "layout": 2,
    "node_map": [
     9,
@@ -152,9 +188,9 @@
    "session_id": 255
   },
   "file": "session_config_max.bin",
-  "hex": "e2ffffdf9999999909",
+  "hex": "e2ffffdf99999999f9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3f",
   "kind": "message",
-  "length": 9,
+  "length": 46,
   "message": "SESSION_CONFIG",
   "name": "session_config_max"
  },

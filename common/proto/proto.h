@@ -129,7 +129,8 @@
 #define PROTO_HEARTBEAT_BYTES PROTO_BYTES(PROTO_HEARTBEAT_BITS)
 #define PROTO_SESSION_CONFIG_BITS                                              \
     (PROTO_HEADER_BITS + PROTO_LAYOUT_BITS + PROTO_POLICY_BITS +               \
-     (PROTO_MAP_SLOTS * PROTO_NODE_BITS))
+     (PROTO_MAP_SLOTS * PROTO_NODE_BITS) + PROTO_FRAME_BITS +                  \
+     (PROTO_MAP_SLOTS * PROTO_CRC_BITS))
 #define PROTO_SESSION_CONFIG_BYTES PROTO_BYTES(PROTO_SESSION_CONFIG_BITS)
 #define PROTO_MANIFEST_BITS                                                    \
     (PROTO_HEADER_BITS + PROTO_FORMAT_BITS + PROTO_FRAME_BITS + PROTO_CRC_BITS)
@@ -297,13 +298,19 @@ typedef struct
     uint8_t        node_id; /**< 1 to 9. */
 } proto_heartbeat_t;
 
-/** SESSION_CONFIG, PC to Pico (T-B2-04, T-B1-05). */
+/** SESSION_CONFIG, PC to Pico (T-B2-04, T-B1-05). frame_count and crc32[]
+ *  are PROVISIONAL (OD-07 item 9, owner Benjamin): the Pico needs each
+ *  tile's manifest CRC32 to check ASSET_READY, and the shared frame_count to
+ *  compute the saved frame index for RESUME_AT and a rejoin. */
 typedef struct
 {
     proto_header_t header;
     uint8_t        layout;                    /**< proto_layout_t. */
     uint8_t        policy;                    /**< proto_policy_t. */
     uint8_t        node_map[PROTO_MAP_SLOTS]; /**< Row-major, 0 = blank. */
+    uint16_t       frame_count;               /**< 1 to 1023, every tile. */
+    uint32_t       crc32[PROTO_MAP_SLOTS];    /**< Manifest CRC32 per position,
+                                                0 for a blank position. */
 } proto_session_config_t;
 
 /** MANIFEST, PC to tile (VC-5, IFM-1a). Session is header.session_id. */
