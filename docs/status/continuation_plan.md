@@ -1,6 +1,6 @@
 # SE15 continuation plan (kept current during the session)
 
-Last updated: 29 Oct 2026, after patch 04. Work continues from `docs/HANDOVER.md` (Ahsanul, end of Phase 1). Written in Ben's (Benjamin, B2) session, building on Ahsanul's working copy.
+Last updated: 29 Oct 2026, after patch 05. Work continues from `docs/HANDOVER.md` (Ahsanul, end of Phase 1). Written in Ben's (Benjamin, B2) session, building on Ahsanul's working copy.
 
 ## Rules this session follows
 
@@ -17,6 +17,8 @@ Last updated: 29 Oct 2026, after patch 04. Work continues from `docs/HANDOVER.md
 | 03 | T-B2-02 to T-B2-05 (Benjamin) | `coordinator_loop.c/.h` rewritten: one routine per pass, ring buffer, registry[9], heartbeat scan 2.5 s, 10 s CONNECTING then FAULT, statechart 2 (12 states), readiness and sync bitmaps, stale session/seq rejection, STATUS 250 ms, START_AT/RESUME_AT/PAUSE/STOP triple sends, pause and continue policies, 5 s recovery, rejoin RESUME_AT (OD-14 a), stall handling (skip slots, no burst), OD-01 exception check, callback/dispatch histograms, `CL_TEST_SUPPRESS_MS` (T-B4-05); `main.c` reduced (plan 0.1); prototype HELLO, `layout_for()`, `pack_wall()`, Pico access point and `dhcpserver/` deleted; USB printf timeout 1 ms; host tests `ledwall_sync/test` (14 of 14, plain and asan); CI job step added | coordinator 14 of 14; Pico SDK 2.3.1 build 0 warnings (text 347,704 B, bss 50,500 B); barr_check 38 files 0 |
 
 | 04 | T-B3-03 completion (Cheston), T-B3-01 (Cheston), HANDOVER steps 7 and 11 | `tile_net` rewritten: WiFi start, Node ID and `wifi_event` moved in from `panel_sync.c`; `esp_wifi_set_storage(WIFI_STORAGE_RAM)`; REGISTER on first beacon and every reconnect; HEARTBEAT 0.5 s staggered by Node ID; SYNC_READY with each heartbeat while ready; session copied from beacons; commands on 4210 into `q_command` (length 3), full = NACK reason 2; 10 s CONNECTING timeout sets the WIFI bit; no variable shared between contexts except through queues and the event group. `panel_sync.c` reduced to `app_main` (Barr-C, in scope). `display_engine` waits for `timesync_sync_ready()` before its first tick; its unused cross-task counter reader removed. `asset_store_probe_heap()` (T-B3-01) called once after the first IP. `docs/week13/iram_budget.md`. Bench checklist Part D (D1 to D7). `.gitignore` gains `**/build2/` (the HANDOVER hook-2 build folder was not ignored) | ESP-IDF v5.3 `panel_sync` build and `-DTN_RX_HOOK=2` build: complete, 0 warnings; DIRAM 112,739 B used, 229,021 B free; IRAM 16,383 of 16,384 B; barr_check 42 files 0; all host tests and pytest pass |
+
+| 05 | T-B4-04 `playback_control` (Ahsanul) | W6 statechart 4, all 9 states; once per (session_id, seq), other session and older seq rejected; START_AT and RESUME_AT arm the timeline (saved frame at t_resume), PAUSE holds the frame, STOP from PAUSED; CLOCK HOLDOVER after 200 ms without beacons, pause and BEACON_LOSS after the 1 s holdover; timeline published by seqlock for the Display Engine; task at priority 15 on core 0 reading `tile_net`'s Command Queue. Added `timesync_newest_age_us()`, `tile_net_has_ip()`, `asset_store_active()` (reports no asset until T-B3-04/05, so a tile waits in WAITING FOR READINESS). D-1 file list extended to `playback_control` (Ahsanul to confirm) | playback host tests 6 of 6 (plain, asan); timesync 4 of 4 and OD-10 rule unchanged; both ESP-IDF builds 0 warnings; barr_check 46 files 0 |
 
 ### Found and fixed on the way
 
@@ -45,7 +47,7 @@ Last updated: 29 Oct 2026, after patch 04. Work continues from `docs/HANDOVER.md
 3. Done (patch 04): T-B3-01 heap probe.
 4. Done (patch 04): IRAM budget doc.
 5. Done except hardware (patch 04): Week 10 gate passes in software; bench steps D1 to D7 added.
-6. **Week 13, plan section 7 order:** T-B4-04 `playback_control` (needs statechart 4, W6 PDF p.22 to 23); T-B3-06 telemetry send/ACK (TELEMETRY broadcast on 4215, ACK on 4214); T-B3-04 `asset_store` RAM copy; T-B3-05 upload and validation; T-B5-02/03 frame path; T-B5-05 orientation; PC side T-B1-02 to T-B1-06 (`pc/` only, can run in parallel); T-B2-06 `pc/tools/sim_nodes.py`; T-X build options and procedures.
+6. **Week 13, plan section 7 order:** T-B4-04 done (patch 05). Next: T-B3-06 telemetry send/ACK (TELEMETRY broadcast on 4215, ACK on 4214); T-B3-04 `asset_store` RAM copy; T-B3-05 upload and validation; T-B5-02/03 frame path; T-B5-05 orientation; PC side T-B1-02 to T-B1-06 (`pc/` only, can run in parallel); T-B2-06 `pc/tools/sim_nodes.py`; T-X build options and procedures.
 7. **DEFENCE docs:** `docs/coordinator_loop_DEFENCE.md` for Benjamin (choices, PostTri rows, examiner questions, 3 owner questions) once step 1 is in.
 8. **Independent review:** two fresh reviewers (Tribunal fidelity; Barr-C and integration) over all patches; log in `docs/status/review_log.md`; loop to 0 BLOCKING.
 9. **Hand back:** update `docs/HANDOVER.md` and `docs/status/overall.md`, refresh patches, zip the folder.
