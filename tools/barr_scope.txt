@@ -43,3 +43,7 @@ panel_sync/main/panel_sync.h
 panel_sync/main/panel_sync.c
 panel_sync/main/asset_store.h
 panel_sync/main/asset_store.c
+panel_sync/main/playback_control.h
+panel_sync/main/playback_control.c
+panel_sync/test/test_playback.h
+panel_sync/test/test_playback.c

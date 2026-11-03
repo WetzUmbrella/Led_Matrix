@@ -247,6 +247,22 @@ uint8_t tile_net_node_id (void)
 }
 
 /**
+ * @brief  Whether the tile has an IP address.
+ * @return true while TN_EV_HAVE_IP is set.
+ */
+bool tile_net_has_ip (void)
+{
+    bool b_has_ip = false;
+
+    if (NULL != g_p_events)
+    {
+        b_has_ip = (0u != (xEventGroupGetBits(g_p_events) & TN_EV_HAVE_IP));
+    }
+
+    return b_has_ip;
+}
+
+/**
  * @brief  Network Task.
  * @param  p_arg  Unused.
  */

@@ -37,4 +37,19 @@ void asset_store_probe_heap (void)
            (largest_internal >= ASSET_STORE_RAM_NEEDED) ? "internal" : "psram");
 }
 
+/**
+ * @brief  The validated RAM asset (T-B3-04): none until the RAM copy and the
+ *         upload path exist.
+ * @param  p_session_id   Unused until then.
+ * @param  p_frame_count  Unused until then.
+ * @return false.
+ */
+bool asset_store_active (uint8_t * p_session_id, uint16_t * p_frame_count)
+{
+    (void)p_session_id;  /* Set by T-B3-04 once an asset exists. */
+    (void)p_frame_count; /* Same. */
+
+    return false;
+}
+
 /*** end of file ***/

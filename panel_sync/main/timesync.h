@@ -269,6 +269,14 @@ int64_t timesync_local_from_pico (timesync_snapshot_t const * p_snap,
 bool timesync_sync_ready (void);
 
 /**
+ * @brief  Age of the newest (t_p, t_l) sample at the local time of the call
+ *         (T-B4-04: CLOCK HOLDOVER and the 1 s holdover pause). Read like
+ *         timesync_sync_ready(). Any task, never an ISR.
+ * @return Microseconds, or INT64_MAX before the first sample.
+ */
+int64_t timesync_newest_age_us (void);
+
+/**
  * @brief  Current filter estimate, for the host tests.
  * @param  p_offset_us  Receives the estimated offset; must not be NULL.
  * @param  p_ref_us     Receives its reference time; must not be NULL.

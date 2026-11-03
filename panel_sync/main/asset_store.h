@@ -7,6 +7,7 @@
  * Cheston, written 29 Oct 2026 in Ben's (B2) session.
  * Implemented: asset_store_probe_heap(), called by tile_net once, after the
  * first IP_EVENT_STA_GOT_IP, when every Week 10 tile task exists.
+ * asset_store_active() reports no asset until T-B3-04 and T-B3-05 land.
  * Not yet implemented: the Asset Storage Task, the RAM copy, the pointer
  * publication and asset_store_flash_allowed() (T-B3-04); chunk receive and
  * verification (T-B3-05).
@@ -16,6 +17,7 @@
 #ifndef ASSET_STORE_H
 #define ASSET_STORE_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /** RAM needed for the packed asset copy: 57,600 B payload plus the 32,768 B
@@ -29,6 +31,16 @@
  *         largest_spiram=<B> od04=<internal|psram>".
  */
 void asset_store_probe_heap (void);
+
+/**
+ * @brief  The validated RAM asset Playback Control plays (T-B3-04, T-B3-05).
+ *         Until the RAM copy exists this always reports no asset, so
+ *         Playback Control waits in WAITING FOR READINESS.
+ * @param  p_session_id   Receives the asset's session_id when true.
+ * @param  p_frame_count  Receives its frame_count when true.
+ * @return true when a validated asset is in RAM.
+ */
+bool asset_store_active (uint8_t * p_session_id, uint16_t * p_frame_count);
 
 #endif /* ASSET_STORE_H */
 

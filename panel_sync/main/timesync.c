@@ -122,6 +122,7 @@ static int64_t  floor_div (int64_t numerator, int64_t divisor);
 static uint32_t low_word (int64_t value);
 static uint32_t high_word (int64_t value);
 static int64_t  join_words (uint32_t low, uint32_t high);
+static bool     ready_read (int64_t * p_newest_us, uint32_t * p_flags);
 static void     min_delay_sample (uint32_t first, uint32_t length,
                                   int64_t * p_offset, int64_t * p_ref);
 
@@ -620,19 +621,18 @@ int64_t timesync_deadline_local (timesync_reader_t * p_reader,
 }
 
 /**
- * @brief  SYNC_READY rule (OD-10): window full, drift available and the
- *         newest sample no older than TIMESYNC_HOLDOVER_US. See timesync.h.
- *         The inputs are read with acquire load, copy, acquire fence and
- *         reload, at most TIMESYNC_READ_ATTEMPTS times; a read that never
- *         sees a stable set returns false.
- * @return true when the tile may report SYNC_READY.
+ * @brief  Read the SYNC_READY inputs under their sequence counter: acquire
+ *         load, copy, acquire fence and reload, at most
+ *         TIMESYNC_READ_ATTEMPTS times.
+ * @param  p_newest_us  Receives the local time of the newest sample.
+ * @param  p_flags      Receives READY_WINDOW and READY_DRIFT.
+ * @return true when a stable, published set was read.
  */
-bool timesync_sync_ready (void)
+static bool ready_read (int64_t * p_newest_us, uint32_t * p_flags)
 {
-    int64_t const now_us  = timesync_platform_now_us();
-    bool          b_done  = false;
-    bool          b_ready = false;
-    uint32_t      attempt = 0u;
+    bool     b_done  = false;
+    bool     b_valid = false;
+    uint32_t attempt = 0u;
 
     while ((!b_done) && (attempt < TIMESYNC_READ_ATTEMPTS))
     {
@@ -652,18 +652,53 @@ bool timesync_sync_ready (void)
 
         if ((0u == (seq_1 & SEQ_ODD_BIT)) && (seq_1 == seq_2))
         {
-            int64_t const age_us = now_us - join_words(newest_low, newest_high);
-            uint32_t const needed = READY_WINDOW | READY_DRIFT;
-
-            b_ready = (0u != seq_1) && (needed == (flags & needed)) &&
-                      (age_us <= TIMESYNC_HOLDOVER_US);
-            b_done = true;
+            *p_newest_us = join_words(newest_low, newest_high);
+            *p_flags     = flags;
+            b_valid      = (0u != seq_1);
+            b_done       = true;
         }
 
         attempt++;
     }
 
-    return b_ready;
+    return b_valid;
+}
+
+/**
+ * @brief  SYNC_READY rule (OD-10): window full, drift available and the
+ *         newest sample no older than TIMESYNC_HOLDOVER_US. See timesync.h.
+ *         A read that never sees a stable set returns false.
+ * @return true when the tile may report SYNC_READY.
+ */
+bool timesync_sync_ready (void)
+{
+    int64_t const  now_us = timesync_platform_now_us();
+    int64_t        newest = 0;
+    uint32_t       flags  = 0u;
+    uint32_t const needed = READY_WINDOW | READY_DRIFT;
+    bool const     b_read = ready_read(&newest, &flags);
+
+    return (b_read) && (needed == (flags & needed)) &&
+           ((now_us - newest) <= TIMESYNC_HOLDOVER_US);
+}
+
+/**
+ * @brief  Age of the newest beacon sample (T-B4-04 holdover input).
+ * @return Local microseconds since the newest sample, or INT64_MAX when no
+ *         sample is published or no stable read was possible.
+ */
+int64_t timesync_newest_age_us (void)
+{
+    int64_t  newest = 0;
+    uint32_t flags  = 0u;
+    int64_t  age_us = INT64_MAX;
+
+    if (ready_read(&newest, &flags))
+    {
+        age_us = timesync_platform_now_us() - newest;
+    }
+
+    return age_us;
 }
 
 /**

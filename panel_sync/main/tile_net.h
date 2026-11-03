@@ -117,6 +117,12 @@ QueueHandle_t tile_net_command_queue (void);
 uint8_t tile_net_node_id (void);
 
 /**
+ * @brief  Whether the tile has an IP address (Playback Control input).
+ * @return true after IP_EVENT_STA_GOT_IP until the next disconnect.
+ */
+bool tile_net_has_ip (void);
+
+/**
  * @brief  Network Task: sends REGISTER, HEARTBEAT and SYNC_READY, prints
  *         the spread log and, under option (b), receives the datagrams.
  * @param  p_arg  Unused.

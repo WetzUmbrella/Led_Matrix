@@ -19,12 +19,14 @@
 #include "freertos/task.h"
 
 #include "display_engine.h"
+#include "playback_control.h"
 #include "tile_net.h"
 #include "tile_tasks.h"
 #include "timesync.h"
 
 /**
- * @brief  ESP-IDF entry point: Network 12 and Time Sync 16 on core 0,
+ * @brief  ESP-IDF entry point: Network 12, Time Sync 16 and Playback
+ *         Control 15 on core 0,
  *         Display Engine 20 on core 1 (T-B5-04), then the boot log.
  *         app_main returns; the tasks own the tile.
  */
@@ -41,6 +43,11 @@ void app_main (void)
                                 TILE_TIMESYNC_PRIO, NULL, TILE_TIMESYNC_CORE))
     {
         printf("panel_sync: timesync_task not created\n");
+    }
+
+    if (!playback_control_start())
+    {
+        printf("panel_sync: playback_control_start failed\n");
     }
 
     if (!display_engine_start())
