@@ -9,7 +9,8 @@
  * de_arm_next(), tick n at timesync_deadline_local(origin, n) computed from
  * n every frame and armed as a one-shot, the test pin pulse with the RIG.md
  * tick-identity marker, the missed-tick counter, one timesync_notify_tick()
- * per tick from de_task, and the DE_W10_TEST_PATTERN moving pixel.
+ * per tick from de_task, the DE_W10_TEST_PATTERN moving pixel, and (29 Oct
+ * 2026) no first tick before timesync_sync_ready() (start-up defect fix).
  * Not yet implemented: frame buffers, swap, RMT start and preparation
  * (T-B5-02, T-B5-03), orientation, asset playback, the frame-timing
  * histogram (T-B5-07). The prototype render.c/.h is deleted (T-B5-01).
@@ -53,14 +54,6 @@
  * @return true when the task was created.
  */
 bool display_engine_start (void);
-
-/**
- * @brief  Ticks shown and ticks missed since start, for logs.
- * @param  p_ticks   Receives the number of ticks with a pulse.
- * @param  p_missed  Receives the number of missed ticks (deadline already
- *                   passed when it was to be armed).
- */
-void display_engine_get_counts (uint32_t * p_ticks, uint32_t * p_missed);
 
 #endif /* DISPLAY_ENGINE_H */
 

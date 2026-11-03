@@ -39,3 +39,7 @@ ledwall_sync/test/test_coord.h
 ledwall_sync/test/test_coord.c
 ledwall_sync/test/coordinator_port.h
 ledwall_sync/test/coordinator_port.c
+panel_sync/main/panel_sync.h
+panel_sync/main/panel_sync.c
+panel_sync/main/asset_store.h
+panel_sync/main/asset_store.c
