@@ -70,6 +70,14 @@
  *  this long without beacons. Changed only by T-B4-05 (OD-19). */
 #define TIMESYNC_HOLDOVER_US INT64_C(1000000)
 
+/** Re-seed threshold: a sample whose offset (t_l - t_p) differs from the
+ *  current estimate by more than 500 ms comes from another Pico clock (a
+ *  coordinator switch or a Pico reboot), so the window is emptied and the
+ *  next tick sets the offset directly (review round 1 R1-2). 500 ms is above
+ *  the 307 ms DTIM 3 buffering of the START_AT lead, so network delay alone
+ *  never triggers it (PROVISIONAL, plan choice, owner Ahsanul). */
+#define TIMESYNC_RESEED_US INT64_C(500000)
+
 /** Snapshot flag: a published set was copied at least once. */
 #define TIMESYNC_SNAP_VALID 0x1u
 
@@ -290,6 +298,13 @@ bool timesync_filter_estimate (int64_t * p_offset_us, int64_t * p_ref_us);
  * @return false until a drift is available.
  */
 bool timesync_drift_estimate (int32_t * p_drift_ppb);
+
+/**
+ * @brief  Number of re-seeds since timesync_init() (R1-2), for TN_STATS-style
+ *         logs and the host tests. Time Sync Task only.
+ * @return The count.
+ */
+uint32_t timesync_reseed_count (void);
 
 /**
  * @brief  The int8_t slew of the last tick, for the host tests.

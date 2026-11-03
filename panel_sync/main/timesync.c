@@ -100,6 +100,7 @@ typedef struct
     bool                b_pub_valid; /**< Something was published. */
     timesync_snapshot_t pub;         /**< Writer's copy of what it published. */
     int8_t              last_slew;   /**< Slew of the last tick. */
+    uint32_t            reseeds;     /**< Re-seeds since init (R1-2). */
 } writer_state_t;
 
 static seqlock_t      g_pub;
@@ -117,6 +118,7 @@ static _Atomic(TaskHandle_t) g_p_sync_task = NULL;
 #endif
 
 static void     hook_point_reached (timesync_hook_point_t point);
+static bool     reseed_needed (int64_t t_p, int64_t t_l);
 static void     ready_publish (int64_t newest_t_l, uint32_t flags);
 static int64_t  floor_div (int64_t numerator, int64_t divisor);
 static uint32_t low_word (int64_t value);
@@ -444,6 +446,21 @@ void timesync_init (void)
  */
 void timesync_add_sample (int64_t t_p, int64_t t_l)
 {
+    if (reseed_needed(t_p, t_l))
+    {
+        /* Another Pico clock (R1-2): forget the window, the estimates and
+         * the published offset, so this sample starts a new window and the
+         * next tick publishes it directly. SYNC_READY stays false until the
+         * window is full again (1.6 s). */
+        g_writer.head          = 0u;
+        g_writer.count         = 0u;
+        g_writer.b_est_valid   = false;
+        g_writer.b_drift_valid = false;
+        g_writer.drift_ppb     = 0;
+        g_writer.b_pub_valid   = false;
+        g_writer.reseeds++;
+    }
+
     g_writer.t_p[g_writer.head] = t_p;
     g_writer.t_l[g_writer.head] = t_l;
     g_writer.head               = (g_writer.head + 1u) % TIMESYNC_WINDOW;
@@ -524,11 +541,12 @@ int8_t timesync_slew_clamp (int64_t request_us)
 
 /**
  * @brief  One tick. The published offset moves towards the filter's estimate
- *         by at most 100 us and is never stepped. Each publication is rebased
- *         to t_local, so a new drift value changes the slope from t_local on
- *         but causes no jump at t_local itself. The very first publication
- *         sets the offset directly: it is the first estimate, not a
- *         correction of an earlier one.
+ *         by at most 100 us and is never stepped, except after a re-seed
+ *         (R1-2), which is handled as a first publication. Each
+ *         publication is rebased to t_local, so a new drift value changes the
+ *         slope from t_local on but causes no jump at t_local itself. The
+ *         very first publication sets the offset directly: it is the first
+ *         estimate, not a correction of an earlier one.
  * @param  t_local  Local time of the tick, microseconds.
  */
 void timesync_tick (int64_t t_local)
@@ -734,6 +752,15 @@ bool timesync_drift_estimate (int32_t * p_drift_ppb)
 }
 
 /**
+ * @brief  Number of re-seeds since timesync_init() (R1-2).
+ * @return The count.
+ */
+uint32_t timesync_reseed_count (void)
+{
+    return g_writer.reseeds;
+}
+
+/**
  * @brief  The int8_t slew of the last tick, for the host tests.
  * @return Slew in -100 to +100 us.
  */
@@ -828,6 +855,28 @@ void timesync_task (void * p_queue)
     }
 }
 #endif /* TIMESYNC_HOST_TEST */
+
+/**
+ * @brief  True when a sample's offset is more than TIMESYNC_RESEED_US away
+ *         from the current estimate, so it comes from another Pico clock
+ *         (R1-2). False before the first estimate.
+ * @param  t_p  Pico time from the beacon, microseconds.
+ * @param  t_l  Local receive time, microseconds.
+ * @return true when the window must be emptied.
+ */
+static bool reseed_needed (int64_t t_p, int64_t t_l)
+{
+    bool b_needed = false;
+
+    if (g_writer.b_est_valid)
+    {
+        int64_t const diff = (t_l - t_p) - g_writer.est_offset;
+
+        b_needed = (diff > TIMESYNC_RESEED_US) || (diff < -TIMESYNC_RESEED_US);
+    }
+
+    return b_needed;
+}
 
 /**
  * @brief  Call the host test hook at a seqlock step. The firmware build has

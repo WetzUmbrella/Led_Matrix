@@ -27,6 +27,7 @@ Owner: Ahsanul (Buddy 4). Written for Ahsanul in Ben's session (29 Oct 2026); th
 - Source: W6D-2b holdover 1 s (proposed), VA-4.3; T-B4-04.
 - Choice: CLOCK HOLDOVER when the newest beacon is older than 200 ms (two beacon periods, plan choice); still playing on the last clock; after `TIMESYNC_HOLDOVER_US` (1 s) PAUSED with the BEACON_LOSS condition bit, which this module clears when beacons return. Host test P6: 0.9 s keeps playing, 1.1 s pauses, 10 of 10.
 - Examiner: "Why 200 ms to enter holdover, and what does the wall look like at 0.5 s and at 1.5 s without beacons?"
+- Review round 1 (R1-13): `timesync_newest_age_us()` also returns `INT64_MAX` when three seqlock reads in a row see a write in progress. The task now keeps the last readable age in that case, so one unlucky read no longer enters CLOCK HOLDOVER (or, already in holdover, pauses with BEACON_LOSS). Real silence still reads as a growing age on the next pass. Not host-tested (it is in the FreeRTOS task loop); the decision logic it feeds is covered by P6.
 
 ## 5. RESUME_AT shows the saved frame at t_resume
 
