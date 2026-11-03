@@ -16,6 +16,9 @@
 #include <string.h>
 
 #ifndef TIMESYNC_HOST_TEST
+#include <inttypes.h>
+#include <stdio.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -848,7 +851,17 @@ void timesync_task (void * p_queue)
 
         while (pdTRUE == xQueueReceive(p_sync_queue, &pair, 0))
         {
+            uint32_t const before = g_writer.reseeds;
+
             timesync_add_sample(pair.t_p, pair.t_l);
+
+            if (before != g_writer.reseeds)
+            {
+                /* Bench evidence for R1-2 (coordinator switch). */
+                printf("TS reseed n=%" PRIu32 " t_p=%" PRId64 " t_l=%" PRId64
+                       "\n",
+                       g_writer.reseeds, pair.t_p, pair.t_l);
+            }
         }
 
         timesync_tick(esp_timer_get_time());
