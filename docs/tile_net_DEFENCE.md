@@ -54,11 +54,11 @@ Each entry: the design choice, the PostTri row it comes from (inventory ID from 
 - Choice: `asset_store_cached()` gives the session and CRC32 of the asset in RAM (0 and 0 when none), read through asset_store's published pointer.
 - Examiner: "A tile reboots mid-session. What does it send, and what does the Pico do with it?"
 
-## 9. Known gap: beacons from any sender
+## 9. One coordinator per tile (fix for the bench finding of 29 Oct 2026)
 
-- Source: bench log 29 Oct 2026 (`docs/week10/skew_2tile/bench_log.md`).
-- State: beacons are accepted from any address; with two Picos on one SSID the tile mixed two clocks and would re-REGISTER on every sender change. Bench rule until fixed: one Pico per router. A fix (accept beacons only from the coordinator of the current session) is open for Cheston and Benjamin (T-B2-04).
-- Examiner: "Another team's Pico is on the lab router. What happens to your skew?"
+- Source: bench log 29 Oct 2026 (`docs/week10/skew_2tile/bench_log.md`): with two Picos on one SSID the tile mixed two clocks (about 17 beacons/s, `lost=` in the millions).
+- Choice (30 Oct 2026, PROVISIONAL): in the receive context, the first beacon sender is locked; beacons and commands from any other address are dropped and counted (`foreign=` in `TN_STATS`); the lock moves only after the locked coordinator has been silent 2 s (twice the 1 s holdover), so a Pico reboot is followed. A new sender restarts the seq baseline, so the switch is not counted as router loss.
+- Examiner: "Another team's Pico is on the lab router. What happens to your skew, and what happens when your own Pico reboots?"
 
 ## PROVISIONAL list for Cheston to confirm
 

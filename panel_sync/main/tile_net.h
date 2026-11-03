@@ -55,6 +55,11 @@
  * PROVISIONAL (OD-11, owner Cheston): telemetry period 1 s, Telemetry Queue
  * length 2 (one item being read plus the newest), pending-ACK ring of 4
  * (TELEMETRY_BOOK_CAPACITY: an ACK up to 4 s late still clears its bits).
+ * PROVISIONAL (owners Cheston and Benjamin, 30 Oct 2026): a tile keeps the
+ * first coordinator it hears and ignores beacons and commands from any other
+ * address until the locked one has been silent 2 s; ignored beacons are
+ * counted as foreign= in TN_STATS (bench log 29 Oct 2026: two Picos on one
+ * SSID were mixed).
  * PROVISIONAL (OD-11, owner Cheston): no Fault queue q_fault is created;
  * faults reach the Network Task through the fault word (RAR-1), so the
  * Fault queue length and policy stay open.

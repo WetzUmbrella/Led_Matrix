@@ -14,6 +14,7 @@
 | `pc/` | no way to build or upload the OD-15 8-bit asset T-X-03 needs | `asset_builder.py --format 8bit`, `uploader.py --format 1` (patch 14) |
 | `pc/tools/gen_week13_docs.py` | bit counts doubled the header | uses `body_bits()` alone; pytest added (patch 14) |
 | `pc/tools/evidence_index.py` | procedure templates counted as evidence, so a readiness row turned Green with no run | documents that say "Nothing has run yet", and the index itself, are not evidence; pytest added (patch 14) |
+| `tile_net.c` `tn_on_beacon()` (bench log) | beacons and commands accepted from any sender; two Picos on one SSID were mixed | coordinator lock: first sender kept, others dropped and counted (`foreign=`), switch after 2 s of silence (patch 17, PROVISIONAL; the bench must confirm with two Picos) |
 | `.github/workflows/build.yml` | the new pytest needs Pillow, which CI did not install | `pillow==11.0.0` added (patch 14) |
 | `panel_sync/test/test_telemetry_book.c` | T5 used a condition bit as an event, so it could not fail | event bits only; the end check now requires every event cleared (patch 09) |
 
@@ -21,7 +22,6 @@
 
 | Tag | Where | Finding | Suggested fix |
 |---|---|---|---|
-| BLOCKING (bench) | `tile_net.c` `tn_handle_record()` | beacons accepted from any sender; two Picos on one SSID are mixed (bench log 29 Oct 2026) | accept beacons only from the coordinator of the current session (T-B2-04, Cheston and Benjamin); until then one Pico per router |
 | SHOULD FIX | `orientation.h` | QMI8658 register values come from the datasheet map and have never run | check `ORIENT imu ready` and the axes on a board before T-B5-06 |
 | SHOULD FIX | `display_frame.h`, `orient_filter.h` | LED numbering, rotation direction and quadrant mapping are assumptions | settle in the T-B5-06 trials |
 | SHOULD FIX | `asset_store.c` | the BUSY burst of T-B3-04 (1) relies on the Network Task draining the 8-slot Reply Queue at least every 20 ms; at the default 100 chunks/s that is about 2 replies per pass, but a faster `--rate` could drop BUSY replies (counted in `reply_drops`) | keep the T-B3-04 run at the default rate or raise the Reply Queue length |

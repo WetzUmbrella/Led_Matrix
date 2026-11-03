@@ -111,6 +111,13 @@
 #define TN_INJECT_PERIOD_US INT64_C(5000000)
 #endif
 
+/** A tile keeps the first coordinator it hears and ignores beacons from
+ *  any other address until the locked one has been silent this long
+ *  (PROVISIONAL, owners Cheston and Benjamin: 2 s, twice the 1 s holdover,
+ *  so a Pico reboot is followed but a second Pico on the SSID never mixes
+ *  its clock in; bench log 29 Oct 2026). */
+#define TN_COORD_SWITCH_US INT64_C(2000000)
+
 /** Event group bits set by the WiFi event handler. */
 #define TN_EV_HAVE_IP BIT0
 #define TN_EV_NEW_IP  BIT1
@@ -132,6 +139,7 @@ typedef struct
     uint32_t dropped;
     uint32_t lost;
     uint32_t log_dropped;
+    uint32_t foreign; /**< Beacons from another coordinator (lock). */
 } tn_record_t;
 
 /** One Telemetry Queue item: the status and the producer's drop count. */
@@ -160,12 +168,15 @@ static EventGroupHandle_t g_p_events      = NULL;
 static uint8_t            g_node_id       = 0u;
 
 /* Receive context only (single producer). */
-static uint32_t g_received    = 0u;
-static uint32_t g_dropped     = 0u;
-static uint32_t g_lost        = 0u;
-static uint32_t g_log_dropped = 0u;
-static uint16_t g_next_seq    = 0u;
-static bool     g_b_seq_known = false;
+static uint32_t g_received      = 0u;
+static uint32_t g_dropped       = 0u;
+static uint32_t g_lost          = 0u;
+static uint32_t g_log_dropped   = 0u;
+static uint16_t g_next_seq      = 0u;
+static bool     g_b_seq_known   = false;
+static uint32_t g_coord_addr    = 0u; /* Locked coordinator, 0 = none. */
+static int64_t  g_coord_last_us = 0;  /* Its last beacon (local time). */
+static uint32_t g_foreign       = 0u; /* Beacons from other senders. */
 
 /* Display Engine context only (single producer of the Telemetry Queue). */
 static uint32_t g_tel_q_dropped = 0u;
@@ -645,38 +656,61 @@ static void tn_on_beacon (uint8_t const * p_buf, uint32_t len, int64_t t_l,
 
     if (proto_decode_beacon(p_buf, len, &msg))
     {
-        if (g_b_seq_known)
-        {
-            /* Wrap-aware gap: seq is a 16-bit counter. */
-            uint16_t const gap = (uint16_t)(msg.header.seq - g_next_seq);
+        bool const b_stale =
+            (t_l - g_coord_last_us) > TN_COORD_SWITCH_US; /* Silent. */
 
-            g_lost += gap;
+        if ((0u == g_coord_addr) || (b_stale))
+        {
+            if (g_coord_addr != src_addr)
+            {
+                g_b_seq_known = false; /* New sender: new seq baseline. */
+            }
+
+            g_coord_addr = src_addr;
         }
 
-        g_b_seq_known = true;
-        g_next_seq    = (uint16_t)(msg.header.seq + 1u); /* 16-bit wrap. */
+        if (src_addr != g_coord_addr)
+        {
+            g_foreign++; /* Another coordinator: never mixed in. */
+        }
+        else
+        {
+            g_coord_last_us = t_l;
 
-        /* time_us_64() on the Pico is below 2^63 us (292,000 years), so the
-         * value fits int64_t unchanged. */
-        timesync_pair_t const pair = {.t_p = (int64_t)msg.t_p, .t_l = t_l};
+            if (g_b_seq_known)
+            {
+                /* Wrap-aware gap: seq is a 16-bit counter. */
+                uint16_t const gap = (uint16_t)(msg.header.seq - g_next_seq);
 
-        tn_post_drop_oldest(g_p_q_timesync, &pair, &g_dropped);
-        g_received++;
+                g_lost += gap;
+            }
 
-        tn_record_t const record = {
-            .kind        = TN_REC_BEACON,
-            .session_id  = msg.header.session_id,
-            .seq         = msg.header.seq,
-            .src_addr    = src_addr,
-            .t_p         = pair.t_p,
-            .t_l         = t_l,
-            .received    = g_received,
-            .dropped     = g_dropped,
-            .lost        = g_lost,
-            .log_dropped = g_log_dropped,
-        };
+            g_b_seq_known = true;
+            g_next_seq    = (uint16_t)(msg.header.seq + 1u); /* 16-bit wrap. */
 
-        tn_post_drop_oldest(g_p_q_log, &record, &g_log_dropped);
+            /* time_us_64() on the Pico is below 2^63 us (292,000 years), so the
+             * value fits int64_t unchanged. */
+            timesync_pair_t const pair = {.t_p = (int64_t)msg.t_p, .t_l = t_l};
+
+            tn_post_drop_oldest(g_p_q_timesync, &pair, &g_dropped);
+            g_received++;
+
+            tn_record_t const record = {
+                .kind        = TN_REC_BEACON,
+                .session_id  = msg.header.session_id,
+                .seq         = msg.header.seq,
+                .src_addr    = src_addr,
+                .t_p         = pair.t_p,
+                .t_l         = t_l,
+                .received    = g_received,
+                .dropped     = g_dropped,
+                .lost        = g_lost,
+                .log_dropped = g_log_dropped,
+                .foreign     = g_foreign,
+            };
+
+            tn_post_drop_oldest(g_p_q_log, &record, &g_log_dropped);
+        }
     }
 }
 
@@ -694,7 +728,11 @@ static void tn_on_command (uint8_t const * p_buf, uint32_t len,
 {
     tile_net_command_t command;
 
-    if (tn_decode_command(p_buf, len, p_header, &command))
+    /* Commands only from the locked coordinator (same rule as beacons). */
+    bool const b_from_coord =
+        (0u == g_coord_addr) || (src_addr == g_coord_addr);
+
+    if ((b_from_coord) && (tn_decode_command(p_buf, len, p_header, &command)))
     {
         if (0u != uxQueueSpacesAvailable(g_p_q_command))
         {
@@ -846,11 +884,11 @@ static void tn_handle_record (tn_record_t const * p_record)
                    " lost=%" PRIu32 " log_dropped=%" PRIu32 " tel_sent=%" PRIu32
                    " tel_acked=%" PRIu32 " ack_unknown=%" PRIu32
                    " tel_q_dropped=%" PRIu32 " upload_nacks=%" PRIu32
-                   " upload_wrong_session=%" PRIu32 "\n",
+                   " upload_wrong_session=%" PRIu32 " foreign=%" PRIu32 "\n",
                    p_record->received, p_record->dropped, p_record->lost,
                    p_record->log_dropped, g_tel_sent, g_tel_acked,
                    g_ack_unknown, g_tel_status.dropped, g_upload_nacks,
-                   g_upload_wrong_session);
+                   g_upload_wrong_session, p_record->foreign);
         }
     }
     else if (TN_REC_NACK == p_record->kind)
