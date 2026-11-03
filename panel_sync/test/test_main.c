@@ -16,6 +16,7 @@
 #include <stdio.h>
 
 #include "test_asset_rx.h"
+#include "test_display.h"
 #include "test_fault_word.h"
 #include "test_playback.h"
 #include "test_telemetry_book.h"
@@ -94,6 +95,25 @@ static test_case_t const g_asset[] = {
      test_asset_rx_complete},
     {"Test A5: zlib CRC32 0xCBF43926 and continuation", test_asset_rx_crc32},
 };
+
+static test_case_t const g_display[] = {
+    {"Test D1: frame_pattern vector 192 of 192 bytes, all 0 to 8",
+     test_display_unpack_vector},
+    {"Test D2: rotation remap, 4 x 90 = identity, 180 = reverse",
+     test_display_rotation},
+    {"Test D3: frame index from ticks", test_display_frame_index},
+    {"Test O1: 25 equal samples give 0 changes, 26 give 1",
+     test_display_orient_debounce},
+    {"Test O2: forced NACK keeps the orientation, IMU bit set then cleared",
+     test_display_orient_nack},
+    {"Test O3: quadrants, weak gravity, flicker restarts the count",
+     test_display_orient_classify},
+};
+
+/** Number of counted display and orientation tests (6): the element count
+ *  of a six-entry array fits uint32_t. */
+#define DISPLAY_COUNT                                                          \
+    ((uint32_t)(sizeof(g_display) / sizeof(g_display[0]))) /* Fits. */
 
 /** Number of counted asset tests (5): the element count of a five-entry
  *  array fits uint32_t. */
@@ -223,12 +243,26 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     printf("Asset: Pass = %" PRIu32 " of %" PRIu32 "\n", asset_passed,
            ASSET_COUNT);
 
+    uint32_t display_passed = 0u;
+
+    for (uint32_t idx = 0u; idx < DISPLAY_COUNT; idx++)
+    {
+        if (test_main_run(g_display[idx].p_name, g_display[idx].p_test))
+        {
+            display_passed++;
+        }
+    }
+
+    printf("Display: Pass = %" PRIu32 " of %" PRIu32 "\n", display_passed,
+           DISPLAY_COUNT);
+
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
     if ((CASE_COUNT == passed) && b_supp && b_ready &&
         (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
-        (TELEMETRY_COUNT == telemetry_passed) && (ASSET_COUNT == asset_passed))
+        (TELEMETRY_COUNT == telemetry_passed) &&
+        (ASSET_COUNT == asset_passed) && (DISPLAY_COUNT == display_passed))
     {
         status = 0;
     }

@@ -55,3 +55,11 @@ panel_sync/main/asset_rx.h
 panel_sync/main/asset_rx.c
 panel_sync/test/test_asset_rx.h
 panel_sync/test/test_asset_rx.c
+panel_sync/main/display_frame.h
+panel_sync/main/display_frame.c
+panel_sync/main/orient_filter.h
+panel_sync/main/orient_filter.c
+panel_sync/main/orientation.h
+panel_sync/main/orientation.c
+panel_sync/test/test_display.h
+panel_sync/test/test_display.c
