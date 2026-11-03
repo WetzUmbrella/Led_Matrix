@@ -75,6 +75,11 @@ jobs:
           make -C common/proto/test
           make -C common/proto/test asan
 
+      - name: Host tests (ledwall_sync coordinator), plain and with sanitizers
+        run: |
+          make -C ledwall_sync/test
+          make -C ledwall_sync/test asan
+
   pico:
     name: Pico W (ledwall_sync)
     runs-on: ubuntu-latest
