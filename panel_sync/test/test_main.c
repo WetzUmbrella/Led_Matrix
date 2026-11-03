@@ -17,6 +17,7 @@
 
 #include "test_fault_word.h"
 #include "test_playback.h"
+#include "test_telemetry_book.h"
 #include "test_timesync.h"
 
 #ifndef TIMESYNC_HOST_TEST
@@ -70,6 +71,22 @@ static test_case_t const g_playback[] = {
     {"Test P6: 0.9 s without beacons keeps playing, 1.1 s pauses, 10 of 10",
      test_playback_holdover},
 };
+
+static test_case_t const g_telemetry[] = {
+    {"Test T1: ACK of a recorded seq returns its bits",
+     test_telemetry_book_ack_match},
+    {"Test T2: repeated and unknown ACKs change nothing",
+     test_telemetry_book_repeat},
+    {"Test T3: ring of 4, the oldest expires", test_telemetry_book_expiry},
+    {"Test T4: seq wrap 65535 to 0", test_telemetry_book_wrap},
+    {"Test T5: VC-4 drop every third, 100% delivered, 0 transitions",
+     test_telemetry_book_vc4},
+};
+
+/** Number of counted telemetry tests (5): the element count of a
+ *  five-entry array fits uint32_t. */
+#define TELEMETRY_COUNT                                                        \
+    ((uint32_t)(sizeof(g_telemetry) / sizeof(g_telemetry[0]))) /* Fits. */
 
 /** Number of counted playback tests (6): a six-entry array count fits
  *  uint32_t. */
@@ -163,11 +180,25 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     printf("Playback: Pass = %" PRIu32 " of %" PRIu32 "\n", playback_passed,
            PLAYBACK_COUNT);
 
+    uint32_t telemetry_passed = 0u;
+
+    for (uint32_t idx = 0u; idx < TELEMETRY_COUNT; idx++)
+    {
+        if (test_main_run(g_telemetry[idx].p_name, g_telemetry[idx].p_test))
+        {
+            telemetry_passed++;
+        }
+    }
+
+    printf("Telemetry: Pass = %" PRIu32 " of %" PRIu32 "\n", telemetry_passed,
+           TELEMETRY_COUNT);
+
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
     if ((CASE_COUNT == passed) && b_supp && b_ready &&
-        (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed))
+        (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
+        (TELEMETRY_COUNT == telemetry_passed))
     {
         status = 0;
     }

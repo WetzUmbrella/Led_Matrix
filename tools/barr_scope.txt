@@ -47,3 +47,7 @@ panel_sync/main/playback_control.h
 panel_sync/main/playback_control.c
 panel_sync/test/test_playback.h
 panel_sync/test/test_playback.c
+panel_sync/main/telemetry_book.h
+panel_sync/main/telemetry_book.c
+panel_sync/test/test_telemetry_book.h
+panel_sync/test/test_telemetry_book.c
