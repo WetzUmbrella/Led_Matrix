@@ -45,6 +45,7 @@
 #include "nvs_flash.h"
 
 #include "asset_store.h"
+#include "playback_control.h"
 #include "fault_word.h"
 #include "proto.h"
 #include "telemetry_book.h"
@@ -85,9 +86,10 @@
  *  (RESUME_AT, 13 B), so a longer datagram is seen as the wrong length. */
 #define TN_RX_BYTES (PROTO_RESUME_AT_BYTES + 1u)
 
-/** Receive buffer for port 4214: one byte more than TELEMETRY_ACK (6 B), so
- *  a longer datagram is seen as the wrong length. */
-#define TN_ACK_RX_BYTES (PROTO_TELEMETRY_ACK_BYTES + 1u)
+/** Receive buffer for port 4214: one byte more than the longest message
+ *  there (ASSET_CHUNK, 5 + 1,024 B), so a longer datagram is seen as the
+ *  wrong length. */
+#define TN_PC_RX_BYTES (PROTO_ASSET_CHUNK_MAX_BYTES + 1u)
 
 /** Heartbeat period 0.5 s (proposed, VA-2.7). */
 #define TN_HEARTBEAT_US INT64_C(500000)
@@ -186,10 +188,15 @@ static int              g_ack_sock    = -1; /* DEVIATION D-2: lwIP socket. */
 static uint32_t         g_bcast_addr  = 0u; /* Network byte order. */
 static int64_t          g_next_tel_us = 0;
 static telemetry_book_t g_tel_book;
-static tn_status_item_t g_tel_status  = {{0u, 0u}, 0u};
-static uint32_t         g_tel_sent    = 0u;
-static uint32_t         g_tel_acked   = 0u;
-static uint32_t         g_ack_unknown = 0u;
+static tn_status_item_t g_tel_status   = {{0u, 0u}, 0u};
+static uint32_t         g_tel_sent     = 0u;
+static uint32_t         g_tel_acked    = 0u;
+static uint32_t         g_ack_unknown  = 0u;
+static uint32_t         g_pc_addr      = 0u; /* Last sender on 4214. */
+static uint16_t         g_pc_port      = 0u; /* Its port, host order. */
+static bool             g_b_had_ip     = false;
+static uint32_t         g_comms        = 0u; /* tile_net_comms_t. */
+static uint32_t         g_upload_nacks = 0u;
 #ifdef TN_TEST_INJECT_FAULTS
 static int64_t  g_next_inject_us = 0;
 static uint32_t g_injected       = 0u;
@@ -216,13 +223,20 @@ static void tn_handle_record (tn_record_t const * p_record);
 static void tn_housekeeping (void);
 static void tn_send_heartbeat (int64_t now);
 static void tn_send_register (void);
-static void tn_send_nack (uint8_t session, uint16_t ref_seq);
+static void tn_send_nack (uint8_t reason, uint8_t session, uint16_t ref_seq,
+                          bool b_to_pc);
+static void tn_send_pc (uint8_t const * p_buf, uint32_t len);
+static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len);
+static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
+                          proto_header_t const * p_header);
+static void tn_send_replies (void);
+static void tn_comms_sm (void);
 static void tn_send (uint8_t const * p_buf, uint32_t len);
 static int  tn_ack_socket (void); /* DEVIATION D-2: lwIP int socket. */
 static void tn_on_new_ip (void);
 static void tn_telemetry_service (int64_t now);
 static void tn_telemetry_send (void);
-static void tn_poll_ack (void);
+static void tn_poll_pc (void);
 static void tn_on_telemetry_ack (uint16_t acked_seq);
 
 #if (TN_RX_HOOK == TN_RX_HOOK_LWIP)
@@ -829,15 +843,17 @@ static void tn_handle_record (tn_record_t const * p_record)
             printf("TN_STATS received=%" PRIu32 " dropped=%" PRIu32
                    " lost=%" PRIu32 " log_dropped=%" PRIu32 " tel_sent=%" PRIu32
                    " tel_acked=%" PRIu32 " ack_unknown=%" PRIu32
-                   " tel_q_dropped=%" PRIu32 "\n",
+                   " tel_q_dropped=%" PRIu32 " upload_nacks=%" PRIu32 "\n",
                    p_record->received, p_record->dropped, p_record->lost,
                    p_record->log_dropped, g_tel_sent, g_tel_acked,
-                   g_ack_unknown, g_tel_status.dropped);
+                   g_ack_unknown, g_tel_status.dropped, g_upload_nacks);
         }
     }
     else if (TN_REC_NACK == p_record->kind)
     {
-        tn_send_nack(p_record->session_id, p_record->seq);
+        /* NACK reason 2 fits uint8_t. */
+        tn_send_nack((uint8_t)PROTO_NACK_COMMAND_QUEUE_FULL,
+                     p_record->session_id, p_record->seq, false);
     }
     else
     {
@@ -955,14 +971,14 @@ static void tn_send_heartbeat (int64_t now)
 }
 
 /**
- * @brief  REGISTER {Node ID, cached session_id, cached CRC32}. The cached
- *         values are 0 until asset_store exists (T-B3-04, T-B3-05).
+ * @brief  REGISTER {Node ID, cached session_id, cached CRC32}: the asset in
+ *         RAM, or 0 and 0 when there is none (T-B3-05).
  */
 static void tn_send_register (void)
 {
     uint8_t buf[PROTO_REGISTER_BYTES];
 
-    proto_register_t const msg = {
+    proto_register_t msg = {
         .header            = {.type       = PROTO_TYPE_REGISTER,
                               .session_id = g_session,
                               .seq        = g_tile_seq},
@@ -971,6 +987,8 @@ static void tn_send_register (void)
         .cached_crc32      = 0u,
     };
 
+    /* The asset in RAM, if any, so the Pico can reuse it (T-B3-05). */
+    asset_store_cached(&msg.cached_session_id, &msg.cached_crc32);
     g_tile_seq++;
 
     /* A tile without a valid Node ID cannot register (the encoder refuses
@@ -980,11 +998,15 @@ static void tn_send_register (void)
 }
 
 /**
- * @brief  NACK reason 2 (Command Queue full) for a rejected command.
- * @param  session  Session of the rejected command.
- * @param  ref_seq  seq of the rejected command.
+ * @brief  NACK: reason 2 (Command Queue full) to the Pico, or an upload
+ *         reason (0, 1 or 3) to the PC.
+ * @param  reason   proto_nack_reason_t.
+ * @param  session  Session of the rejected message.
+ * @param  ref_seq  seq of the rejected message.
+ * @param  b_to_pc  true: to the PC that sent it; false: to the Pico.
  */
-static void tn_send_nack (uint8_t session, uint16_t ref_seq)
+static void tn_send_nack (uint8_t reason, uint8_t session, uint16_t ref_seq,
+                          bool b_to_pc)
 {
     uint8_t buf[PROTO_NACK_BYTES];
 
@@ -993,12 +1015,46 @@ static void tn_send_nack (uint8_t session, uint16_t ref_seq)
                     .session_id = session,
                     .seq        = g_tile_seq},
         .node_id = g_node_id,
-        .reason  = PROTO_NACK_COMMAND_QUEUE_FULL,
+        .reason  = reason,
         .ref_seq = ref_seq,
     };
 
+    uint32_t const len = proto_encode_nack(&msg, buf, sizeof(buf));
+
     g_tile_seq++;
-    tn_send(buf, proto_encode_nack(&msg, buf, sizeof(buf)));
+
+    if (b_to_pc)
+    {
+        tn_send_pc(buf, len);
+    }
+    else
+    {
+        tn_send(buf, len);
+    }
+}
+
+/**
+ * @brief  Send to the PC at the address and port its last message on port
+ *         4214 came from (layout_table.md section 11). Nothing is sent
+ *         before the PC has sent anything.
+ * @param  p_buf  Bytes.
+ * @param  len    Length (0 sends nothing).
+ */
+static void tn_send_pc (uint8_t const * p_buf, uint32_t len)
+{
+    if ((0u != len) && (0u != g_pc_addr) && (g_tx_sock >= 0))
+    {
+        struct sockaddr_in const to = {
+            .sin_family      = AF_INET,
+            .sin_port        = htons(g_pc_port),
+            .sin_addr.s_addr = g_pc_addr,
+        };
+
+        /* sockaddr_in is the IPv4 form of sockaddr. A lost reply is repeated
+         * when the PC sends the chunk again. */
+        (void)sendto(g_tx_sock, p_buf, len, 0, (struct sockaddr const *)&to,
+                     sizeof(to));
+    }
 }
 
 /**
@@ -1090,7 +1146,9 @@ static void tn_telemetry_service (int64_t now)
         g_tel_status = item;
     }
 
-    tn_poll_ack();
+    tn_poll_pc();
+    tn_send_replies();
+    tn_comms_sm();
 
 #ifdef TN_TEST_INJECT_FAULTS
     /* Inject only while the bit is clear, so the tile log counts separate
@@ -1162,30 +1220,250 @@ static void tn_telemetry_send (void)
 }
 
 /**
- * @brief  Read every datagram waiting on port 4214 and act on each valid
- *         TELEMETRY_ACK. Other types on this port are ignored until
- *         T-B3-05 adds MANIFEST and ASSET_CHUNK.
+ * @brief  Read every datagram waiting on port 4214 (Network Task); the
+ *         sender becomes the PC address for replies.
  */
-static void tn_poll_ack (void)
+static void tn_poll_pc (void)
 {
-    uint8_t buf[TN_ACK_RX_BYTES];
+    static uint8_t buf[TN_PC_RX_BYTES]; /* 1 KB: off the task stack. */
 
-    /* DEVIATION D-2: recv returns ssize_t. */
-    ssize_t got = (g_ack_sock >= 0)
-                      ? recv(g_ack_sock, buf, sizeof(buf), MSG_DONTWAIT)
-                      : -1;
+    bool b_more = (g_ack_sock >= 0);
 
-    while (got > 0)
+    while (b_more)
     {
-        proto_telemetry_ack_t ack;
+        struct sockaddr_in from;
+        socklen_t          from_len = sizeof(from);
 
-        /* got is 1 to TN_ACK_RX_BYTES, so it fits uint32_t. */
-        if (proto_decode_telemetry_ack(buf, (uint32_t)got, &ack))
+        /* DEVIATION D-2: recvfrom returns ssize_t. sockaddr_in is the IPv4
+         * form of sockaddr, as the sockets API expects. */
+        ssize_t const got = recvfrom(g_ack_sock, buf, sizeof(buf), MSG_DONTWAIT,
+                                     (struct sockaddr *)&from, &from_len);
+
+        b_more = (got > 0);
+
+        if (b_more)
         {
-            tn_on_telemetry_ack(ack.acked_seq);
+            g_pc_addr = from.sin_addr.s_addr;
+            g_pc_port = ntohs(from.sin_port);
+            /* got is 1 to TN_PC_RX_BYTES, so it fits uint32_t. */
+            tn_on_pc_datagram(buf, (uint32_t)got);
         }
+    }
+}
 
-        got = recv(g_ack_sock, buf, sizeof(buf), MSG_DONTWAIT);
+/**
+ * @brief  One datagram from the PC: TELEMETRY_ACK, MANIFEST or ASSET_CHUNK.
+ *         Other types on this port are ignored.
+ * @param  p_buf  Bytes.
+ * @param  len    Length.
+ */
+static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len)
+{
+    proto_header_t header;
+
+    if (proto_decode_header(p_buf, len, &header))
+    {
+        /* A decoded type is below 18, a valid proto_type_t. */
+        proto_type_t const type = (proto_type_t)header.type;
+
+        if (PROTO_TYPE_TELEMETRY_ACK == type)
+        {
+            proto_telemetry_ack_t ack;
+
+            if (proto_decode_telemetry_ack(p_buf, len, &ack))
+            {
+                tn_on_telemetry_ack(ack.acked_seq);
+            }
+        }
+        else if ((PROTO_TYPE_MANIFEST == type) ||
+                 (PROTO_TYPE_ASSET_CHUNK == type))
+        {
+            tn_on_upload(p_buf, len, &header);
+        }
+        else
+        {
+            /* Not a PC-to-tile message. */
+        }
+    }
+}
+
+/**
+ * @brief  MANIFEST or ASSET_CHUNK into the Upload Queue (asset_store);
+ *         queue full: reject and NACK reason 3 (VA-3.6).
+ * @param  p_buf     Bytes.
+ * @param  len       Length.
+ * @param  p_header  Decoded header.
+ */
+static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
+                          proto_header_t const * p_header)
+{
+    static asset_store_upload_t item; /* 1 KB: off the task stack. */
+
+    bool b_valid = false;
+
+    (void)memset(&item, 0, sizeof(item)); /* Returns &item. */
+    item.session_id = p_header->session_id;
+    item.seq        = p_header->seq;
+
+    if (PROTO_TYPE_MANIFEST == p_header->type)
+    {
+        proto_manifest_t msg;
+
+        b_valid   = proto_decode_manifest(p_buf, len, &msg);
+        item.kind = (uint8_t)ASSET_STORE_UP_MANIFEST; /* Enum value fits. */
+        item.format_version = msg.format_version;
+        item.frame_count    = msg.frame_count;
+        item.crc32          = msg.crc32;
+    }
+    else
+    {
+        proto_asset_chunk_t msg;
+
+        b_valid = proto_decode_asset_chunk(p_buf, len, &msg);
+
+        if (b_valid)
+        {
+            item.kind = (uint8_t)ASSET_STORE_UP_CHUNK; /* Enum value fits. */
+            item.chunk_index = msg.chunk_index;
+            item.payload_len = msg.payload_len;
+            /* Returns item.payload. payload_len is 1 to 1,024 (decoder). */
+            (void)memcpy(item.payload, msg.p_payload, msg.payload_len);
+        }
+    }
+
+    if ((b_valid) && (!asset_store_post_upload(&item)))
+    {
+        g_upload_nacks++;
+        /* NACK reason 3 fits uint8_t. */
+        tn_send_nack((uint8_t)PROTO_NACK_UPLOAD_QUEUE_FULL, item.session_id,
+                     item.seq, true);
+    }
+}
+
+/**
+ * @brief  Send every reply asset_store has queued: CHUNK_ACK, BUSY and NACK
+ *         to the PC, ASSET_READY to the Pico.
+ */
+static void tn_send_replies (void)
+{
+    asset_store_reply_t reply;
+
+    while (asset_store_take_reply(&reply))
+    {
+        uint8_t buf[PROTO_ASSET_READY_BYTES];
+
+        if (ASSET_STORE_REPLY_NACK == reply.kind)
+        {
+            tn_send_nack(reply.reason, reply.session_id, reply.ref_seq, true);
+        }
+        else
+        {
+            proto_header_t const header = {
+                .type = 0u, .session_id = reply.session_id, .seq = g_tile_seq};
+
+            g_tile_seq++;
+
+            if (ASSET_STORE_REPLY_CHUNK_ACK == reply.kind)
+            {
+                proto_chunk_ack_t msg = {.header      = header,
+                                         .node_id     = g_node_id,
+                                         .chunk_index = reply.chunk_index};
+
+                msg.header.type =
+                    (uint8_t)PROTO_TYPE_CHUNK_ACK; /* Enum value fits. */
+                tn_send_pc(buf, proto_encode_chunk_ack(&msg, buf, sizeof(buf)));
+            }
+            else if (ASSET_STORE_REPLY_BUSY == reply.kind)
+            {
+                proto_busy_t msg = {.header  = header,
+                                    .node_id = g_node_id,
+                                    .ref_seq = reply.ref_seq};
+
+                msg.header.type =
+                    (uint8_t)PROTO_TYPE_BUSY; /* Enum value fits. */
+                tn_send_pc(buf, proto_encode_busy(&msg, buf, sizeof(buf)));
+            }
+            else
+            {
+                proto_asset_ready_t msg = {.header  = header,
+                                           .node_id = g_node_id,
+                                           .crc32   = reply.crc32};
+
+                msg.header.type =
+                    (uint8_t)PROTO_TYPE_ASSET_READY; /* Enum value fits. */
+                tn_send(buf, proto_encode_asset_ready(&msg, buf, sizeof(buf)));
+                printf("tile_net: ASSET_READY crc=0x%08" PRIx32 "\n",
+                       reply.crc32);
+            }
+        }
+    }
+}
+
+/**
+ * @brief  Comms statechart (W6 statechart 3, T-B3-05), derived each pass
+ *         from what each owner publishes: the IP event bits and the
+ *         CONNECTING timeout (this task), REGISTER (this task), the upload
+ *         phase (asset_store) and the playback state (Playback Control).
+ *         A change is logged as "TN_COMMS <state>".
+ */
+static void tn_comms_sm (void)
+{
+    static char const * const names[TILE_NET_COMMS_COUNT] = {
+        "BOOTING",          "CONNECTING TO WIFI",
+        "REGISTERING TILE", "WAITING FOR ASSET",
+        "RECEIVING ASSET",  "VERIFYING ASSET",
+        "ASSET READY",      "SUPPORTING PLAYBACK",
+        "RECONNECTING",     "FAULT"};
+
+    playback_control_state_t const play  = playback_control_state();
+    asset_store_phase_t const      phase = asset_store_phase();
+    bool const                     b_ip  = tile_net_has_ip();
+    tile_net_comms_t               next  = TILE_NET_COMMS_WAITING;
+
+    if (b_ip)
+    {
+        g_b_had_ip = true;
+    }
+
+    if (g_b_wifi_fault)
+    {
+        next = TILE_NET_COMMS_FAULT;
+    }
+    else if (!b_ip)
+    {
+        next = g_b_had_ip ? TILE_NET_COMMS_RECONNECTING
+                          : TILE_NET_COMMS_CONNECTING;
+    }
+    else if (!g_b_registered)
+    {
+        next = TILE_NET_COMMS_REGISTERING;
+    }
+    else if ((PLAYBACK_ARMED == play) || (PLAYBACK_PLAYING == play) ||
+             (PLAYBACK_PAUSED == play) || (PLAYBACK_CLOCK_HOLDOVER == play))
+    {
+        next = TILE_NET_COMMS_SUPPORTING_PLAYBACK;
+    }
+    else if (ASSET_STORE_RECEIVING == phase)
+    {
+        next = TILE_NET_COMMS_RECEIVING;
+    }
+    else if (ASSET_STORE_VERIFYING == phase)
+    {
+        next = TILE_NET_COMMS_VERIFYING;
+    }
+    else if (ASSET_STORE_READY == phase)
+    {
+        next = TILE_NET_COMMS_ASSET_READY;
+    }
+    else
+    {
+        /* Registered, no upload yet: WAITING FOR ASSET. */
+    }
+
+    if ((uint32_t)next != g_comms) /* Enum value fits. */
+    {
+        g_comms = (uint32_t)next; /* Enum value fits. */
+        printf("TN_COMMS %s\n", names[next]);
     }
 }
 

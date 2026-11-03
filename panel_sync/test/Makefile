@@ -11,7 +11,8 @@ CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -pthread -DTIMESYNC_HOST_TEST -I../
 SRC     = test_main.c test_timesync.c ../main/timesync.c \
           test_fault_word.c ../main/fault_word.c \
           test_playback.c ../main/playback_control.c \
-          test_telemetry_book.c ../main/telemetry_book.c
+          test_telemetry_book.c ../main/telemetry_book.c \
+          test_asset_rx.c ../main/asset_rx.c
 
 .PHONY: run asan clean
 run: test_timesync
@@ -20,7 +21,8 @@ run: test_timesync
 test_timesync: $(SRC) test_main.h test_timesync.h ../main/timesync.h \
                test_fault_word.h ../main/fault_word.h \
                test_playback.h ../main/playback_control.h \
-               test_telemetry_book.h ../main/telemetry_book.h
+               test_telemetry_book.h ../main/telemetry_book.h \
+               test_asset_rx.h ../main/asset_rx.h
 	$(CC) $(CFLAGS) -o $@ $(SRC)
 
 asan: $(SRC)
