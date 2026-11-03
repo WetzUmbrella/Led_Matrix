@@ -92,7 +92,7 @@ Steps 3 to 8 and 10 of the 29 Oct list are done in patches 09 to 15; `docs/statu
 
 1. **Review and commit (Ahsanul).** Apply patches 01 to 15 in order on `b4/handover` (or commit file groups by task from section 3), one `b<n>/<task>` branch per task. Done when every branch builds in CI.
 2. **Independent review (step 9 of the old list, still open).** Two fresh reviewers (Tribunal fidelity; Barr-C and integration) over everything, logged as round 1 in `docs/status/review_log.md`. Round 0 there is only the implementing session's self-review.
-3. **Fix the BLOCKING bench item first:** tiles accept beacons from any Pico (review log; T-B2-04 with T-B3-03, Cheston and Benjamin). Until then, one Pico per router.
+3. **Confirm the coordinator lock on the bench (patch 17):** with two Picos on the SSID, the tile's `TN_STATS` shows `foreign=` rising and about 10 `BCN,` lines per second from one Pico only; power the locked Pico off and the tile follows the other within about 2 s.
 4. **Hardware, Week 10 (team).** `docs/week10/bench_checklist.md` Parts B0, C1 (passed on ESP-4), D, A5 to A7, then Part B. Confirm the test pin GPIO4 is on the header first (Jia Jun).
 5. **Hardware, Week 13 (team).** Parts E, F, G and H, in that order; each step names its evidence file. Then re-run `python3 pc/tools/gen_week13_docs.py` (after filling measured cells) and `python3 pc/tools/evidence_index.py --inputs ../inputs`.
 6. **Owner decisions.** Every PROVISIONAL row of section 4, plus OD-22 (temperature limits, blocks T-B5-08), OD-13 (upload rate, from G4), OD-18 (from H1), OD-19 (from H2) and OD-17 (lecturer answer, for T-X-06).
