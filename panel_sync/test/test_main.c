@@ -16,6 +16,7 @@
 #include <stdio.h>
 
 #include "test_fault_word.h"
+#include "test_playback.h"
 #include "test_timesync.h"
 
 #ifndef TIMESYNC_HOST_TEST
@@ -55,6 +56,24 @@ static test_case_t const g_faults[] = {
     {"Test F5: two setters and a reporter, 0 lost (T-X-02 forerunner)",
      test_fault_word_two_threads},
 };
+
+static test_case_t const g_playback[] = {
+    {"Test P1: three identical START_AT give 1 transition",
+     test_playback_start_once},
+    {"Test P2: a wrong session_id gives 0 transitions",
+     test_playback_wrong_session},
+    {"Test P3: frame at origin + k x 10^6 / 60 is k mod 600, k 0 to 1199",
+     test_playback_frame_index},
+    {"Test P4: STOP accepted from PAUSED", test_playback_stop_from_paused},
+    {"Test P5: RESUME_AT shows the saved index at t_resume",
+     test_playback_resume_frame},
+    {"Test P6: 0.9 s without beacons keeps playing, 1.1 s pauses, 10 of 10",
+     test_playback_holdover},
+};
+
+/** Number of counted playback tests (6): a six-entry array count fits
+ *  uint32_t. */
+#define PLAYBACK_COUNT ((uint32_t)(sizeof(g_playback) / sizeof(g_playback[0])))
 
 /** Number of counted fault word tests (5): the element count of a
  *  five-entry array fits uint32_t. */
@@ -131,11 +150,24 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     printf("Fault word: Pass = %" PRIu32 " of %" PRIu32 "\n", fault_passed,
            FAULT_COUNT);
 
+    uint32_t playback_passed = 0u;
+
+    for (uint32_t idx = 0u; idx < PLAYBACK_COUNT; idx++)
+    {
+        if (test_main_run(g_playback[idx].p_name, g_playback[idx].p_test))
+        {
+            playback_passed++;
+        }
+    }
+
+    printf("Playback: Pass = %" PRIu32 " of %" PRIu32 "\n", playback_passed,
+           PLAYBACK_COUNT);
+
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
     if ((CASE_COUNT == passed) && b_supp && b_ready &&
-        (FAULT_COUNT == fault_passed))
+        (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed))
     {
         status = 0;
     }

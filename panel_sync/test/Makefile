@@ -7,16 +7,18 @@
 #               crash at start-up with AddressSanitizer:DEADLYSIGNAL before
 #               any test runs.
 CC      = gcc
-CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -pthread -DTIMESYNC_HOST_TEST -I../main
+CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -pthread -DTIMESYNC_HOST_TEST -I../main -I../../common/proto
 SRC     = test_main.c test_timesync.c ../main/timesync.c \
-          test_fault_word.c ../main/fault_word.c
+          test_fault_word.c ../main/fault_word.c \
+          test_playback.c ../main/playback_control.c
 
 .PHONY: run asan clean
 run: test_timesync
 	./test_timesync
 
 test_timesync: $(SRC) test_main.h test_timesync.h ../main/timesync.h \
-               test_fault_word.h ../main/fault_word.h
+               test_fault_word.h ../main/fault_word.h \
+               test_playback.h ../main/playback_control.h
 	$(CC) $(CFLAGS) -o $@ $(SRC)
 
 asan: $(SRC)

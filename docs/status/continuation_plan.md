@@ -1,6 +1,6 @@
 # SE15 continuation plan (kept current during the session)
 
-Last updated: 29 Oct 2026, after patch 03. Work continues from `docs/HANDOVER.md` (Ahsanul, end of Phase 1). Written in Ben's (Benjamin, B2) session, building on Ahsanul's working copy.
+Last updated: 29 Oct 2026, after patch 04. Work continues from `docs/HANDOVER.md` (Ahsanul, end of Phase 1). Written in Ben's (Benjamin, B2) session, building on Ahsanul's working copy.
 
 ## Rules this session follows
 
@@ -16,6 +16,8 @@ Last updated: 29 Oct 2026, after patch 03. Work continues from `docs/HANDOVER.md
 | 02 | T-B2-01 additions (Benjamin) | SESSION_CONFIG gains `frame_count` and `crc32[9]` (46 B; OD-07 item 9); `layout_table.md` section 10 items 9 to 13 and new section 11 (ports 4210 to 4215, TELEMETRY broadcast); Python twin, vectors, C vector tool generalised for array fields | proto 7 of 7 (plain, asan); pytest 165 passed; C/Python vectors 0 mismatches |
 | 03 | T-B2-02 to T-B2-05 (Benjamin) | `coordinator_loop.c/.h` rewritten: one routine per pass, ring buffer, registry[9], heartbeat scan 2.5 s, 10 s CONNECTING then FAULT, statechart 2 (12 states), readiness and sync bitmaps, stale session/seq rejection, STATUS 250 ms, START_AT/RESUME_AT/PAUSE/STOP triple sends, pause and continue policies, 5 s recovery, rejoin RESUME_AT (OD-14 a), stall handling (skip slots, no burst), OD-01 exception check, callback/dispatch histograms, `CL_TEST_SUPPRESS_MS` (T-B4-05); `main.c` reduced (plan 0.1); prototype HELLO, `layout_for()`, `pack_wall()`, Pico access point and `dhcpserver/` deleted; USB printf timeout 1 ms; host tests `ledwall_sync/test` (14 of 14, plain and asan); CI job step added | coordinator 14 of 14; Pico SDK 2.3.1 build 0 warnings (text 347,704 B, bss 50,500 B); barr_check 38 files 0 |
 
+| 04 | T-B3-03 completion (Cheston), T-B3-01 (Cheston), HANDOVER steps 7 and 11 | `tile_net` rewritten: WiFi start, Node ID and `wifi_event` moved in from `panel_sync.c`; `esp_wifi_set_storage(WIFI_STORAGE_RAM)`; REGISTER on first beacon and every reconnect; HEARTBEAT 0.5 s staggered by Node ID; SYNC_READY with each heartbeat while ready; session copied from beacons; commands on 4210 into `q_command` (length 3), full = NACK reason 2; 10 s CONNECTING timeout sets the WIFI bit; no variable shared between contexts except through queues and the event group. `panel_sync.c` reduced to `app_main` (Barr-C, in scope). `display_engine` waits for `timesync_sync_ready()` before its first tick; its unused cross-task counter reader removed. `asset_store_probe_heap()` (T-B3-01) called once after the first IP. `docs/week13/iram_budget.md`. Bench checklist Part D (D1 to D7). `.gitignore` gains `**/build2/` (the HANDOVER hook-2 build folder was not ignored) | ESP-IDF v5.3 `panel_sync` build and `-DTN_RX_HOOK=2` build: complete, 0 warnings; DIRAM 112,739 B used, 229,021 B free; IRAM 16,383 of 16,384 B; barr_check 42 files 0; all host tests and pytest pass |
+
 ### Found and fixed on the way
 
 - The Pico CI job would fail on `ubuntu-latest`: its newlib has no `PRIu64`, which the old `coordinator_loop.c` used. The new code prints no 64-bit format.
@@ -23,7 +25,8 @@ Last updated: 29 Oct 2026, after patch 03. Work continues from `docs/HANDOVER.md
 
 ## Not verified here
 
-- **ESP-IDF builds of `panel_sync` and `boardtest`** after patch 01 (two comment lines and one buffer size in `tile_tasks.c`). ESP-IDF v5.3 is now installed in this workspace (`. ~/esp/esp-idf/export.sh`); run the build before relying on it.
+- **`boardtest`**: not built here (its component comes from the Espressif registry, which this workspace cannot reach). This session did not change it.
+- ESP-IDF in this workspace needs `export IDF_PYTHON_CHECK_CONSTRAINTS=no` before `. ~/esp/esp-idf/export.sh` (the constraints file host is blocked) and `idf-component-manager~=2.1` in its Python env.
 - Nothing has run on hardware.
 
 ## PROVISIONAL decisions for owners to confirm
@@ -37,11 +40,11 @@ Last updated: 29 Oct 2026, after patch 03. Work continues from `docs/HANDOVER.md
 
 ## Next steps, in order (resume here)
 
-1. **Tile side of the new protocol (T-B3-03 completion, Cheston):** move WiFi start and `wifi_event` into `tile_net` (Node ID from NVS, `esp_wifi_set_storage(WIFI_STORAGE_RAM)`, 10 s CONNECTING then FAULT + WIFI bit); learn the Pico address from beacon source; REGISTER on join and reconnect; HEARTBEAT every 0.5 s offset (Node ID - 1) x 500 / 9 ms; copy session_id from beacons into outgoing messages; resend ASSET_READY and SYNC_READY with each heartbeat while true (no ACK row exists); dispatch commands on 4210 into `q_command` (length 3, full = NACK reason 2 to the Pico on 4211); counters into the log record (no cross-task reads).
-2. **Start-up defect (HANDOVER step 11):** `display_engine` waits for `timesync_sync_ready()` before its first tick.
-3. **T-B3-01 heap probe:** `asset_store.c` with `asset_store_probe_heap()` called from `tile_net` after `IP_EVENT_STA_GOT_IP`.
-4. **IRAM budget doc (HANDOVER step 7):** `docs/week13/iram_budget.md` from HANDOVER section 4.1.
-5. **Week 10 gate:** ESP-IDF builds (`panel_sync`, `-DTN_RX_HOOK=2`, `boardtest`), Pico build, every host test, pytest, barr_check; add bench steps for T-B2-02 (10 min lateness, `exc_max` 0), T-B3-03 (spread log both hooks), T-B3-01, T-B3-02 to `docs/week10/bench_checklist.md`.
+1. Done (patch 04): tile side of the new protocol.
+2. Done (patch 04): start-up defect.
+3. Done (patch 04): T-B3-01 heap probe.
+4. Done (patch 04): IRAM budget doc.
+5. Done except hardware (patch 04): Week 10 gate passes in software; bench steps D1 to D7 added.
 6. **Week 13, plan section 7 order:** T-B4-04 `playback_control` (needs statechart 4, W6 PDF p.22 to 23); T-B3-06 telemetry send/ACK (TELEMETRY broadcast on 4215, ACK on 4214); T-B3-04 `asset_store` RAM copy; T-B3-05 upload and validation; T-B5-02/03 frame path; T-B5-05 orientation; PC side T-B1-02 to T-B1-06 (`pc/` only, can run in parallel); T-B2-06 `pc/tools/sim_nodes.py`; T-X build options and procedures.
 7. **DEFENCE docs:** `docs/coordinator_loop_DEFENCE.md` for Benjamin (choices, PostTri rows, examiner questions, 3 owner questions) once step 1 is in.
 8. **Independent review:** two fresh reviewers (Tribunal fidelity; Barr-C and integration) over all patches; log in `docs/status/review_log.md`; loop to 0 BLOCKING.
