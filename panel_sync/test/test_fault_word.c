@@ -60,7 +60,7 @@ bool test_fault_word_set_snapshot (void)
     bool b_ok = true;
 
     word_reset();
-    b_ok = test_main_check(0u == fault_word_snapshot(), __LINE__) && b_ok;
+    b_ok = (test_main_check(0u == fault_word_snapshot(), __LINE__)) && b_ok;
 
     fault_word_set(FAULT_BIT_MISSED_DEADLINE);
     fault_word_set(FAULT_BIT_WIFI);
@@ -68,9 +68,10 @@ bool test_fault_word_set_snapshot (void)
 
     uint32_t const expected = FAULT_BIT_MISSED_DEADLINE | FAULT_BIT_WIFI;
 
-    b_ok = test_main_check(expected == fault_word_snapshot(), __LINE__) && b_ok;
-    b_ok = test_main_check(0u == (FAULT_EVENT_MASK & FAULT_CONDITION_MASK),
-                           __LINE__) &&
+    b_ok =
+        (test_main_check(expected == fault_word_snapshot(), __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == (FAULT_EVENT_MASK & FAULT_CONDITION_MASK),
+                            __LINE__)) &&
            b_ok;
 
     return b_ok;
@@ -96,8 +97,8 @@ bool test_fault_word_ack_events_only (void)
 
     uint32_t const left = fault_word_snapshot();
 
-    b_ok = test_main_check((FAULT_BIT_IMU | FAULT_BIT_SYNC_STALE) == left,
-                           __LINE__) &&
+    b_ok = (test_main_check((FAULT_BIT_IMU | FAULT_BIT_SYNC_STALE) == left,
+                            __LINE__)) &&
            b_ok;
 
     return b_ok;
@@ -118,16 +119,16 @@ bool test_fault_word_condition_owner (void)
     for (uint32_t ack = 0u; ack < 3u; ack++)
     {
         fault_word_clear_events(fault_word_snapshot());
-        b_ok = test_main_check(FAULT_BIT_ASSET_FORMAT == fault_word_snapshot(),
-                               __LINE__) &&
+        b_ok = (test_main_check(FAULT_BIT_ASSET_FORMAT == fault_word_snapshot(),
+                                __LINE__)) &&
                b_ok;
     }
 
     /* The owner's clear ignores an event bit passed with it. */
     fault_word_set(FAULT_BIT_CRC_FAIL);
     fault_word_clear_condition(FAULT_BIT_ASSET_FORMAT | FAULT_BIT_CRC_FAIL);
-    b_ok = test_main_check(FAULT_BIT_CRC_FAIL == fault_word_snapshot(),
-                           __LINE__) &&
+    b_ok = (test_main_check(FAULT_BIT_CRC_FAIL == fault_word_snapshot(),
+                            __LINE__)) &&
            b_ok;
 
     return b_ok;
@@ -152,15 +153,16 @@ bool test_fault_word_merge_rule (void)
     fault_word_set(FAULT_BIT_QUEUE_OVERFLOW);
     fault_word_clear_events(sent);
 
-    b_ok = test_main_check(FAULT_BIT_QUEUE_OVERFLOW == fault_word_snapshot(),
-                           __LINE__) &&
+    b_ok = (test_main_check(FAULT_BIT_QUEUE_OVERFLOW == fault_word_snapshot(),
+                            __LINE__)) &&
            b_ok;
 
     /* Without an ACK the bit rides in the next packet. */
     uint32_t const next = fault_word_snapshot();
 
-    b_ok = test_main_check(0u != (next & FAULT_BIT_QUEUE_OVERFLOW), __LINE__) &&
-           b_ok;
+    b_ok =
+        (test_main_check(0u != (next & FAULT_BIT_QUEUE_OVERFLOW), __LINE__)) &&
+        b_ok;
 
     return b_ok;
 }
@@ -188,28 +190,29 @@ bool test_fault_word_two_threads (void)
 
     atomic_store_explicit(&g_running, F5_SETTERS, memory_order_release);
 
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                0 == pthread_create(&reporter, NULL, reporter_thread, NULL),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
 
     for (uint32_t idx = 0u; idx < F5_SETTERS; idx++)
     {
-        b_ok =
-            test_main_check(0 == pthread_create(&setters[idx], NULL,
-                                                setter_thread, &g_setters[idx]),
-                            __LINE__) &&
-            b_ok;
+        b_ok = (test_main_check(0 == pthread_create(&setters[idx], NULL,
+                                                    setter_thread,
+                                                    &g_setters[idx]),
+                                __LINE__)) &&
+               b_ok;
     }
 
     for (uint32_t idx = 0u; idx < F5_SETTERS; idx++)
     {
-        b_ok =
-            test_main_check(0 == pthread_join(setters[idx], NULL), __LINE__) &&
-            b_ok;
+        b_ok = (test_main_check(0 == pthread_join(setters[idx], NULL),
+                                __LINE__)) &&
+               b_ok;
     }
 
-    b_ok = test_main_check(0 == pthread_join(reporter, NULL), __LINE__) && b_ok;
+    b_ok =
+        (test_main_check(0 == pthread_join(reporter, NULL), __LINE__)) && b_ok;
 
     for (uint32_t idx = 0u; idx < F5_SETTERS; idx++)
     {
@@ -220,8 +223,8 @@ bool test_fault_word_two_threads (void)
                " lost=%" PRIu32 "\n",
                idx, g_setters[idx].sets, seen, g_setters[idx].sets - seen);
         b_ok =
-            test_main_check(F5_SETS == g_setters[idx].sets, __LINE__) && b_ok;
-        b_ok = test_main_check(F5_SETS == seen, __LINE__) && b_ok;
+            (test_main_check(F5_SETS == g_setters[idx].sets, __LINE__)) && b_ok;
+        b_ok = (test_main_check(F5_SETS == seen, __LINE__)) && b_ok;
     }
 
     return b_ok;

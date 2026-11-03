@@ -9,7 +9,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 1. Numeric priorities and cores
 
 - Source: W6D-4a, "Priorities **(proposed)**: Display Engine 20 and Orientation 5 on core 1; Time Sync 16, Playback Control 15, Network 12, Asset Storage 8 on core 0."; VA-5.1, "Display Engine priority 20 on core 1 **(proposed)**; WiFi 23 and esp_timer 22 stay on core 0; lwIP tcpip (18) pinned to core 0 in menuconfig."; lecturer feedback (`SE15 (1).txt`), "pin the Display Engine to core 1 and state priorities relative to ESP-IDF system tasks".
-- Choice: the six rows of `tile_tasks.h` copy those numbers. Every tile task is created with `xTaskCreatePinnedToCore()` from the four macros of its row (`display_engine.c`, `tile_net.c`, `panel_sync.c` for the Time Sync Task). Core 1 carries only the Display Engine and Orientation, so the 60 Hz path never competes with WiFi (23), esp_timer (22) or tcpip (18) on core 0. All values stay (proposed) until the boot log is read on a tile.
+- Choice: the six rows of `tile_tasks.h` copy those numbers. Every tile task is created with `xTaskCreatePinnedToCore()` from the four macros of its row (`display_engine.c`, `tile_net.c`, `panel_sync.c` for the Time Sync Task). Of the tile tasks, core 1 carries only the Display Engine and Orientation; ESP-IDF also runs its own `ipc1` and `IDLE1` tasks there. The 60 Hz path therefore never competes with WiFi (23), esp_timer (22) or tcpip (18), which all stay on core 0. All values stay (proposed) until the boot log is read on a tile.
 - Examiner: "Time Sync is at 16 and tcpip at 18 on the same core. What happens to the Time Sync Task while a burst of four beacons is being received, and does it matter for the skew?"
 
 ## 2. lwIP tcpip task pinned to core 0
@@ -21,7 +21,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 3. IRAM-safe tick and RMT interrupts
 
 - Source: VA-5.2, "Tick from a gptimer alarm ISR registered from the core-1 task, `CONFIG_GPTIMER_ISR_IRAM_SAFE`, alarm callback in IRAM (not an esp_timer callback)."; SRM-3M, "tick and RMT ISRs IRAM-safe".
-- Choice: `CONFIG_GPTIMER_ISR_IRAM_SAFE=y` and `CONFIG_RMT_ISR_IRAM_SAFE=y`. A flash write or erase disables the cache on both cores; an IRAM-safe interrupt still runs then, so a tick is not delayed by the stall.
+- Choice: `CONFIG_GPTIMER_ISR_IRAM_SAFE=y` and `CONFIG_RMT_ISR_IRAM_SAFE=y`. A flash write or erase disables the cache on both cores; an IRAM-safe interrupt still runs then, so the alarm that is already armed still fires and pulses the pin on time. The re-arm for the next tick runs in `de_task`, whose code is in flash, so it waits for the stall to end: a stall longer than one frame (16.67 ms) can still cost the following tick, which the missed-tick counter records.
 - Examiner: "The shipped firmware never writes flash while PLAYING. Why make the interrupts IRAM-safe anyway, and what does it cost?"
 
 ## 4. Power management off
@@ -33,7 +33,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 5. Trace options for `vTaskList()` with a core column
 
 - Source: T-B5-04, "`CONFIG_FREERTOS_USE_TRACE_FACILITY=y`, `CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y` and `CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y` (needed for the core column of `vTaskList()`)"; Round 1 finding 15.
-- Choice: all three set. `tile_tasks_log_boot()` sizes the `vTaskList()` buffer as (task count + 4) x 48 B + 1 B and frees it afterwards. 48 B per line: the ESP-IDF v5.3 line with the core column is at most 42 B (name padded to 15, five tab-separated numbers, CR LF), plus 6 B spare (plan choice). 4 spare lines (plan choice): `vTaskList()` takes no length, so the margin covers a task created between counting and listing; the Week 10 build creates none at that point.
+- Choice: all three set. `tile_tasks_log_boot()` sizes the `vTaskList()` buffer as (task count + 4) x 48 B + 1 B and frees it afterwards. 64 B per line: the ESP-IDF v5.3 line with the core column (`components/freertos/FreeRTOS-Kernel/tasks.c`, `vTaskList()`) is at most 47 B: the name padded to 15, then the state, priority, stack high-water mark (`uint32_t`, up to 10 digits), task number and core, each after a tab, then CR LF. That leaves 17 B spare (plan choice). 4 spare lines (plan choice): `vTaskList()` takes no length, so the margin covers a task created between counting and listing; the Week 10 build creates none at that point.
 - Examiner: "`vTaskList()` has no length parameter. What stops it writing past your buffer, and why is a heap buffer acceptable here when the plan avoids allocation elsewhere?"
 
 ## 6. CPU frequency recorded, not changed
@@ -52,7 +52,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 
 1. Every priority and core in the table: (proposed, W6D-4a) until the boot log on a tile shows them.
 2. Stack 4096 B for every task, unmeasured.
-3. `vTaskList()` buffer: 48 B per line and 4 spare lines (plan choice, section 5).
+3. `vTaskList()` buffer: 64 B per line and 4 spare lines (plan choice, section 5).
 4. The boot log is printed from `app_main` right after the three Week 10 tasks are created; Orientation, Playback Control and Asset Storage are checked the same way in T-B5-05, T-B4-04 and T-B3-04.
 
 ## Questions for Jia Jun before Tribunal 2

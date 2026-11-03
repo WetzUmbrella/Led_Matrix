@@ -606,14 +606,88 @@ def check_function(src, body, out, is_static, is_file_scope):
                                % name))
 
 
+LOGICAL_OPS = ("&&", "||")
+
+# Tokens that end a logical operand when met at bracket depth 0.
+OPERAND_STOPS = ("&&", "||", ",", ";", "?", ":", "=", "return", "{", "}")
+
+MAX_FUNCTION_LINES = 100
+
+
+def is_identifier(tok):
+    return bool(re.match(r"[A-Za-z_]\w*$", tok)) and (tok not in KEYWORDS)
+
+
+def operand_span(tokens, index, step):
+    """Walk from tokens[index] in direction step (-1 left, +1 right) over
+    one operand of a logical operator. Return (first, last, stop) where
+    first..last are the operand's token indices in source order and stop is
+    the token that ended the walk ("" at the start or end of the file)."""
+    openers = ("(", "[") if (1 == step) else (")", "]")
+    closers = (")", "]") if (1 == step) else ("(", "[")
+    depth = 0
+    pos = index
+    stop = ""
+    while (0 <= pos) and (pos < len(tokens)):
+        tok = tokens[pos][0]
+        if tok in openers:
+            depth += 1
+        elif tok in closers:
+            if 0 == depth:
+                stop = tok
+                break
+            depth -= 1
+        elif (0 == depth) and (tok in OPERAND_STOPS):
+            stop = tok
+            break
+        pos += step
+    if 1 == step:
+        return index, pos - 1, stop
+    return pos + 1, index, stop
+
+
+def operand_ok(tokens, first, last):
+    """A single identifier, a single constant, or one parenthesised group
+    that spans the whole operand (Barr-C 1.4.b)."""
+    result = False
+    if first == last:
+        tok = tokens[first][0]
+        result = is_identifier(tok) or bool(CONST_RE.match(tok))
+    elif (first < last) and ("(" == tokens[first][0]):
+        result = (matching(tokens, first, "(", ")") - 1) == last
+    return result
+
+
+def check_logical_operands(src, tokens, out):
+    """1.4.b: every operand of && and || that is not a single identifier or
+    constant is in parentheses; 1.4.a: && and || are never mixed at one
+    level without parentheses."""
+    for index, (tok, line) in enumerate(tokens):
+        if tok not in LOGICAL_OPS:
+            continue
+        left = operand_span(tokens, index - 1, -1)
+        right = operand_span(tokens, index + 1, 1)
+        for first, last, _ in (left, right):
+            if not operand_ok(tokens, first, last):
+                out.append(Finding(src.path, line, "1.4.b",
+                                   "operand of %s is not parenthesised"
+                                   % tok))
+        # Reported once per unparenthesised && group that touches an ||.
+        if ("&&" == tok) and ("||" in (left[2], right[2])):
+            out.append(Finding(src.path, line, "1.4.a",
+                               "&& and || mixed without parentheses"))
+
+
 def check_tokens(src, out):
     tokens = tokens_with_lines(src)
     check_if_chains(src, tokens, out)
+    check_logical_operands(src, tokens, out)
     # Walk statements with a brace stack. Kinds: "aggregate" (struct, union,
     # enum or initialiser body), "func", "block".
     stack = []
     stmt = []
     pending_typedef = None
+    func_start = (0, 0)
     index = 0
     while index < len(tokens):
         tok = tokens[index][0]
@@ -636,12 +710,15 @@ def check_tokens(src, out):
             elif (not stack) and words and (")" == words[-1]):
                 check_declaration(src, stmt, out, True)
                 stack.append("func")
+                func_start = (stmt[0][1], tokens[index][1])
             else:
                 if stmt:
                     check_control_header(src, stmt, out)
                 stack.append("block")
             stmt = []
         elif "}" == tok:
+            if stack and ("func" == stack[-1]) and (1 == len(stack)):
+                check_function_length(src, func_start, tokens[index][1], out)
             if stack:
                 stack.pop()
             stmt = []
@@ -658,6 +735,18 @@ def check_tokens(src, out):
         else:
             stmt.append(tokens[index])
         index += 1
+
+
+def check_function_length(src, start, close_line, out):
+    """6.2.a: a function is at most 100 lines, counted from its opening
+    brace to its closing brace, both included (strict reading: blank and
+    comment lines inside the body count)."""
+    header_line, open_line = start
+    length = close_line - open_line + 1
+    if length > MAX_FUNCTION_LINES:
+        out.append(Finding(src.path, header_line, "6.2.a",
+                           "function body is %d lines, limit %d"
+                           % (length, MAX_FUNCTION_LINES)))
 
 
 def check_typedef_name(src, stmt, out):

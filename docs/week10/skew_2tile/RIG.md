@@ -33,7 +33,7 @@ The plan lists all four as dependencies; the three above plus T-B4-02 must all b
  GND ------------------------->   GND        <---------------- GND
 ```
 
-- Test pin: the spare GPIO that T-B5-01 records in its log ("a spare GPIO as test pin (pin number recorded in the log)"). Jia Jun confirms the pin number against T-B5-01 before wiring. It must not be GPIO14, which drives the WS2812B data line (`panel_sync/main/render.c:15`, PostTri RMT row). The same GPIO number on both tiles keeps one firmware image.
+- Test pin: the spare GPIO that T-B5-01 records in its log ("a spare GPIO as test pin (pin number recorded in the log)"). Jia Jun confirms the pin number against T-B5-01 before wiring. It must not be GPIO14, which drives the WS2812B data line (PostTri RMT row; `DE_LED_GPIO` in `panel_sync/main/display_engine.c`, which replaced the deleted `render.c`). The same GPIO number on both tiles keeps one firmware image.
 - Common ground: tile A GND, tile B GND and the analyser GND are joined. Without a shared ground the analyser reads the pins against a floating reference.
 - Channel order: tile A on analyser channel 0 (Saleae "Channel 0", sigrok `D0`), tile B on channel 1 (Saleae "Channel 1", sigrok `D1`). Skew in the output is t_b minus t_a.
 - Levels: the ESP32-S3 drives 3.3 V logic; confirm the analyser's input threshold accepts 3.3 V before connecting.

@@ -35,7 +35,7 @@ git diff <base>..<branch>
 ## Not dependencies, but changed by the wiring (under review)
 
 - `panel_sync/main/panel_sync.c` (prototype, no Barr-C scope): `app_main` keeps `wifi_init()` and then starts `tile_net`, the Time Sync Task at priority 16 on core 0 and `display_engine`. Removed because every caller is replaced: `sync_rx_task`, `hello_task`, the packed `beacon_t` and `hello_t`, `lock`, `get_render_state`, `FPS`, and `render_start()`.
-- `panel_sync/main/CMakeLists.txt`: `render.c` and `frames.c` are no longer built (T-B5-01: "the old 30 fps GIF path is not built"); the files stay in the repository for Jia Jun.
+- `panel_sync/main/CMakeLists.txt`: the prototype `render.c` and `frames.c` are no longer built (T-B5-01: "the old 30 fps GIF path is not built"). `render.c/.h` were deleted afterwards on `b5/t-b5-01-delete-render`; `frames.c/.h` go with T-B3-04.
 - `ledwall_sync/main.c` (prototype): the beacon loop, `beacon_t`, `FPS`, `CMD_PLAY`, `SYNC_MAGIC`, `BEACON_MS` and `expire_nodes()` are removed; `main()` calls `coordinator_loop_run()`. The router join and the HELLO receive stay for T-B2-03.
 - `ledwall_sync/CMakeLists.txt`: adds `coordinator_loop.c` and `../common/proto/proto.c`, links `pico_cyw43_arch_lwip_poll`.
 
