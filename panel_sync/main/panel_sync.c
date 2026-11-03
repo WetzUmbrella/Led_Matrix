@@ -23,6 +23,7 @@
 #include "orientation.h"
 #include "playback_control.h"
 #include "tile_net.h"
+#include "tile_stress.h"
 #include "tile_tasks.h"
 #include "timesync.h"
 
@@ -34,6 +35,14 @@
  */
 void app_main (void)
 {
+    /* T-X-02 and T-X-05 test builds replace the tile (tile_stress.h); the
+     * shipped firmware has neither flag and continues below. */
+    if (tile_stress_start())
+    {
+        printf("panel_sync: stress build running\n");
+        return;
+    }
+
     /* Before tile_net, which posts to its Upload Queue (T-B3-04). */
     if (!asset_store_start())
     {

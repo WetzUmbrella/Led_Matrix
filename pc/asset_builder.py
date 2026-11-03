@@ -63,6 +63,11 @@ BRIGHTNESS_MAX = pl.NIBBLE_MAX
 #: Shipped asset format (layout_table.md section 5.4).
 FORMAT_PACKED = 2
 
+#: 8-bit format of the DE_PROFILE build only (OD-15): 192 B frames, one byte
+#: per channel, values already scaled to 0 to 8 here. The shipped firmware
+#: NACKs it (VC-5); it exists for the T-X-03 before/after timing run.
+FORMAT_8BIT = 1
+
 #: Tile side in LEDs.
 TILE = 8
 
@@ -223,6 +228,16 @@ def build_tile(node_id: int, frames: Sequence[Pixels],
     return TileAsset(node_id, payload, len(frames), zlib.crc32(payload))
 
 
+def build_tile_8bit(node_id: int, frames: Sequence[Pixels],
+                    brightness: int = BRIGHTNESS_MAX) -> TileAsset:
+    """OD-15 8-bit asset: 192 B per frame, each byte round(v x b / 255)."""
+    check_brightness(brightness)
+    check_frame_limit(len(frames))
+    payload = bytes(scale(channel, brightness) for pixels in frames
+                    for pixel in pixels for channel in pixel)
+    return TileAsset(node_id, payload, len(frames), zlib.crc32(payload))
+
+
 def build_manifest(session_id: int, seq: int, asset: TileAsset) -> bytes:
     """Encoded MANIFEST for one tile."""
     return pl.encode_manifest(session_id=session_id, seq=seq,
@@ -232,13 +247,15 @@ def build_manifest(session_id: int, seq: int, asset: TileAsset) -> bytes:
 
 
 def build_assets(frames, delays: Sequence[int], layout: str,  # type: ignore
-                 node_map: Sequence[int],
-                 brightness: int = BRIGHTNESS_MAX) -> Dict[int, TileAsset]:
-    """GIF frames and delays to one TileAsset per Node ID."""
+                 node_map: Sequence[int], brightness: int = BRIGHTNESS_MAX,
+                 eight_bit: bool = False) -> Dict[int, TileAsset]:
+    """GIF frames and delays to one TileAsset per Node ID (packed, or the
+    OD-15 8-bit test format)."""
     check_brightness(brightness)
     ticks = resample_60fps(delays)
     tiles = partition_tiles(frames, layout, node_map)
-    return {node: build_tile(node, [regions[i] for i in ticks], brightness)
+    build = build_tile_8bit if eight_bit else build_tile
+    return {node: build(node, [regions[i] for i in ticks], brightness)
             for node, regions in tiles.items()}
 
 
@@ -273,12 +290,15 @@ def main(argv: List[str] = None) -> int:  # type: ignore[assignment]
     parser.add_argument("--brightness", type=int, default=BRIGHTNESS_MAX)
     parser.add_argument("--session", type=int, default=1)
     parser.add_argument("--out", default="assets")
+    parser.add_argument("--format", default="packed",
+                        choices=("packed", "8bit"),
+                        help="8bit only for the DE_PROFILE test build (OD-15)")
     args = parser.parse_args(argv)
     try:
         node_map = [int(n) for n in args.map.split(",")]
         frames, delays = load_gif(args.gif)
         assets = build_assets(frames, delays, args.layout, node_map,
-                              args.brightness)
+                              args.brightness, args.format == "8bit")
     except (AssetError, ValueError) as err:
         print("asset_builder: %s" % err, file=sys.stderr)
         return 1

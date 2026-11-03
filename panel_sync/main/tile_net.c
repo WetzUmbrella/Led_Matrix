@@ -197,6 +197,7 @@ static uint16_t         g_pc_port      = 0u; /* Its port, host order. */
 static bool             g_b_had_ip     = false;
 static uint32_t         g_comms        = 0u; /* tile_net_comms_t. */
 static uint32_t         g_upload_nacks = 0u;
+static uint32_t         g_upload_wrong_session = 0u;
 #ifdef TN_TEST_INJECT_FAULTS
 static int64_t  g_next_inject_us = 0;
 static uint32_t g_injected       = 0u;
@@ -844,10 +845,12 @@ static void tn_handle_record (tn_record_t const * p_record)
             printf("TN_STATS received=%" PRIu32 " dropped=%" PRIu32
                    " lost=%" PRIu32 " log_dropped=%" PRIu32 " tel_sent=%" PRIu32
                    " tel_acked=%" PRIu32 " ack_unknown=%" PRIu32
-                   " tel_q_dropped=%" PRIu32 " upload_nacks=%" PRIu32 "\n",
+                   " tel_q_dropped=%" PRIu32 " upload_nacks=%" PRIu32
+                   " upload_wrong_session=%" PRIu32 "\n",
                    p_record->received, p_record->dropped, p_record->lost,
                    p_record->log_dropped, g_tel_sent, g_tel_acked,
-                   g_ack_unknown, g_tel_status.dropped, g_upload_nacks);
+                   g_ack_unknown, g_tel_status.dropped, g_upload_nacks,
+                   g_upload_wrong_session);
         }
     }
     else if (TN_REC_NACK == p_record->kind)
@@ -1338,12 +1341,24 @@ static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
         }
     }
 
-    if ((b_valid) && (!asset_store_post_upload(&item)))
+    if ((b_valid) && (0u != g_session) && (item.session_id != g_session))
+    {
+        /* T-X-08 case 3: an upload for another session than the one the
+         * beacons carry is rejected. The NACK reason list has no session
+         * code (layout_table.md section 10 item 8), so it is dropped and
+         * counted; the PC sees no CHUNK_ACK and the Pico no ASSET_READY. */
+        g_upload_wrong_session++;
+    }
+    else if ((b_valid) && (!asset_store_post_upload(&item)))
     {
         g_upload_nacks++;
         /* NACK reason 3 fits uint8_t. */
         tn_send_nack((uint8_t)PROTO_NACK_UPLOAD_QUEUE_FULL, item.session_id,
                      item.seq, true);
+    }
+    else
+    {
+        /* Posted, or not a valid MANIFEST or ASSET_CHUNK. */
     }
 }
 

@@ -31,6 +31,9 @@
 #include "driver/rmt_encoder.h"
 #include "driver/rmt_tx.h"
 #include "esp_attr.h"
+#include "esp_cpu.h"
+#include "esp_partition.h"
+#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "hal/gpio_ll.h"
 #include "soc/gpio_struct.h"
@@ -85,6 +88,26 @@
 #define DE_HIST_BINS   11u
 #define DE_HIST_BIN_US INT64_C(100)
 
+/** T-X-03 DE_PROFILE: preparation-time histogram, 16 bins of 250 us (the
+ *  last also holds longer), and the GPIO toggled around preparation
+ *  (PROVISIONAL, owner Jia Jun: GPIO5, next to the test pin). */
+#define DE_PROF_BINS   16u
+#define DE_PROF_BIN_US 250u
+#define DE_PROF_PIN    5u
+
+/** T-B5-07 (b) DE_TEST_SLOW_PREP: busy-wait added to every preparation,
+ *  bringing it close to the about 14 ms slack (plan choice: 13 ms). */
+#define DE_SLOW_PREP_US 13000u
+
+/** T-B5-07 (c) DE_TEST_FLASH_ERASE: one 4 KB sector at the end of the
+ *  frames partition (the asset uses the first 64 KB), erased every 1 s by
+ *  a core 0 task (test build only; the shipped firmware never writes flash
+ *  while PLAYING, T-B3-04). */
+#define DE_ERASE_OFFSET    0x1FF000u
+#define DE_ERASE_BYTES     4096u
+#define DE_ERASE_PERIOD_MS 1000u
+#define DE_ERASE_PRIO      TILE_ASSET_PRIO
+
 /** Number of pixel buffers (front and back, W6D-3b). */
 #define DE_BUFFERS 2u
 
@@ -123,12 +146,22 @@ static void     de_present (de_rmt_t const * p_rmt, int64_t deadline);
 static void     de_swap (void);
 static void     de_prepare_frame (uint64_t tick);
 static void     de_log (void);
-static bool     de_tick_isr (gptimer_handle_t                   p_timer,
-                             gptimer_alarm_event_data_t const * p_event,
-                             void *                             p_ctx);
-static void     de_arm_next (gptimer_handle_t p_timer, int64_t delay_us,
-                             bool b_pin_high);
-static void     de_wait_alarm (void);
+static void     de_test_after_prepare (uint32_t frame, bool b_frame);
+#ifdef DE_PROFILE
+static uint32_t g_prof[DE_PROF_BINS];
+#endif
+#ifdef DE_DUMP_FRAMES
+static uint32_t g_dump_next = 0u; /* Next frame to dump (T-X-01). */
+#endif
+#ifdef DE_TEST_FLASH_ERASE
+static void de_erase_task (void * p_arg);
+#endif
+static bool             de_tick_isr (gptimer_handle_t                   p_timer,
+                                     gptimer_alarm_event_data_t const * p_event,
+                                     void *                             p_ctx);
+static void             de_arm_next (gptimer_handle_t p_timer, int64_t delay_us,
+                                     bool b_pin_high);
+static void             de_wait_alarm (void);
 static gptimer_handle_t de_timer_create (void);
 static bool             de_start_rmt (de_rmt_t * p_rmt);
 
@@ -162,6 +195,20 @@ static void de_task (void * p_arg)
 
     (void)gpio_config(&pin_cfg);           /* Fixed, valid configuration. */
     (void)gpio_set_level(DE_TEST_PIN, 0u); /* Valid pin and level. */
+#ifdef DE_PROFILE
+    gpio_config_t const prof_cfg = {
+        .pin_bit_mask = (UINT64_C(1) << DE_PROF_PIN),
+        .mode         = GPIO_MODE_OUTPUT,
+    };
+
+    (void)gpio_config(&prof_cfg); /* Fixed, valid configuration. */
+#endif
+#ifdef DE_TEST_FLASH_ERASE
+    /* Core 0, so the erase competes with the network side as an upload
+     * would; the result only matters for the test build. */
+    (void)xTaskCreatePinnedToCore(de_erase_task, "de_erase", 4096u, NULL,
+                                  DE_ERASE_PRIO, NULL, TILE_CORE_NET);
+#endif
 
     de_report(PROTO_DISPLAY_INITIALISING);
     display_frame_status(DISPLAY_FRAME_STATUS_DARK, g_p_front);
@@ -272,8 +319,31 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
         timesync_notify_tick();
 
         int64_t const prep_start = esp_timer_get_time();
+#ifdef DE_PROFILE
+        uint32_t const cycles_start = esp_cpu_get_cycle_count();
+
+        gpio_ll_set_level(&GPIO, DE_PROF_PIN, 1u);
+#endif
 
         de_prepare_frame(next);
+
+#ifdef DE_TEST_SLOW_PREP
+        esp_rom_delay_us(DE_SLOW_PREP_US); /* T-B5-07 (b). */
+#endif
+#ifdef DE_PROFILE
+        gpio_ll_set_level(&GPIO, DE_PROF_PIN, 0u);
+
+        /* Unsigned 32-bit delta, taken within one frame: correct across one
+         * wrap (26.8 s at 160 MHz, VC-8a). */
+        uint32_t const cycles = esp_cpu_get_cycle_count() - cycles_start;
+        uint32_t const prof_us =
+            cycles / (uint32_t)CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ; /* Fits. */
+        uint32_t const prof_bin = (prof_us / DE_PROF_BIN_US < DE_PROF_BINS)
+                                      ? (prof_us / DE_PROF_BIN_US)
+                                      : (DE_PROF_BINS - 1u);
+
+        g_prof[prof_bin]++;
+#endif
 
         int64_t const prep_us = esp_timer_get_time() - prep_start;
 
@@ -428,6 +498,37 @@ static void de_prepare_frame (uint64_t tick)
                                      : DISPLAY_FRAME_STATUS_NO_ASSET,
                              g_p_back);
     }
+
+    de_test_after_prepare(frame, b_frame);
+}
+
+/**
+ * @brief  Test builds only. DE_DUMP_FRAMES (T-X-01): print the back buffer
+ *         of each frame once, in frame order, as "DE_DUMP,<frame>,<hex>";
+ *         a frame missed while printing is dumped on a later lap. The
+ *         shipped build does nothing here.
+ * @param  frame    Frame just prepared.
+ * @param  b_frame  true when a frame (not a status pattern) was prepared.
+ */
+static void de_test_after_prepare (uint32_t frame, bool b_frame)
+{
+#ifdef DE_DUMP_FRAMES
+    if ((b_frame) && (frame == g_dump_next))
+    {
+        printf("DE_DUMP,%" PRIu32 ",", frame);
+
+        for (uint32_t idx = 0u; idx < DISPLAY_FRAME_WIRE_BYTES; idx++)
+        {
+            printf("%02x", g_p_back[idx]);
+        }
+
+        printf("\n");
+        g_dump_next++;
+    }
+#else
+    (void)frame;   /* Used only by the dump build. */
+    (void)b_frame; /* Same. */
+#endif
 }
 
 /**
@@ -448,7 +549,50 @@ static void de_log (void)
     }
 
     printf("\n");
+#ifdef DE_PROFILE
+    printf("DE_PROF cpu_mhz=%u bin_us=%u", CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
+           DE_PROF_BIN_US);
+
+    for (uint32_t bin = 0u; bin < DE_PROF_BINS; bin++)
+    {
+        printf(",%" PRIu32, g_prof[bin]);
+    }
+
+    printf("\n");
+#endif
 }
+
+#ifdef DE_TEST_FLASH_ERASE
+/**
+ * @brief  T-B5-07 (c) test build: erase one spare sector every second while
+ *         PLAYING and log how long each erase stalled this task.
+ * @param  p_arg  Unused.
+ */
+static void de_erase_task (void * p_arg)
+{
+    esp_partition_t const * const p_part = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "frames");
+    uint32_t erases = 0u;
+
+    (void)p_arg; /* No parameter. */
+
+    for (;;)
+    {
+        vTaskDelay(pdMS_TO_TICKS(DE_ERASE_PERIOD_MS));
+
+        if ((NULL != p_part) && (PLAYBACK_PLAYING == playback_control_state()))
+        {
+            int64_t const   start = esp_timer_get_time();
+            esp_err_t const err   = esp_partition_erase_range(
+                p_part, DE_ERASE_OFFSET, DE_ERASE_BYTES);
+
+            erases++;
+            printf("DE_ERASE n=%" PRIu32 " us=%" PRId64 " err=%d\n", erases,
+                   esp_timer_get_time() - start, err);
+        }
+    }
+}
+#endif
 
 /**
  * @brief  gptimer alarm callback, in IRAM so it runs during flash operations
