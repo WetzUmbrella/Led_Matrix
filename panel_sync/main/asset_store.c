@@ -68,6 +68,14 @@
 #define AS_HDR_CRC     8u
 #define AS_HDR_NOTCRC  12u
 
+/** Counter line every 60 s while no upload arrives (plan choice), so the
+ *  T-B3-04 10 min PLAYING check reads the counters from the log. */
+#define AS_COUNTER_LOG_MS 60000u
+
+/** Counter line every 60 s while no upload arrives (plan choice), so the
+ *  T-B3-04 10 min PLAYING check reads the counters from the log. */
+#define AS_COUNTER_LOG_MS 60000u
+
 /** Bits per byte, for the little-endian helpers. */
 #define AS_BYTE_BITS 8u
 
@@ -108,9 +116,11 @@ static uint32_t   g_flash_erases  = 0u;
 static uint32_t   g_flash_refused = 0u;
 static uint32_t   g_reply_drops   = 0u;
 static uint32_t   g_ignored       = 0u;
+static uint32_t   g_busy          = 0u;
 
 static void asset_store_task (void * p_arg);
 static void as_handle (asset_store_upload_t const * p_item);
+static void as_log_counters (void);
 static void as_on_manifest (asset_store_upload_t const * p_item);
 static void as_on_chunk (asset_store_upload_t const * p_item);
 static void as_verify (void);
@@ -314,9 +324,14 @@ static void asset_store_task (void * p_arg)
 
     for (;;)
     {
-        if (pdTRUE == xQueueReceive(g_p_q_upload, &item, portMAX_DELAY))
+        if (pdTRUE == xQueueReceive(g_p_q_upload, &item,
+                                    pdMS_TO_TICKS(AS_COUNTER_LOG_MS)))
         {
             as_handle(&item);
+        }
+        else
+        {
+            as_log_counters();
         }
     }
 }
@@ -330,6 +345,7 @@ static void as_handle (asset_store_upload_t const * p_item)
 {
     if (!asset_store_flash_allowed())
     {
+        g_busy++;
         as_reply_simple(ASSET_STORE_REPLY_BUSY, p_item, 0u);
     }
     else if (ASSET_STORE_UP_MANIFEST == p_item->kind)
@@ -507,11 +523,21 @@ static void as_verify (void)
                crc, g_rx.crc32);
     }
 
-    printf("ASSET_FLASH writes=%" PRIu32 " erases=%" PRIu32 " refused=%" PRIu32
-           " ignored=%" PRIu32 " reply_drops=%" PRIu32 "\n",
-           g_flash_writes, g_flash_erases, g_flash_refused, g_ignored,
-           g_reply_drops);
+    as_log_counters();
     asset_rx_init(&g_rx);
+}
+
+/**
+ * @brief  One counter line: flash writes and erases (only in the upload
+ *         states), refused writes, ignored chunks, BUSY replies and reply
+ *         drops (T-B3-04 acceptance (1) and (2)).
+ */
+static void as_log_counters (void)
+{
+    printf("ASSET_FLASH writes=%" PRIu32 " erases=%" PRIu32 " refused=%" PRIu32
+           " ignored=%" PRIu32 " busy=%" PRIu32 " reply_drops=%" PRIu32 "\n",
+           g_flash_writes, g_flash_erases, g_flash_refused, g_ignored, g_busy,
+           g_reply_drops);
 }
 
 /**

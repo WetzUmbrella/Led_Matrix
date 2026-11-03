@@ -192,7 +192,7 @@ static tn_status_item_t g_tel_status   = {{0u, 0u}, 0u};
 static uint32_t         g_tel_sent     = 0u;
 static uint32_t         g_tel_acked    = 0u;
 static uint32_t         g_ack_unknown  = 0u;
-static uint32_t         g_pc_addr      = 0u; /* Last sender on 4214. */
+static uint32_t         g_pc_addr      = 0u; /* Last uploader on 4214. */
 static uint16_t         g_pc_port      = 0u; /* Its port, host order. */
 static bool             g_b_had_ip     = false;
 static uint32_t         g_comms        = 0u; /* tile_net_comms_t. */
@@ -226,7 +226,8 @@ static void tn_send_register (void);
 static void tn_send_nack (uint8_t reason, uint8_t session, uint16_t ref_seq,
                           bool b_to_pc);
 static void tn_send_pc (uint8_t const * p_buf, uint32_t len);
-static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len);
+static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len,
+                               uint32_t src_addr, uint16_t src_port);
 static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
                           proto_header_t const * p_header);
 static void tn_send_replies (void);
@@ -1220,8 +1221,7 @@ static void tn_telemetry_send (void)
 }
 
 /**
- * @brief  Read every datagram waiting on port 4214 (Network Task); the
- *         sender becomes the PC address for replies.
+ * @brief  Read every datagram waiting on port 4214 (Network Task).
  */
 static void tn_poll_pc (void)
 {
@@ -1243,21 +1243,26 @@ static void tn_poll_pc (void)
 
         if (b_more)
         {
-            g_pc_addr = from.sin_addr.s_addr;
-            g_pc_port = ntohs(from.sin_port);
             /* got is 1 to TN_PC_RX_BYTES, so it fits uint32_t. */
-            tn_on_pc_datagram(buf, (uint32_t)got);
+            tn_on_pc_datagram(buf, (uint32_t)got, from.sin_addr.s_addr,
+                              ntohs(from.sin_port));
         }
     }
 }
 
 /**
  * @brief  One datagram from the PC: TELEMETRY_ACK, MANIFEST or ASSET_CHUNK.
- *         Other types on this port are ignored.
- * @param  p_buf  Bytes.
- * @param  len    Length.
+ *         Other types on this port are ignored. Only MANIFEST and
+ *         ASSET_CHUNK set the reply address, so a TELEMETRY_ACK from
+ *         another PC socket (pc/telemetry.py) never redirects upload
+ *         replies.
+ * @param  p_buf     Bytes.
+ * @param  len       Length.
+ * @param  src_addr  Sender address, network byte order.
+ * @param  src_port  Sender port, host order.
  */
-static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len)
+static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len,
+                               uint32_t src_addr, uint16_t src_port)
 {
     proto_header_t header;
 
@@ -1278,6 +1283,8 @@ static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len)
         else if ((PROTO_TYPE_MANIFEST == type) ||
                  (PROTO_TYPE_ASSET_CHUNK == type))
         {
+            g_pc_addr = src_addr;
+            g_pc_port = src_port;
             tn_on_upload(p_buf, len, &header);
         }
         else
