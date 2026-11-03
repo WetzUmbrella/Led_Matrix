@@ -1,0 +1,3 @@
+# arm-none-eabi-size ledwall_sync.elf, b4/handover 5fc51dd + patches 01-14, Pico SDK 2.3.1, built 30 Oct 2026 on macOS
+   text	   data	    bss	    dec	    hex	filename
+ 346120	      0	  50500	 396620	  60d4c	ledwall_sync.elf

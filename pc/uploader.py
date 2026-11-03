@@ -69,8 +69,12 @@ DEFAULT_RATE = 100.0
 #: Rounds before the upload is abandoned (plan choice).
 MAX_ROUNDS = 20
 
-#: Packed asset format (layout_table.md section 5.4).
+#: Packed asset format and the OD-15 8-bit format (section 5.4).
 FORMAT_PACKED = 2
+FORMAT_8BIT = 1
+
+#: Bytes per 8-bit frame (DE_PROFILE build only).
+FRAME_8BIT_BYTES = 192
 
 #: Seconds per frame of payload at 96 B per frame, for the manifest.
 FRAME_BYTES = pl.FRAME_BYTES
@@ -170,19 +174,27 @@ class Uploader:
                                       "%d" % reason)
 
     def upload_asset(self, tile_ip: str, session_id: int, payload: bytes,
-                     drop: Iterable[int] = ()) -> UploadStats:
+                     drop: Iterable[int] = (),
+                     manifest_crc: Optional[int] = None,
+                     format_version: int = FORMAT_PACKED) -> UploadStats:
         """MANIFEST, then chunks until all are ACKed.
 
         ``drop`` is the T-B1-04 test hook: the first send of each listed
         chunk is skipped, as if lost, so it must be resent.
+        ``manifest_crc`` is the T-X-08 case 1 hook: the MANIFEST carries this
+        CRC32 instead of the CRC32 of ``payload``. ``format_version`` 1 is
+        the OD-15 8-bit asset (192 B frames) for the DE_PROFILE build.
         """
         stats = UploadStats(chunks=chunk_count(len(payload)))
         to_drop = set(drop)
+        frame_bytes = FRAME_8BIT_BYTES if format_version == FORMAT_8BIT \
+            else FRAME_BYTES
         manifest = pl.encode_manifest(
             session_id=session_id, seq=self._next_seq(),
-            format_version=FORMAT_PACKED,
-            frame_count=len(payload) // FRAME_BYTES,
-            crc32=zlib.crc32(payload))
+            format_version=format_version,
+            frame_count=len(payload) // frame_bytes,
+            crc32=zlib.crc32(payload) if manifest_crc is None
+            else manifest_crc)
         start = time.monotonic()
         self.sock.sendto(manifest, (tile_ip, TILE_PORT))
         self._read_replies(time.monotonic() + self.settle_s, session_id,
@@ -270,6 +282,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--rate", type=float, default=DEFAULT_RATE)
     parser.add_argument("--drop", type=int, default=0,
                         help="test hook: lose this many chunks once")
+    parser.add_argument("--format", type=int, default=FORMAT_PACKED,
+                        choices=(FORMAT_8BIT, FORMAT_PACKED),
+                        help="1 = 8-bit, DE_PROFILE build only (OD-15)")
     parser.add_argument("--expect-busy", action="store_true",
                         help="T-B3-04: re-upload during PLAYING and count "
                              "BUSY replies")
@@ -284,7 +299,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0 if busy == chunks else 1
     drops = pick_drops(chunk_count(len(payload)), args.drop)
     try:
-        stats = uploader.upload_asset(args.tile, args.session, payload, drops)
+        stats = uploader.upload_asset(args.tile, args.session, payload, drops,
+                                      format_version=args.format)
     except UploadError as err:
         print("uploader: %s" % err, file=sys.stderr)
         return 1

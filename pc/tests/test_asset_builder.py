@@ -114,3 +114,10 @@ def test_bad_maps_refused() -> None:
         ab.parse_layout("1x1", [1, 1, 0, 0, 0, 0, 0, 0, 0])
     with pytest.raises(ab.AssetError):
         ab.parse_layout("4x4", [1] + [0] * 8)
+
+
+def test_8bit_asset_is_115200_bytes_values_0_to_8() -> None:
+    asset = ab.build_tile_8bit(1, [_solid((255, 128, 0))] * 600)
+    assert len(asset.payload) == 115200
+    assert max(asset.payload) == 8
+    assert asset.payload[:3] == bytes((8, 4, 0))
