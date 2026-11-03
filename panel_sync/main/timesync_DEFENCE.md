@@ -30,6 +30,13 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - Choice: `timesync_slew_clamp()` limits each request to -100..+100 and returns `int8_t`. Every tick publishes `applied + slew`. Host test 1 checks -100, 0, +100 unchanged and -101, +101 limited.
 - Examiner: "Why `int8_t` and not 7 bits, and what is the largest correction rate in ppm that a 100 us per tick slew can follow at 60 fps?"
 
+### 4a. The one exception: re-seed on another Pico clock (review round 1, R1-2; PROVISIONAL, owner Ahsanul)
+
+- Source: review round 1 R1-2 (`docs/status/review_log.md`). With the patch 17 coordinator lock a tile can switch Pico, and a Pico can reboot on the same address. Either way `t_p` comes from a different epoch, often seconds or minutes away. At 100 us per tick the offset would take minutes to hours to converge while SYNC_READY stayed true.
+- Choice: `timesync_add_sample()` compares each sample's offset `t_l - t_p` with the current estimate. More than `TIMESYNC_RESEED_US` (500 ms, plan choice) away means another clock: the window, both estimates and the published offset are forgotten, the sample starts a new window, and the next tick publishes it directly, as at boot. SYNC_READY is false until the window is full again (1.6 s). 500 ms sits above the 307 ms DTIM 3 buffering behind the START_AT lead, so delay alone never triggers it; host test "R1-2 re-seed" checks a 400 ms late sample does not. `timesync_reseed_count()` counts re-seeds.
+- Limit: one sample delayed by more than 500 ms would re-seed twice (out and back) and cost 1.6 s of readiness. Not seen in the 29 Oct logs; watch the count on the bench.
+- Examiner: "Why is stepping acceptable here when VA-4.6 says slew? What does a tile that is PLAYING do at the moment of the step?" (Answer: the old offset belongs to a clock that no longer exists, so there is nothing to slew towards; the timeline origin from the old Pico is meaningless too, which is why SYNC_READY drops and the new coordinator must send START_AT again.)
+
 ## 5. What "absorbed in exactly 20 ticks" means
 
 - Source: T-B4-02 host test (3), "an injected 2 ms offset step is absorbed in exactly 20 ticks".

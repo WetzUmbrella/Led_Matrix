@@ -597,7 +597,8 @@ bool playback_control_start (void)
  */
 static void playback_task (void * p_arg)
 {
-    timesync_reader_t reader = {0};
+    timesync_reader_t reader   = {0};
+    int64_t           age_kept = INT64_MAX; /* Last readable beacon age. */
 
     (void)p_arg; /* The task takes no parameter. */
 
@@ -612,9 +613,21 @@ static void playback_task (void * p_arg)
         inputs.b_wifi = tile_net_has_ip();
         inputs.b_asset =
             asset_store_active(&inputs.session_id, &inputs.frame_count);
-        inputs.b_sync_ready  = timesync_sync_ready();
-        inputs.now_pico_us   = timesync_now_corrected(&reader);
-        inputs.beacon_age_us = timesync_newest_age_us();
+        inputs.b_sync_ready = timesync_sync_ready();
+        inputs.now_pico_us  = timesync_now_corrected(&reader);
+
+        /* A read that never saw a stable set also returns INT64_MAX; keep
+         * the last readable age instead, so one unlucky read does not look
+         * like lost beacons (R1-13). Real silence still reads as a growing
+         * age on the next pass. */
+        int64_t const age_us = timesync_newest_age_us();
+
+        if ((INT64_MAX != age_us) || (INT64_MAX == age_kept))
+        {
+            age_kept = age_us;
+        }
+
+        inputs.beacon_age_us = age_kept;
 
         if (b_cmd)
         {

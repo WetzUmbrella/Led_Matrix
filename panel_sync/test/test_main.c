@@ -188,6 +188,9 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
                       test_timesync_supp_arithmetic);
     bool const b_ready = test_main_run("OD-10 SYNC_READY rule (not counted)",
                                        test_timesync_sync_ready);
+    bool const b_reseed =
+        test_main_run("R1-2 re-seed on another Pico clock (not counted)",
+                      test_timesync_reseed);
 
     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
 
@@ -259,7 +262,7 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
-    if ((CASE_COUNT == passed) && b_supp && b_ready &&
+    if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed &&
         (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
         (TELEMETRY_COUNT == telemetry_passed) &&
         (ASSET_COUNT == asset_passed) && (DISPLAY_COUNT == display_passed))

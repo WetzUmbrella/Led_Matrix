@@ -49,6 +49,12 @@ bool test_timesync_seqlock (void);
 bool test_timesync_sync_ready (void);
 
 /**
+ * @brief  R1-2 re-seed on another Pico clock (not counted).
+ * @return true when every check passed.
+ */
+bool test_timesync_reseed (void);
+
+/**
  * @brief  Supplementary arithmetic checks (not counted in Pass = N of 4).
  * @return true when every check passed.
  */

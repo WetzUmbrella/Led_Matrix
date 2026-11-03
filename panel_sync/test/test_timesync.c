@@ -32,6 +32,8 @@
 #define READY_START_US   INT64_C(1000000)
 #define READY_DELAY_US   INT64_C(2000)
 #define READY_STALE_US   INT64_C(1100000)
+#define RESEED_PICO_US   INT64_C(50000)
+#define RESEED_UNDER_US  INT64_C(400000)
 #define FRAMES_600       600u
 #define FRAME_TICKS      UINT64_C(1200)
 #define SET_SCALE        INT64_C(0x100000001)
@@ -280,6 +282,95 @@ bool test_timesync_sync_ready (void)
     b_ok = (test_main_check(!timesync_sync_ready(), __LINE__)) && b_ok;
     printf("    all met, newest 1.1 s old: SYNC_READY %d\n",
            timesync_sync_ready());
+
+    timesync_init();
+
+    return b_ok;
+}
+
+/**
+ * @brief  R1-2 re-seed (not counted): a sample from another Pico clock
+ *         empties the window, drops SYNC_READY, and the next tick publishes
+ *         the new offset directly; a 400 ms change does not re-seed.
+ * @return true when every check passed.
+ */
+bool test_timesync_reseed (void)
+{
+    timesync_reader_t reader = {0};
+
+    bool    b_ok   = true;
+    int64_t t_p    = 0;
+    int64_t offset = 0;
+    int64_t ref    = 0;
+    int32_t drift  = 0;
+
+    /* Locked to the first Pico: full window, ready. */
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        t_p = beacon_time(READY_START_US, idx);
+        timesync_add_sample(t_p, t_p + READY_DELAY_US);
+    }
+
+    int64_t t_local = t_p + READY_DELAY_US;
+
+    timesync_test_set_now_us(t_local);
+    timesync_tick(t_local);
+    b_ok = (test_main_check(timesync_sync_ready(), __LINE__)) && b_ok;
+
+    /* Second Pico: its clock started 50 ms ago, about 2.5 s behind. */
+    int64_t t_p2 = RESEED_PICO_US;
+
+    t_local += BEACON_PERIOD_US;
+    timesync_add_sample(t_p2, t_local);
+    timesync_test_set_now_us(t_local);
+
+    b_ok = (test_main_check(1u == timesync_reseed_count(), __LINE__)) && b_ok;
+    b_ok = (test_main_check(!timesync_sync_ready(), __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(!timesync_drift_estimate(&drift), __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(timesync_filter_estimate(&offset, &ref), __LINE__)) &&
+        b_ok;
+    b_ok = (test_main_check((t_local - t_p2) == offset, __LINE__)) && b_ok;
+
+    /* The next tick publishes the new offset directly (no 100 us slew). */
+    timesync_tick(t_local);
+    b_ok = (test_main_check(0 == timesync_last_slew(), __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(t_p2 == timesync_now_corrected(&reader), __LINE__)) &&
+        b_ok;
+    printf("    after the switch: reseeds %" PRIu32 ", SYNC_READY %d\n",
+           timesync_reseed_count(), timesync_sync_ready());
+
+    /* Fifteen more beacons from the second Pico: ready again, no re-seed. */
+    for (uint32_t idx = 1u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        t_p2 += BEACON_PERIOD_US;
+        t_local += BEACON_PERIOD_US;
+        timesync_add_sample(t_p2, t_local);
+    }
+
+    timesync_test_set_now_us(t_local);
+    b_ok = (test_main_check(timesync_sync_ready(), __LINE__)) && b_ok;
+    b_ok = (test_main_check(1u == timesync_reseed_count(), __LINE__)) && b_ok;
+    printf("    16 samples later: SYNC_READY %d\n", timesync_sync_ready());
+
+    /* A 400 ms change is network delay, not another clock: no re-seed. */
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        t_p = beacon_time(READY_START_US, idx);
+        timesync_add_sample(t_p, t_p + READY_DELAY_US);
+    }
+
+    t_p += BEACON_PERIOD_US;
+    timesync_add_sample(t_p, t_p + READY_DELAY_US + RESEED_UNDER_US);
+    b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
+    printf("    400 ms late sample: reseeds %" PRIu32 "\n",
+           timesync_reseed_count());
 
     timesync_init();
 
