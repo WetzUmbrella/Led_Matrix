@@ -1,6 +1,6 @@
 # SE15 continuation plan
 
-Written 29 Oct 2026 at a planned safe stop of Ben's (Benjamin, B2) session. This session continued Ahsanul's Phase 1 work (`docs/HANDOVER.md`). Read this file first (updated 30 Oct 2026 after patch 15; next is section 5 step 1); read `docs/HANDOVER.md` second for setup, rules and the open decisions table.
+Written 29 Oct 2026 at a planned safe stop of Ben's (Benjamin, B2) session. This session continued Ahsanul's Phase 1 work (`docs/HANDOVER.md`). Read this file first (updated 3 Nov 2026: patches committed on `b4/phase2`, review round 1 done; next is section 5 step 1); read `docs/HANDOVER.md` second for setup, rules and the open decisions table.
 
 ## 1. Where everything is
 
@@ -41,6 +41,8 @@ The handoff folder holds:
 | 13 | T-B1-02 to T-B1-06 PC side (Jolyn), 29 to 30 Oct 2026 | `pc/asset_builder.py`, `uploader.py`, `telemetry.py`, `pico_link.py`, `dashboard.py`, `tests/numbered_pattern.py`, `tests/check_assets.py` and their pytest; `panel_sync/tools/` deleted; Pillow added to CI; bench checklist Part F. tile_net: upload replies go only to the uploader's address. asset_store: `ASSET_FLASH` counters every 60 s, BUSY count. |
 | 14 | T-X builds, tools, procedures, evidence (all), 30 Oct 2026 | Test builds `FAULT_STRESS` and `TS_STRESS` (`tile_stress.c`), `DE_DUMP_FRAMES`, `DE_PROFILE`, `DE_TEST_SLOW_PREP`, `DE_TEST_FLASH_ERASE`; `pc/tests/round_trip.py` (T-X-01), `upload_faults.py` (T-X-08), `pc/tools/gen_week13_docs.py` (T-X-06 and the T-X-04 size table; `before_after.md` After column filled), `pc/tools/evidence_index.py` (T-B1-07); 8-bit asset build and upload for T-X-03; wrong-session uploads rejected; procedures for T-B5-06, T-B5-08, T-X-09; bench checklist Parts G and H. |
 | 15 | DEFENCE documents, playback state copy, 30 Oct 2026 | `docs/tile_net_DEFENCE.md`, `asset_store_DEFENCE.md`, `playback_control_DEFENCE.md`, `display_engine_DEFENCE.md`, `orientation_DEFENCE.md`, `pc_tools_DEFENCE.md`; `playback_control_state()` reads an atomic copy (other tasks call it); self-review `docs/status/review_log.md`; `overall.md` section 10; HANDOVER note. |
+| 16 | Status docs | `overall.md`, continuation plan and `review_log.md` round 0 (self-review). |
+| 17 | Coordinator lock (Cheston, Benjamin) | `tile_net`: the first coordinator heard is kept; beacons and commands from others are dropped and counted (`foreign=`); switch after 2 s of silence (`TN_COORD_SWITCH_US`). Bench confirmation pending. |
 
 ### Results at the stop (29 Oct 2026; after patch 15 see `docs/status/review_log.md`, "Checks at the end of the round")
 
@@ -80,20 +82,38 @@ The handoff folder holds:
 | Benjamin (patch 09) | TELEMETRY uses the tile's single header seq stream (shared with REGISTER, HEARTBEAT, SYNC_READY, NACK) | `panel_sync/main/tile_net.h` |
 | Jia Jun (patch 09) | Display Engine reports WAITING FOR NEXT TICK while the Week 10 loop ticks; orientation 0 until T-B5-05 | `display_engine.c` |
 | Cheston (patches 11, 14) | Upload Queue 4, Reply Queue 8; BUSY also in PAUSED and CLOCK HOLDOVER; frames partition header sector; a wrong-length chunk drops the upload; wrong-session uploads dropped without a NACK | `asset_store.h`, `tile_net.c` |
+| Cheston, Benjamin (patch 17) | Coordinator lock: first beacon heard wins; switch after 2 s of silence; commands accepted from any sender while unlocked (review round 1 R1-4, R1-5, R1-16) | `panel_sync/main/tile_net.h`, `docs/tile_net_DEFENCE.md` |
 | Ahsanul (patches 11, 15) | D-1 extended to `asset_store`; `playback_control_state()` reads an atomic copy; `TS_STRESS` readers are test tasks at the named priorities | `docs/coding_standard.md`, `playback_control.c`, `tile_stress.h` |
 | Jia Jun (patches 12, 14) | OD-16 RMT without DMA; LED numbering and rotation direction; quadrant mapping and 0.5 g threshold; QMI8658 register values; profiling pin GPIO5; status pattern; PREPARING/TRANSMITTING not reported | `display_engine.h`, `display_frame.h`, `orient_filter.h`, `orientation.h` |
 | Jolyn (patch 13) | OD-06 (a); OD-02 (b); upload window 4, 1 s manifest pause, 100 chunks/s; numbered-pattern encoding; dashboard as a command-line shell | `pc/asset_builder.py`, `pc/uploader.py`, `pc/dashboard.py` |
 | Ahsanul | 1.4.b complied with; 6.2.a counted strictly; D-1 extended to `playback_control`; holdover entry at 200 ms; FAULT on invalid frame_count; START_AT/RESUME_AT accepted in READY and all playing states | `docs/coding_standard.md`, `playback_control.h` |
 | Jia Jun | `vTaskList()` buffer 64 B per line; first tick waits for SYNC_READY; the Display Engine must read `playback_control_read_timeline()` in T-B5-02/03 | `tile_tasks.c`, `display_engine.c` |
 
-## 5. Next steps, in order (rewritten 30 Oct 2026 after patch 15)
+## 5. Next steps, in order (rewritten 3 Nov 2026 after review round 1)
 
-Steps 3 to 8 and 10 of the 29 Oct list are done in patches 09 to 15; `docs/status/overall.md` section 10 has every task's state.
+Done on 3 Nov 2026: patches 01 to 17 committed as stacked task branches on `b4/handover` and merged with `--no-ff` into **`b4/phase2`** (the new integration head; tree identical to the handoff working tree); every branch passes the host checks on its own; round 1 of the independent review is in `docs/status/review_log.md`.
 
-1. **Review and commit (Ahsanul).** Apply patches 01 to 15 in order on `b4/handover` (or commit file groups by task from section 3), one `b<n>/<task>` branch per task. Done when every branch builds in CI.
-2. **Independent review (step 9 of the old list, still open).** Two fresh reviewers (Tribunal fidelity; Barr-C and integration) over everything, logged as round 1 in `docs/status/review_log.md`. Round 0 there is only the implementing session's self-review.
-3. **Confirm the coordinator lock on the bench (patch 17):** with two Picos on the SSID, the tile's `TN_STATS` shows `foreign=` rising and about 10 `BCN,` lines per second from one Pico only; power the locked Pico off and the tile follows the other within about 2 s.
-4. **Hardware, Week 10 (team).** `docs/week10/bench_checklist.md` Parts B0, C1 (passed on ESP-4), D, A5 to A7, then Part B. Confirm the test pin GPIO4 is on the header first (Jia Jun).
+| Branch | Patches |
+|---|---|
+| `b4/review-round1-fixes` | 01 |
+| `b2/t-b2-01-session-config` | 02 |
+| `b2/t-b2-02-05-coordinator` | 03 |
+| `b3/t-b3-03-tile-net` | 04 |
+| `b4/t-b4-04-playback-control` | 05 |
+| `b2/t-b2-06-sim-nodes-defence` | 06, 07, 08 |
+| `b3/t-b3-06-telemetry` | 09, 10 |
+| `b3/t-b3-04-05-asset-path` | 11 |
+| `b5/t-b5-02-03-05-frame-path` | 12 |
+| `b1/t-b1-02-06-pc-side` | 13 |
+| `b4/t-x-tests-evidence` | 14 |
+| `b4/defence-docs` | 15, 16 |
+| `b3/t-b3-03-coordinator-lock` | 17 |
+| `b4/review-round1` | this review log and plan update |
+
+1. **Fix the round 1 BLOCKING items** (`review_log.md` R1-1 to R1-3): REGISTER repeated until the Pico knows the tile (Cheston, Benjamin); timesync flush and re-seed on a coordinator switch or epoch jump (Ahsanul, Cheston); asset RAM placement against the real manifest length (Cheston). Then R1-6 and R1-9 to R1-11. One branch per fix from `b4/phase2`.
+2. **Round 2 review** over the fixes only.
+3. **Confirm the coordinator lock on the bench (patch 17):** with two Picos on the SSID, the tile's `TN_STATS` shows `foreign=` rising and about 10 `BCN,` lines per second from one Pico only; power the locked Pico off and the tile follows the other within about 2 s; after R1-2 is fixed, measure skew after the switch. Until then, one Pico per router.
+4. **Hardware, Week 10 (team).** `docs/week10/bench_checklist.md` Parts B0, C1 (passed on ESP-4), D, A5 to A7, then Part B. Confirm the test pin GPIO4 is on the header first (Jia Jun). Record the B0 `HEAP largest_internal=` value (R1-3).
 5. **Hardware, Week 13 (team).** Parts E, F, G and H, in that order; each step names its evidence file. Then re-run `python3 pc/tools/gen_week13_docs.py` (after filling measured cells) and `python3 pc/tools/evidence_index.py --inputs ../inputs`.
 6. **Owner decisions.** Every PROVISIONAL row of section 4, plus OD-22 (temperature limits, blocks T-B5-08), OD-13 (upload rate, from G4), OD-18 (from H1), OD-19 (from H2) and OD-17 (lecturer answer, for T-X-06).
 7. **Final:** T-X-09 soak (`docs/final/soak_5tile.md`); T-B4-07 only if a skew run exceeds 5 ms.
