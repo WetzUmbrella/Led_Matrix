@@ -68,9 +68,9 @@ bool test_proto_bits (void)
                 mask = (UINT64_C(1) << width) - 1u;
             }
 
-            b_ok = test_main_check((PATTERN_BITS & mask) ==
-                                       proto_get_bits(buf, offset, width),
-                                   __LINE__) &&
+            b_ok = (test_main_check((PATTERN_BITS & mask) ==
+                                        proto_get_bits(buf, offset, width),
+                                    __LINE__)) &&
                    b_ok;
 
             /* The bits below the field and above it keep the fill. */
@@ -78,21 +78,21 @@ bool test_proto_bits (void)
 
             if (offset > 0u)
             {
-                b_ok = test_main_check(proto_get_bits(&fill, 0u, offset) ==
-                                           proto_get_bits(buf, 0u, offset),
-                                       __LINE__) &&
+                b_ok = (test_main_check(proto_get_bits(&fill, 0u, offset) ==
+                                            proto_get_bits(buf, 0u, offset),
+                                        __LINE__)) &&
                        b_ok;
             }
 
             uint32_t const end = offset + width;
 
             b_ok =
-                test_main_check(FILL_BYTE == buf[BUF_BYTES - 1u], __LINE__) &&
+                (test_main_check(FILL_BYTE == buf[BUF_BYTES - 1u], __LINE__)) &&
                 b_ok;
-            b_ok = test_main_check(
+            b_ok = (test_main_check(
                        proto_get_bits(&fill, end % 8u, 8u - (end % 8u)) ==
                            proto_get_bits(buf, end, 8u - (end % 8u)),
-                       __LINE__) &&
+                       __LINE__)) &&
                    b_ok;
             checks++;
         }
@@ -121,19 +121,19 @@ bool test_proto_beacon (void)
         .t_p    = UINT64_MAX,
     };
 
-    b_ok = test_main_check(PROTO_BEACON_BYTES ==
-                               proto_encode_beacon(&mid, buf, sizeof(buf)),
-                           __LINE__) &&
+    b_ok = (test_main_check(PROTO_BEACON_BYTES ==
+                                proto_encode_beacon(&mid, buf, sizeof(buf)),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(bytes_equal(buf, g_ref_mid, PROTO_BEACON_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(bytes_equal(buf, g_ref_mid, PROTO_BEACON_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(PROTO_BEACON_BYTES ==
-                               proto_encode_beacon(&max, buf, sizeof(buf)),
-                           __LINE__) &&
+    b_ok = (test_main_check(PROTO_BEACON_BYTES ==
+                                proto_encode_beacon(&max, buf, sizeof(buf)),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(bytes_equal(buf, g_ref_max, PROTO_BEACON_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(bytes_equal(buf, g_ref_max, PROTO_BEACON_BYTES),
+                            __LINE__)) &&
            b_ok;
     /* Setting t_p after encoding gives the same bytes as encoding it. */
     proto_beacon_t mid_zero = mid;
@@ -141,8 +141,8 @@ bool test_proto_beacon (void)
     mid_zero.t_p = 0u;
     (void)proto_encode_beacon(&mid_zero, buf, sizeof(buf)); /* Size known. */
     proto_beacon_set_t_p(buf, mid.t_p);
-    b_ok = test_main_check(bytes_equal(buf, g_ref_mid, PROTO_BEACON_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(bytes_equal(buf, g_ref_mid, PROTO_BEACON_BYTES),
+                            __LINE__)) &&
            b_ok;
     printf("    93 bits, %" PRIu32 " bytes; reference vectors match\n",
            PROTO_BEACON_BYTES);
@@ -171,7 +171,7 @@ bool test_proto_beacon (void)
 
                 bool const b_same = round_trip(&msg);
 
-                b_ok = test_main_check(b_same, __LINE__) && b_ok;
+                b_ok = (test_main_check(b_same, __LINE__)) && b_ok;
                 cases++;
 
                 if (!b_same)
@@ -203,29 +203,29 @@ bool test_proto_beacon_reject (void)
         .t_p    = 3u,
     };
 
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                0u == proto_encode_beacon(&msg, buf, PROTO_BEACON_BYTES - 1u),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(PROTO_BEACON_BYTES ==
-                               proto_encode_beacon(&msg, buf, sizeof(buf)),
-                           __LINE__) &&
+    b_ok = (test_main_check(PROTO_BEACON_BYTES ==
+                                proto_encode_beacon(&msg, buf, sizeof(buf)),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                !proto_decode_beacon(buf, PROTO_BEACON_BYTES - 1u, &decoded),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                !proto_decode_beacon(buf, PROTO_BEACON_BYTES + 1u, &decoded),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
 
     /* Change the type field to START_AT: no longer a beacon. */
     proto_put_bits(buf, 0u, PROTO_TYPE_BITS, PROTO_TYPE_START_AT);
-    b_ok =
-        test_main_check(!proto_decode_beacon(buf, PROTO_BEACON_BYTES, &decoded),
-                        __LINE__) &&
-        b_ok;
+    b_ok = (test_main_check(
+               !proto_decode_beacon(buf, PROTO_BEACON_BYTES, &decoded),
+               __LINE__)) &&
+           b_ok;
     printf("    short buffer, 11 B, 13 B and type START_AT rejected\n");
 
     return b_ok;

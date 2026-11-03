@@ -10,8 +10,8 @@
 #     target that defines them); there is no int, long, enum, pointer, bool or bit-field whose size could differ;
 #   - MAX_NODES is the same macro value (8) on both builds.
 # The ESP-IDF compiler (xtensa-esp32s3-elf-gcc) is GCC and honours the packed attribute, so the Xtensa value
-# should equal the host value. The target-compiler confirmation is BENCH.md step S-2 (sizeof_xtensa.txt);
-# until it runs, the "on target" cells in before_after.md stay blank.
+# should equal the host value. The target-compiler confirmation is BENCH.md step S-2: it ran on 29 Oct 2026
+# and sizeof_xtensa.txt shows 50 and 9, equal to the host values.
 #
 # Field sums (derived, from the struct definitions):
 #   beacon_t (panel_sync.c:52-63): magic 4 + version 1 + seq 4 + cmd 1 + frame_no 4 + layout_ver 1

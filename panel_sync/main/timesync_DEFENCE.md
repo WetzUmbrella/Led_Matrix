@@ -107,7 +107,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 16. `lock` and `get_render_state` removed with their callers
 
 - Source: VC-1 current state, "`panel_sync.c:76` `portMUX_TYPE lock`; writer `panel_sync.c:201-210`; reader `panel_sync.c:222-231`"; T-B4-02, "removes `lock`, `get_render_state` (`panel_sync.c:76,201-210,218-232`)".
-- Choice: kept until their callers went, so every commit built. `95aaf07` (T-B4-03 wiring) removed `lock`, `get_render_state` and `sync_rx_task` once `tile_net` (T-B3-03) and `display_engine` (T-B5-01) replaced them; the unbuilt `render.c/.h` were deleted afterwards on `b5/t-b5-01-delete-render`. The portMUX snapshot (VC-10 rejected) no longer exists anywhere in the tile code.
+- Choice: kept until their callers went, so every commit built. `95aaf07` (T-B4-03 wiring) removed `lock`, `get_render_state` and `sync_rx_task` once `tile_net` (T-B3-03) and `display_engine` (T-B5-01) replaced them; the unbuilt `render.c/.h` were deleted afterwards on `b5/t-b5-01-delete-render`. The portMUX snapshot (superseded by VC-1) no longer exists anywhere in the tile code.
 - Examiner: "Which code path reads the corrected clock now, and can any of it still take a portMUX section on core 1?"
 
 ## Open interface items

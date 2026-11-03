@@ -107,6 +107,10 @@ BODY_CASES = [
     ("7.1.m", "    bool done_yet = false;\n"),
     ("1.6.a", "    g_count =\n        (uint32_t)g_count;\n"),
     ("1.3.a", "    if (DEMO_LIMIT > g_count) g_count++;\n"),
+    ("1.4.b", "    if (demo_step() && (DEMO_LIMIT > g_count))\n    {\n"
+              "        g_count = 0u;\n    }\n"),
+    ("1.4.b", "    bool b_low = (DEMO_LIMIT > g_count) || !g_count;\n"),
+    ("1.4.a", "    bool b_any = (DEMO_LIMIT > g_count) && b_flag || b_flag;\n"),
 ]
 
 
@@ -183,3 +187,29 @@ def test_deviation_table_is_parsed(tmp_path):
                      "| D-2 | 5.2.a, 6.3.a | y |\n", encoding="utf-8")
     assert {"D-1": {"1.1.a"}, "D-2": {"5.2.a", "6.3.a"}} == \
         barr_check.load_deviations(str(table))
+
+
+CLEAN_LOGICAL_BODIES = [
+    "    bool b_both = (DEMO_LIMIT > g_count) && (0u != g_count);\n",
+    "    bool b_call = (demo_step()) || (0u == g_count);\n",
+    "    bool b_names = DEMO_LIMIT && g_count;\n",
+    "    bool b_nested = ((DEMO_LIMIT > g_count) && (0u != g_count)) ||\n"
+    "                    (1u == g_count);\n",
+]
+
+
+@pytest.mark.parametrize("body", CLEAN_LOGICAL_BODIES)
+def test_parenthesised_logical_operands_pass(tmp_path, body):
+    assert [] == run(tmp_path, c_file(body=body))
+
+
+def test_function_over_100_lines_is_caught(tmp_path):
+    body = "    g_count++;\n" * 100
+    assert ["6.2.a"] == run(tmp_path, c_file(body=body))
+
+
+def test_function_of_100_lines_passes(tmp_path):
+    # The clean demo_step body is 9 lines from brace to brace; 91 more lines
+    # make exactly 100.
+    body = "    g_count++;\n" * 91
+    assert [] == run(tmp_path, c_file(body=body))

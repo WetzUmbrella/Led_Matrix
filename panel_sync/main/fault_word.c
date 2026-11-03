@@ -9,10 +9,13 @@
  * atomic word, and all read-modify-writes on one atomic object form a single
  * modification order, so no set or clear is ever lost whatever order is used.
  * The order only decides what other memory becomes visible with the bit:
- * - fault_word_set() uses release, so whatever the raising task wrote
- *   before the fault (for example a drop counter or the missed-deadline
- *   counter) is visible to the Network Task once it sees the bit;
- * - fault_word_snapshot() uses acquire, the other half of that pair;
+ * - fault_word_set() uses release and fault_word_snapshot() uses acquire, so
+ *   a write the raising task made before the set is visible to a task whose
+ *   snapshot sees the bit. This orders only writes made before the set: a
+ *   counter the raising task keeps incrementing afterwards is still read
+ *   concurrently, so any count read by another task (a drop counter, the
+ *   missed-deadline counter) must itself be an atomic and is never made
+ *   safe by this pairing alone;
  * - the two clears use relaxed: a clear publishes no other data, and the
  *   telemetry seq and sent bits it relies on stay inside the Network Task.
  *

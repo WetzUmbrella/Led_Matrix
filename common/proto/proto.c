@@ -231,9 +231,9 @@ uint32_t proto_encode_register (proto_register_t const * p_msg, uint8_t * p_buf,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (register_ok(p_msg) &&
-        begin_encode(p_buf, buf_len, PROTO_REGISTER_BYTES, PROTO_TYPE_REGISTER,
-                     &p_msg->header, &writer))
+    if ((register_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_REGISTER_BYTES, PROTO_TYPE_REGISTER,
+                      &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_SESSION_BITS, p_msg->cached_session_id);
@@ -282,9 +282,9 @@ uint32_t proto_encode_heartbeat (proto_heartbeat_t const * p_msg,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (node_ok(p_msg->node_id) &&
-        begin_encode(p_buf, buf_len, PROTO_HEARTBEAT_BYTES,
-                     PROTO_TYPE_HEARTBEAT, &p_msg->header, &writer))
+    if ((node_ok(p_msg->node_id)) &&
+        (begin_encode(p_buf, buf_len, PROTO_HEARTBEAT_BYTES,
+                      PROTO_TYPE_HEARTBEAT, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         written = PROTO_HEARTBEAT_BYTES;
@@ -329,9 +329,9 @@ uint32_t proto_encode_session_config (proto_session_config_t const * p_msg,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (session_config_ok(p_msg) &&
-        begin_encode(p_buf, buf_len, PROTO_SESSION_CONFIG_BYTES,
-                     PROTO_TYPE_SESSION_CONFIG, &p_msg->header, &writer))
+    if ((session_config_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_SESSION_CONFIG_BYTES,
+                      PROTO_TYPE_SESSION_CONFIG, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_LAYOUT_BITS, p_msg->layout);
         put_field(&writer, PROTO_POLICY_BITS, p_msg->policy);
@@ -390,9 +390,9 @@ uint32_t proto_encode_manifest (proto_manifest_t const * p_msg, uint8_t * p_buf,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (manifest_ok(p_msg) &&
-        begin_encode(p_buf, buf_len, PROTO_MANIFEST_BYTES, PROTO_TYPE_MANIFEST,
-                     &p_msg->header, &writer))
+    if ((manifest_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_MANIFEST_BYTES, PROTO_TYPE_MANIFEST,
+                      &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_FORMAT_BITS, p_msg->format_version);
         put_field(&writer, PROTO_FRAME_BITS, p_msg->frame_count);
@@ -448,8 +448,8 @@ uint32_t proto_encode_asset_chunk (proto_asset_chunk_t const * p_msg,
                          (NULL != p_msg->p_payload);
     writer_t writer;
 
-    if (b_valid && begin_encode(p_buf, buf_len, total, PROTO_TYPE_ASSET_CHUNK,
-                                &p_msg->header, &writer))
+    if (b_valid && (begin_encode(p_buf, buf_len, total, PROTO_TYPE_ASSET_CHUNK,
+                                 &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_CHUNK_BITS, p_msg->chunk_index);
 
@@ -479,8 +479,8 @@ bool proto_decode_asset_chunk (uint8_t const * p_buf, uint32_t len,
         (len > PROTO_CHUNK_HEAD_BYTES) && (len <= PROTO_ASSET_CHUNK_MAX_BYTES);
     reader_t reader;
 
-    if (b_length && begin_decode(p_buf, len, len, PROTO_TYPE_ASSET_CHUNK,
-                                 &p_msg->header, &reader))
+    if (b_length && (begin_decode(p_buf, len, len, PROTO_TYPE_ASSET_CHUNK,
+                                  &p_msg->header, &reader)))
     {
         p_msg->chunk_index = take_u8(&reader, PROTO_CHUNK_BITS);
 
@@ -506,9 +506,9 @@ uint32_t proto_encode_chunk_ack (proto_chunk_ack_t const * p_msg,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (chunk_ack_ok(p_msg) &&
-        begin_encode(p_buf, buf_len, PROTO_CHUNK_ACK_BYTES,
-                     PROTO_TYPE_CHUNK_ACK, &p_msg->header, &writer))
+    if ((chunk_ack_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_CHUNK_ACK_BYTES,
+                      PROTO_TYPE_CHUNK_ACK, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_CHUNK_BITS, p_msg->chunk_index);
@@ -555,9 +555,9 @@ uint32_t proto_encode_nack (proto_nack_t const * p_msg, uint8_t * p_buf,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (nack_ok(p_msg) &&
-        begin_encode(p_buf, buf_len, PROTO_NACK_BYTES, PROTO_TYPE_NACK,
-                     &p_msg->header, &writer))
+    if ((nack_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_NACK_BYTES, PROTO_TYPE_NACK,
+                      &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_REASON_BITS, p_msg->reason);
@@ -606,9 +606,9 @@ uint32_t proto_encode_busy (proto_busy_t const * p_msg, uint8_t * p_buf,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (node_ok(p_msg->node_id) &&
-        begin_encode(p_buf, buf_len, PROTO_BUSY_BYTES, PROTO_TYPE_BUSY,
-                     &p_msg->header, &writer))
+    if ((node_ok(p_msg->node_id)) &&
+        (begin_encode(p_buf, buf_len, PROTO_BUSY_BYTES, PROTO_TYPE_BUSY,
+                      &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_SEQ_BITS, p_msg->ref_seq);
@@ -655,9 +655,9 @@ uint32_t proto_encode_asset_ready (proto_asset_ready_t const * p_msg,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (node_ok(p_msg->node_id) &&
-        begin_encode(p_buf, buf_len, PROTO_ASSET_READY_BYTES,
-                     PROTO_TYPE_ASSET_READY, &p_msg->header, &writer))
+    if ((node_ok(p_msg->node_id)) &&
+        (begin_encode(p_buf, buf_len, PROTO_ASSET_READY_BYTES,
+                      PROTO_TYPE_ASSET_READY, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_CRC_BITS, p_msg->crc32);
@@ -704,9 +704,9 @@ uint32_t proto_encode_sync_ready (proto_sync_ready_t const * p_msg,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (node_ok(p_msg->node_id) &&
-        begin_encode(p_buf, buf_len, PROTO_SYNC_READY_BYTES,
-                     PROTO_TYPE_SYNC_READY, &p_msg->header, &writer))
+    if ((node_ok(p_msg->node_id)) &&
+        (begin_encode(p_buf, buf_len, PROTO_SYNC_READY_BYTES,
+                      PROTO_TYPE_SYNC_READY, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         written = PROTO_SYNC_READY_BYTES;
@@ -854,8 +854,8 @@ uint32_t proto_encode_resume_at (proto_resume_at_t const * p_msg,
     writer_t writer;
 
     if ((p_msg->frame_index <= PROTO_FRAME_MAX) &&
-        begin_encode(p_buf, buf_len, PROTO_RESUME_AT_BYTES,
-                     PROTO_TYPE_RESUME_AT, &p_msg->header, &writer))
+        (begin_encode(p_buf, buf_len, PROTO_RESUME_AT_BYTES,
+                      PROTO_TYPE_RESUME_AT, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_TIME_BITS, p_msg->t_resume);
         put_field(&writer, PROTO_FRAME_BITS, p_msg->frame_index);
@@ -954,9 +954,9 @@ uint32_t proto_encode_status (proto_status_t const * p_msg, uint8_t * p_buf,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (status_ok(p_msg) &&
-        begin_encode(p_buf, buf_len, PROTO_STATUS_BYTES, PROTO_TYPE_STATUS,
-                     &p_msg->header, &writer))
+    if ((status_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_STATUS_BYTES, PROTO_TYPE_STATUS,
+                      &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_BITMAP_BITS, p_msg->readiness);
         put_field(&writer, PROTO_BITMAP_BITS, p_msg->online);
@@ -1005,9 +1005,9 @@ uint32_t proto_encode_telemetry (proto_telemetry_t const * p_msg,
     uint32_t written = 0u;
     writer_t writer;
 
-    if (telemetry_ok(p_msg) &&
-        begin_encode(p_buf, buf_len, PROTO_TELEMETRY_BYTES,
-                     PROTO_TYPE_TELEMETRY, &p_msg->header, &writer))
+    if ((telemetry_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_TELEMETRY_BYTES,
+                      PROTO_TYPE_TELEMETRY, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_FAULT_BITS, p_msg->fault_word);
@@ -1192,7 +1192,7 @@ static bool begin_decode (uint8_t const * p_buf, uint32_t len, uint32_t bytes,
 {
     bool b_ok = false;
 
-    if ((bytes == len) && proto_decode_header(p_buf, len, p_header))
+    if ((bytes == len) && (proto_decode_header(p_buf, len, p_header)))
     {
         p_reader->p_buf = p_buf;
         p_reader->bit   = PROTO_HEADER_BITS;
@@ -1322,7 +1322,7 @@ static bool session_config_ok (proto_session_config_t const * p_msg)
 {
     return (p_msg->layout < (uint8_t)PROTO_LAYOUT_COUNT) && /* Code < 3. */
            (p_msg->policy < (uint8_t)PROTO_POLICY_COUNT) && /* Code < 2. */
-           map_ok(p_msg->node_map);
+           (map_ok(p_msg->node_map));
 }
 
 /**
@@ -1333,7 +1333,7 @@ static bool session_config_ok (proto_session_config_t const * p_msg)
 static bool manifest_ok (proto_manifest_t const * p_msg)
 {
     return (p_msg->format_version < (uint8_t)PROTO_FORMAT_COUNT) && /* < 4 */
-           frame_count_ok(p_msg->frame_count);
+           (frame_count_ok(p_msg->frame_count));
 }
 
 /**
@@ -1343,7 +1343,7 @@ static bool manifest_ok (proto_manifest_t const * p_msg)
  */
 static bool chunk_ack_ok (proto_chunk_ack_t const * p_msg)
 {
-    return node_ok(p_msg->node_id) &&
+    return (node_ok(p_msg->node_id)) &&
            (p_msg->chunk_index <= PROTO_CHUNK_INDEX_MAX);
 }
 
@@ -1354,7 +1354,7 @@ static bool chunk_ack_ok (proto_chunk_ack_t const * p_msg)
  */
 static bool nack_ok (proto_nack_t const * p_msg)
 {
-    return node_ok(p_msg->node_id) &&
+    return (node_ok(p_msg->node_id)) &&
            (p_msg->reason < (uint8_t)PROTO_NACK_COUNT); /* Code < 4. */
 }
 
@@ -1377,7 +1377,7 @@ static bool status_ok (proto_status_t const * p_msg)
  */
 static bool telemetry_ok (proto_telemetry_t const * p_msg)
 {
-    return node_ok(p_msg->node_id) &&
+    return (node_ok(p_msg->node_id)) &&
            (p_msg->orientation < (uint8_t)PROTO_ORIENT_COUNT) &&  /* < 4 */
            (p_msg->display_state < (uint8_t)PROTO_DISPLAY_COUNT); /* < 7 */
 }

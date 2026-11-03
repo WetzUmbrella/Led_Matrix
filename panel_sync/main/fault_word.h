@@ -12,7 +12,8 @@
  * tile_net.c (snapshot, TELEMETRY {seq, fault word, orientation, display
  * state}, remember (seq, sent bits), call fault_word_clear_events() on the
  * matching ACK), the Telemetry and Fault queues q_telemetry and q_fault, and
- * the telemetry period (OD-11). Those need the TELEMETRY rows of T-B2-01.
+ * the telemetry period (OD-11). The TELEMETRY and TELEMETRY_ACK codecs they
+ * use exist in common/proto (T-B2-01).
  *
  * PROVISIONAL (OD-12, owner Cheston): bit numbers, and the event or
  * condition class of CRC_FAIL, QUEUE_OVERFLOW, BEACON_LOSS and SYNC_STALE.
@@ -39,8 +40,9 @@
  *  is one occurrence; the per-queue drop counters keep the count). */
 #define FAULT_BIT_QUEUE_OVERFLOW (UINT32_C(1) << 2u)
 
-/** Condition: no beacon for longer than the 1 s holdover (PROVISIONAL, OD-12:
- *  it stays true until beacons return). Owner: playback_control. */
+/** Condition: no beacon for longer than the 1 s holdover (proposed, W6D-2b)
+ *  (PROVISIONAL, OD-12: it stays true until beacons return). Owner:
+ *  playback_control. */
 #define FAULT_BIT_BEACON_LOSS (UINT32_C(1) << 3u)
 
 /** Condition: IMU transaction failed (T-B5-05 "the IMU condition bit is set
@@ -48,7 +50,7 @@
 #define FAULT_BIT_IMU (UINT32_C(1) << 4u)
 
 /** Event: RMT still busy at a tick (T-B5-03 "raise the MISSED_DEADLINE event
- *  bit through fault_word_set()"). */
+ *  bit through fault_set()"; fault_set() is fault_word_set() here). */
 #define FAULT_BIT_MISSED_DEADLINE (UINT32_C(1) << 5u)
 
 /** Condition: unknown format_version or wrong payload length (VC-5 "raises an

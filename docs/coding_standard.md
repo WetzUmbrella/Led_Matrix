@@ -25,7 +25,7 @@ CI job `barr` in `.github/workflows/build.yml` runs CF, BC, the `barr_check` and
 | 1.2.a | Lines at most 80 characters. | CF, BC |
 | 1.3.a | Braces around every `if`, `else`, `switch`, `while`, `do` and `for` body, even a single statement. | CF (`InsertBraces`), BC for `if`/`else` |
 | 1.3.b | Each brace on its own line; the closing brace lines up with the opening one. | CF |
-| 1.4.a, 1.4.b | Use parentheses rather than precedence; parenthesise every operand of `&&` and `\|\|` that is not a single identifier or constant. | RV |
+| 1.4.a, 1.4.b | Use parentheses rather than precedence; parenthesise every operand of `&&` and `\|\|` that is not a single identifier or constant (a function call is neither, so it is parenthesised too). | BC (1.4.b, and 1.4.a for `&&` mixed with `\|\|`), RV for the rest of 1.4.a |
 | 1.5.a, 1.5.b | Avoid abbreviations; keep a table of project abbreviations. | RV; section 5 |
 | 1.6.a | Every cast has a comment saying why the value fits the target type. | BC |
 | 1.7.a, 1.7.b | No `auto`, no `register`. | RV |
@@ -64,7 +64,7 @@ CI job `barr` in `.github/workflows/build.yml` runs CF, BC, the `barr_check` and
 | 5.6.a, 5.6.b | Booleans are `bool`; convert to Boolean with a relational operator, not a cast. | RV |
 | 6.1.a to 6.1.h | Function names: not a keyword or library name, no leading underscore, at most 31 characters, lowercase with underscores, descriptive. Macro names have no lowercase. | BC (6.1.d, 6.1.e, 6.1.f), RV |
 | 6.1.i | Public function names start with the module name and an underscore. | BC |
-| 6.2.a to 6.2.f | Functions at most 100 lines; one exit point at the bottom (preferred practice); prototype in the header for each public function; private functions `static`; every parameter named. | RV (we treat 6.2.c as required) |
+| 6.2.a to 6.2.f | Functions at most 100 lines; one exit point at the bottom (preferred practice); prototype in the header for each public function; private functions `static`; every parameter named. | BC for 6.2.a (counted strictly, opening brace to closing brace, blank and comment lines included); RV for the rest (we treat 6.2.c as required) |
 | 6.3.a, 6.3.b | No function-like macro where a function would do; otherwise parenthesise everything, use each parameter once, never transfer control. | RV; deviation D-2 for vendor macros |
 | 6.4.a | Task functions end in `_task` (or `_thread`, `_process`). | RV |
 | 6.5.a to 6.5.d | ISRs are marked as such, end in `_isr`, are `static`, and unhandled vectors get a stub. | RV |

@@ -145,78 +145,78 @@ bool test_messages_lengths (void)
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_telemetry_ack_t const  tack  = {hdr, 0u};
 
-    b_ok = test_main_check(LEN_REGISTER ==
-                               proto_encode_register(&reg, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_REGISTER ==
+                                proto_encode_register(&reg, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_HEARTBEAT ==
-                               proto_encode_heartbeat(&beat, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_HEARTBEAT ==
+                                proto_encode_heartbeat(&beat, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_SESSION_CONFIG == proto_encode_session_config(
-                                                     &cfg, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_SESSION_CONFIG == proto_encode_session_config(
+                                                      &cfg, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_MANIFEST ==
-                               proto_encode_manifest(&man, g_buf, BUF_BYTES),
-                           __LINE__) &&
-           b_ok;
-    b_ok =
-        test_main_check((LEN_CHUNK_HEAD + 1u) ==
-                            proto_encode_asset_chunk(&chunk, g_buf, BUF_BYTES),
-                        __LINE__) &&
-        b_ok;
-    b_ok = test_main_check(LEN_CHUNK_ACK ==
-                               proto_encode_chunk_ack(&cack, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_MANIFEST ==
+                                proto_encode_manifest(&man, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
     b_ok =
-        test_main_check(LEN_NACK == proto_encode_nack(&nack, g_buf, BUF_BYTES),
-                        __LINE__) &&
+        (test_main_check((LEN_CHUNK_HEAD + 1u) ==
+                             proto_encode_asset_chunk(&chunk, g_buf, BUF_BYTES),
+                         __LINE__)) &&
+        b_ok;
+    b_ok = (test_main_check(LEN_CHUNK_ACK ==
+                                proto_encode_chunk_ack(&cack, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check(LEN_NACK == proto_encode_nack(&nack, g_buf, BUF_BYTES),
+                         __LINE__)) &&
         b_ok;
     b_ok =
-        test_main_check(LEN_BUSY == proto_encode_busy(&busy, g_buf, BUF_BYTES),
-                        __LINE__) &&
+        (test_main_check(LEN_BUSY == proto_encode_busy(&busy, g_buf, BUF_BYTES),
+                         __LINE__)) &&
         b_ok;
-    b_ok = test_main_check(LEN_ASSET_READY == proto_encode_asset_ready(
-                                                  &ready, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_ASSET_READY == proto_encode_asset_ready(
+                                                   &ready, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_SYNC_READY ==
-                               proto_encode_sync_ready(&sync, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_SYNC_READY == proto_encode_sync_ready(
+                                                  &sync, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_BEACON ==
-                               proto_encode_beacon(&bcn, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_BEACON ==
+                                proto_encode_beacon(&bcn, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_START_AT ==
-                               proto_encode_start_at(&start, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_START_AT ==
+                                proto_encode_start_at(&start, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_RESUME_AT ==
-                               proto_encode_resume_at(&res, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_RESUME_AT ==
+                                proto_encode_resume_at(&res, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_COMMAND ==
-                               proto_encode_pause(&cmd, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_COMMAND ==
+                                proto_encode_pause(&cmd, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_COMMAND ==
-                               proto_encode_stop(&cmd, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_COMMAND ==
+                                proto_encode_stop(&cmd, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_STATUS ==
-                               proto_encode_status(&stat, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_STATUS ==
+                                proto_encode_status(&stat, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_TELEMETRY ==
-                               proto_encode_telemetry(&tel, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_TELEMETRY ==
+                                proto_encode_telemetry(&tel, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(LEN_TELEMETRY_ACK == proto_encode_telemetry_ack(
-                                                    &tack, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(LEN_TELEMETRY_ACK == proto_encode_telemetry_ack(
+                                                     &tack, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
     printf("    18 encoders return the layout_table.md lengths\n");
 
@@ -258,30 +258,31 @@ static bool reject_encode (void)
 
     /* Encoders refuse out-of-range fields. */
     b_ok =
-        test_main_check(0u == proto_encode_heartbeat(&beat, g_buf, BUF_BYTES),
-                        __LINE__) &&
+        (test_main_check(0u == proto_encode_heartbeat(&beat, g_buf, BUF_BYTES),
+                         __LINE__)) &&
         b_ok;
     beat.node_id = PROTO_NODE_MAX + 1u;
     b_ok =
-        test_main_check(0u == proto_encode_heartbeat(&beat, g_buf, BUF_BYTES),
-                        __LINE__) &&
+        (test_main_check(0u == proto_encode_heartbeat(&beat, g_buf, BUF_BYTES),
+                         __LINE__)) &&
         b_ok;
-    b_ok = test_main_check(0u == proto_encode_manifest(&man, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(0u == proto_encode_manifest(&man, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(0u == proto_encode_status(&stat, g_buf, BUF_BYTES),
-                           __LINE__) &&
+    b_ok = (test_main_check(0u == proto_encode_status(&stat, g_buf, BUF_BYTES),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(0u == proto_encode_telemetry(&tel, g_buf, BUF_BYTES),
-                           __LINE__) &&
-           b_ok;
-    b_ok = test_main_check(
+    b_ok =
+        (test_main_check(0u == proto_encode_telemetry(&tel, g_buf, BUF_BYTES),
+                         __LINE__)) &&
+        b_ok;
+    b_ok = (test_main_check(
                0u == proto_encode_asset_chunk(&chunk, g_buf, BUF_BYTES),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                0u == proto_encode_session_config(&cfg, g_buf, BUF_BYTES),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
 
     return b_ok;
@@ -314,48 +315,48 @@ static bool reject_decode_range (void)
      * chunk index 113 and layout 3. */
     (void)proto_encode_heartbeat(&beat, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_NODE_BITS, 0u);
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                !proto_decode_heartbeat(g_buf, LEN_HEARTBEAT, &beat_out),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
 
     (void)proto_encode_manifest(&man, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS + PROTO_FORMAT_BITS,
                    PROTO_FRAME_BITS, 0u);
     b_ok =
-        test_main_check(!proto_decode_manifest(g_buf, LEN_MANIFEST, &man_out),
-                        __LINE__) &&
+        (test_main_check(!proto_decode_manifest(g_buf, LEN_MANIFEST, &man_out),
+                         __LINE__)) &&
         b_ok;
 
     (void)proto_encode_status(&stat, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS + (2u * PROTO_BITMAP_BITS),
                    PROTO_COORD_STATE_BITS, PROTO_COORD_COUNT);
-    b_ok = test_main_check(!proto_decode_status(g_buf, LEN_STATUS, &stat_out),
-                           __LINE__) &&
+    b_ok = (test_main_check(!proto_decode_status(g_buf, LEN_STATUS, &stat_out),
+                            __LINE__)) &&
            b_ok;
 
     (void)proto_encode_telemetry(&tel, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_TELEMETRY_BITS - PROTO_DISPLAY_STATE_BITS,
                    PROTO_DISPLAY_STATE_BITS, PROTO_DISPLAY_COUNT);
-    b_ok =
-        test_main_check(!proto_decode_telemetry(g_buf, LEN_TELEMETRY, &tel_out),
-                        __LINE__) &&
-        b_ok;
+    b_ok = (test_main_check(
+               !proto_decode_telemetry(g_buf, LEN_TELEMETRY, &tel_out),
+               __LINE__)) &&
+           b_ok;
 
     (void)proto_encode_asset_chunk(&chunk, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_CHUNK_BITS,
                    PROTO_CHUNK_INDEX_MAX + 1u);
-    b_ok = test_main_check(!proto_decode_asset_chunk(g_buf, LEN_CHUNK_HEAD + 1u,
-                                                     &chunk_out),
-                           __LINE__) &&
+    b_ok = (test_main_check(!proto_decode_asset_chunk(
+                                g_buf, LEN_CHUNK_HEAD + 1u, &chunk_out),
+                            __LINE__)) &&
            b_ok;
 
     (void)proto_encode_session_config(&cfg, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_LAYOUT_BITS,
                    PROTO_LAYOUT_COUNT);
-    b_ok = test_main_check(!proto_decode_session_config(
-                               g_buf, LEN_SESSION_CONFIG, &cfg_out),
-                           __LINE__) &&
+    b_ok = (test_main_check(!proto_decode_session_config(
+                                g_buf, LEN_SESSION_CONFIG, &cfg_out),
+                            __LINE__)) &&
            b_ok;
 
     return b_ok;
@@ -378,33 +379,33 @@ static bool reject_length_type (void)
     proto_asset_chunk_t       chunk_out;
 
     (void)proto_encode_heartbeat(&beat, g_buf, BUF_BYTES); /* Valid. */
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                !proto_decode_sync_ready(g_buf, LEN_SYNC_READY, &sync_out),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                !proto_decode_heartbeat(g_buf, LEN_HEARTBEAT + 1u, &beat_out),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                0u == proto_encode_heartbeat(&beat, g_buf, LEN_HEARTBEAT - 1u),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
 
     /* A valid full chunk in g_buf, so only the length decides. */
     (void)proto_encode_asset_chunk(&chunk, g_buf, BUF_BYTES); /* Valid. */
-    b_ok = test_main_check(proto_decode_asset_chunk(
-                               g_buf, PROTO_ASSET_CHUNK_MAX_BYTES, &chunk_out),
-                           __LINE__) &&
+    b_ok = (test_main_check(proto_decode_asset_chunk(
+                                g_buf, PROTO_ASSET_CHUNK_MAX_BYTES, &chunk_out),
+                            __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                !proto_decode_asset_chunk(
                    g_buf, PROTO_ASSET_CHUNK_MAX_BYTES + 1u, &chunk_out),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
-    b_ok = test_main_check(
+    b_ok = (test_main_check(
                !proto_decode_asset_chunk(g_buf, LEN_CHUNK_HEAD, &chunk_out),
-               __LINE__) &&
+               __LINE__)) &&
            b_ok;
 
     return b_ok;
@@ -425,18 +426,20 @@ bool test_messages_le (void)
 
     for (uint32_t idx = 0u; idx < LE_BYTES; idx++)
     {
-        b_ok = test_main_check(ref[idx] == buf[idx], __LINE__) && b_ok;
+        b_ok = (test_main_check(ref[idx] == buf[idx], __LINE__)) && b_ok;
     }
 
-    b_ok = test_main_check(LE_U64 == proto_get_u64_le(buf), __LINE__) && b_ok;
+    b_ok = (test_main_check(LE_U64 == proto_get_u64_le(buf), __LINE__)) && b_ok;
     proto_put_u32_le(buf, LE_U32);
-    b_ok = test_main_check((0x04u == buf[0]) && (0x01u == buf[3]), __LINE__) &&
-           b_ok;
-    b_ok = test_main_check(LE_U32 == proto_get_u32_le(buf), __LINE__) && b_ok;
+    b_ok =
+        (test_main_check((0x04u == buf[0]) && (0x01u == buf[3]), __LINE__)) &&
+        b_ok;
+    b_ok = (test_main_check(LE_U32 == proto_get_u32_le(buf), __LINE__)) && b_ok;
     proto_put_u16_le(buf, LE_U16);
-    b_ok = test_main_check((0x02u == buf[0]) && (0x01u == buf[1]), __LINE__) &&
-           b_ok;
-    b_ok = test_main_check(LE_U16 == proto_get_u16_le(buf), __LINE__) && b_ok;
+    b_ok =
+        (test_main_check((0x02u == buf[0]) && (0x01u == buf[1]), __LINE__)) &&
+        b_ok;
+    b_ok = (test_main_check(LE_U16 == proto_get_u16_le(buf), __LINE__)) && b_ok;
     printf("    u16, u32, u64: low byte first, values round-trip\n");
 
     return b_ok;
@@ -517,8 +520,8 @@ static void rt_register (uint32_t corner)
     proto_register_t       out;
     uint32_t const         len = proto_encode_register(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_register(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_register(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) &&
           (msg.cached_session_id == out.cached_session_id) &&
           (msg.cached_crc32 == out.cached_crc32));
@@ -534,8 +537,8 @@ static void rt_heartbeat (uint32_t corner)
     proto_heartbeat_t       out;
     uint32_t const len = proto_encode_heartbeat(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_heartbeat(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_heartbeat(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id));
 }
 
@@ -560,8 +563,8 @@ static void rt_session_config (uint32_t corner)
 
     uint32_t const len = proto_encode_session_config(&msg, g_buf, BUF_BYTES);
 
-    b_same = proto_decode_session_config(g_buf, len, &out) &&
-             same_header(&msg.header, &out.header) &&
+    b_same = (proto_decode_session_config(g_buf, len, &out)) &&
+             (same_header(&msg.header, &out.header)) &&
              (msg.layout == out.layout) && (msg.policy == out.policy);
 
     for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
@@ -586,8 +589,8 @@ static void rt_manifest (uint32_t corner)
     proto_manifest_t out;
     uint32_t const   len = proto_encode_manifest(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_manifest(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_manifest(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.format_version == out.format_version) &&
           (msg.frame_count == out.frame_count) && (msg.crc32 == out.crc32));
 }
@@ -612,8 +615,8 @@ static void rt_asset_chunk (uint32_t corner)
         b_max ? PROTO_CHUNK_PAYLOAD_MAX : 1u, g_payload};
     proto_asset_chunk_t out;
     uint32_t const      len = proto_encode_asset_chunk(&msg, g_buf, BUF_BYTES);
-    bool                b_same = proto_decode_asset_chunk(g_buf, len, &out) &&
-                  same_header(&msg.header, &out.header) &&
+    bool                b_same = (proto_decode_asset_chunk(g_buf, len, &out)) &&
+                  (same_header(&msg.header, &out.header)) &&
                   (msg.chunk_index == out.chunk_index) &&
                   (msg.payload_len == out.payload_len);
 
@@ -637,8 +640,8 @@ static void rt_chunk_ack (uint32_t corner)
     proto_chunk_ack_t       out;
     uint32_t const len = proto_encode_chunk_ack(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_chunk_ack(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_chunk_ack(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) && (msg.chunk_index == out.chunk_index));
 }
 
@@ -656,8 +659,8 @@ static void rt_nack (uint32_t corner)
     proto_nack_t       out;
     uint32_t const     len = proto_encode_nack(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_nack(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_nack(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) && (msg.reason == out.reason) &&
           (msg.ref_seq == out.ref_seq));
 }
@@ -673,8 +676,8 @@ static void rt_busy (uint32_t corner)
     proto_busy_t       out;
     uint32_t const     len = proto_encode_busy(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_busy(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_busy(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) && (msg.ref_seq == out.ref_seq));
 }
 
@@ -689,8 +692,8 @@ static void rt_asset_ready (uint32_t corner)
     proto_asset_ready_t       out;
     uint32_t const len = proto_encode_asset_ready(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_asset_ready(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_asset_ready(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) && (msg.crc32 == out.crc32));
 }
 
@@ -704,8 +707,8 @@ static void rt_sync_ready (uint32_t corner)
     proto_sync_ready_t       out;
     uint32_t const len = proto_encode_sync_ready(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_sync_ready(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_sync_ready(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id));
 }
 
@@ -720,8 +723,8 @@ static void rt_beacon (uint32_t corner)
     proto_beacon_t       out;
     uint32_t const       len = proto_encode_beacon(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_beacon(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) && (msg.t_p == out.t_p));
+    tally((proto_decode_beacon(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) && (msg.t_p == out.t_p));
 }
 
 /**
@@ -735,8 +738,8 @@ static void rt_start_at (uint32_t corner)
     proto_start_at_t       out;
     uint32_t const         len = proto_encode_start_at(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_start_at(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_start_at(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.t_start == out.t_start));
 }
 
@@ -752,8 +755,8 @@ static void rt_resume_at (uint32_t corner)
     proto_resume_at_t       out;
     uint32_t const len = proto_encode_resume_at(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_resume_at(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_resume_at(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.t_resume == out.t_resume) &&
           (msg.frame_index == out.frame_index));
 }
@@ -768,14 +771,14 @@ static void rt_commands (uint32_t corner)
     proto_command_t       out;
     uint32_t              len = proto_encode_pause(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_pause(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
-          !proto_decode_stop(g_buf, len, &out));
+    tally((proto_decode_pause(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (!proto_decode_stop(g_buf, len, &out)));
 
     len = proto_encode_stop(&msg, g_buf, BUF_BYTES);
-    tally(proto_decode_stop(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
-          !proto_decode_pause(g_buf, len, &out));
+    tally((proto_decode_stop(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (!proto_decode_pause(g_buf, len, &out)));
 }
 
 /**
@@ -791,8 +794,8 @@ static void rt_status (uint32_t corner)
     proto_status_t out;
     uint32_t const len = proto_encode_status(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_status(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_status(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.readiness == out.readiness) && (msg.online == out.online) &&
           (msg.state == out.state));
 }
@@ -811,8 +814,8 @@ static void rt_telemetry (uint32_t corner)
     proto_telemetry_t out;
     uint32_t const    len = proto_encode_telemetry(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_telemetry(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_telemetry(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) && (msg.fault_word == out.fault_word) &&
           (msg.orientation == out.orientation) &&
           (msg.display_state == out.display_state));
@@ -829,8 +832,8 @@ static void rt_telemetry_ack (uint32_t corner)
     proto_telemetry_ack_t out;
     uint32_t const len = proto_encode_telemetry_ack(&msg, g_buf, BUF_BYTES);
 
-    tally(proto_decode_telemetry_ack(g_buf, len, &out) &&
-          same_header(&msg.header, &out.header) &&
+    tally((proto_decode_telemetry_ack(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
           (msg.acked_seq == out.acked_seq));
 }
 

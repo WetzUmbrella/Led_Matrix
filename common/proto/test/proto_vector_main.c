@@ -99,12 +99,13 @@ int main (int argc, char ** pp_argv)
 
         if (0 == strcmp(p_mode, "decode"))
         {
-            b_ok =
-                read_file(pp_argv[ARG_OPERAND], &len) && decode_any(g_in, len);
+            b_ok = (read_file(pp_argv[ARG_OPERAND], &len)) &&
+                   (decode_any(g_in, len));
         }
         else if (0 == strcmp(p_mode, "nibbles"))
         {
-            b_ok = read_file(pp_argv[ARG_OPERAND], &len) && print_nibbles(len);
+            b_ok =
+                (read_file(pp_argv[ARG_OPERAND], &len)) && (print_nibbles(len));
         }
         else if (0 == strcmp(p_mode, "encode"))
         {
@@ -373,10 +374,10 @@ static bool decode_any (uint8_t const * p_buf, uint32_t len)
 
     if (b_ok)
     {
-        b_ok = decode_tile(p_buf, len, header.type) ||
-               decode_tile_upload(p_buf, len, header.type) ||
-               decode_coordinator(p_buf, len, header.type) ||
-               decode_pc(p_buf, len, header.type);
+        b_ok = (decode_tile(p_buf, len, header.type)) ||
+               (decode_tile_upload(p_buf, len, header.type)) ||
+               (decode_coordinator(p_buf, len, header.type)) ||
+               (decode_pc(p_buf, len, header.type));
     }
 
     return b_ok;

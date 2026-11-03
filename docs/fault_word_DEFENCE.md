@@ -21,7 +21,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 ## 3. Memory order: release on set, acquire on snapshot, relaxed on clears
 
 - Source: VB-3a and LDC-2 (atomic fetch-or); D-1 in `docs/coding_standard.md`.
-- Choice: all read-modify-writes on one atomic object are in a single modification order, so no bit is lost whatever order is chosen. The order only matters for other memory. Release on set and acquire on the snapshot mean that anything a task wrote before raising a fault (for example a drop counter) is visible to the Network Task when it sees the bit. The clears use relaxed because a clear publishes nothing else, and the telemetry seq and sent bits stay inside the Network Task (plan choice).
+- Choice: all read-modify-writes on one atomic object are in a single modification order, so no bit is lost whatever order is chosen. The order only matters for other memory. Release on set and acquire on the snapshot mean that a write a task made before raising a fault is visible to the Network Task once its snapshot sees the bit. That pairing orders only writes made before the set. A counter the raising task keeps incrementing after the set (a drop counter, the missed-deadline counter) is still read while it is being written, so every count that another task reads is itself a C11 atomic; the pairing does not make a plain counter safe. The clears use relaxed because a clear publishes nothing else, and the telemetry seq and sent bits stay inside the Network Task (plan choice).
 - Examiner: "If every operation were relaxed, could a bit still be lost? What could go wrong instead?"
 
 ## 4. Event bits clear only on the TELEMETRY_ACK
@@ -40,6 +40,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 
 - Source: VB-3b, "Event faults read-and-clear; condition faults latched until the owning task clears them."; T-B3-06, "Condition bits are cleared only by their owning task."
 - Choice: `fault_word_clear_condition()` masks its argument with `FAULT_CONDITION_MASK`, so a condition owner can never drop an unreported event, and `fault_word_clear_events()` masks with `FAULT_EVENT_MASK`, so an ACK can never drop a condition. The owner of each condition is named in `fault_word.h`. Host test F3 checks three ACKs leave a condition set and the owner's clear ignores an event bit.
+- How "owner only" is checked: the function cannot know its caller, so ownership is a review check, not a run-time one. `grep -rn "fault_word_clear_condition" panel_sync/main` must list only calls whose `FAULT_BIT_*` argument is owned by the file the call sits in (WIFI in `tile_net.c`, BEACON_LOSS in `playback_control.c`, IMU in `orientation.c`, ASSET_FORMAT in `asset_store.c`, DISPLAY in `display_engine.c`). The pull-request reviewer runs the grep and records the count of calls outside their owner's file, which must be 0 (plan choice: a grep is the cheapest check that covers every caller).
 - Examiner: "Telemetry packets are being lost. Why does a held condition such as ASSET_FORMAT still show continuously on the dashboard, with no off/on flicker?"
 
 ## 7. Bit map and EVENT_MASK membership (PROVISIONAL, OD-12)
@@ -68,6 +69,6 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 
 Answer each in your own words, without reading the code.
 
-1. Explain why a fetch-and that clears only `(sent bits AND EVENT_MASK)` cannot lose an event that was raised after the snapshot, and what would be lost if the Network Task cleared the whole snapshot instead.
+1. Explain why a fetch-and that clears only `(sent bits AND EVENT_MASK)` cannot lose a first-time event (one whose bit was not set in the sent snapshot) raised after the snapshot, and what would be lost if the Network Task cleared the whole snapshot instead.
 2. A condition bit and an event bit are raised together, and the TELEMETRY packet carrying both is dropped twice before an ACK arrives. Describe exactly what the dashboard shows for each bit over those three packets.
 3. Why does this module use C11 atomics (deviation D-1) instead of a FreeRTOS critical section around `word |= bit`, given that the Display Engine on core 1 raises MISSED_DEADLINE from its tick path?

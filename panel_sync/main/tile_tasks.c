@@ -36,13 +36,15 @@
 #define TENTHS_PER_SECOND 10u
 
 /** Bytes per vTaskList() line. The ESP-IDF v5.3 format with the core
- *  column (FreeRTOS-Kernel tasks.c, configTASKLIST_INCLUDE_COREID) is the
- *  name padded to 15 characters, then tab, state (1), tab, priority (at
- *  most 2 digits, 25 levels), tab, stack high-water mark (16-bit, at most 5
- *  digits), tab, task number (32-bit, at most 10 digits), tab, core (at most
- *  2: -1, 0 or 1), CR LF: 15 + 1 + 1 + 1 + 2 + 1 + 5 + 1 + 10 + 1 + 2 + 2 =
- *  42 B. 48 B leaves 6 B spare per line (plan choice). */
-#define LIST_LINE_BYTES 48u
+ *  column (components/freertos/FreeRTOS-Kernel/tasks.c, vTaskList(),
+ *  configTASKLIST_INCLUDE_COREID) is the name padded to 15 characters
+ *  (configMAX_TASK_NAME_LEN 16 minus 1), then tab, state (1), tab, priority
+ *  (at most 2 digits, 25 levels), tab, stack high-water mark (uint32_t,
+ *  configSTACK_DEPTH_TYPE in FreeRTOSConfig.h, at most 10 digits), tab, task
+ *  number (32-bit, at most 10 digits), tab, core (at most 2: -1, 0 or 1),
+ *  CR LF: 15 + 1 + 1 + 1 + 2 + 1 + 10 + 1 + 10 + 1 + 2 + 2 = 47 B. 64 B
+ *  leaves 17 B spare per line (plan choice). */
+#define LIST_LINE_BYTES 64u
 
 /** Extra lines for tasks created between the count and the list (plan
  *  choice: the Week 10 build creates none after app_main's three). */
