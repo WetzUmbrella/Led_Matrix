@@ -1,0 +1,135 @@
+# T-B5-04 C1 boot log, tile ESP-4 (MAC 9c:13:9e:f1:2e:b0), b4/phase1 7a98781, 29 Oct 2026
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037b666
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x178c
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xcb8
+load:0x403cb700,len:0x2db0
+entry 0x403c8914
+I (26) boot: ESP-IDF v5.3 2nd stage bootloader
+I (27) boot: compile time Oct 29 2026 16:47:43
+I (27) boot: Multicore bootloader
+I (30) boot: chip revision: v0.2
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (38) boot.esp32s3: SPI Mode       : DIO
+I (43) boot.esp32s3: SPI Flash Size : 4MB
+I (48) boot: Enabling RNG early entropy source...
+I (53) boot: Partition Table:
+I (57) boot: ## Label            Usage          Type ST Offset   Length
+I (64) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (71) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (79) boot:  2 factory          factory app      00 00 00010000 00180000
+I (86) boot:  3 frames           Unknown data     01 40 00190000 00200000
+I (94) boot: End of partition table
+I (98) esp_image: segment 0: paddr=00010020 vaddr=3c090020 size=22438h (140344) map
+I (132) esp_image: segment 1: paddr=00032460 vaddr=3fc9ae00 size=04bd8h ( 19416) load
+I (136) esp_image: segment 2: paddr=00037040 vaddr=40374000 size=08fd8h ( 36824) load
+I (145) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=8735ch (553820) map
+I (245) esp_image: segment 4: paddr=000c7384 vaddr=4037cfd8 size=0dd54h ( 56660) load
+I (267) boot: Loaded app from partition at offset 0x10000
+I (268) boot: Disabling RNG early entropy source...
+I (279) cpu_start: Multicore app
+I (289) cpu_start: Pro cpu start user code
+I (289) cpu_start: cpu freq: 160000000 Hz
+I (289) app_init: Application information:
+I (292) app_init: Project name:     panel_sync
+I (297) app_init: App version:      cr1-before-75-g7a98781
+I (303) app_init: Compile time:     Oct 29 2026 16:47:37
+I (309) app_init: ELF file SHA256:  de8b1bde8...
+I (314) app_init: ESP-IDF:          v5.3
+I (319) efuse_init: Min chip rev:     v0.0
+I (323) efuse_init: Max chip rev:     v0.99 
+I (328) efuse_init: Chip rev:         v0.2
+I (333) heap_init: Initializing. RAM available for dynamic allocation:
+I (341) heap_init: At 3FCA3908 len 00045E08 (279 KiB): RAM
+I (347) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (353) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (359) heap_init: At 600FE100 len 00001EE8 (7 KiB): RTCRAM
+I (366) spi_flash: detected chip: generic
+I (370) spi_flash: flash io: dio
+I (374) sleep: Configure to isolate all GPIO pins in sleep state
+I (381) sleep: Enable automatic switching of GPIO sleep configuration
+I (388) main_task: Started on CPU0
+I (398) main_task: Calling app_main()
+I (398) panel: panel id 9ef12eb0
+I (418) panel: I am ESP-4
+I (418) pp: pp rom version: e7ae62f
+I (418) net80211: net80211 rom version: e7ae62f
+I (428) wifi:wifi driver task: 3fcae64c, prio:23, stack:6656, core=0
+I (438) wifi:wifi firmware version: 0caa81945
+I (438) wifi:wifi certification version: v7.0
+I (438) wifi:config NVS flash: enabled
+I (438) wifi:config nano formating: disabled
+I (438) wifi:Init data frame dynamic rx buffer num: 32
+I (448) wifi:Init static rx mgmt buffer num: 5
+I (448) wifi:Init management short buffer num: 32
+I (458) wifi:Init dynamic tx buffer num: 32
+I (458) wifi:Init static tx FG buffer num: 2
+I (458) wifi:Init static rx buffer size: 1600
+I (468) wifi:Init static rx buffer num: 10
+I (468) wifi:Init dynamic rx buffer num: 32
+I (478) wifi_init: rx ba win: 6
+I (478) wifi_init: accept mbox: 6
+I (478) wifi_init: tcpip mbox: 32
+I (488) wifi_init: udp mbox: 6
+I (488) wifi_init: tcp mbox: 6
+I (498) wifi_init: tcp tx win: 5760
+I (498) wifi_init: tcp rx win: 5760
+I (498) wifi_init: tcp mss: 1440
+I (508) wifi_init: WiFi IRAM OP enabled
+I (508) wifi_init: WiFi RX IRAM OP enabled
+I (518) phy_init: phy_version 680,a6008b2,Jun  4 2024,16:41:10
+W (568) phy_init: saving new calibration data because of checksum failure, mode(0)
+I (588) wifi:mode : sta (9c:13:9e:f1:2e:b0)
+I (588) wifi:enable tsf
+I (588) wifi:Set ps type: 0, coexist: 0
+
+TN_RX_HOOK 1 (1 = lwIP callback, 2 = recvfrom)
+TILE_TASKS cpu_mhz=160 cycle_wrap_s=26.8
+I (588) gpio: GPIO[4]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (598) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (598) gpio: GPIO[14]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 
+I (608) wifi:state: init -> auth (0xb0)
+display_engine: test pin GPIO4, first tick 16
+TILE_TASKS vTaskList (name state prio stack num core), 13 tasks
+display        	R	20	2036	13	1
+main           	X	1	1268	4	0
+IDLE1          	R	0	812	6	1
+IDLE0          	R	0	800	5	0
+tiT            	B	18	2464	8	0
+timesync       	B	16	3336	12	0
+Tmr Svc        	B	1	1320	7	-1
+ipc1           	S	24	540	2	1
+sys_evt        	B	20	1584	9	0
+tile_net       	B	12	2192	11	0
+wifi           	B	23	4232	10	0
+esp_timer      	S	22	3096	3	0
+ipc0           	S	24	528	1	0
+I (668) main_task: Returned from app_main()
+I (668) wifi:state: auth -> assoc (0x0)
+I (688) wifi:state: assoc -> run (0x10)
+I (748) wifi:<ba-add>idx:0 (ifx:0, 88:d7:f6:be:85:70), tid:0, ssn:0, winSize:64
+I (878) wifi:connected with Matrix, aid = 4, channel 6, BW20, bssid = 88:d7:f6:be:85:70
+I (878) wifi:security: WPA2-PSK, phy: bgn, rssi: -25
+I (888) wifi:pm start, type: 0
+
+I (888) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (888) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (918) wifi:AP's beacon interval = 102400 us, DTIM period = 3
+I (2398) esp_netif_handlers: sta ip: 192.168.1.6, mask: 255.255.255.0, gw: 192.168.1.1
+I (2398) panel: joined Matrix, IP 192.168.1.6
+TN_STATS received=100 dropped=0 lost=2490321 log_dropped=0
+DE ticks=600 missed=1
+TN_STATS received=200 dropped=0 lost=5505935 log_dropped=0
+TN_STATS received=300 dropped=0 lost=8586079 log_dropped=0
+# sdkconfig options
+CONFIG_GPTIMER_ISR_IRAM_SAFE=y
+CONFIG_RMT_ISR_IRAM_SAFE=y
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
+CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
+CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU0=y
