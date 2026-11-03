@@ -26,10 +26,15 @@
  *   the packed bytes read back from flash. A CRC mismatch raises the
  *   CRC_FAIL event bit, drops the upload and sends no ASSET_READY.
  * - RAM copy (T-B3-04, OD-04 rule): one heap_caps_malloc() block,
- *   MALLOC_CAP_INTERNAL when the largest internal block is at least
- *   ASSET_STORE_RAM_NEEDED, otherwise MALLOC_CAP_SPIRAM; filled from flash
- *   and checked again before ASSET_READY; published once with release
- *   ordering, constant while ARMED, PLAYING, PAUSED or in holdover.
+ *   MALLOC_CAP_INTERNAL when the largest internal block is at least the
+ *   payload length plus ASSET_STORE_RAM_MARGIN, otherwise MALLOC_CAP_SPIRAM
+ *   (only when PSRAM is enabled). The same check runs at the MANIFEST, before
+ *   anything is erased: an asset that cannot fit is refused with NACK reason
+ *   1 (wrong payload length) and the ASSET_FORMAT condition bit (R1-3,
+ *   PROVISIONAL, owner Cheston: reason 1 reused, no new wire value).
+ *   The copy is filled from flash and checked again before ASSET_READY;
+ *   published once with release ordering, constant while ARMED, PLAYING,
+ *   PAUSED or in holdover.
  * - Cached asset: a 16 B header at the start of the frames partition holds
  *   the manifest (written with the erase, inside RECEIVING ASSET). At boot
  *   a payload whose CRC32 matches it is copied into RAM again, so REGISTER
@@ -55,8 +60,13 @@
 
 #include "asset_rx.h"
 
-/** RAM needed for the packed asset copy: 57,600 B payload plus the 32,768 B
- *  margin (proposed, RAR-4) = 90,368 B (T-B3-01 decision rule for OD-04). */
+/** Heap left free beside the asset copy (proposed, RAR-4). */
+#define ASSET_STORE_RAM_MARGIN 32768u
+
+/** RAM needed for the packed 600-frame asset copy: 57,600 B payload plus the
+ *  margin = 90,368 B (T-B3-01 decision rule for OD-04). Used by the boot
+ *  probe; the copy itself checks the real payload length plus the margin
+ *  (review round 1 R1-3). */
 #define ASSET_STORE_RAM_NEEDED 90368u
 
 /** Upload Queue length (PROVISIONAL, OD-11, owner Cheston). */

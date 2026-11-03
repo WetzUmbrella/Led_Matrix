@@ -127,9 +127,11 @@ static void as_verify (void);
 static bool asset_store_load_to_ram (uint8_t session_id, uint16_t frame_count,
                                      uint32_t len, uint32_t crc32);
 static void as_unpublish (void);
-static bool as_crc_flash (uint32_t len, uint32_t * p_crc);
-static void as_load_cached (void);
-static bool as_flash_erase (uint32_t offset, uint32_t len);
+static uint32_t as_ram_caps (uint32_t len);
+static void     as_receive (asset_store_upload_t const * p_item);
+static bool     as_crc_flash (uint32_t len, uint32_t * p_crc);
+static void     as_load_cached (void);
+static bool     as_flash_erase (uint32_t offset, uint32_t len);
 static bool as_flash_write (uint32_t offset, void const * p_src, uint32_t len);
 static bool as_write_allowed (void);
 static void as_set_phase (asset_store_phase_t phase);
@@ -403,37 +405,66 @@ static void as_on_manifest (asset_store_upload_t const * p_item)
     }
     else
     {
-        fault_word_clear_condition(FAULT_BIT_ASSET_FORMAT); /* Owner. */
         as_unpublish();
-        as_set_phase(ASSET_STORE_RECEIVING);
         asset_rx_open(&g_rx, p_item->session_id, p_item->format_version,
                       p_item->frame_count, p_item->crc32);
 
-        uint8_t        header[AS_HEADER_BYTES];
-        uint32_t const erase_len =
-            (((AS_PAYLOAD_OFFSET + g_rx.payload_len) + AS_SECTOR_BYTES) - 1u) /
-            AS_SECTOR_BYTES * AS_SECTOR_BYTES;
+        uint32_t const payload_len = g_rx.payload_len;
 
-        as_put_le(&header[AS_HDR_MAGIC], AS_MAGIC, AS_U32_BYTES);
-        header[AS_HDR_FORMAT]  = p_item->format_version;
-        header[AS_HDR_SESSION] = p_item->session_id;
-        as_put_le(&header[AS_HDR_FRAMES], p_item->frame_count, AS_U16_BYTES);
-        as_put_le(&header[AS_HDR_CRC], p_item->crc32, AS_U32_BYTES);
-        as_put_le(&header[AS_HDR_NOTCRC], ~p_item->crc32, AS_U32_BYTES);
-
-        bool const b_ok = (as_flash_erase(0u, erase_len)) &&
-                          (as_flash_write(0u, header, AS_HEADER_BYTES));
-
-        printf("ASSET manifest session=%" PRIu8 " frames=%" PRIu16
-               " crc=0x%08" PRIx32 " chunks=%" PRIu32 " %s\n",
-               p_item->session_id, p_item->frame_count, p_item->crc32,
-               g_rx.chunk_count, b_ok ? "receiving" : "flash failed");
-
-        if (!b_ok)
+        if (0u == as_ram_caps(payload_len))
         {
+            /* Refused before any erase (R1-3): the copy could never be
+             * made, so the upload would end in CRC_FAIL. */
             asset_rx_init(&g_rx);
             as_set_phase(ASSET_STORE_WAITING);
+            /* NACK reason 1 fits uint8_t. */
+            as_reply_simple(ASSET_STORE_REPLY_NACK, p_item,
+                            (uint8_t)PROTO_NACK_WRONG_LENGTH);
+            fault_word_set(FAULT_BIT_ASSET_FORMAT);
+            printf("ASSET manifest refused: %" PRIu32 " B does not fit RAM\n",
+                   payload_len);
         }
+        else
+        {
+            as_receive(p_item);
+        }
+    }
+}
+
+/**
+ * @brief  Start receiving an accepted manifest: erase the frames partition
+ *         and write the header (RECEIVING ASSET).
+ * @param  p_item  The manifest; g_rx is already open for it.
+ */
+static void as_receive (asset_store_upload_t const * p_item)
+{
+    fault_word_clear_condition(FAULT_BIT_ASSET_FORMAT); /* Owner. */
+    as_set_phase(ASSET_STORE_RECEIVING);
+
+    uint8_t        header[AS_HEADER_BYTES];
+    uint32_t const erase_len =
+        (((AS_PAYLOAD_OFFSET + g_rx.payload_len) + AS_SECTOR_BYTES) - 1u) /
+        AS_SECTOR_BYTES * AS_SECTOR_BYTES;
+
+    as_put_le(&header[AS_HDR_MAGIC], AS_MAGIC, AS_U32_BYTES);
+    header[AS_HDR_FORMAT]  = p_item->format_version;
+    header[AS_HDR_SESSION] = p_item->session_id;
+    as_put_le(&header[AS_HDR_FRAMES], p_item->frame_count, AS_U16_BYTES);
+    as_put_le(&header[AS_HDR_CRC], p_item->crc32, AS_U32_BYTES);
+    as_put_le(&header[AS_HDR_NOTCRC], ~p_item->crc32, AS_U32_BYTES);
+
+    bool const b_ok = (as_flash_erase(0u, erase_len)) &&
+                      (as_flash_write(0u, header, AS_HEADER_BYTES));
+
+    printf("ASSET manifest session=%" PRIu8 " frames=%" PRIu16
+           " crc=0x%08" PRIx32 " chunks=%" PRIu32 " %s\n",
+           p_item->session_id, p_item->frame_count, p_item->crc32,
+           g_rx.chunk_count, b_ok ? "receiving" : "flash failed");
+
+    if (!b_ok)
+    {
+        asset_rx_init(&g_rx);
+        as_set_phase(ASSET_STORE_WAITING);
     }
 }
 
@@ -554,16 +585,15 @@ static bool asset_store_load_to_ram (uint8_t session_id, uint16_t frame_count,
 {
     bool b_ok = false;
 
-    /* DEVIATION D-2: heap_caps_get_largest_free_block returns size_t; the
-     * value is below 512 KB, so it fits uint32_t. */
-    uint32_t const largest_internal =
-        (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
-    bool const b_internal = (largest_internal >= ASSET_STORE_RAM_NEEDED);
-
     as_unpublish();
-    g_p_block = heap_caps_malloc(
-        len, b_internal ? (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
-                        : (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+
+    uint32_t const caps       = as_ram_caps(len);
+    bool const     b_internal = (0u != (caps & MALLOC_CAP_INTERNAL));
+
+    if (0u != caps)
+    {
+        g_p_block = heap_caps_malloc(len, caps);
+    }
 
     if ((NULL != g_p_block) &&
         (ESP_OK ==
@@ -591,12 +621,50 @@ static bool asset_store_load_to_ram (uint8_t session_id, uint16_t frame_count,
     else
     {
         printf("ASSET RAM copy failed (%" PRIu32 " B, %s)\n", len,
-               b_internal ? "internal" : "psram");
+               (0u == caps) ? "no region"
+                            : (b_internal ? "internal" : "psram"));
         heap_caps_free(g_p_block); /* NULL is allowed. */
         g_p_block = NULL;
     }
 
     return b_ok;
+}
+
+/**
+ * @brief  OD-04 rule on the real length (R1-3): internal RAM when its
+ *         largest free block holds the payload plus ASSET_STORE_RAM_MARGIN,
+ *         otherwise PSRAM if it is enabled and holds the payload.
+ * @param  len  Payload bytes.
+ * @return heap_caps_malloc() capabilities, or 0 when nothing can hold it.
+ */
+static uint32_t as_ram_caps (uint32_t len)
+{
+    uint32_t caps = 0u;
+
+    /* DEVIATION D-2: heap_caps_get_largest_free_block returns size_t; the
+     * value is below 512 KB, so it fits uint32_t. */
+    uint32_t const largest_internal =
+        (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+
+    if (largest_internal >= (len + ASSET_STORE_RAM_MARGIN))
+    {
+        caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    }
+
+#ifdef CONFIG_SPIRAM
+    /* Same range rule, for the 2 MB of PSRAM. */
+    else if ((uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) >=
+             len)
+    {
+        caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+    }
+#endif
+    else
+    {
+        /* Neither region can hold the copy. */
+    }
+
+    return caps;
 }
 
 /**

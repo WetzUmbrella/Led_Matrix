@@ -9,6 +9,7 @@ Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston: the heap prob
 - Source: VA-3.1, RAR-4, R2; PostTri Version A Buddy 3 "copy the validated asset into RAM before ASSET_READY, so flash leaves the 60 Hz path"; OD-04 rule from T-B3-01.
 - Choice: after the CRC32 over the flash copy matches, one `heap_caps_malloc()` of the payload size, `MALLOC_CAP_INTERNAL` when the largest internal block is at least 90,368 B (57,600 B + 32,768 B margin, proposed), otherwise `MALLOC_CAP_SPIRAM`; the block is filled from flash and its CRC32 checked again before ASSET_READY. The log line `ASSET ready ... ram=<address> region=<internal|psram>` is acceptance (3).
 - Examiner: "Why check the CRC32 twice, and what would a PSRAM copy cost the Display Engine per frame?"
+- Review round 1 (R1-3): the rule compared the largest internal block with the fixed 90,368 B of a 600-frame asset, but manifests up to 1,023 frames (98,208 B) and the 115,200 B 8-bit asset are valid, and `CONFIG_SPIRAM` is off, so the PSRAM branch could never succeed and the upload ended in CRC_FAIL with no ASSET_READY. Now `as_ram_caps()` checks the real payload length plus the 32,768 B margin, at the MANIFEST before any erase and again for the copy; PSRAM is tried only when it is enabled. An asset that cannot fit is refused with NACK reason 1 and the ASSET_FORMAT bit (PROVISIONAL for Cheston: reason 1 reused rather than a new wire value). The boot probe's `HEAP largest_internal=` line (bench B0) gives the real headroom.
 
 ## 2. Published once, constant while it can be read
 
