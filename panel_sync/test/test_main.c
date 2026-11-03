@@ -15,6 +15,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "test_asset_rx.h"
 #include "test_fault_word.h"
 #include "test_playback.h"
 #include "test_telemetry_book.h"
@@ -82,6 +83,22 @@ static test_case_t const g_telemetry[] = {
     {"Test T5: VC-4 drop every third, 100% delivered, 0 transitions",
      test_telemetry_book_vc4},
 };
+
+static test_case_t const g_asset[] = {
+    {"Test A1: manifest format and length rules", test_asset_rx_manifest},
+    {"Test A2: 600 frames = 57 chunks, the last 256 B",
+     test_asset_rx_chunk_count},
+    {"Test A3: new, repeat, other session, wrong length",
+     test_asset_rx_chunk_classes},
+    {"Test A4: complete after all 57 chunks in any order",
+     test_asset_rx_complete},
+    {"Test A5: zlib CRC32 0xCBF43926 and continuation", test_asset_rx_crc32},
+};
+
+/** Number of counted asset tests (5): the element count of a five-entry
+ *  array fits uint32_t. */
+#define ASSET_COUNT                                                            \
+    ((uint32_t)(sizeof(g_asset) / sizeof(g_asset[0]))) /* Fits. */
 
 /** Number of counted telemetry tests (5): the element count of a
  *  five-entry array fits uint32_t. */
@@ -193,12 +210,25 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     printf("Telemetry: Pass = %" PRIu32 " of %" PRIu32 "\n", telemetry_passed,
            TELEMETRY_COUNT);
 
+    uint32_t asset_passed = 0u;
+
+    for (uint32_t idx = 0u; idx < ASSET_COUNT; idx++)
+    {
+        if (test_main_run(g_asset[idx].p_name, g_asset[idx].p_test))
+        {
+            asset_passed++;
+        }
+    }
+
+    printf("Asset: Pass = %" PRIu32 " of %" PRIu32 "\n", asset_passed,
+           ASSET_COUNT);
+
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
     if ((CASE_COUNT == passed) && b_supp && b_ready &&
         (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
-        (TELEMETRY_COUNT == telemetry_passed))
+        (TELEMETRY_COUNT == telemetry_passed) && (ASSET_COUNT == asset_passed))
     {
         status = 0;
     }

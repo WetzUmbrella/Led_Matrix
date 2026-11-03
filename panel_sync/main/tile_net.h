@@ -33,9 +33,12 @@
  *   join starts sets the WIFI condition bit (fault_word); the bit clears on
  *   IP_EVENT_STA_GOT_IP.
  * - T-B3-01: asset_store_probe_heap() once, after the first IP address.
- * Not yet implemented: the comms statechart and the upload path (T-B3-05),
- * ASSET_READY and the cached asset values in REGISTER (sent as 0 until
- * asset_store exists, T-B3-04).
+ * - T-B3-05 (29 Oct 2026, Jia Jun's session): port 4214 also takes MANIFEST
+ *   and ASSET_CHUNK into the Upload Queue (asset_store; full: NACK reason 3
+ *   to the PC); CHUNK_ACK, BUSY and NACK go back to the PC's address and
+ *   port, ASSET_READY to the Pico; REGISTER carries the cached session_id
+ *   and CRC32 of the asset in RAM; the comms statechart (W6 statechart 3)
+ *   is derived each pass and logged as "TN_COMMS <state>".
  *
  * PROVISIONAL (OD-09, owners Cheston and Ahsanul): TN_RX_HOOK selects the
  * receive hook at compile time. TN_RX_HOOK_LWIP (default, option (a))
@@ -101,6 +104,22 @@
  *  Engine posts only on a state change, so 2 holds the item being read and
  *  the newest; drop-oldest keeps the newest (VA-3.7). */
 #define TILE_NET_TELEMETRY_QUEUE_LEN 2u
+
+/** Comms state (W6 statechart 3, T-B3-05), logged as "TN_COMMS <state>". */
+typedef enum
+{
+    TILE_NET_COMMS_BOOTING = 0,
+    TILE_NET_COMMS_CONNECTING,          /**< CONNECTING TO WIFI. */
+    TILE_NET_COMMS_REGISTERING,         /**< REGISTERING TILE. */
+    TILE_NET_COMMS_WAITING,             /**< WAITING FOR ASSET. */
+    TILE_NET_COMMS_RECEIVING,           /**< RECEIVING ASSET. */
+    TILE_NET_COMMS_VERIFYING,           /**< VERIFYING ASSET. */
+    TILE_NET_COMMS_ASSET_READY,         /**< ASSET READY. */
+    TILE_NET_COMMS_SUPPORTING_PLAYBACK, /**< SUPPORTING PLAYBACK. */
+    TILE_NET_COMMS_RECONNECTING,        /**< RECONNECTING. */
+    TILE_NET_COMMS_FAULT,               /**< FAULT (WIFI condition bit). */
+    TILE_NET_COMMS_COUNT
+} tile_net_comms_t;
 
 /** One command from the Pico, as Playback Control reads it from the
  *  Command Queue (T-B4-04). */

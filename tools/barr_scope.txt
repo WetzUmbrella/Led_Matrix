@@ -51,3 +51,7 @@ panel_sync/main/telemetry_book.h
 panel_sync/main/telemetry_book.c
 panel_sync/test/test_telemetry_book.h
 panel_sync/test/test_telemetry_book.c
+panel_sync/main/asset_rx.h
+panel_sync/main/asset_rx.c
+panel_sync/test/test_asset_rx.h
+panel_sync/test/test_asset_rx.c

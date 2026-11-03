@@ -18,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "asset_store.h"
 #include "display_engine.h"
 #include "playback_control.h"
 #include "tile_net.h"
@@ -32,6 +33,12 @@
  */
 void app_main (void)
 {
+    /* Before tile_net, which posts to its Upload Queue (T-B3-04). */
+    if (!asset_store_start())
+    {
+        printf("panel_sync: asset_store_start failed\n");
+    }
+
     if (!tile_net_start())
     {
         printf("panel_sync: tile_net_start failed\n");
