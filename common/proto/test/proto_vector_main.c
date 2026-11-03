@@ -62,7 +62,8 @@ static bool         read_file (char const * p_path, uint32_t * p_len);
 static char const * find_arg (vector_args_t const * p_args, char const * p_key);
 static uint64_t     arg_u64 (vector_args_t const * p_args, char const * p_key);
 static void         arg_map (vector_args_t const * p_args, uint8_t * p_map);
-static uint16_t     arg_payload (vector_args_t const * p_args);
+static void     arg_crc_list (vector_args_t const * p_args, uint32_t * p_crc);
+static uint16_t arg_payload (vector_args_t const * p_args);
 static proto_header_t arg_header (vector_args_t const * p_args);
 static void           print_header (proto_header_t const * p_header);
 static void           print_u64 (char const * p_name, uint64_t value);
@@ -264,6 +265,33 @@ static void arg_map (vector_args_t const * p_args, uint8_t * p_map)
              * and strtoul's result is masked to 8 bits here. */
             p_map[slot] =
                 (uint8_t)(strtoul(p_text, &p_end, DEC_BASE) & UINT8_MAX);
+            p_text = (',' == *p_end) ? (p_end + 1) : NULL;
+        }
+    }
+}
+
+/**
+ * @brief  crc32=<9 comma-separated decimal values> into p_crc; missing
+ *         entries are 0.
+ * @param  p_args  Arguments.
+ * @param  p_crc   Receives PROTO_MAP_SLOTS values.
+ */
+static void arg_crc_list (vector_args_t const * p_args, uint32_t * p_crc)
+{
+    char const * p_text = find_arg(p_args, "crc32");
+
+    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    {
+        p_crc[slot] = 0u;
+
+        if (NULL != p_text)
+        {
+            char * p_end = NULL;
+
+            /* A CRC32 is at most 2^32 - 1; strtoull's result is masked to
+             * 32 bits here. */
+            p_crc[slot] =
+                (uint32_t)(strtoull(p_text, &p_end, DEC_BASE) & UINT32_MAX);
             p_text = (',' == *p_end) ? (p_end + 1) : NULL;
         }
     }
@@ -679,6 +707,16 @@ static bool decode_pc (uint8_t const * p_buf, uint32_t len, uint8_t type)
                 }
 
                 printf("\n");
+                print_u64("frame_count", msg.frame_count);
+                printf("crc32=");
+
+                for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+                {
+                    printf("%s%" PRIu32, (0u == slot) ? "" : ",",
+                           msg.crc32[slot]);
+                }
+
+                printf("\n");
             }
         }
         break;
@@ -961,9 +999,12 @@ static uint32_t encode_pc (uint32_t type, vector_args_t const * p_args)
             proto_session_config_t msg = {header,
                                           arg_u8(p_args, "layout"),
                                           arg_u8(p_args, "policy"),
+                                          {0u},
+                                          arg_u16(p_args, "frame_count"),
                                           {0u}};
 
             arg_map(p_args, msg.node_map);
+            arg_crc_list(p_args, msg.crc32);
             written = proto_encode_session_config(&msg, g_out, FILE_MAX);
         }
         break;

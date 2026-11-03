@@ -20,7 +20,7 @@ import proto_layout as pl  # noqa: E402
 
 #: Encoded lengths from protocol/layout_table.md section 4 (typed in, so a
 #: width change in LAYOUT that the table does not follow fails here).
-LENGTHS = {"REGISTER": 10, "HEARTBEAT": 5, "SESSION_CONFIG": 9,
+LENGTHS = {"REGISTER": 10, "HEARTBEAT": 5, "SESSION_CONFIG": 46,
            "MANIFEST": 10, "CHUNK_ACK": 5, "NACK": 7, "BUSY": 7,
            "ASSET_READY": 9, "SYNC_READY": 5, "BEACON": 12, "START_AT": 12,
            "RESUME_AT": 13, "PAUSE": 4, "STOP": 4, "STATUS": 7,

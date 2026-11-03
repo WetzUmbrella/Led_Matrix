@@ -37,7 +37,10 @@ TYPICAL: Dict[str, Dict[str, object]] = {
                  "cached_crc32": 0x1234ABCD},
     "HEARTBEAT": {"node_id": 7},
     "SESSION_CONFIG": {"layout": 1, "policy": 1,
-                       "node_map": [1, 2, 0, 3, 4, 0, 0, 0, 0]},
+                       "node_map": [1, 2, 0, 3, 4, 0, 0, 0, 0],
+                       "frame_count": 600,
+                       "crc32": [0x11111111, 0x22222222, 0, 0x33333333,
+                                 0x44444444, 0, 0, 0, 0]},
     "MANIFEST": {"format_version": 2, "frame_count": 600,
                  "crc32": 0xCBF43926},
     "ASSET_CHUNK": {"chunk_index": 56,
@@ -62,15 +65,14 @@ TYPICAL: Dict[str, Dict[str, object]] = {
 def _corner(name: str, high: bool) -> Dict[str, object]:
     """Every field at its smallest (high False) or largest valid value."""
     fields: Dict[str, object] = {}
-    node_map: List[int] = []
+    arrays: Dict[str, List[int]] = {}
     for field, _, low, top in pl.LAYOUT[name][1]:
         value = top if high else low
-        if field.startswith("node_map["):
-            node_map.append(value)
+        if "[" in field:
+            arrays.setdefault(field.split("[", 1)[0], []).append(value)
         else:
             fields[field] = value
-    if node_map:
-        fields["node_map"] = node_map
+    fields.update(arrays)
     if name == "ASSET_CHUNK":
         size = pl.CHUNK_PAYLOAD_MAX if high else 1
         fields["payload"] = bytes((0xFF if high else 0x00,)) * size

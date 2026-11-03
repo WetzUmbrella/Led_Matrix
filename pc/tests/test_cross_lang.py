@@ -59,10 +59,11 @@ def _canonical(vector: Dict[str, object]) -> List[str]:
              "session_id=%d" % fields.pop("session_id"),
              "seq=%d" % fields.pop("seq")]
     for field, _, _, _ in pl.LAYOUT[str(vector["message"])][1]:
-        if field.startswith("node_map["):
-            if field == "node_map[0]":
-                lines.append("node_map=" + ",".join(
-                    str(n) for n in fields["node_map"]))  # type: ignore
+        if "[" in field:
+            base = field.split("[", 1)[0]
+            if field == base + "[0]":
+                lines.append(base + "=" + ",".join(
+                    str(n) for n in fields[base]))  # type: ignore
         else:
             lines.append("%s=%d" % (field, fields[field]))
     if "payload" in fields:
@@ -73,7 +74,7 @@ def _canonical(vector: Dict[str, object]) -> List[str]:
 def _args(vector: Dict[str, object]) -> List[str]:
     args = []
     for key, value in dict(vector["fields"]).items():  # type: ignore
-        if key == "node_map":
+        if isinstance(value, list):
             value = ",".join(str(n) for n in value)
         args.append("%s=%s" % (key, value))
     return args

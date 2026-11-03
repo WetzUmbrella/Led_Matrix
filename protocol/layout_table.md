@@ -65,8 +65,18 @@ Offsets are absolute bit offsets in the message. Direction: T = tile, P = Pico, 
 | node_map[6] | 56 | 4 | 0 to 9 | row 2, column 0 | as above |
 | node_map[7] | 60 | 4 | 0 to 9 | row 2, column 1 | as above |
 | node_map[8] | 64 | 4 | 0 to 9 | row 2, column 2 | as above |
+| frame_count | 68 | 10 | 1 to 1023 | frames in every tile asset of the session (all tiles share one duration) | T-B1-03, VC-3; field PROVISIONAL (section 10 item 9) |
+| crc32[0] | 78 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 0; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[1] | 110 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 1; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[2] | 142 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 2; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[3] | 174 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 3; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[4] | 206 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 4; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[5] | 238 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 5; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[6] | 270 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 6; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[7] | 302 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 7; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| crc32[8] | 334 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 8; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
 
-The map is always 9 positions in row-major order of a 3x3 grid; a 1x1 layout uses position 0 and a 2x2 layout positions 0, 1, 3 and 4 **(plan choice)**. Unused positions are 0.
+The map is always 9 positions in row-major order of a 3x3 grid; a 1x1 layout uses position 0 and a 2x2 layout positions 0, 1, 3 and 4 **(plan choice)**. Unused positions are 0. `crc32[i]` belongs to the tile at `node_map[i]`. **PROVISIONAL (OD-07 item 9, owner Benjamin):** `frame_count` and `crc32[]` were added on 29 Oct 2026 so the Pico can check ASSET_READY against the manifest CRC32 of each Node ID (T-B2-04) and compute the saved frame index it sends in RESUME_AT and in a rejoin (T-B2-05, OD-14). Every tile of a session plays the same GIF duration, so one frame_count serves all of them.
 
 ### MANIFEST (type 3, C to T)
 
@@ -187,7 +197,7 @@ The telemetry seq of VC-4 is the header seq.
 |---|---|---|---|---|
 | REGISTER | 73 | 10 | 21 | derived, W6 8-bit design |
 | HEARTBEAT | 33 | 5 | 9 (`sizeof(hello_t)`, the tag's heartbeat) | measured (Xtensa `sizeof`); on-air pending B-3 |
-| SESSION_CONFIG | 68 | 9 | 47 | derived |
+| SESSION_CONFIG | 366 | 46 | 87 | derived |
 | MANIFEST | 73 | 10 | 22 | derived |
 | ASSET_CHUNK | 40 + payload | 5 + 1 to 1,024 (1,029 full) | 13 + 1,024 = 1,037 | derived |
 | CHUNK_ACK | 40 | 5 | 13 | derived |
@@ -274,9 +284,9 @@ Every field and every shared packed word, with its valid range, bits before (the
 | seq | header | 0 to 65,535, wrap-aware | 32 (`uint32_t seq`, `panel_sync.c:55` at the tag) | 16 | shifts and masks | 109.2 min wrap at 10 Hz with a wrap-aware comparison |
 | Node ID | messages from tiles; map | 1 to 9 (0 = blank in the map) | 32 (`uint32_t` ID, rule; the tag's `board` was `uint8_t`) | 4 | shifts and masks | 9 nodes plus blank, ceil(log2 10) = 4 |
 | t_p, t_start, t_resume | BEACON, START_AT, RESUME_AT | 0 to 2^64 - 1 us | 64 (`uint64_t` time, rule; tile times were 64-bit at the tag, `panel_sync.c:78`) | 64 | shifts and masks | see justification row J1 |
-| frame_count, frame index | MANIFEST, RESUME_AT, tile RAM | 0 to 1023 (frame_count 1 to 1023) | 32 (`uint32_t frame_no`, `panel_sync.c:57` at the tag) | 10 | shifts and masks | J3 |
+| frame_count, frame index | MANIFEST, SESSION_CONFIG, RESUME_AT, tile RAM | 0 to 1023 (frame_count 1 to 1023) | 32 (`uint32_t frame_no`, `panel_sync.c:57` at the tag) | 10 | shifts and masks | J3 |
 | slew | tile RAM (`timesync`), not on the wire | -100 to +100 us per tick | none at the tag (the clock was stepped) | 8 (`int8_t`) | C type | J2 |
-| CRC32 | REGISTER, MANIFEST, ASSET_READY | 0 to 2^32 - 1 | 32 | 32 | shifts and masks | zlib CRC32 is 32 bits |
+| CRC32 | REGISTER, SESSION_CONFIG (9 per message), MANIFEST, ASSET_READY | 0 to 2^32 - 1 | 32 | 32 | shifts and masks | zlib CRC32 is 32 bits |
 | format_version | MANIFEST | 0 to 3 | 8 (`uint8_t version`, `panel_sync.c:54`) | 2 | shifts and masks | 4 codes (section 5.4) |
 | chunk index | ASSET_CHUNK, CHUNK_ACK | 0 to 112 | 32 (counter, rule) | 7 | shifts and masks | 113 chunks for the 8-bit 600-frame asset, ceil(log2 113) = 7 |
 | NACK reason | NACK | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | 4 reasons |
@@ -327,5 +337,23 @@ The receiver checks session_id against its session and seq against the last acce
 6. frame_rate left off the wire.
 7. ASSET_CHUNK payload on a byte boundary, length from the datagram.
 8. The NACK reason list (CRC mismatch, manifest session mismatch and upload while PLAYING are not in it; any one of them makes 5 reasons and 3 bits).
-9. How the Pico learns each Node ID's manifest CRC32, which T-B2-04 needs to check ASSET_READY: the plan's SESSION_CONFIG row has no CRC field. Options: add 9 x 32-bit CRCs to SESSION_CONFIG, or have the PC send each tile's MANIFEST to the Pico as well.
-10. OD-14 (rejoin message) and OD-20 (two-way exchange) may add rows; 14 type codes are spare.
+9. How the Pico learns each Node ID's manifest CRC32, which T-B2-04 needs to check ASSET_READY: the plan's SESSION_CONFIG row has no CRC field. **PROVISIONAL, implemented 29 Oct 2026:** 9 x 32-bit CRCs, one per map position, plus the shared frame_count, added to SESSION_CONFIG (46 B). The other option, the PC sending each tile's MANIFEST to the Pico, does not work as the row stands: MANIFEST carries no Node ID, so the Pico could not tell which tile a CRC belongs to.
+10. OD-14 (rejoin message) and OD-20 (two-way exchange) may add rows; 14 type codes are spare. **PROVISIONAL, implemented:** OD-14 option (a), with no new row: the Pico sends the rejoining tile a RESUME_AT (unicast) whose t_resume is a tick deadline at least 600 ms ahead and whose frame_index is the frame the wall shows at that tick.
+11. **PC commands to the Pico (PROVISIONAL, implemented).** The plan lists Start, Pause, Resume and Stop as dashboard commands (T-B1-05 `pico_link.py`) but no row carries them from the PC. They reuse the START_AT, PAUSE, RESUME_AT and STOP rows in the direction C to P, with t_start, t_resume and frame_index sent as 0 and ignored: the Pico chooses those values itself (T-B2-05). No type code is added.
+12. **Transport (PROVISIONAL, implemented):** the ports and addressing of section 11.
+13. **seq scope (item 2, PROVISIONAL, implemented):** one counter per sender for every message it sends; a REGISTER (tile) or a SESSION_CONFIG with a new session_id (PC) restarts the receiver's baseline for that sender, because a sender that reboots starts its counter again.
+
+## 11. Transport (PROVISIONAL, section 10 item 12, owner Benjamin)
+
+All messages are single UDP datagrams on the dedicated router's subnet. Port numbers are plan choices; 4210 and 4211 keep the prototype's beacon and HELLO ports.
+
+| Port | Listener | Messages received | How the sender addresses it |
+|---|---|---|---|
+| 4210 | every tile (`tile_net`) | BEACON, START_AT, RESUME_AT, PAUSE, STOP from the Pico | subnet broadcast; a rejoin RESUME_AT is unicast to the one tile (section 10 item 10) |
+| 4211 | Pico (`coordinator_loop`) | REGISTER, HEARTBEAT, ASSET_READY, SYNC_READY, NACK (reason 2) from tiles | unicast to the Pico, whose address the tile takes from the source address of the beacons |
+| 4212 | Pico (`coordinator_loop`) | SESSION_CONFIG and the C to P commands of section 10 item 11 | unicast from the PC to the Pico's address (shown on the Pico's USB log and in the router's client list as `PICO-Main`) |
+| 4213 | PC (`pc/pico_link.py`) | STATUS from the Pico | the Pico replies to the address and port of the last valid datagram from the PC |
+| 4214 | every tile (`tile_net`) | MANIFEST, ASSET_CHUNK, TELEMETRY_ACK from the PC | unicast from the PC to the tile address it learnt from that tile's TELEMETRY |
+| 4215 | PC (`pc/uploader.py`, `pc/telemetry.py`) | TELEMETRY (subnet broadcast); CHUNK_ACK, NACK, BUSY (unicast replies) from tiles | TELEMETRY is broadcast, so the PC learns every tile's address and Node ID without a lookup; replies go to the address and port the request came from |
+
+TELEMETRY is broadcast because nothing else tells the PC which address a Node ID has, and the PC must unicast MANIFEST and ASSET_CHUNK to the right tile (MANIFEST has no Node ID field). One 9 B TELEMETRY per tile per telemetry period (OD-11) is small next to the 120 B/s of beacons.

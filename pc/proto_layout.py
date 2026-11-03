@@ -58,6 +58,9 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     "HEARTBEAT": (1, [_NODE]),
     "SESSION_CONFIG": (2, [("layout", 2, 0, 2), ("policy", 1, 0, 1)]
                        + [("node_map[%d]" % slot, 4, 0, NODE_MAX)
+                          for slot in range(MAP_SLOTS)]
+                       + [("frame_count", 10, 1, FRAME_MAX)]
+                       + [("crc32[%d]" % slot, 32, 0, _CRC_MAX)
                           for slot in range(MAP_SLOTS)]),
     "MANIFEST": (3, [("format_version", 2, 0, 3),
                      ("frame_count", 10, 1, FRAME_MAX),
@@ -88,6 +91,18 @@ NAMES: Dict[int, str] = {code: name for name, (code, _) in LAYOUT.items()}
 
 class LayoutError(ValueError):
     """A field is out of range, or the bytes are not a valid message."""
+
+
+def array_fields(name: str) -> List[str]:
+    """Names of the array fields of a row (``node_map``, ``crc32``), in
+    wire order; their elements are the fields ``name[i]``."""
+    names: List[str] = []
+    for field, _, _, _ in LAYOUT[name][1]:
+        if "[" in field:
+            base = field.split("[", 1)[0]
+            if base not in names:
+                names.append(base)
+    return names
 
 
 def body_bits(name: str) -> int:
@@ -121,17 +136,19 @@ def encode(name: str, fields: Mapping[str, object]) -> bytes:
     """Encode one message from a dict of its fields.
 
     ``fields`` holds ``session_id``, ``seq`` and every body field of the row;
-    ``node_map`` may be given as a list of 9 entries; ASSET_CHUNK also needs
-    ``payload`` (bytes, 1 to 1,024).
+    an array field (``node_map``, ``crc32`` of SESSION_CONFIG) may be given
+    as a list of 9 entries; ASSET_CHUNK also needs ``payload`` (bytes, 1 to
+    1,024).
     """
     if name not in LAYOUT:
         raise LayoutError("unknown message %r" % name)
     code, body = LAYOUT[name]
     flat = dict(fields)
-    if "node_map" in flat:
-        nodes = list(flat.pop("node_map"))  # type: ignore[call-overload]
-        for slot, node in enumerate(nodes):
-            flat["node_map[%d]" % slot] = node
+    for array in array_fields(name):
+        if isinstance(flat.get(array), (list, tuple)):
+            items = list(flat.pop(array))  # type: ignore[call-overload]
+            for slot, item in enumerate(items):
+                flat["%s[%d]" % (array, slot)] = item
     header = [("session_id", SESSION_BITS, 0, (1 << SESSION_BITS) - 1),
               ("seq", SEQ_BITS, 0, _U16)]
     value = code
@@ -153,7 +170,7 @@ def encode(name: str, fields: Mapping[str, object]) -> bytes:
 def decode(data: bytes) -> Dict[str, object]:
     """Decode any message; returns ``type`` (name), the header and fields.
 
-    ``node_map`` is returned as a list of 9 entries and an ASSET_CHUNK
+    An array field is returned as a list of 9 entries and an ASSET_CHUNK
     ``payload`` as bytes. Raises LayoutError on a wrong length, an unknown
     type or a field outside its range.
     """
@@ -179,17 +196,16 @@ def decode(data: bytes) -> Dict[str, object]:
         "session_id": (value >> TYPE_BITS) & ((1 << SESSION_BITS) - 1),
         "seq": (value >> (TYPE_BITS + SESSION_BITS)) & _U16,
     }
-    node_map: List[int] = []
+    arrays: Dict[str, List[int]] = {}
     for (field, bit, width), (_, _, low, high) in zip(offsets(name),
                                                       LAYOUT[name][1]):
         item = (value >> bit) & ((1 << width) - 1)
         _check(field, item, low, high)
-        if field.startswith("node_map["):
-            node_map.append(item)
+        if "[" in field:
+            arrays.setdefault(field.split("[", 1)[0], []).append(item)
         else:
             result[field] = item
-    if node_map:
-        result["node_map"] = node_map
+    result.update(arrays)
     if name == "ASSET_CHUNK":
         result["payload"] = bytes(data[CHUNK_HEAD_BYTES:])
     return result

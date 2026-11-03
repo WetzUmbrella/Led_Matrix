@@ -36,7 +36,7 @@
  *  change of width in proto.h that the table does not follow fails here. */
 #define LEN_REGISTER       10u
 #define LEN_HEARTBEAT      5u
-#define LEN_SESSION_CONFIG 9u
+#define LEN_SESSION_CONFIG 46u
 #define LEN_MANIFEST       10u
 #define LEN_CHUNK_HEAD     5u
 #define LEN_CHUNK_ACK      5u
@@ -129,7 +129,7 @@ bool test_messages_lengths (void)
     proto_header_t const         hdr   = header_at(CORNER_MIN);
     proto_register_t const       reg   = {hdr, 1u, 0u, 0u};
     proto_heartbeat_t const      beat  = {hdr, 1u};
-    proto_session_config_t const cfg   = {hdr, 0u, 0u, {0u}};
+    proto_session_config_t const cfg   = {hdr, 0u, 0u, {0u}, 1u, {0u}};
     proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
     proto_chunk_ack_t const      cack  = {hdr, 1u, 0u};
@@ -254,7 +254,7 @@ static bool reject_encode (void)
     proto_telemetry_t      tel   = {hdr, 1u, 0u, 0u, PROTO_DISPLAY_COUNT};
     proto_asset_chunk_t    chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
                                     g_payload};
-    proto_session_config_t cfg   = {hdr, PROTO_LAYOUT_COUNT, 0u, {0u}};
+    proto_session_config_t cfg = {hdr, PROTO_LAYOUT_COUNT, 0u, {0u}, 1u, {0u}};
 
     /* Encoders refuse out-of-range fields. */
     b_ok =
@@ -302,7 +302,7 @@ static bool reject_decode_range (void)
     proto_status_t const         stat  = {hdr, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
-    proto_session_config_t const cfg   = {hdr, 0u, 0u, {0u}};
+    proto_session_config_t const cfg   = {hdr, 0u, 0u, {0u}, 1u, {0u}};
     proto_heartbeat_t            beat_out;
     proto_manifest_t             man_out;
     proto_status_t               stat_out;
@@ -549,16 +549,19 @@ static void rt_heartbeat (uint32_t corner)
 static void rt_session_config (uint32_t corner)
 {
     bool const             b_max = (CORNER_MIN != corner);
-    proto_session_config_t msg   = {header_at(corner), 0u, 0u, {0u}};
+    proto_session_config_t msg   = {header_at(corner), 0u, 0u, {0u}, 1u, {0u}};
     proto_session_config_t out;
     bool                   b_same;
 
     msg.layout = b_max ? (uint8_t)PROTO_LAYOUT_3X3 : 0u;   /* Code 2. */
     msg.policy = b_max ? (uint8_t)PROTO_POLICY_PAUSE : 0u; /* Code 1. */
 
+    msg.frame_count = b_max ? (uint16_t)PROTO_FRAME_MAX : 1u; /* 1023. */
+
     for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
     {
         msg.node_map[slot] = b_max ? PROTO_NODE_MAX : 0u;
+        msg.crc32[slot]    = b_max ? UINT32_MAX : 0u;
     }
 
     uint32_t const len = proto_encode_session_config(&msg, g_buf, BUF_BYTES);
@@ -567,9 +570,12 @@ static void rt_session_config (uint32_t corner)
              (same_header(&msg.header, &out.header)) &&
              (msg.layout == out.layout) && (msg.policy == out.policy);
 
+    b_same = b_same && (msg.frame_count == out.frame_count);
+
     for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
     {
-        b_same = b_same && (msg.node_map[slot] == out.node_map[slot]);
+        b_same = b_same && (msg.node_map[slot] == out.node_map[slot]) &&
+                 (msg.crc32[slot] == out.crc32[slot]);
     }
 
     tally(b_same);

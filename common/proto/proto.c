@@ -341,6 +341,13 @@ uint32_t proto_encode_session_config (proto_session_config_t const * p_msg,
             put_field(&writer, PROTO_NODE_BITS, p_msg->node_map[slot]);
         }
 
+        put_field(&writer, PROTO_FRAME_BITS, p_msg->frame_count);
+
+        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        {
+            put_field(&writer, PROTO_CRC_BITS, p_msg->crc32[slot]);
+        }
+
         written = PROTO_SESSION_CONFIG_BYTES;
     }
 
@@ -369,6 +376,13 @@ bool proto_decode_session_config (uint8_t const * p_buf, uint32_t len,
         for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
         {
             p_msg->node_map[slot] = take_u8(&reader, PROTO_NODE_BITS);
+        }
+
+        p_msg->frame_count = take_u16(&reader, PROTO_FRAME_BITS);
+
+        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        {
+            p_msg->crc32[slot] = take_u32(&reader, PROTO_CRC_BITS);
         }
 
         b_ok = session_config_ok(p_msg);
@@ -1322,7 +1336,7 @@ static bool session_config_ok (proto_session_config_t const * p_msg)
 {
     return (p_msg->layout < (uint8_t)PROTO_LAYOUT_COUNT) && /* Code < 3. */
            (p_msg->policy < (uint8_t)PROTO_POLICY_COUNT) && /* Code < 2. */
-           (map_ok(p_msg->node_map));
+           (map_ok(p_msg->node_map)) && (frame_count_ok(p_msg->frame_count));
 }
 
 /**
