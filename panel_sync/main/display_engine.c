@@ -51,6 +51,10 @@
 #define DE_LED_VALUE 8u
 #define DE_RMT_HZ    10000000u
 
+/** Poll period while waiting for SYNC_READY before the first tick (plan
+ *  choice: 20 ms, about one beacon interval / 5). */
+#define DE_WAIT_SYNC_MS 20u
+
 /** Count line every 600 ticks (10 s, plan choice). */
 #define DE_LOG_EVERY 600u
 
@@ -60,8 +64,9 @@ static TaskHandle_t g_p_de_task = NULL;
  *  arming, read by the ISR. */
 static volatile bool g_b_pin_high_next = false;
 
-static volatile uint32_t g_ticks  = 0u;
-static volatile uint32_t g_missed = 0u;
+/* Written and read only by de_task. */
+static uint32_t g_ticks  = 0u;
+static uint32_t g_missed = 0u;
 
 static void     de_task (void * p_arg);
 static uint64_t de_run_tick (gptimer_handle_t    p_timer,
@@ -86,17 +91,6 @@ bool display_engine_start (void)
     return (pdPASS == xTaskCreatePinnedToCore(
                           de_task, TILE_DISPLAY_NAME, TILE_DISPLAY_STACK, NULL,
                           TILE_DISPLAY_PRIO, NULL, TILE_DISPLAY_CORE));
-}
-
-/**
- * @brief  Ticks shown and ticks missed since start.
- * @param  p_ticks   Receives the ticks with a pulse.
- * @param  p_missed  Receives the missed ticks.
- */
-void display_engine_get_counts (uint32_t * p_ticks, uint32_t * p_missed)
-{
-    *p_ticks  = g_ticks;
-    *p_missed = g_missed;
 }
 
 /**
@@ -125,6 +119,14 @@ static void de_task (void * p_arg)
     gptimer_handle_t const   p_timer = de_timer_create();
     led_strip_handle_t const p_strip = de_strip_create();
     timesync_reader_t        reader  = {0};
+
+    /* Start-up defect fix (HANDOVER step 11): the first tick is taken
+     * from corrected Pico time only once the OD-10 rule holds, so a tile
+     * that booted before the Pico does not arm a deadline seconds away. */
+    while (!timesync_sync_ready())
+    {
+        vTaskDelay(pdMS_TO_TICKS(DE_WAIT_SYNC_MS));
+    }
 
     uint64_t tick =
         timesync_next_tick(DE_ORIGIN_US, timesync_now_corrected(&reader));
