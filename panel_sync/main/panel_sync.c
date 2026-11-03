@@ -20,6 +20,7 @@
 
 #include "asset_store.h"
 #include "display_engine.h"
+#include "orientation.h"
 #include "playback_control.h"
 #include "tile_net.h"
 #include "tile_tasks.h"
@@ -55,6 +56,11 @@ void app_main (void)
     if (!playback_control_start())
     {
         printf("panel_sync: playback_control_start failed\n");
+    }
+
+    if (!orientation_start())
+    {
+        printf("panel_sync: orientation_start failed\n");
     }
 
     if (!display_engine_start())

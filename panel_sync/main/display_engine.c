@@ -1,15 +1,22 @@
 /**
  * @file    display_engine.c
- * @brief   Display Engine Task (T-B5-01): gptimer one-shot tick, test pin and
- *          the Week 10 moving pixel.
+ * @brief   Display Engine Task (T-B5-01, T-B5-02, T-B5-03): gptimer one-shot
+ *          tick, test pin, double-buffered frame path and RMT start on the
+ *          tick.
  *
- * Minimal implementation by Buddy 4 for T-B4-03. Owner: Jia Jun, task
- * T-B5-01. Implemented and not yet implemented: see display_engine.h.
+ * Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for
+ * T-B4-03; T-B5-02 and T-B5-03 implemented by Ahsanul (B4) for Jia Jun,
+ * written 29 Oct 2026 in Jia Jun's session. What is implemented and the
  * PROVISIONAL choices: see display_engine.h.
  *
- * DEVIATION D-2 (module-wide): ESP-IDF, FreeRTOS and led_strip names, types
- * and macros (gptimer_handle_t, TaskHandle_t, BaseType_t, pdTRUE, IRAM_ATTR,
- * led_strip_handle_t, ESP_OK).
+ * Contexts: de_task (core 1, priority 20) owns both pixel buffers, the RMT
+ * channel, the counters and the histogram; the gptimer ISR only writes the
+ * test pin and notifies de_task. The buffers are never referenced outside
+ * this file (T-B5-03 code review check).
+ *
+ * DEVIATION D-2 (module-wide): ESP-IDF and FreeRTOS names, types and macros
+ * (gptimer_handle_t, rmt_channel_handle_t, rmt_encoder_handle_t,
+ * TaskHandle_t, BaseType_t, portMUX_TYPE, pdTRUE, IRAM_ATTR, ESP_OK).
  */
 #include "display_engine.h"
 
@@ -21,12 +28,18 @@
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
+#include "driver/rmt_encoder.h"
+#include "driver/rmt_tx.h"
 #include "esp_attr.h"
 #include "esp_timer.h"
 #include "hal/gpio_ll.h"
-#include "led_strip.h"
 #include "soc/gpio_struct.h"
 
+#include "asset_store.h"
+#include "display_frame.h"
+#include "fault_word.h"
+#include "orientation.h"
+#include "playback_control.h"
 #include "proto.h"
 #include "tile_net.h"
 #include "tile_tasks.h"
@@ -35,7 +48,9 @@
 /** gptimer resolution: 1 MHz, so one count is 1 us. */
 #define DE_TIMER_HZ 1000000u
 
-/** Timeline origin in Pico time for the rig build (PROVISIONAL). */
+/** Tick grid origin in Pico time: ticks fall on multiples of 10^6 / 60 us
+ *  (T-B4-03 rig build); the playback origin (START_AT) picks the first
+ *  frame's tick on this grid. */
 #define DE_ORIGIN_US INT64_C(0)
 
 /** Least lead for arming a tick, microseconds (plan choice: room for the
@@ -47,18 +62,38 @@
 #define DE_PULSE_US      INT64_C(1000)
 #define DE_MARKER_US     INT64_C(4000)
 
-/** LED matrix: 64 WS2812B on GPIO14, value 8 = the 8/255 cap (VC-6). */
-#define DE_LED_GPIO  14
-#define DE_LED_COUNT 64u
-#define DE_LED_VALUE 8u
-#define DE_RMT_HZ    10000000u
+/** WS2812B data line (PostTri RMT row) and RMT resolution, 10 MHz. */
+#define DE_LED_GPIO 14
+#define DE_RMT_HZ   10000000u
+
+/** WS2812B bit timing in 0.1 us RMT ticks: 0 = 0.3 us high, 0.9 us low;
+ *  1 = 0.9 us high, 0.3 us low (WS2812B datasheet, as led_strip used). */
+#define DE_T_SHORT 3u
+#define DE_T_LONG  9u
+
+/** RMT memory per channel without DMA, symbols (PROVISIONAL, OD-16). */
+#define DE_RMT_SYMBOLS 64u
 
 /** Poll period while waiting for SYNC_READY before the first tick (plan
  *  choice: 20 ms, about one beacon interval / 5). */
 #define DE_WAIT_SYNC_MS 20u
 
-/** Count line every 600 ticks (10 s, plan choice). */
+/** Counter and histogram line every 600 ticks (10 s, plan choice). */
 #define DE_LOG_EVERY 600u
+
+/** Lateness histogram: 10 bins of 100 us, then one overflow bin (VC-8). */
+#define DE_HIST_BINS   11u
+#define DE_HIST_BIN_US INT64_C(100)
+
+/** Number of pixel buffers (front and back, W6D-3b). */
+#define DE_BUFFERS 2u
+
+/** RMT and LED driver state, owned by de_task. */
+typedef struct
+{
+    rmt_channel_handle_t p_chan;
+    rmt_encoder_handle_t p_enc;
+} de_rmt_t;
 
 static TaskHandle_t g_p_de_task = NULL;
 
@@ -67,23 +102,35 @@ static TaskHandle_t g_p_de_task = NULL;
 static volatile bool g_b_pin_high_next = false;
 
 /* Written and read only by de_task. */
-static uint32_t g_ticks  = 0u;
-static uint32_t g_missed = 0u;
+static uint8_t      g_buf[DE_BUFFERS][DISPLAY_FRAME_WIRE_BYTES];
+static uint8_t *    g_p_front   = g_buf[0];
+static uint8_t *    g_p_back    = g_buf[1];
+static portMUX_TYPE g_swap_lock = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t     g_ticks     = 0u;
+static uint32_t     g_missed    = 0u;
+static uint32_t     g_rmt_busy  = 0u;
+static uint32_t     g_hist[DE_HIST_BINS];
+static int64_t      g_prep_max_us = 0;
+static uint32_t     g_state       = PROTO_DISPLAY_COUNT; /* None reported. */
+static uint8_t      g_orient      = PROTO_ORIENT_0;
+static bool         g_b_rmt_fault = false;
 
 static void     de_task (void * p_arg);
 static void     de_report (proto_display_state_t state);
-static uint64_t de_run_tick (gptimer_handle_t    p_timer,
-                             led_strip_handle_t  p_strip,
+static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
                              timesync_reader_t * p_reader, uint64_t tick);
+static void     de_present (de_rmt_t const * p_rmt, int64_t deadline);
+static void     de_swap (void);
+static void     de_prepare_frame (uint64_t tick);
+static void     de_log (void);
 static bool     de_tick_isr (gptimer_handle_t                   p_timer,
                              gptimer_alarm_event_data_t const * p_event,
                              void *                             p_ctx);
 static void     de_arm_next (gptimer_handle_t p_timer, int64_t delay_us,
                              bool b_pin_high);
 static void     de_wait_alarm (void);
-static void     de_show_tick (led_strip_handle_t p_strip, uint64_t tick);
-static gptimer_handle_t   de_timer_create (void);
-static led_strip_handle_t de_strip_create (void);
+static gptimer_handle_t de_timer_create (void);
+static bool             de_start_rmt (de_rmt_t * p_rmt);
 
 /**
  * @brief  Create the Display Engine Task.
@@ -97,12 +144,9 @@ bool display_engine_start (void)
 }
 
 /**
- * @brief  Display Engine Task, core 1. For each tick n: deadline =
- *         timesync_deadline_local(origin, n), computed from n every frame;
- *         arm a one-shot for the rising edge; on the alarm, arm the falling
- *         edge, show the pixel, notify Time Sync, wait for the falling edge,
- *         then n + 1. A deadline already too close counts as missed and the
- *         task moves to the next tick after now.
+ * @brief  Display Engine Task, core 1: create the test pin, the gptimer and
+ *         the RMT channel on core 1, wait for SYNC_READY, prepare the first
+ *         frame, then one de_run_tick() per tick.
  * @param  p_arg  Unused.
  */
 static void de_task (void * p_arg)
@@ -120,13 +164,25 @@ static void de_task (void * p_arg)
     (void)gpio_set_level(DE_TEST_PIN, 0u); /* Valid pin and level. */
 
     de_report(PROTO_DISPLAY_INITIALISING);
+    display_frame_status(DISPLAY_FRAME_STATUS_DARK, g_p_front);
+    display_frame_status(DISPLAY_FRAME_STATUS_DARK, g_p_back);
 
-    gptimer_handle_t const   p_timer = de_timer_create();
-    led_strip_handle_t const p_strip = de_strip_create();
-    timesync_reader_t        reader  = {0};
+    de_rmt_t               rmt     = {NULL, NULL};
+    gptimer_handle_t const p_timer = de_timer_create();
+    bool const             b_rmt   = de_start_rmt(&rmt);
+    timesync_reader_t      reader  = {0};
 
-    /* No tick source is a DISPLAY FAULT; otherwise idle until synchronised. */
-    de_report((NULL == p_timer) ? PROTO_DISPLAY_FAULT : PROTO_DISPLAY_IDLE);
+    if ((NULL == p_timer) || (!b_rmt))
+    {
+        /* No tick source or no LED output: DISPLAY FAULT (condition bit,
+         * owner display_engine). */
+        fault_word_set(FAULT_BIT_DISPLAY);
+        de_report(PROTO_DISPLAY_FAULT);
+    }
+    else
+    {
+        de_report(PROTO_DISPLAY_IDLE);
+    }
 
     /* Start-up defect fix (HANDOVER step 11): the first tick is taken
      * from corrected Pico time only once the OD-10 rule holds, so a tile
@@ -141,54 +197,53 @@ static void de_task (void * p_arg)
 
     printf("display_engine: test pin GPIO%u, first tick %" PRIu64 "\n",
            DE_TEST_PIN, tick);
-
-    if (NULL != p_timer)
-    {
-        /* The Week 10 loop spends almost all of each tick waiting for the
-         * alarm, so WAITING FOR NEXT TICK is the state it reports; the
-         * PREPARING FRAME and TRANSMITTING PIXELS phases arrive with the
-         * frame path (T-B5-03). */
-        de_report(PROTO_DISPLAY_WAITING_FOR_NEXT_TICK);
-    }
+    de_prepare_frame(tick);
 
     for (;;)
     {
-        if (NULL == p_timer)
+        if ((NULL == p_timer) || (!b_rmt))
         {
             /* No tick source: stay idle (a FreeRTOS task never returns). */
             vTaskDelay(portMAX_DELAY);
         }
         else
         {
-            tick = de_run_tick(p_timer, p_strip, &reader, tick);
+            tick = de_run_tick(p_timer, &rmt, &reader, tick);
         }
     }
 }
 
 /**
  * @brief  Report a display state change to the Network Task for TELEMETRY
- *         (T-B3-06). Never blocks. Orientation is always 0 until the
- *         Orientation Task exists: PROVISIONAL (T-B5-05, owner Jia Jun).
+ *         (T-B3-06), with the orientation in use. Never blocks; only a
+ *         change is posted.
  * @param  state  New display state.
  */
 static void de_report (proto_display_state_t state)
 {
-    /* A full queue drops its oldest item and counts it (tile_net). */
-    (void)tile_net_post_status((uint8_t)PROTO_ORIENT_0, (uint8_t)state);
+    /* A display state is 0 to 6, so it fits uint32_t. */
+    if ((uint32_t)state != g_state)
+    {
+        g_state = (uint32_t)state; /* Same range. */
+        /* A full queue drops its oldest item and counts it (tile_net). The
+         * state is 0 to 6, so it fits uint8_t. */
+        (void)tile_net_post_status(g_orient, (uint8_t)state);
+    }
 }
 
 /**
- * @brief  One pass of the tick loop: arm, pulse, show, notify. A deadline
- *         already too close counts as missed and the next tick after now is
- *         returned instead.
+ * @brief  One tick (T-B5-03): arm the rising edge for tick n; on the alarm
+ *         present the frame prepared for n, arm the falling edge, notify
+ *         Time Sync, prepare n + 1 into the back buffer, wait for the
+ *         falling edge. A deadline already too close counts as missed and
+ *         the next tick after now is returned instead.
  * @param  p_timer   The tick timer.
- * @param  p_strip   LED driver, or NULL.
+ * @param  p_rmt     The LED output.
  * @param  p_reader  This task's timesync reader.
  * @param  tick      Tick number n to show.
  * @return The next tick to show.
  */
-static uint64_t de_run_tick (gptimer_handle_t    p_timer,
-                             led_strip_handle_t  p_strip,
+static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
                              timesync_reader_t * p_reader, uint64_t tick)
 {
     uint64_t next = tick + 1u;
@@ -200,8 +255,10 @@ static uint64_t de_run_tick (gptimer_handle_t    p_timer,
     if (lead < DE_MIN_LEAD_US)
     {
         g_missed++;
+        fault_word_set(FAULT_BIT_MISSED_DEADLINE);
         next =
             timesync_next_tick(DE_ORIGIN_US, timesync_now_corrected(p_reader));
+        de_prepare_frame(next);
     }
     else
     {
@@ -210,20 +267,187 @@ static uint64_t de_run_tick (gptimer_handle_t    p_timer,
 
         de_arm_next(p_timer, lead, true);
         de_wait_alarm(); /* Rising edge: tick n. */
+        de_present(p_rmt, deadline);
         de_arm_next(p_timer, width, false);
-        de_show_tick(p_strip, tick);
         timesync_notify_tick();
+
+        int64_t const prep_start = esp_timer_get_time();
+
+        de_prepare_frame(next);
+
+        int64_t const prep_us = esp_timer_get_time() - prep_start;
+
+        if (prep_us > g_prep_max_us)
+        {
+            g_prep_max_us = prep_us;
+        }
+
         de_wait_alarm(); /* Falling edge. */
         g_ticks++;
 
         if (0u == (g_ticks % DE_LOG_EVERY))
         {
-            printf("DE ticks=%" PRIu32 " missed=%" PRIu32 "\n", g_ticks,
-                   g_missed);
+            de_log();
         }
     }
 
     return next;
+}
+
+/**
+ * @brief  On the tick: if RMT is still sending, count a missed deadline and
+ *         raise MISSED_DEADLINE; otherwise swap the buffers and start RMT on
+ *         the front buffer. The start lateness goes into the histogram.
+ * @param  p_rmt     The LED output.
+ * @param  deadline  Local time of this tick.
+ */
+static void de_present (de_rmt_t const * p_rmt, int64_t deadline)
+{
+    if (ESP_OK != rmt_tx_wait_all_done(p_rmt->p_chan, 0))
+    {
+        g_rmt_busy++;
+        g_missed++;
+        fault_word_set(FAULT_BIT_MISSED_DEADLINE);
+    }
+    else
+    {
+        rmt_transmit_config_t const tx_cfg = {.loop_count = 0};
+
+        de_swap();
+
+        int64_t const   late = esp_timer_get_time() - deadline;
+        esp_err_t const err =
+            rmt_transmit(p_rmt->p_chan, p_rmt->p_enc, g_p_front,
+                         DISPLAY_FRAME_WIRE_BYTES, &tx_cfg);
+
+        /* late >= 0 after the alarm; the bin is below DE_HIST_BINS. */
+        uint32_t const bin =
+            (late >= (DE_HIST_BIN_US * (int64_t)(DE_HIST_BINS - 1u)))
+                ? (DE_HIST_BINS - 1u)
+                : (uint32_t)((late < 0) ? 0 : (late / DE_HIST_BIN_US));
+
+        g_hist[bin]++;
+
+        if ((ESP_OK != err) && (!g_b_rmt_fault))
+        {
+            g_b_rmt_fault = true;
+            fault_word_set(FAULT_BIT_DISPLAY);
+            de_report(PROTO_DISPLAY_FAULT);
+        }
+        else if ((ESP_OK == err) && (g_b_rmt_fault))
+        {
+            g_b_rmt_fault = false;
+            fault_word_clear_condition(FAULT_BIT_DISPLAY); /* Owner. */
+        }
+        else
+        {
+            /* No change in the RMT condition. */
+        }
+    }
+}
+
+/**
+ * @brief  Swap the front and back pointers inside a critical section
+ *         (T-B5-03, W6D-3b).
+ */
+static void de_swap (void)
+{
+    taskENTER_CRITICAL(&g_swap_lock);
+
+    uint8_t * const p_old_front = g_p_front;
+
+    g_p_front = g_p_back;
+    g_p_back  = p_old_front;
+    taskEXIT_CRITICAL(&g_swap_lock);
+}
+
+/**
+ * @brief  Prepare tick n into the back buffer (T-B5-02): the frame of the
+ *         running or held timeline from the RAM asset, unpacked with the
+ *         stable orientation; otherwise a status pattern. Reports the state.
+ * @param  tick  Tick number the buffer is for.
+ */
+static void de_prepare_frame (uint64_t tick)
+{
+    playback_control_timeline_t timeline;
+    uint8_t const *             p_payload   = NULL;
+    uint32_t                    len         = 0u;
+    uint16_t                    frame_count = 0u;
+    uint16_t                    frame       = 0u;
+    bool                        b_frame     = false;
+
+    g_orient = orientation_current();
+
+    bool const b_timeline = playback_control_read_timeline(&timeline);
+    bool const b_asset    = asset_store_get(&p_payload, &len, &frame_count);
+
+    if ((b_timeline) && (b_asset) && (timeline.b_held))
+    {
+        frame = (timeline.hold_frame < frame_count) ? timeline.hold_frame : 0u;
+        b_frame = true;
+        de_report(PROTO_DISPLAY_PAUSED);
+    }
+    else if ((b_timeline) && (b_asset) && (timeline.b_running))
+    {
+        /* First tick at or after the origin: strictly after origin - 1. */
+        uint64_t const first =
+            timesync_next_tick(DE_ORIGIN_US, timeline.origin_us - 1);
+
+        b_frame = display_frame_index(tick, first, frame_count, &frame);
+        de_report(PROTO_DISPLAY_WAITING_FOR_NEXT_TICK);
+    }
+    else
+    {
+        de_report(PROTO_DISPLAY_IDLE);
+    }
+
+    if (b_frame)
+    {
+        uint32_t const        frame_bytes = len / frame_count;
+        uint32_t const        offset  = frame * frame_bytes; /* Below len. */
+        uint8_t const * const p_frame = &p_payload[offset];
+
+        if (DISPLAY_FRAME_PACKED_BYTES == frame_bytes)
+        {
+            display_frame_unpack(p_frame, g_orient, g_p_back);
+        }
+        else
+        {
+            /* DE_PROFILE 8-bit asset (OD-15): copied, not unpacked. */
+            display_frame_copy_8bit(p_frame, g_orient, g_p_back);
+        }
+    }
+    else if ((b_timeline) && (b_asset) && (timeline.b_running))
+    {
+        /* Before the first frame's tick: keep the LEDs dark. */
+        display_frame_status(DISPLAY_FRAME_STATUS_DARK, g_p_back);
+    }
+    else
+    {
+        display_frame_status(b_asset ? DISPLAY_FRAME_STATUS_DARK
+                                     : DISPLAY_FRAME_STATUS_NO_ASSET,
+                             g_p_back);
+    }
+}
+
+/**
+ * @brief  One log line every DE_LOG_EVERY ticks: counters, the worst
+ *         preparation time and the tick-to-RMT-start lateness histogram in
+ *         100 us bins (VC-8: a histogram, not per-frame prints).
+ */
+static void de_log (void)
+{
+    printf("DE ticks=%" PRIu32 " missed=%" PRIu32 " rmt_busy=%" PRIu32
+           " prep_max_us=%" PRId64 " orient=%" PRIu8 "\n",
+           g_ticks, g_missed, g_rmt_busy, g_prep_max_us, g_orient);
+    printf("DE_HIST");
+
+    for (uint32_t bin = 0u; bin < DE_HIST_BINS; bin++)
+    {
+        printf(",%" PRIu32, g_hist[bin]);
+    }
+
+    printf("\n");
 }
 
 /**
@@ -286,36 +510,6 @@ static void de_wait_alarm (void)
 }
 
 /**
- * @brief  DE_W10_TEST_PATTERN: light only LED (n mod 64) at value 8 on all
- *         three channels; the previous LED goes dark.
- * @param  p_strip  LED driver, or NULL if it failed to start.
- * @param  tick     Tick number n.
- */
-static void de_show_tick (led_strip_handle_t p_strip, uint64_t tick)
-{
-#if DE_W10_TEST_PATTERN
-    if (NULL != p_strip)
-    {
-        /* tick mod 64 is below 64, so it fits uint32_t. */
-        uint32_t const led  = (uint32_t)(tick % DE_LED_COUNT);
-        uint32_t const prev = (led + DE_LED_COUNT - 1u) % DE_LED_COUNT;
-
-        /* Both indices are below DE_LED_COUNT, so the calls cannot fail on
-         * range; their results are not needed. */
-        (void)led_strip_set_pixel(p_strip, prev, 0u, 0u, 0u);
-
-        /* led is below DE_LED_COUNT: the result is not needed. */
-        (void)led_strip_set_pixel(p_strip, led, DE_LED_VALUE, DE_LED_VALUE,
-                                  DE_LED_VALUE);
-        (void)led_strip_refresh(p_strip); /* A failed frame is not retried. */
-    }
-#else
-    (void)p_strip; /* No LED content outside the test pattern build. */
-    (void)tick;    /* Same. */
-#endif
-}
-
-/**
  * @brief  Create, enable and start the 1 MHz tick timer with de_tick_isr()
  *         registered, from de_task on core 1, so the interrupt is allocated
  *         on core 1 (T-B5-01).
@@ -361,31 +555,52 @@ static gptimer_handle_t de_timer_create (void)
 }
 
 /**
- * @brief  Create the WS2812B driver on GPIO14 (RMT, created on core 1).
- * @return The driver, or NULL if it could not start.
+ * @brief  Create the RMT TX channel on GPIO14 and a bytes encoder with the
+ *         WS2812B bit timing, from de_task on core 1 (T-B5-03). No DMA: the
+ *         RMT refill interrupt is IRAM-safe (CONFIG_RMT_ISR_IRAM_SAFE),
+ *         PROVISIONAL (OD-16, owner Jia Jun).
+ * @param  p_rmt  Receives the channel and encoder.
+ * @return true when the channel is enabled.
  */
-static led_strip_handle_t de_strip_create (void)
+static bool de_start_rmt (de_rmt_t * p_rmt)
 {
-    led_strip_handle_t p_strip = NULL;
-
-    led_strip_config_t const strip_cfg = {
-        .strip_gpio_num         = DE_LED_GPIO,
-        .max_leds               = DE_LED_COUNT,
-        .led_model              = LED_MODEL_WS2812,
-        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_RGB,
+    rmt_tx_channel_config_t const chan_cfg = {
+        .gpio_num          = DE_LED_GPIO,
+        .clk_src           = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz     = DE_RMT_HZ,
+        .mem_block_symbols = DE_RMT_SYMBOLS,
+        .trans_queue_depth = 1u,
     };
-    led_strip_rmt_config_t const rmt_cfg = {
-        .clk_src       = RMT_CLK_SRC_DEFAULT,
-        .resolution_hz = DE_RMT_HZ,
+    rmt_bytes_encoder_config_t const enc_cfg = {
+        .bit0  = {.level0    = 1u,
+                  .duration0 = DE_T_SHORT,
+                  .level1    = 0u,
+                  .duration1 = DE_T_LONG},
+        .bit1  = {.level0    = 1u,
+                  .duration0 = DE_T_LONG,
+                  .level1    = 0u,
+                  .duration1 = DE_T_SHORT},
+        .flags = {.msb_first = 1u},
     };
 
-    if (ESP_OK != led_strip_new_rmt_device(&strip_cfg, &rmt_cfg, &p_strip))
+    esp_err_t err = rmt_new_tx_channel(&chan_cfg, &p_rmt->p_chan);
+
+    if (ESP_OK == err)
     {
-        printf("display_engine: LED driver failed, pulses only\n");
-        p_strip = NULL;
+        err = rmt_new_bytes_encoder(&enc_cfg, &p_rmt->p_enc);
     }
 
-    return p_strip;
+    if (ESP_OK == err)
+    {
+        err = rmt_enable(p_rmt->p_chan);
+    }
+
+    if (ESP_OK != err)
+    {
+        printf("display_engine: RMT failed (%d)\n", err);
+    }
+
+    return (ESP_OK == err);
 }
 
 /*** end of file ***/
