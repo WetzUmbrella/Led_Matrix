@@ -15,7 +15,9 @@
  *   beacons only from the log records, so no variable is shared between
  *   the two contexts except through a FreeRTOS queue or event group.
  * The WiFi event handler runs in the ESP-IDF event task and talks to the
- * Network Task only through the event group.
+ * Network Task only through the event group. The Display Engine is the only
+ * producer of the Telemetry Queue (tile_net_post_status()); its drop counter
+ * is written only in that context and travels inside each item (T-B3-06).
  *
  * DEVIATION D-2 (module-wide): ESP-IDF, FreeRTOS and lwIP names, types and
  * macros (QueueHandle_t, EventGroupHandle_t, pdTRUE, portMAX_DELAY,
@@ -45,6 +47,7 @@
 #include "asset_store.h"
 #include "fault_word.h"
 #include "proto.h"
+#include "telemetry_book.h"
 #include "tile_tasks.h"
 #include "timesync.h"
 
@@ -63,6 +66,14 @@
 /** UDP port of the Pico for tile messages. */
 #define TN_PICO_PORT 4211u
 
+/** UDP port of the tile for PC messages: TELEMETRY_ACK (layout_table.md
+ *  section 11). */
+#define TN_PC_TO_TILE_PORT 4214u
+
+/** UDP port of the PC for TELEMETRY, sent as a subnet broadcast
+ *  (layout_table.md section 11). */
+#define TN_TELEMETRY_PORT 4215u
+
 /** Log queue length (plan choice: 1.6 s of beacons at 10 Hz, so a slow
  *  console never stalls the receive path). */
 #define TN_LOG_QUEUE_LEN 16u
@@ -73,6 +84,10 @@
 /** Receive buffer: one byte more than the longest message on port 4210
  *  (RESUME_AT, 13 B), so a longer datagram is seen as the wrong length. */
 #define TN_RX_BYTES (PROTO_RESUME_AT_BYTES + 1u)
+
+/** Receive buffer for port 4214: one byte more than TELEMETRY_ACK (6 B), so
+ *  a longer datagram is seen as the wrong length. */
+#define TN_ACK_RX_BYTES (PROTO_TELEMETRY_ACK_BYTES + 1u)
 
 /** Heartbeat period 0.5 s (proposed, VA-2.7). */
 #define TN_HEARTBEAT_US INT64_C(500000)
@@ -86,6 +101,13 @@
 /** Network Task wake-up when idle, 20 ms (plan choice: heartbeats leave
  *  within 20 ms of their slot, far inside the 2.5 s timeout). */
 #define TN_IDLE_WAIT_MS 20u
+
+#ifdef TN_TEST_INJECT_FAULTS
+/** VC-4 test build only (T-B3-06): an event fault is injected every 5 s
+ *  (plan choice: 5 telemetry periods, so each injection is a separate
+ *  report unless its ACK is lost twice). Off in the shipped firmware. */
+#define TN_INJECT_PERIOD_US INT64_C(5000000)
+#endif
 
 /** Event group bits set by the WiFi event handler. */
 #define TN_EV_HAVE_IP BIT0
@@ -110,21 +132,30 @@ typedef struct
     uint32_t log_dropped;
 } tn_record_t;
 
-/** Scratch item large enough for any of the three queues, for the
+/** One Telemetry Queue item: the status and the producer's drop count. */
+typedef struct
+{
+    tile_net_status_t status;
+    uint32_t          dropped; /**< Telemetry Queue drops so far. */
+} tn_status_item_t;
+
+/** Scratch item large enough for any of the queues, for the
  *  drop-oldest read. */
 typedef union
 {
     timesync_pair_t    pair;
     tn_record_t        record;
     tile_net_command_t command;
+    tn_status_item_t   status;
 } tn_any_item_t;
 
 /* Created once in tile_net_start(), then only read. */
-static QueueHandle_t      g_p_q_timesync = NULL;
-static QueueHandle_t      g_p_q_command  = NULL;
-static QueueHandle_t      g_p_q_log      = NULL;
-static EventGroupHandle_t g_p_events     = NULL;
-static uint8_t            g_node_id      = 0u;
+static QueueHandle_t      g_p_q_timesync  = NULL;
+static QueueHandle_t      g_p_q_command   = NULL;
+static QueueHandle_t      g_p_q_log       = NULL;
+static QueueHandle_t      g_p_q_telemetry = NULL;
+static EventGroupHandle_t g_p_events      = NULL;
+static uint8_t            g_node_id       = 0u;
 
 /* Receive context only (single producer). */
 static uint32_t g_received    = 0u;
@@ -133,6 +164,9 @@ static uint32_t g_lost        = 0u;
 static uint32_t g_log_dropped = 0u;
 static uint16_t g_next_seq    = 0u;
 static bool     g_b_seq_known = false;
+
+/* Display Engine context only (single producer of the Telemetry Queue). */
+static uint32_t g_tel_q_dropped = 0u;
 
 /* Network Task only. */
 static int      g_tx_sock         = -1; /* DEVIATION D-2: lwIP int socket. */
@@ -146,6 +180,20 @@ static uint8_t  g_session         = 0u;
 static uint16_t g_tile_seq        = 0u;
 static int64_t  g_next_beat_us    = 0;
 static int64_t  g_join_start_us   = 0;
+
+/* Network Task only (T-B3-06). */
+static int              g_ack_sock    = -1; /* DEVIATION D-2: lwIP socket. */
+static uint32_t         g_bcast_addr  = 0u; /* Network byte order. */
+static int64_t          g_next_tel_us = 0;
+static telemetry_book_t g_tel_book;
+static tn_status_item_t g_tel_status  = {{0u, 0u}, 0u};
+static uint32_t         g_tel_sent    = 0u;
+static uint32_t         g_tel_acked   = 0u;
+static uint32_t         g_ack_unknown = 0u;
+#ifdef TN_TEST_INJECT_FAULTS
+static int64_t  g_next_inject_us = 0;
+static uint32_t g_injected       = 0u;
+#endif
 
 static bool      tn_wifi_start (void);
 static esp_err_t tn_nvs_start (void);
@@ -170,6 +218,12 @@ static void tn_send_heartbeat (int64_t now);
 static void tn_send_register (void);
 static void tn_send_nack (uint8_t session, uint16_t ref_seq);
 static void tn_send (uint8_t const * p_buf, uint32_t len);
+static int  tn_ack_socket (void); /* DEVIATION D-2: lwIP int socket. */
+static void tn_on_new_ip (void);
+static void tn_telemetry_service (int64_t now);
+static void tn_telemetry_send (void);
+static void tn_poll_ack (void);
+static void tn_on_telemetry_ack (uint16_t acked_seq);
 
 #if (TN_RX_HOOK == TN_RX_HOOK_LWIP)
 static void tn_lwip_setup (void * p_ctx);
@@ -192,11 +246,14 @@ bool tile_net_start (void)
         xQueueCreate(TILE_NET_TIMESYNC_QUEUE_LEN, sizeof(timesync_pair_t));
     g_p_q_command =
         xQueueCreate(TILE_NET_COMMAND_QUEUE_LEN, sizeof(tile_net_command_t));
-    g_p_q_log  = xQueueCreate(TN_LOG_QUEUE_LEN, sizeof(tn_record_t));
+    g_p_q_log = xQueueCreate(TN_LOG_QUEUE_LEN, sizeof(tn_record_t));
+    g_p_q_telemetry =
+        xQueueCreate(TILE_NET_TELEMETRY_QUEUE_LEN, sizeof(tn_status_item_t));
     g_p_events = xEventGroupCreate();
 
     if ((NULL != g_p_q_timesync) && (NULL != g_p_q_command) &&
-        (NULL != g_p_q_log) && (NULL != g_p_events))
+        (NULL != g_p_q_log) && (NULL != g_p_q_telemetry) &&
+        (NULL != g_p_events))
     {
         b_ok = tn_wifi_start();
     }
@@ -263,6 +320,40 @@ bool tile_net_has_ip (void)
 }
 
 /**
+ * @brief  Post a status update from the Display Engine (single producer):
+ *         drop-oldest with a drop counter (VA-3.7), never blocks.
+ * @param  orientation    proto_orientation_t, 0 to 3.
+ * @param  display_state  proto_display_state_t, 0 to 6.
+ * @return true when the item was queued.
+ */
+bool tile_net_post_status (uint8_t orientation, uint8_t display_state)
+{
+    bool b_ok = false;
+
+    if ((NULL != g_p_q_telemetry) && (orientation < PROTO_ORIENT_COUNT) &&
+        (display_state < PROTO_DISPLAY_COUNT))
+    {
+        uint32_t const   before = g_tel_q_dropped;
+        tn_status_item_t item   = {
+              .status  = {.orientation   = orientation,
+                          .display_state = display_state},
+              .dropped = before,
+        };
+
+        if (0u == uxQueueSpacesAvailable(g_p_q_telemetry))
+        {
+            /* The oldest item is about to go: count it in this item. */
+            item.dropped = before + 1u;
+        }
+
+        tn_post_drop_oldest(g_p_q_telemetry, &item, &g_tel_q_dropped);
+        b_ok = (g_tel_q_dropped == item.dropped);
+    }
+
+    return b_ok;
+}
+
+/**
  * @brief  Network Task.
  * @param  p_arg  Unused.
  */
@@ -270,8 +361,15 @@ void tile_net_task (void * p_arg)
 {
     (void)p_arg; /* The task takes no parameter. */
 
-    g_tx_sock       = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int const b_bcast = 1; /* DEVIATION D-2: setsockopt takes an int. */
+
+    g_tx_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    /* TELEMETRY is a broadcast; a failure only stops telemetry. */
+    (void)setsockopt(g_tx_sock, SOL_SOCKET, SO_BROADCAST, &b_bcast,
+                     sizeof(b_bcast));
+    g_ack_sock      = tn_ack_socket();
     g_join_start_us = esp_timer_get_time();
+    telemetry_book_init(&g_tel_book);
     printf("TN_RX_HOOK %d (1 = lwIP callback, 2 = recvfrom), node %" PRIu8 "\n",
            TN_RX_HOOK, g_node_id);
 
@@ -729,9 +827,12 @@ static void tn_handle_record (tn_record_t const * p_record)
         if (0u == (p_record->received % TN_STATS_EVERY))
         {
             printf("TN_STATS received=%" PRIu32 " dropped=%" PRIu32
-                   " lost=%" PRIu32 " log_dropped=%" PRIu32 "\n",
+                   " lost=%" PRIu32 " log_dropped=%" PRIu32 " tel_sent=%" PRIu32
+                   " tel_acked=%" PRIu32 " ack_unknown=%" PRIu32
+                   " tel_q_dropped=%" PRIu32 "\n",
                    p_record->received, p_record->dropped, p_record->lost,
-                   p_record->log_dropped);
+                   p_record->log_dropped, g_tel_sent, g_tel_acked,
+                   g_ack_unknown, g_tel_status.dropped);
         }
     }
     else if (TN_REC_NACK == p_record->kind)
@@ -770,6 +871,8 @@ static void tn_housekeeping (void)
         g_b_need_register = true;
         g_join_start_us   = now;
 
+        tn_on_new_ip();
+
         if (!g_b_heap_logged)
         {
             /* T-B3-01: once, after the first IP, when every Week 10 task
@@ -788,6 +891,8 @@ static void tn_housekeeping (void)
     {
         g_join_start_us = now; /* Connected: the timeout restarts on loss. */
     }
+
+    tn_telemetry_service(now);
 
     if ((g_b_pico_known) && (g_b_need_register))
     {
@@ -916,6 +1021,192 @@ static void tn_send (uint8_t const * p_buf, uint32_t len)
          * repeated by the next heartbeat. */
         (void)sendto(g_tx_sock, p_buf, len, 0, (struct sockaddr const *)&to,
                      sizeof(to));
+    }
+}
+
+/**
+ * @brief  The port 4214 socket, non-blocking, read by the Network Task.
+ * @return The socket, or -1.
+ */
+static int tn_ack_socket (void) /* DEVIATION D-2: lwIP int socket. */
+{
+    /* DEVIATION D-2: lwIP sockets use an int descriptor. */
+    int const sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    struct sockaddr_in const addr = {
+        .sin_family      = AF_INET,
+        .sin_port        = htons(TN_PC_TO_TILE_PORT),
+        .sin_addr.s_addr = htonl(INADDR_ANY),
+    };
+
+    /* sockaddr_in is the IPv4 form of sockaddr, as the sockets API expects. */
+    if ((sock < 0) ||
+        (0 != bind(sock, (struct sockaddr const *)&addr, sizeof(addr))))
+    {
+        printf("tile_net: bind %u failed\n", TN_PC_TO_TILE_PORT);
+    }
+    else
+    {
+        /* DEVIATION D-2: fcntl takes and returns int flags. */
+        int const flags = fcntl(sock, F_GETFL, 0);
+
+        /* A failure leaves the socket blocking; MSG_DONTWAIT still applies. */
+        (void)fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+    }
+
+    return sock;
+}
+
+/**
+ * @brief  After each new IP address: the subnet broadcast address for
+ *         TELEMETRY, and the first telemetry one period later.
+ */
+static void tn_on_new_ip (void)
+{
+    esp_netif_ip_info_t info;
+    esp_netif_t * const p_sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+
+    if ((NULL != p_sta) && (ESP_OK == esp_netif_get_ip_info(p_sta, &info)))
+    {
+        /* Both values are in network byte order, so is the result. */
+        g_bcast_addr = (info.ip.addr | (~info.netmask.addr));
+    }
+
+    g_next_tel_us = esp_timer_get_time() + TILE_NET_TELEMETRY_PERIOD_US;
+}
+
+/**
+ * @brief  Network Task, every pass: take the newest Display Engine status,
+ *         read any TELEMETRY_ACK, and send TELEMETRY when the period is due
+ *         (absolute schedule; a late pass skips missed slots, no burst).
+ * @param  now  Current time.
+ */
+static void tn_telemetry_service (int64_t now)
+{
+    tn_status_item_t item;
+
+    while (pdTRUE == xQueueReceive(g_p_q_telemetry, &item, 0))
+    {
+        g_tel_status = item;
+    }
+
+    tn_poll_ack();
+
+#ifdef TN_TEST_INJECT_FAULTS
+    /* Inject only while the bit is clear, so the tile log counts separate
+     * faults and the PC's report count must match it (VC-4). */
+    if ((0u != g_bcast_addr) && (now >= g_next_inject_us) &&
+        (0u == (fault_word_snapshot() & FAULT_BIT_CRC_FAIL)))
+    {
+        fault_word_set(FAULT_BIT_CRC_FAIL);
+        g_injected++;
+        g_next_inject_us = now + TN_INJECT_PERIOD_US;
+        printf("TN_INJECT n=%" PRIu32 " bit=1\n", g_injected);
+    }
+#endif
+
+    if ((0u != g_bcast_addr) && (now >= g_next_tel_us))
+    {
+        tn_telemetry_send();
+        g_next_tel_us += TILE_NET_TELEMETRY_PERIOD_US;
+
+        if (g_next_tel_us <= now)
+        {
+            g_next_tel_us = now + TILE_NET_TELEMETRY_PERIOD_US;
+        }
+    }
+}
+
+/**
+ * @brief  TELEMETRY {seq, fault word, orientation, display state} as a subnet
+ *         broadcast to port 4215; (seq, sent bits) go into the pending-ACK
+ *         ring (VC-4). Bits not yet acknowledged are still set in the word,
+ *         so they ride in this packet without extra work.
+ */
+static void tn_telemetry_send (void)
+{
+    uint8_t  buf[PROTO_TELEMETRY_BYTES];
+    uint16_t seq = g_tile_seq;
+
+    proto_telemetry_t const msg = {
+        .header        = {.type       = PROTO_TYPE_TELEMETRY,
+                          .session_id = g_session,
+                          .seq        = seq},
+        .node_id       = g_node_id,
+        .fault_word    = fault_word_snapshot(),
+        .orientation   = g_tel_status.status.orientation,
+        .display_state = g_tel_status.status.display_state,
+    };
+
+    uint32_t const len = proto_encode_telemetry(&msg, buf, sizeof(buf));
+
+    g_tile_seq++;
+
+    /* Node ID 0 makes the encoder refuse the message: nothing is sent. */
+    if ((0u != len) && (g_tx_sock >= 0))
+    {
+        struct sockaddr_in const to = {
+            .sin_family      = AF_INET,
+            .sin_port        = htons(TN_TELEMETRY_PORT),
+            .sin_addr.s_addr = g_bcast_addr,
+        };
+
+        /* sockaddr_in is the IPv4 form of sockaddr. */
+        if (sendto(g_tx_sock, buf, len, 0, (struct sockaddr const *)&to,
+                   sizeof(to)) > 0)
+        {
+            telemetry_book_record(&g_tel_book, seq, msg.fault_word);
+            g_tel_sent++;
+        }
+    }
+}
+
+/**
+ * @brief  Read every datagram waiting on port 4214 and act on each valid
+ *         TELEMETRY_ACK. Other types on this port are ignored until
+ *         T-B3-05 adds MANIFEST and ASSET_CHUNK.
+ */
+static void tn_poll_ack (void)
+{
+    uint8_t buf[TN_ACK_RX_BYTES];
+
+    /* DEVIATION D-2: recv returns ssize_t. */
+    ssize_t got = (g_ack_sock >= 0)
+                      ? recv(g_ack_sock, buf, sizeof(buf), MSG_DONTWAIT)
+                      : -1;
+
+    while (got > 0)
+    {
+        proto_telemetry_ack_t ack;
+
+        /* got is 1 to TN_ACK_RX_BYTES, so it fits uint32_t. */
+        if (proto_decode_telemetry_ack(buf, (uint32_t)got, &ack))
+        {
+            tn_on_telemetry_ack(ack.acked_seq);
+        }
+
+        got = recv(g_ack_sock, buf, sizeof(buf), MSG_DONTWAIT);
+    }
+}
+
+/**
+ * @brief  TELEMETRY_ACK: clear (sent bits AND FAULT_EVENT_MASK) of that
+ *         packet with an atomic fetch-and (VC-4). Condition bits are never
+ *         cleared here. An unknown, expired or repeated seq changes nothing.
+ * @param  acked_seq  seq of the acknowledged TELEMETRY.
+ */
+static void tn_on_telemetry_ack (uint16_t acked_seq)
+{
+    uint32_t sent_bits = 0u;
+
+    if (telemetry_book_ack(&g_tel_book, acked_seq, &sent_bits))
+    {
+        fault_word_clear_events(sent_bits);
+        g_tel_acked++;
+    }
+    else
+    {
+        g_ack_unknown++;
     }
 }
 

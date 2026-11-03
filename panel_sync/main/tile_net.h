@@ -2,7 +2,8 @@
  * @file    tile_net.h
  * @brief   Tile Network Task (T-B3-03): the only path to the network. WiFi
  *          start-up, BEACON and command receive, REGISTER, HEARTBEAT,
- *          SYNC_READY and the Time Sync and Command Queues.
+ *          SYNC_READY, TELEMETRY and its ACK (T-B3-06), and the Time Sync,
+ *          Command, and Telemetry Queues.
  *
  * Owner: Cheston (Buddy 3), task T-B3-03. Implemented by Ahsanul (B4) for
  * Cheston; the parts below marked 29 Oct 2026 were written in Ben's (B2)
@@ -34,7 +35,7 @@
  * - T-B3-01: asset_store_probe_heap() once, after the first IP address.
  * Not yet implemented: the comms statechart and the upload path (T-B3-05),
  * ASSET_READY and the cached asset values in REGISTER (sent as 0 until
- * asset_store exists, T-B3-04), TELEMETRY and its ACK (T-B3-06).
+ * asset_store exists, T-B3-04).
  *
  * PROVISIONAL (OD-09, owners Cheston and Ahsanul): TN_RX_HOOK selects the
  * receive hook at compile time. TN_RX_HOOK_LWIP (default, option (a))
@@ -48,6 +49,19 @@
  * set; T-B3-05's statechart decides whether FAULT stops the retries.
  * PROVISIONAL (owner Benjamin): ports 4210 and 4211, layout_table.md
  * section 11.
+ * PROVISIONAL (OD-11, owner Cheston): telemetry period 1 s, Telemetry Queue
+ * length 2 (one item being read plus the newest), pending-ACK ring of 4
+ * (TELEMETRY_BOOK_CAPACITY: an ACK up to 4 s late still clears its bits).
+ * PROVISIONAL (OD-11, owner Cheston): no Fault queue q_fault is created;
+ * faults reach the Network Task through the fault word (RAR-1), so the
+ * Fault queue length and policy stay open.
+ * PROVISIONAL (owner Benjamin): TELEMETRY is a subnet broadcast to port
+ * 4215 and TELEMETRY_ACK arrives on port 4214 (layout_table.md section 11);
+ * TELEMETRY uses the tile's single header seq stream, like REGISTER and
+ * HEARTBEAT.
+ * PROVISIONAL (owner Cheston): port 4214 is read by the Network Task with a
+ * non-blocking socket every pass (at most TN_IDLE_WAIT_MS late) in both
+ * OD-09 builds; the OD-09 hook only matters for beacon timestamps.
  *
  * DEVIATION D-2 (module-wide): ESP-IDF, FreeRTOS and lwIP names and types.
  */
@@ -78,6 +92,16 @@
 /** Command Queue length (PROVISIONAL, OD-11). */
 #define TILE_NET_COMMAND_QUEUE_LEN 3u
 
+/** Telemetry period 1 s (PROVISIONAL, OD-11, owner Cheston: continuation
+ *  plan proposal; with critic ruling 23 a setter waits at most 3 periods
+ *  = 3 s). */
+#define TILE_NET_TELEMETRY_PERIOD_US INT64_C(1000000)
+
+/** Telemetry Queue length (PROVISIONAL, OD-11, owner Cheston): the Display
+ *  Engine posts only on a state change, so 2 holds the item being read and
+ *  the newest; drop-oldest keeps the newest (VA-3.7). */
+#define TILE_NET_TELEMETRY_QUEUE_LEN 2u
+
 /** One command from the Pico, as Playback Control reads it from the
  *  Command Queue (T-B4-04). */
 typedef struct
@@ -89,6 +113,14 @@ typedef struct
     uint16_t frame_index; /**< RESUME_AT only. */
     uint64_t t_us;        /**< t_start or t_resume, Pico time. */
 } tile_net_command_t;
+
+/** One status item from the Display Engine to the Network Task through
+ *  q_telemetry (T-B3-06). */
+typedef struct
+{
+    uint8_t orientation;   /**< proto_orientation_t, 0 to 3. */
+    uint8_t display_state; /**< proto_display_state_t, 0 to 6. */
+} tile_net_status_t;
 
 /**
  * @brief  Start NVS, WiFi, the queues and the Network Task (priority 12 on
@@ -128,6 +160,17 @@ bool tile_net_has_ip (void);
  * @param  p_arg  Unused.
  */
 void tile_net_task (void * p_arg);
+
+/**
+ * @brief  Post a status update (orientation, display_state) from the
+ *         Display Engine to the Network Task through q_telemetry.
+ *         Drop-oldest with a drop counter (VA-3.7). Never blocks (timeout
+ *         0). Not from ISR context.
+ * @param  orientation    proto_orientation_t, 0 to 3.
+ * @param  display_state  proto_display_state_t, 0 to 6.
+ * @return true when the item was queued.
+ */
+bool tile_net_post_status (uint8_t orientation, uint8_t display_state);
 
 #endif /* TILE_NET_H */
 

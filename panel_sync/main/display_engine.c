@@ -27,6 +27,8 @@
 #include "led_strip.h"
 #include "soc/gpio_struct.h"
 
+#include "proto.h"
+#include "tile_net.h"
 #include "tile_tasks.h"
 #include "timesync.h"
 
@@ -69,6 +71,7 @@ static uint32_t g_ticks  = 0u;
 static uint32_t g_missed = 0u;
 
 static void     de_task (void * p_arg);
+static void     de_report (proto_display_state_t state);
 static uint64_t de_run_tick (gptimer_handle_t    p_timer,
                              led_strip_handle_t  p_strip,
                              timesync_reader_t * p_reader, uint64_t tick);
@@ -116,9 +119,14 @@ static void de_task (void * p_arg)
     (void)gpio_config(&pin_cfg);           /* Fixed, valid configuration. */
     (void)gpio_set_level(DE_TEST_PIN, 0u); /* Valid pin and level. */
 
+    de_report(PROTO_DISPLAY_INITIALISING);
+
     gptimer_handle_t const   p_timer = de_timer_create();
     led_strip_handle_t const p_strip = de_strip_create();
     timesync_reader_t        reader  = {0};
+
+    /* No tick source is a DISPLAY FAULT; otherwise idle until synchronised. */
+    de_report((NULL == p_timer) ? PROTO_DISPLAY_FAULT : PROTO_DISPLAY_IDLE);
 
     /* Start-up defect fix (HANDOVER step 11): the first tick is taken
      * from corrected Pico time only once the OD-10 rule holds, so a tile
@@ -134,6 +142,15 @@ static void de_task (void * p_arg)
     printf("display_engine: test pin GPIO%u, first tick %" PRIu64 "\n",
            DE_TEST_PIN, tick);
 
+    if (NULL != p_timer)
+    {
+        /* The Week 10 loop spends almost all of each tick waiting for the
+         * alarm, so WAITING FOR NEXT TICK is the state it reports; the
+         * PREPARING FRAME and TRANSMITTING PIXELS phases arrive with the
+         * frame path (T-B5-03). */
+        de_report(PROTO_DISPLAY_WAITING_FOR_NEXT_TICK);
+    }
+
     for (;;)
     {
         if (NULL == p_timer)
@@ -146,6 +163,18 @@ static void de_task (void * p_arg)
             tick = de_run_tick(p_timer, p_strip, &reader, tick);
         }
     }
+}
+
+/**
+ * @brief  Report a display state change to the Network Task for TELEMETRY
+ *         (T-B3-06). Never blocks. Orientation is always 0 until the
+ *         Orientation Task exists: PROVISIONAL (T-B5-05, owner Jia Jun).
+ * @param  state  New display state.
+ */
+static void de_report (proto_display_state_t state)
+{
+    /* A full queue drops its oldest item and counts it (tile_net). */
+    (void)tile_net_post_status((uint8_t)PROTO_ORIENT_0, (uint8_t)state);
 }
 
 /**
