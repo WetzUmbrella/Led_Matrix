@@ -141,3 +141,14 @@ Test builds are selected with `-DCMAKE_C_FLAGS=-D<FLAG>` in their own build fold
 | G11 | T-B5-08 power and heating | Jia Jun | `docs/week13/power_thermal.md` | as in that file | `docs/week13/power_thermal.md` |
 
 The T-X-09 final soak (5 tiles, 30 min) is in `docs/final/soak_5tile.md`. The T-B5-06 trials are in `docs/week13/orientation_trials.md`.
+
+## Part H: Week 13 network and recovery runs (added 30 Oct 2026)
+
+No new code: these use the shipped builds and Ben's `CL_TEST_SUPPRESS_MS` Pico build. Use `idf.py monitor --timestamps` for tile logs, so every line has a PC time. Nothing here has run. Pass criteria copied from the plan rows.
+
+| # | Step | Owner (support) | Commands or action | Pass criterion | Evidence file |
+|---|---|---|---|---|---|
+| H1 | T-B2-07 router 30 min | Benjamin (Cheston) | Router: DTIM 1, AP isolation off (write both into `README.md`); power save off on the PC (README), the Pico and the tiles (tiles log `Set ps type: 0`); 5 tiles registered, 30 min, Pico and tile logs saved | "0 false heartbeat-timeout drop-outs in 30 min at the 2.5 s timeout; beacon loss reported beside the 4.5% DTIM 3 baseline" (no `LEAVE` for a powered tile; beacon loss = `TN_STATS lost=` change / beacons sent). A drop-out selects 3 s under OD-18 and the run repeats | `docs/week13/router_30min/` |
+| H2 | T-B4-05 holdover sizing | Ahsanul | Pico built with `-DCL_TEST_SUPPRESS_MS=<n>` for n = 1000, 2000, 4000, 8000, 10000 (one build each); 2 tiles playing on the Part B rig; capture across each suppression | "Table of 5 suppression lengths with maximum skew; the holdover constant set by the rule above" (holdover = the longest suppression whose maximum skew stays at most 5 ms, never beyond 10 s) | `docs/week13/holdover_table.md`, captures |
+| H3 | T-B4-06 recovery timing | Ahsanul (Benjamin, Cheston) | 20 trials each: (a) cold boot to `joined` (Pico `Joined`, tile `joined ...`); (b) router drops the tile (block its MAC for 3 s) to `TN_COMMS REGISTERING TILE`, then to the first frame after the rejoin RESUME_AT; record times in `docs/week13/recovery_timing.csv` (columns: trial, kind, t_drop, t_reconnect, t_rejoin_frame, t_join) | "Rejoin within 2 s of reconnection (NFR8) in 20 of 20; reconnect plus rejoin within 5 s in 20 of 20; join plus DHCP within 10 s in 20 of 20" | `docs/week13/recovery_timing.csv` |
+| H4 | T-B4-07 two-way fallback | Ahsanul (Benjamin) | only if a skew result (Part B, G4 or G6) has a maximum above 5 ms: write the OD-20 design note first, reviewed by Benjamin | (triggered only) | design note |

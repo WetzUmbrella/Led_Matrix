@@ -21,7 +21,9 @@ tile log, the Pico STATUS (``dashboard.py`` ``status``) and the telemetry:
      not ACKed before the pause.
   3. a manifest and chunks with session_id + 1: 0 CHUNK_ACK, tile
      ``upload_wrong_session`` rises.
-  4. a manifest with format_version 0: NACK reason 0; ASSET_FORMAT set.
+  4. manifests with format_version 0 and 1: NACK reason 0 for both on the
+     shipped build (1 is accepted only by the DE_PROFILE build, T-B5-02);
+     ASSET_FORMAT set.
   5. ``protocol/vectors/payload_115200.bin``: NACK reason 1 at the manifest.
 
 Usage:
@@ -147,13 +149,18 @@ def case3(u: up.Uploader, tile: str, session: int, payload: bytes) -> str:
 
 
 def case4(u: up.Uploader, tile: str, session: int) -> str:
-    """Manifest with the unknown format_version 0."""
-    u.sock.sendto(pl.encode_manifest(
-        session_id=session, seq=u._next_seq(), format_version=0,
-        frame_count=600, crc32=0x11223344), (tile, up.TILE_PORT))
-    reasons = nack_reasons(listen(u.sock, LISTEN_S))
-    return "NACK reasons %s (want [0]): %s" % (
-        reasons, "PASS" if reasons == [0] else "FAIL")
+    """Manifests with format_version 0 (unknown, T-X-08) and 1 (8-bit,
+    refused by the shipped build, T-B5-02 and VC-5)."""
+    results = []
+    for version in (0, 1):
+        u.sock.sendto(pl.encode_manifest(
+            session_id=session, seq=u._next_seq(), format_version=version,
+            frame_count=600, crc32=0x11223344), (tile, up.TILE_PORT))
+        reasons = nack_reasons(listen(u.sock, LISTEN_S))
+        results.append("format %d: NACK %s" % (version, reasons))
+    ok = all(r.endswith("[0]") for r in results)
+    return "%s (want [0] for both on the shipped build): %s" % (
+        "; ".join(results), "PASS" if ok else "FAIL")
 
 
 def case5(u: up.Uploader, tile: str, session: int) -> str:
