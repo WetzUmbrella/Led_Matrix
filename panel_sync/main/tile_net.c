@@ -46,6 +46,7 @@
 
 #include "asset_store.h"
 #include "playback_control.h"
+#include "coord_lock.h"
 #include "fault_word.h"
 #include "proto.h"
 #include "telemetry_book.h"
@@ -111,12 +112,21 @@
 #define TN_INJECT_PERIOD_US INT64_C(5000000)
 #endif
 
-/** A tile keeps the first coordinator it hears and ignores beacons from
- *  any other address until the locked one has been silent this long
- *  (PROVISIONAL, owners Cheston and Benjamin: 2 s, twice the 1 s holdover,
- *  so a Pico reboot is followed but a second Pico on the SSID never mixes
- *  its clock in; bench log 29 Oct 2026). */
-#define TN_COORD_SWITCH_US INT64_C(2000000)
+/** REGISTER is sent this many times, TN_REGISTER_GAP_US apart, so one lost
+ *  datagram does not leave the tile invisible (R1-1; PROVISIONAL, owner
+ *  Cheston). Same pattern as the three START_AT copies. */
+#define TN_REGISTER_COPIES 3u
+
+/** Gap between REGISTER copies, 100 ms (R1-1; PROVISIONAL, owner Cheston). */
+#define TN_REGISTER_GAP_US INT64_C(100000)
+
+/** A beacon seq this far behind the previous one (wrap-aware) means the
+ *  Pico restarted: the tile registers again (R1-1). */
+#define TN_BEACON_SEQ_BACK 16
+
+/** Datagrams read from port 4214 in one Network Task pass, so a flood
+ *  cannot starve the heartbeats (R1-9; PROVISIONAL, owner Cheston). */
+#define TN_PC_RX_PER_PASS 8u
 
 /** Event group bits set by the WiFi event handler. */
 #define TN_EV_HAVE_IP BIT0
@@ -168,31 +178,35 @@ static EventGroupHandle_t g_p_events      = NULL;
 static uint8_t            g_node_id       = 0u;
 
 /* Receive context only (single producer). */
-static uint32_t g_received      = 0u;
-static uint32_t g_dropped       = 0u;
-static uint32_t g_lost          = 0u;
-static uint32_t g_log_dropped   = 0u;
-static uint16_t g_next_seq      = 0u;
-static bool     g_b_seq_known   = false;
-static uint32_t g_coord_addr    = 0u; /* Locked coordinator, 0 = none. */
-static int64_t  g_coord_last_us = 0;  /* Its last beacon (local time). */
-static uint32_t g_foreign       = 0u; /* Beacons from other senders. */
+static uint32_t g_received    = 0u;
+static uint32_t g_dropped     = 0u;
+static uint32_t g_lost        = 0u;
+static uint32_t g_log_dropped = 0u;
+static uint16_t g_next_seq    = 0u;
+static bool     g_b_seq_known = false;
+/* Locked coordinator: all zero is "none" (same as coord_lock_init). */
+static coord_lock_t g_coord = {.addr = 0u, .last_us = 0, .foreign = 0u};
 
 /* Display Engine context only (single producer of the Telemetry Queue). */
 static uint32_t g_tel_q_dropped = 0u;
 
 /* Network Task only. */
-static int      g_tx_sock         = -1; /* DEVIATION D-2: lwIP int socket. */
-static bool     g_b_pico_known    = false;
-static bool     g_b_need_register = false;
-static bool     g_b_registered    = false;
-static bool     g_b_wifi_fault    = false;
-static bool     g_b_heap_logged   = false;
-static uint32_t g_pico_addr       = 0u;
-static uint8_t  g_session         = 0u;
-static uint16_t g_tile_seq        = 0u;
-static int64_t  g_next_beat_us    = 0;
-static int64_t  g_join_start_us   = 0;
+static int      g_tx_sock          = -1; /* DEVIATION D-2: lwIP int socket. */
+static bool     g_b_pico_known     = false;
+static bool     g_b_need_register  = false;
+static bool     g_b_registered     = false;
+static bool     g_b_wifi_fault     = false;
+static bool     g_b_heap_logged    = false;
+static uint32_t g_pico_addr        = 0u;
+static uint8_t  g_session          = 0u;
+static uint16_t g_tile_seq         = 0u;
+static int64_t  g_next_beat_us     = 0;
+static int64_t  g_join_start_us    = 0;
+static uint32_t g_register_left    = 0u; /* REGISTER copies still to send. */
+static int64_t  g_next_register_us = 0;
+static bool     g_b_bcn_seen       = false; /* A beacon record was handled. */
+static uint8_t  g_last_bcn_session = 0u;
+static uint16_t g_last_bcn_seq     = 0u;
 
 /* Network Task only (T-B3-06). */
 static int              g_ack_sock    = -1; /* DEVIATION D-2: lwIP socket. */
@@ -231,6 +245,7 @@ static bool tn_decode_command (uint8_t const * p_buf, uint32_t len,
 static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
                                  uint32_t * p_drops);
 static void tn_service (TickType_t wait);
+static bool tn_pico_restarted (tn_record_t const * p_record);
 static void tn_handle_record (tn_record_t const * p_record);
 static void tn_housekeeping (void);
 static void tn_send_heartbeat (int64_t now);
@@ -240,7 +255,7 @@ static void tn_send_nack (uint8_t reason, uint8_t session, uint16_t ref_seq,
 static void tn_send_pc (uint8_t const * p_buf, uint32_t len);
 static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len,
                                uint32_t src_addr, uint16_t src_port);
-static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
+static bool tn_on_upload (uint8_t const * p_buf, uint32_t len,
                           proto_header_t const * p_header);
 static void tn_send_replies (void);
 static void tn_comms_sm (void);
@@ -656,27 +671,17 @@ static void tn_on_beacon (uint8_t const * p_buf, uint32_t len, int64_t t_l,
 
     if (proto_decode_beacon(p_buf, len, &msg))
     {
-        bool const b_stale =
-            (t_l - g_coord_last_us) > TN_COORD_SWITCH_US; /* Silent. */
+        coord_lock_result_t const lock =
+            coord_lock_beacon(&g_coord, src_addr, t_l);
 
-        if ((0u == g_coord_addr) || (b_stale))
+        if (COORD_LOCK_SWITCHED == lock)
         {
-            if (g_coord_addr != src_addr)
-            {
-                g_b_seq_known = false; /* New sender: new seq baseline. */
-            }
-
-            g_coord_addr = src_addr;
+            g_b_seq_known = false; /* New sender: new seq baseline. */
         }
 
-        if (src_addr != g_coord_addr)
+        /* Another coordinator's beacon is never mixed in. */
+        if (COORD_LOCK_FOREIGN != lock)
         {
-            g_foreign++; /* Another coordinator: never mixed in. */
-        }
-        else
-        {
-            g_coord_last_us = t_l;
-
             if (g_b_seq_known)
             {
                 /* Wrap-aware gap: seq is a 16-bit counter. */
@@ -706,7 +711,7 @@ static void tn_on_beacon (uint8_t const * p_buf, uint32_t len, int64_t t_l,
                 .dropped     = g_dropped,
                 .lost        = g_lost,
                 .log_dropped = g_log_dropped,
-                .foreign     = g_foreign,
+                .foreign     = g_coord.foreign,
             };
 
             tn_post_drop_oldest(g_p_q_log, &record, &g_log_dropped);
@@ -728,9 +733,9 @@ static void tn_on_command (uint8_t const * p_buf, uint32_t len,
 {
     tile_net_command_t command;
 
-    /* Commands only from the locked coordinator (same rule as beacons). */
-    bool const b_from_coord =
-        (0u == g_coord_addr) || (src_addr == g_coord_addr);
+    /* Commands only from the locked coordinator (same rule as beacons), and
+     * none while nothing is locked (R1-5). */
+    bool const b_from_coord = coord_lock_command_ok(&g_coord, src_addr);
 
     if ((b_from_coord) && (tn_decode_command(p_buf, len, p_header, &command)))
     {
@@ -754,6 +759,7 @@ static void tn_on_command (uint8_t const * p_buf, uint32_t len,
                 .log_dropped = g_log_dropped,
             };
 
+            fault_word_set(FAULT_BIT_QUEUE_OVERFLOW); /* R1-11. */
             tn_post_drop_oldest(g_p_q_log, &record, &g_log_dropped);
         }
     }
@@ -834,6 +840,7 @@ static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
         if (pdTRUE == xQueueReceive(p_queue, &old_item, 0))
         {
             (*p_drops)++;
+            fault_word_set(FAULT_BIT_QUEUE_OVERFLOW); /* R1-11. */
         }
     }
 
@@ -841,6 +848,7 @@ static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
     if (pdTRUE != xQueueSend(p_queue, p_item, 0))
     {
         (*p_drops)++;
+        fault_word_set(FAULT_BIT_QUEUE_OVERFLOW); /* R1-11. */
     }
 }
 
@@ -859,6 +867,32 @@ static void tn_service (TickType_t wait)
 }
 
 /**
+ * @brief  Did the Pico behind this beacon restart on the same address
+ *         (R1-1)? Its session_id fell from non-zero to 0, or its seq is more
+ *         than TN_BEACON_SEQ_BACK behind the previous beacon's (wrap-aware).
+ * @param  p_record  The beacon record.
+ * @return true when a restart is likely.
+ */
+static bool tn_pico_restarted (tn_record_t const * p_record)
+{
+    bool b_restart = false;
+
+    if (g_b_bcn_seen)
+    {
+        /* The difference is taken modulo 2^16 and read as signed: a value in
+         * -32,768 to 32,767 fits int16_t after the unsigned subtraction. */
+        int16_t const delta =
+            (int16_t)(uint16_t)(p_record->seq - g_last_bcn_seq);
+
+        b_restart =
+            ((0u != g_last_bcn_session) && (0u == p_record->session_id)) ||
+            (delta < -TN_BEACON_SEQ_BACK);
+    }
+
+    return b_restart;
+}
+
+/**
  * @brief  Network Task: one record. A beacon updates the Pico address and
  *         the session, and prints the spread line; a NACK request is sent.
  * @param  p_record  The record.
@@ -873,8 +907,19 @@ static void tn_handle_record (tn_record_t const * p_record)
             g_pico_addr       = p_record->src_addr;
             g_b_need_register = true;
         }
+        else if (tn_pico_restarted(p_record))
+        {
+            g_b_need_register = true; /* R1-1: same IP, Pico rebooted. */
+        }
+        else
+        {
+            /* Same Pico, no restart seen. */
+        }
 
-        g_session = p_record->session_id;
+        g_b_bcn_seen       = true;
+        g_last_bcn_session = p_record->session_id;
+        g_last_bcn_seq     = p_record->seq;
+        g_session          = p_record->session_id;
         printf("BCN,%" PRIu16 ",%" PRId64 ",%" PRId64 "\n", p_record->seq,
                p_record->t_p, p_record->t_l);
 
@@ -955,11 +1000,19 @@ static void tn_housekeeping (void)
     if ((g_b_pico_known) && (g_b_need_register))
     {
         tn_send_register();
-        g_b_need_register = false;
-        g_b_registered    = true;
+        g_b_need_register  = false;
+        g_b_registered     = true;
+        g_register_left    = TN_REGISTER_COPIES - 1u; /* R1-1: more to come. */
+        g_next_register_us = now + TN_REGISTER_GAP_US;
         /* Node IDs are 1 to 9 here (tn_send_register checks), so the
          * offset is 0 to 8 x 500 / 9 ms. */
         g_next_beat_us = now + ((int64_t)(g_node_id - 1u) * TN_STAGGER_US);
+    }
+    else if ((0u != g_register_left) && (now >= g_next_register_us))
+    {
+        tn_send_register();
+        g_register_left--;
+        g_next_register_us += TN_REGISTER_GAP_US;
     }
     else if ((g_b_registered) && (now >= g_next_beat_us))
     {
@@ -1262,16 +1315,19 @@ static void tn_telemetry_send (void)
 }
 
 /**
- * @brief  Read every datagram waiting on port 4214 (Network Task).
+ * @brief  Read the datagrams waiting on port 4214, at most
+ *         TN_PC_RX_PER_PASS per pass (Network Task).
  */
 static void tn_poll_pc (void)
 {
     static uint8_t buf[TN_PC_RX_BYTES]; /* 1 KB: off the task stack. */
 
-    bool b_more = (g_ack_sock >= 0);
+    bool     b_more = (g_ack_sock >= 0);
+    uint32_t reads  = 0u;
 
-    while (b_more)
+    while ((b_more) && (reads < TN_PC_RX_PER_PASS)) /* R1-9: bounded. */
     {
+        reads++;
         struct sockaddr_in from;
         socklen_t          from_len = sizeof(from);
 
@@ -1324,9 +1380,13 @@ static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len,
         else if ((PROTO_TYPE_MANIFEST == type) ||
                  (PROTO_TYPE_ASSET_CHUNK == type))
         {
-            g_pc_addr = src_addr;
-            g_pc_port = src_port;
-            tn_on_upload(p_buf, len, &header);
+            /* The reply address is taken only from an upload that decoded and
+             * passed the session check (R1-10). */
+            if (tn_on_upload(p_buf, len, &header))
+            {
+                g_pc_addr = src_addr;
+                g_pc_port = src_port;
+            }
         }
         else
         {
@@ -1341,13 +1401,16 @@ static void tn_on_pc_datagram (uint8_t const * p_buf, uint32_t len,
  * @param  p_buf     Bytes.
  * @param  len       Length.
  * @param  p_header  Decoded header.
+ * @return true when the item decoded and passed the session check (posted,
+ *         or NACKed because the queue was full); false otherwise.
  */
-static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
+static bool tn_on_upload (uint8_t const * p_buf, uint32_t len,
                           proto_header_t const * p_header)
 {
     static asset_store_upload_t item; /* 1 KB: off the task stack. */
 
     bool b_valid = false;
+    bool b_taken = false;
 
     (void)memset(&item, 0, sizeof(item)); /* Returns &item. */
     item.session_id = p_header->session_id;
@@ -1384,12 +1447,17 @@ static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
         /* T-X-08 case 3: an upload for another session than the one the
          * beacons carry is rejected. The NACK reason list has no session
          * code (layout_table.md section 10 item 8), so it is dropped and
-         * counted; the PC sees no CHUNK_ACK and the Pico no ASSET_READY. */
+         * counted; the PC sees no CHUNK_ACK and the Pico no ASSET_READY.
+         * Session 0 (no session configured on the Pico yet) still accepts
+         * uploads, so the bench upload tests run without the dashboard;
+         * R1-10's nonzero-session rule waits for an owner decision. */
         g_upload_wrong_session++;
     }
     else if ((b_valid) && (!asset_store_post_upload(&item)))
     {
+        b_taken = true;
         g_upload_nacks++;
+        fault_word_set(FAULT_BIT_QUEUE_OVERFLOW); /* R1-11. */
         /* NACK reason 3 fits uint8_t. */
         tn_send_nack((uint8_t)PROTO_NACK_UPLOAD_QUEUE_FULL, item.session_id,
                      item.seq, true);
@@ -1397,7 +1465,10 @@ static void tn_on_upload (uint8_t const * p_buf, uint32_t len,
     else
     {
         /* Posted, or not a valid MANIFEST or ASSET_CHUNK. */
+        b_taken = b_valid;
     }
+
+    return b_taken;
 }
 
 /**

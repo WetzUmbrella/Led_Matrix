@@ -65,3 +65,7 @@ panel_sync/test/test_display.h
 panel_sync/test/test_display.c
 panel_sync/main/tile_stress.h
 panel_sync/main/tile_stress.c
+panel_sync/main/coord_lock.h
+panel_sync/main/coord_lock.c
+panel_sync/test/test_coord_lock.h
+panel_sync/test/test_coord_lock.c

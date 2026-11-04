@@ -16,6 +16,7 @@
 #include <stdio.h>
 
 #include "test_asset_rx.h"
+#include "test_coord_lock.h"
 #include "test_display.h"
 #include "test_fault_word.h"
 #include "test_playback.h"
@@ -96,6 +97,17 @@ static test_case_t const g_asset[] = {
     {"Test A5: zlib CRC32 0xCBF43926 and continuation", test_asset_rx_crc32},
 };
 
+static test_case_t const g_coord[] = {
+    {"Test L1: first lock, repeat, foreign sender counted and refused",
+     test_coord_lock_first},
+    {"Test L2: 1.9 s keeps the lock, 2.1 s of silence switches it",
+     test_coord_lock_switch},
+    {"Test L3: commands refused while unlocked and from others",
+     test_coord_lock_commands},
+    {"Test L4: t_l near INT64_MAX / 2 does not overflow",
+     test_coord_lock_large_time},
+};
+
 static test_case_t const g_display[] = {
     {"Test D1: frame_pattern vector 192 of 192 bytes, all 0 to 8",
      test_display_unpack_vector},
@@ -114,6 +126,11 @@ static test_case_t const g_display[] = {
  *  of a six-entry array fits uint32_t. */
 #define DISPLAY_COUNT                                                          \
     ((uint32_t)(sizeof(g_display) / sizeof(g_display[0]))) /* Fits. */
+
+/** Number of counted coordinator lock tests (4): a four-entry array count
+ *  fits uint32_t. */
+#define COORD_COUNT                                                            \
+    ((uint32_t)(sizeof(g_coord) / sizeof(g_coord[0]))) /* Fits. */
 
 /** Number of counted asset tests (5): the element count of a five-entry
  *  array fits uint32_t. */
@@ -167,6 +184,27 @@ bool test_main_run (char const * p_name, test_main_fn_t p_test)
 }
 
 /**
+ * @brief  Run a table of counted tests.
+ * @param  p_cases  The tests.
+ * @param  count    Number of tests.
+ * @return How many passed.
+ */
+static uint32_t run_cases (test_case_t const * p_cases, uint32_t count)
+{
+    uint32_t passed = 0u;
+
+    for (uint32_t idx = 0u; idx < count; idx++)
+    {
+        if (test_main_run(p_cases[idx].p_name, p_cases[idx].p_test))
+        {
+            passed++;
+        }
+    }
+
+    return passed;
+}
+
+/**
  * @brief  Run the four counted tests, the supplementary checks and the
  *         five fault word tests.
  * @return 0 when all pass, 1 otherwise.
@@ -194,67 +232,32 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
 
     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
 
-    uint32_t fault_passed = 0u;
-
-    for (uint32_t idx = 0u; idx < FAULT_COUNT; idx++)
-    {
-        if (test_main_run(g_faults[idx].p_name, g_faults[idx].p_test))
-        {
-            fault_passed++;
-        }
-    }
+    uint32_t fault_passed = run_cases(g_faults, FAULT_COUNT);
 
     printf("Fault word: Pass = %" PRIu32 " of %" PRIu32 "\n", fault_passed,
            FAULT_COUNT);
 
-    uint32_t playback_passed = 0u;
-
-    for (uint32_t idx = 0u; idx < PLAYBACK_COUNT; idx++)
-    {
-        if (test_main_run(g_playback[idx].p_name, g_playback[idx].p_test))
-        {
-            playback_passed++;
-        }
-    }
+    uint32_t playback_passed = run_cases(g_playback, PLAYBACK_COUNT);
 
     printf("Playback: Pass = %" PRIu32 " of %" PRIu32 "\n", playback_passed,
            PLAYBACK_COUNT);
 
-    uint32_t telemetry_passed = 0u;
-
-    for (uint32_t idx = 0u; idx < TELEMETRY_COUNT; idx++)
-    {
-        if (test_main_run(g_telemetry[idx].p_name, g_telemetry[idx].p_test))
-        {
-            telemetry_passed++;
-        }
-    }
+    uint32_t telemetry_passed = run_cases(g_telemetry, TELEMETRY_COUNT);
 
     printf("Telemetry: Pass = %" PRIu32 " of %" PRIu32 "\n", telemetry_passed,
            TELEMETRY_COUNT);
 
-    uint32_t asset_passed = 0u;
-
-    for (uint32_t idx = 0u; idx < ASSET_COUNT; idx++)
-    {
-        if (test_main_run(g_asset[idx].p_name, g_asset[idx].p_test))
-        {
-            asset_passed++;
-        }
-    }
+    uint32_t asset_passed = run_cases(g_asset, ASSET_COUNT);
 
     printf("Asset: Pass = %" PRIu32 " of %" PRIu32 "\n", asset_passed,
            ASSET_COUNT);
 
-    uint32_t display_passed = 0u;
+    uint32_t coord_passed = run_cases(g_coord, COORD_COUNT);
 
-    for (uint32_t idx = 0u; idx < DISPLAY_COUNT; idx++)
-    {
-        if (test_main_run(g_display[idx].p_name, g_display[idx].p_test))
-        {
-            display_passed++;
-        }
-    }
+    printf("Coordinator lock: Pass = %" PRIu32 " of %" PRIu32 "\n",
+           coord_passed, COORD_COUNT);
+
+    uint32_t display_passed = run_cases(g_display, DISPLAY_COUNT);
 
     printf("Display: Pass = %" PRIu32 " of %" PRIu32 "\n", display_passed,
            DISPLAY_COUNT);
@@ -265,7 +268,8 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed &&
         (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
         (TELEMETRY_COUNT == telemetry_passed) &&
-        (ASSET_COUNT == asset_passed) && (DISPLAY_COUNT == display_passed))
+        (ASSET_COUNT == asset_passed) && (COORD_COUNT == coord_passed) &&
+        (DISPLAY_COUNT == display_passed))
     {
         status = 0;
     }

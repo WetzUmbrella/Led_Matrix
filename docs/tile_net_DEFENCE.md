@@ -60,6 +60,14 @@ Each entry: the design choice, the PostTri row it comes from (inventory ID from 
 - Choice (30 Oct 2026, PROVISIONAL): in the receive context, the first beacon sender is locked; beacons and commands from any other address are dropped and counted (`foreign=` in `TN_STATS`); the lock moves only after the locked coordinator has been silent 2 s (twice the 1 s holdover), so a Pico reboot is followed. A new sender restarts the seq baseline, so the switch is not counted as router loss.
 - Examiner: "Another team's Pico is on the lab router. What happens to your skew, and what happens when your own Pico reboots?"
 
+## 10. Review round 1 fixes in tile_net (R1-1, R1-5, R1-6, R1-9, R1-10, R1-11)
+
+- R1-1: REGISTER is sent `TN_REGISTER_COPIES` = 3 times, `TN_REGISTER_GAP_US` = 100 ms apart (PROVISIONAL, owner Cheston), like START_AT's three copies; heartbeats still start after the first copy. The Pico's `cl_on_register()` is idempotent apart from clearing that tile's SYNC_READY bit, which the next heartbeat restores. A beacon from the same Pico address whose session_id falls from non-zero to 0, or whose seq is more than 16 behind the previous one, sets the register request again, so a Pico reboot on the same IP is followed.
+- R1-5 and R1-6: the coordinator lock moved unchanged into the pure module `coord_lock.c` (2 s switch rule, foreign count, seq baseline reset on a new sender) with a host test (`test_coord_lock.c`). One change: commands are refused while nothing is locked, where before any sender was accepted.
+- R1-9: `tn_poll_pc()` reads at most `TN_PC_RX_PER_PASS` = 8 datagrams per pass, so a flood on port 4214 cannot delay the heartbeats.
+- R1-10: the PC reply address is set only when `tn_on_upload()` reports that the item decoded and passed the session check, so a malformed or wrong-session datagram can no longer redirect CHUNK_ACKs. The second half of R1-10 (reject uploads while the session is 0) is not applied: the bench upload tests send straight to a tile while the Pico beacons session 0. PROVISIONAL for Cheston: decide whether to require a session once the dashboard flow is the only upload path.
+- R1-11: `FAULT_BIT_QUEUE_OVERFLOW` is now raised when `tn_post_drop_oldest()` drops an item, when the Command Queue is full (the NACK path) and when `asset_store_post_upload()` fails.
+
 ## PROVISIONAL list for Cheston to confirm
 
 - OD-11: Time Sync Queue 4, Command Queue 3, Telemetry Queue 2 (Display Engine its only producer), pending-ACK ring 4, telemetry period 1 s; Upload Queue 4 and Reply Queue 8 (in asset_store).
