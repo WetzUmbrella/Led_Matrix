@@ -8,3 +8,4 @@ __pycache__/
 .pytest_cache/
 **/build2/
 **/build_vc4/
+**/build_bench*/

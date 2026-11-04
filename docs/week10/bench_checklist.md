@@ -23,6 +23,8 @@ Hardware for B-1 to B-3: 2 tiles with board numbers set, the router (AP isolatio
 
 ## Part B0: two-tile skew rig dry run from `b4/wire-w10` (no evidence)
 
+> **Update 4 Nov 2026 (bench day 5 Nov):** run B0 from the tag `bench-5nov` (on `b4/phase2`), not `b4/wire-w10`; images are prebuilt by `tools/build_bench_images.sh` and flashed with `esptool` (`docs/bench/2026-11-05_plan.md`). On phase2 the test pin always gives the 1 ms tick pulse and the 4 ms marker every 64 ticks; there is no `DE_W10_TEST_PATTERN` flag any more. The LEDs show the status pattern, not the moving pixel, until an asset is uploaded and played (Part F), so B0.10 and the B6 video only apply after F1/F2. Without a logic analyser, use `pico_tap` (`tools/pico_tap/README.md`) and run its calibration first.
+
 Purpose: find wiring, WiFi, flashing and log problems before the evidence run. Nothing from B0 is committed as T-B4-03 evidence; the bench log notes that it was a dry run on `b4/wire-w10` and the hash flashed.
 
 Hardware: 2 tiles, the Pico W, the router (same SSID for all three, AP isolation off), the logic analyser, 2 jumper wires per tile (test pin and GND), USB cables.
@@ -52,6 +54,8 @@ What the build does (from the code, not measured): the Pico joins the router and
 Keep the dry-run CSVs and logs out of the repo; only `bench_log.md` notes are committed.
 
 ## Part B: T-B4-03 two-tile skew rig (after its four dependencies)
+
+> **Update 4 Nov 2026:** B2 is settled in code (`display_engine.c`: `DE_PULSE_US` 1 ms, `DE_MARKER_US` 4 ms, `DE_MARKER_PERIOD` 64) and B3 needs no flag: flash the plain `tile_plain_A` image from the `bench-5nov` tag. With `pico_tap`, B5 is `python pc/tools/pico_tap_capture.py --port <COM> --channels 2 --seconds 600 --out docs/week10/skew_2tile/skew_2tile.csv`, and B7 uses the Saleae channel names (`--ch-a "Channel 0" --ch-b "Channel 1"`).
 
 Pass criterion of the rig (copied from the T-B4-03 row): "10 min capture (W6 section 7 A6, "at least 10 minutes"): maximum absolute skew over all tick pairs at most 5 ms (SE15 target, W6D-1c) and no pair at or above 16.67 ms (NFR2 hard limit); median, p99 and max reported. Pass = both. A maximum above 5 ms starts T-B4-07."
 
