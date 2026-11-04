@@ -60,6 +60,12 @@
  * address until the locked one has been silent 2 s; ignored beacons are
  * counted as foreign= in TN_STATS (bench log 29 Oct 2026: two Picos on one
  * SSID were mixed).
+ * PROVISIONAL (owner Cheston, R1-1): TN_REGISTER_COPIES 3 REGISTER
+ * datagrams TN_REGISTER_GAP_US 100 ms apart (heartbeats start after the
+ * first), and a new REGISTER when a beacon from the same Pico address shows
+ * session_id 0 after a non-zero one, or a seq more than 16 behind.
+ * PROVISIONAL (owner Cheston, R1-9): TN_PC_RX_PER_PASS 8 datagrams read from
+ * port 4214 per Network Task pass.
  * PROVISIONAL (OD-11, owner Cheston): no Fault queue q_fault is created;
  * faults reach the Network Task through the fault word (RAR-1), so the
  * Fault queue length and policy stay open.
