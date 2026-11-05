@@ -574,6 +574,12 @@ static bool pb_seq_newer (uint16_t seq, uint16_t last)
  *  own tick, not from this state change). */
 #define PB_WAIT_MS 5u
 
+/** At least one tick: at the 100 Hz FreeRTOS tick, 5 ms rounds down to 0
+ *  ticks, so the wait never blocked and the task starved IDLE0 and tile_net
+ *  on core 0 (bench, 5 Nov 2026). */
+#define PB_WAIT_TICKS \
+    ((pdMS_TO_TICKS(PB_WAIT_MS) > 0u) ? pdMS_TO_TICKS(PB_WAIT_MS) : 1u)
+
 static void playback_task (void * p_arg);
 
 /**
@@ -608,7 +614,7 @@ static void playback_task (void * p_arg)
         playback_control_inputs_t inputs = {0};
         bool const                b_cmd =
             (pdTRUE == xQueueReceive(tile_net_command_queue(), &cmd,
-                                     pdMS_TO_TICKS(PB_WAIT_MS)));
+                                     PB_WAIT_TICKS));
 
         inputs.b_wifi = tile_net_has_ip();
         inputs.b_asset =
