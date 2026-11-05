@@ -25,7 +25,7 @@ Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-0
 ## 4. Unpack straight to LED values, no scaling on the tile
 
 - Source: VC-6 "each LED byte equals the nibble value 0 to 8, with no scaling and no floating point"; OD-05 option (a); CB-5.
-- Choice: nibble k of the frame is written unchanged into the wire buffer in G, R, B order. The brightness cap lives only on the PC. `grep -rn -e "dim(" -e BRIGHT panel_sync/main` returns 0 lines. Host test D1: the T-B1-01 `frame_pattern.bin` vector gives 192 of 192 bytes equal to the PC reference and every byte 0 to 8.
+- Choice: nibble k of the frame is written unchanged into the wire buffer in R, G, B order (the Waveshare panel is RGB; bench 5 Nov 2026). The brightness cap lives only on the PC. `grep -rn -e "dim(" -e BRIGHT panel_sync/main` returns 0 lines. Host test D1: the T-B1-01 `frame_pattern.bin` vector gives 192 of 192 bytes equal to the PC reference and every byte 0 to 8.
 - Examiner: "Where would double scaling show up, and which test catches it?" (T-X-01 round trip.)
 
 ## 5. Frame index by tick count

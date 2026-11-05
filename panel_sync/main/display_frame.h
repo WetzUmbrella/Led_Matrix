@@ -12,7 +12,8 @@
  *   in R0 G0 B0 R1 ... order, nibble k at bit 4k. Each nibble (0 to 8) is
  *   written unchanged into one LED byte: no scaling, no floating point
  *   (VC-6). The brightness cap is applied on the PC (VC-6, OD-02).
- * - Wire buffer: 64 LEDs x 3 bytes in WS2812B order G, R, B, LED 0 first.
+ * - Wire buffer: 64 LEDs x 3 bytes in R, G, B order (the Waveshare panel
+ *   is RGB, not the usual WS2812B G, R, B; bench 5 Nov 2026), LED 0 first.
  * - LEDs are numbered row by row from the top-left, LED = 8 x row + column
  *   (PROVISIONAL, owner Jia Jun: matches the prototype's frame_px(); check
  *   on the board in T-B5-06).
@@ -42,6 +43,12 @@
 
 /** Largest channel value after the PC cap (VC-6). */
 #define DISPLAY_FRAME_VALUE_MAX 8u
+
+/** Quarter turns from the IMU's 0 degree axis to the LED grid's upright on
+ *  the Waveshare board, added to the measured orientation before the remap.
+ *  Measured on the bench 5 Nov 2026: with 0, every tile's picture sat a
+ *  quarter turn anticlockwise from upright on an upright wall. */
+#define DISPLAY_FRAME_MOUNT_TURNS 3u
 
 /** Status shown when no frame is playing. */
 typedef enum
@@ -89,6 +96,14 @@ void display_frame_status (display_frame_status_t status, uint8_t * p_wire);
  */
 bool display_frame_index (uint64_t tick, uint64_t first_tick,
                           uint16_t frame_count, uint16_t * p_frame);
+
+/**
+ * @brief  Rotation to draw for a measured orientation: the orientation plus
+ *         DISPLAY_FRAME_MOUNT_TURNS, modulo one turn.
+ * @param  orientation  Measured orientation, 0 to 3.
+ * @return Rotation for display_frame_unpack(), 0 to 3.
+ */
+uint8_t display_frame_mounted (uint8_t orientation);
 
 /**
  * @brief  Source LED for a physical LED under a rotation (the remap above).

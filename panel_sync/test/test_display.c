@@ -28,8 +28,8 @@
 
 /** Channels per LED and wire positions (G, R, B). */
 #define D_CH     3u
-#define D_WIRE_G 0u
-#define D_WIRE_R 1u
+#define D_WIRE_R 0u /* The Waveshare panel is RGB (bench 5 Nov 2026). */
+#define D_WIRE_G 1u
 #define D_WIRE_B 2u
 
 /** One full turn in 90 degree steps. */
@@ -159,6 +159,18 @@ bool test_display_rotation (void)
                                 display_frame_source_led(0u, D_ORIENT_270),
                             __LINE__)) &&
            b_ok;
+
+    /* Mounting offset measured on the bench 5 Nov 2026: a measured 0 draws
+     * the 270 remap and every orientation stays in 0 to 3. */
+    b_ok = (test_main_check(D_ORIENT_270 == display_frame_mounted(0u),
+                            __LINE__)) &&
+           b_ok;
+    for (uint8_t orient = 0u; orient < D_TURNS; orient++)
+    {
+        b_ok = (test_main_check(display_frame_mounted(orient) < D_TURNS,
+                                __LINE__)) &&
+               b_ok;
+    }
 
     return b_ok;
 }

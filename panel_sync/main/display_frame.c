@@ -18,10 +18,12 @@
 /** Largest row or column index. */
 #define DF_LAST (DF_SIDE - 1u)
 
-/** Channels per LED and their positions in the wire buffer (G, R, B). */
+/** Channels per LED and their positions in the wire buffer (R, G, B: the
+ *  Waveshare panel is RGB, measured on the bench 5 Nov 2026 and in the
+ *  prototype fix 62f40cb). */
 #define DF_CHANNELS 3u
-#define DF_WIRE_G   0u
-#define DF_WIRE_R   1u
+#define DF_WIRE_R   0u
+#define DF_WIRE_G   1u
 #define DF_WIRE_B   2u
 
 /** Nibble bits and mask. */
@@ -35,6 +37,9 @@
 #define DF_ORIENT_90  1u
 #define DF_ORIENT_180 2u
 #define DF_ORIENT_270 3u
+
+/** Orientations in one full turn. */
+#define DF_TURNS 4u
 
 /** Status pattern: LED 0 blue at 2 (at most 8, VC-6). */
 #define DF_STATUS_VALUE 2u
@@ -118,6 +123,17 @@ bool display_frame_index (uint64_t tick, uint64_t first_tick,
     }
 
     return b_started;
+}
+
+/**
+ * @brief  Rotation to draw for a measured orientation.
+ * @param  orientation  Measured orientation, 0 to 3.
+ * @return Rotation, 0 to 3.
+ */
+uint8_t display_frame_mounted (uint8_t orientation)
+{
+    /* A sum of at most 3 + 3 taken modulo 4 is 0 to 3, so it fits uint8_t. */
+    return (uint8_t)((orientation + DISPLAY_FRAME_MOUNT_TURNS) % DF_TURNS);
 }
 
 /**
