@@ -16,11 +16,14 @@
  * - LEDs are numbered row by row from the top-left, LED = 8 x row + column
  *   (PROVISIONAL, owner Jia Jun: matches the prototype's frame_px(); check
  *   on the board in T-B5-06).
- * - Rotation (2-bit orientation, layout_table.md 5.7): a tile turned r
- *   degrees clockwise shows source pixel (column, row) = for 0: (c, r);
+ * - Rotation (2-bit orientation, layout_table.md 5.7): a tile at orientation
+ *   code r x 90 shows source pixel (column, row) = for 0: (c, r);
  *   90: (r, 7 - c); 180: (7 - c, 7 - r); 270: (7 - r, c), so the picture
- *   stays upright (PROVISIONAL, owner Jia Jun: direction to be confirmed in
- *   the T-B5-06 trials).
+ *   stays upright. Code 90 is a tile turned 90 degrees anticlockwise seen from
+ *   the front, not clockwise: orient_filter.h gives 90 when +X reads +1 g, so
+ *   +X points up (host tests D4 to D6). This assumes IMU axes X right and Y
+ *   up with the LEDs facing the viewer (PROVISIONAL, owner Jia Jun: to be
+ *   confirmed in the T-B5-06 trials).
  * - Frame index: frame k of the asset is shown on the k-th tick at or after
  *   the timeline origin, modulo frame_count; counting ticks instead of
  *   microseconds avoids the rounding of 1,000,000 / 60.

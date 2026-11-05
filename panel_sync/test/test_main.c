@@ -114,6 +114,12 @@ static test_case_t const g_display[] = {
     {"Test D2: rotation remap, 4 x 90 = identity, 180 = reverse",
      test_display_rotation},
     {"Test D3: frame index from ticks", test_display_frame_index},
+    {"Test D4: corner LEDs match the hand-worked table, all orientations",
+     test_display_rotation_corners},
+    {"Test D5: gravity to picture, 64 LEDs upright in all orientations",
+     test_display_rotation_gravity},
+    {"Test D6: one source pixel reaches the expected wire LED",
+     test_display_rotation_wire},
     {"Test O1: 25 equal samples give 0 changes, 26 give 1",
      test_display_orient_debounce},
     {"Test O2: forced NACK keeps the orientation, IMU bit set then cleared",
@@ -122,8 +128,8 @@ static test_case_t const g_display[] = {
      test_display_orient_classify},
 };
 
-/** Number of counted display and orientation tests (6): the element count
- *  of a six-entry array fits uint32_t. */
+/** Number of counted display and orientation tests (9): the element count
+ *  of a nine-entry array fits uint32_t. */
 #define DISPLAY_COUNT                                                          \
     ((uint32_t)(sizeof(g_display) / sizeof(g_display[0]))) /* Fits. */
 

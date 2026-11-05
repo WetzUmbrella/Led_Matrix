@@ -46,6 +46,43 @@
 /** Failures injected in O2 (plan choice: 2 s at 50 Hz). */
 #define O_INJECT 100u
 
+/** Corners checked in D4, doubled grid centre and side of the LED grid. */
+#define D_CORNERS 4u
+#define D_CENTRE  7
+#define D_SIDE    8u
+
+/** Test value written to R of source LED 0 in D6. */
+#define D_MARK 5u
+
+/** Gravity reading on a still tile, and the orientation it must give. */
+typedef struct
+{
+    int16_t accel_x;
+    int16_t accel_y;
+    uint8_t orient;
+} d_gravity_t;
+
+static d_gravity_t const g_gravity[D_TURNS] = {
+    {0, O_ONE_G, 0u},
+    {O_ONE_G, 0, 1u},
+    {0, -O_ONE_G, 2u},
+    {-O_ONE_G, 0, 3u},
+};
+
+/** Physical corners: top left, top right, bottom left, bottom right. */
+static uint8_t const g_corner_led[D_CORNERS] = {0u, 7u, 56u, 63u};
+
+/** Source LED shown on each corner, worked out by hand per orientation. */
+static uint8_t const g_corner_src[D_TURNS][D_CORNERS] = {
+    {0u, 7u, 56u, 63u},
+    {56u, 0u, 63u, 7u},
+    {63u, 56u, 7u, 0u},
+    {7u, 63u, 0u, 56u},
+};
+
+/** Physical LED that shows source LED 0, per orientation. */
+static uint8_t const g_origin_led[D_TURNS] = {0u, 7u, 63u, 56u};
+
 static bool read_vector (char const * p_name, uint8_t * p_buf);
 
 /**
@@ -171,6 +208,112 @@ bool test_display_frame_index (void)
                                 (0u == frame),
                             __LINE__)) &&
            b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  Test D4: corner LEDs against the hand-worked table.
+ * @return true when every check passed.
+ */
+bool test_display_rotation_corners (void)
+{
+    bool b_ok = true;
+
+    for (uint8_t orient = 0u; orient < D_TURNS; orient++)
+    {
+        for (uint32_t idx = 0u; idx < D_CORNERS; idx++)
+        {
+            uint32_t const led  = g_corner_led[idx];
+            uint32_t const want = g_corner_src[orient][idx];
+            uint32_t const got  = display_frame_source_led(led, orient);
+
+            b_ok = (test_main_check(want == got, __LINE__)) && b_ok;
+        }
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Test D5: gravity to picture, from the geometry of the tile. The
+ *         axes are assumed X to the right and Y up with the LEDs facing the
+ *         viewer (PROVISIONAL, check on a tile). Each LED is placed in the
+ *         tile frame, projected on the world axes that gravity gives, and the
+ *         source pixel at that world position is the expected one.
+ * @return true when every check passed.
+ */
+bool test_display_rotation_gravity (void)
+{
+    bool b_ok = true;
+
+    for (uint32_t turn = 0u; turn < D_TURNS; turn++)
+    {
+        d_gravity_t const * const p_g = &g_gravity[turn];
+
+        /* A still accelerometer reads +1 g along world up: unit values. */
+        int32_t const up_x = p_g->accel_x / O_ONE_G;
+        int32_t const up_y = p_g->accel_y / O_ONE_G;
+
+        uint8_t const code = orient_filter_classify(p_g->accel_x, p_g->accel_y);
+
+        b_ok = (test_main_check(p_g->orient == code, __LINE__)) && b_ok;
+
+        for (uint32_t led = 0u; led < DISPLAY_FRAME_LEDS; led++)
+        {
+            /* Doubled so that the centre of the grid is a whole number. */
+            int32_t const col   = led % D_SIDE;
+            int32_t const row   = led / D_SIDE;
+            int32_t const pos_x = (2 * col) - D_CENTRE;
+            int32_t const pos_y = D_CENTRE - (2 * row);
+
+            /* World right is world up turned clockwise: (up_y, -up_x). */
+            int32_t const world_x = (pos_x * up_y) - (pos_y * up_x);
+            int32_t const world_y = (pos_x * up_x) + (pos_y * up_y);
+
+            /* Both sums are even and 0 to 14, so they halve to 0 to 7. */
+            int32_t const src_col = (world_x + D_CENTRE) / 2;
+            int32_t const src_row = (D_CENTRE - world_y) / 2;
+
+            uint32_t const want = (src_row * D_SIDE) + src_col;
+            uint32_t const got  = display_frame_source_led(led, p_g->orient);
+
+            b_ok = (test_main_check(want == got, __LINE__)) && b_ok;
+        }
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Test D6: one lit source pixel reaches the expected wire LED through
+ *         display_frame_unpack(), and no other byte is lit.
+ * @return true when every check passed.
+ */
+bool test_display_rotation_wire (void)
+{
+    bool    b_ok = true;
+    uint8_t wire[DISPLAY_FRAME_WIRE_BYTES];
+    uint8_t packed[DISPLAY_FRAME_PACKED_BYTES] = {0u};
+
+    packed[0] = D_MARK; /* R of source LED 0: low nibble of byte 0. */
+
+    for (uint8_t orient = 0u; orient < D_TURNS; orient++)
+    {
+        uint32_t lit = 0u;
+
+        display_frame_unpack(packed, orient, wire);
+
+        for (uint32_t idx = 0u; idx < DISPLAY_FRAME_WIRE_BYTES; idx++)
+        {
+            lit += (0u != wire[idx]) ? 1u : 0u;
+        }
+
+        uint8_t const mark = wire[(g_origin_led[orient] * D_CH) + D_WIRE_R];
+
+        b_ok = (test_main_check(1u == lit, __LINE__)) && b_ok;
+        b_ok = (test_main_check(D_MARK == mark, __LINE__)) && b_ok;
+    }
 
     return b_ok;
 }

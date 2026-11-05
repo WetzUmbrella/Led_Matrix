@@ -1,6 +1,6 @@
 # display_engine: design defence (T-B5-01, T-B5-02, T-B5-03, T-B5-07 test builds)
 
-Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-03 rig; the frame path (T-B5-02, T-B5-03) and the test builds written in Jia Jun's session (29 to 30 Oct 2026), for Jia Jun to review, change where needed, and defend. Files: `panel_sync/main/display_engine.c/.h`, `panel_sync/main/display_frame.c/.h`; host tests `panel_sync/test/test_display.c` D1 to D3 ("Display: Pass = 6 of 6" with the orientation tests). Coding standard: Barr-C:2018, deviation D-2.
+Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-03 rig; the frame path (T-B5-02, T-B5-03) and the test builds written in Jia Jun's session (29 to 30 Oct 2026), for Jia Jun to review, change where needed, and defend. Files: `panel_sync/main/display_engine.c/.h`, `panel_sync/main/display_frame.c/.h`; host tests `panel_sync/test/test_display.c` D1 to D6 ("Display: Pass = 9 of 9" with the orientation tests). Coding standard: Barr-C:2018, deviation D-2.
 
 **Names.** Public: `display_engine_start()`. The plan's `de_task()`, `de_tick_isr()`, `de_arm_next()`, `de_swap()`, `de_start_rmt()`, `de_prepare_frame()` keep their names as statics. The plan's `de_state` is `g_state` (7.1.j). The unpack, remap and frame-index rules are a separate pure module, `display_frame` (`display_frame_unpack()`, `display_frame_source_led()`, `display_frame_index()`), so T-B5-02's host test runs without a tile. The plan's `de_dump_back_buffer()` (T-X-01) is the `DE_DUMP_FRAMES` test build.
 
@@ -37,7 +37,7 @@ Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-0
 ## 6. Rotation remap from the stable orientation
 
 - Source: T-B5-03 "unpack and rotation remap from the 2-bit stable orientation"; IFM-5a.
-- Choice: `display_frame_source_led()` maps each physical LED to its source LED for 0, 90, 180, 270 degrees; the orientation is read from the Orientation Task's mailbox once per preparation. Host test D2: four 90 degree turns are the identity, 180 degrees is LED i to 63 - i, every orientation is a permutation. The direction is PROVISIONAL until the T-B5-06 trials.
+- Choice: `display_frame_source_led()` maps each physical LED to its source LED for 0, 90, 180, 270 degrees; the orientation is read from the Orientation Task's mailbox once per preparation. Host test D2: four 90 degree turns are the identity, 180 degrees is LED i to 63 - i, every orientation is a permutation. D2 passes for either direction, so host tests D4 to D6 pin it: D4 and D6 against hand-worked LED tables, D5 from gravity through `orient_filter_classify()` to the picture for all 64 LEDs. Code 90 is a tile turned anticlockwise when the IMU axes are X right and Y up. Those axes are PROVISIONAL until the T-B5-06 trials.
 - Examiner: "The tile is turned 90 degrees clockwise. Which source LED does physical LED 0 show?"
 
 ## 7. States reported and the timing log
