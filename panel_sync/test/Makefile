@@ -14,7 +14,8 @@ SRC     = test_main.c test_timesync.c ../main/timesync.c \
           test_telemetry_book.c ../main/telemetry_book.c \
           test_asset_rx.c ../main/asset_rx.c \
           test_coord_lock.c ../main/coord_lock.c \
-          test_display.c ../main/display_frame.c ../main/orient_filter.c
+          test_display.c ../main/display_frame.c ../main/orient_filter.c \
+          test_tap_detect.c ../main/tap_detect.c
 
 .PHONY: run asan clean
 run: test_timesync
@@ -26,7 +27,8 @@ test_timesync: $(SRC) test_main.h test_timesync.h ../main/timesync.h \
                test_telemetry_book.h ../main/telemetry_book.h \
                test_asset_rx.h ../main/asset_rx.h \
                test_coord_lock.h ../main/coord_lock.h \
-               test_display.h ../main/display_frame.h ../main/orient_filter.h
+               test_display.h ../main/display_frame.h ../main/orient_filter.h \
+               test_tap_detect.h ../main/tap_detect.h
 	$(CC) $(CFLAGS) -o $@ $(SRC)
 
 asan: $(SRC)

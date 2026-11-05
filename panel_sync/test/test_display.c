@@ -39,9 +39,9 @@
 #define D_ORIENT_90  1u
 #define D_ORIENT_180 2u
 
-/** Accelerometer readings: 1 g and a weak 0.25 g at 16,384 LSB/g. */
-#define O_ONE_G  16384
-#define O_WEAK_G 4096
+/** Accelerometer readings: 1 g and a weak 0.25 g at 4,096 LSB/g (+/-8 g). */
+#define O_ONE_G  4096
+#define O_WEAK_G 1024
 
 /** Failures injected in O2 (plan choice: 2 s at 50 Hz). */
 #define O_INJECT 100u

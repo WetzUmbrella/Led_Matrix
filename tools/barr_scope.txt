@@ -63,6 +63,10 @@ panel_sync/main/orientation.h
 panel_sync/main/orientation.c
 panel_sync/test/test_display.h
 panel_sync/test/test_display.c
+panel_sync/main/tap_detect.h
+panel_sync/main/tap_detect.c
+panel_sync/test/test_tap_detect.h
+panel_sync/test/test_tap_detect.c
 panel_sync/main/tile_stress.h
 panel_sync/main/tile_stress.c
 panel_sync/main/coord_lock.h

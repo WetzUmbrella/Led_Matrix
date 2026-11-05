@@ -31,9 +31,9 @@
 /** Equal samples needed to publish a new orientation (T-B5-05 row). */
 #define ORIENT_FILTER_STABLE_SAMPLES 26u
 
-/** Least dominant-axis reading for a candidate: 0.5 g at 16,384 LSB/g
- *  (QMI8658 at +/-2 g), plan choice. */
-#define ORIENT_FILTER_MIN_LSB 8192
+/** Least dominant-axis reading for a candidate: 0.5 g at 4,096 LSB/g
+ *  (QMI8658 at +/-8 g, the range tap detection needs), plan choice. */
+#define ORIENT_FILTER_MIN_LSB 2048
 
 /** No candidate (weak or ambiguous gravity in X and Y). */
 #define ORIENT_FILTER_NONE 4u

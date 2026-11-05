@@ -20,6 +20,7 @@
 #include "test_display.h"
 #include "test_fault_word.h"
 #include "test_playback.h"
+#include "test_tap_detect.h"
 #include "test_telemetry_book.h"
 #include "test_timesync.h"
 
@@ -127,6 +128,23 @@ static test_case_t const g_display[] = {
     {"Test O3: quadrants, weak gravity, flicker restarts the count",
      test_display_orient_classify},
 };
+
+static test_case_t const g_tap[] = {
+    {"Test K1: peak threshold, 2047 refused and 2048 accepted",
+     test_tap_detect_threshold},
+    {"Test K2: refractory, 149,999 us refused and 150,000 us accepted",
+     test_tap_detect_refractory},
+    {"Test K3: status byte, bad count and axis refused, axes and polarity",
+     test_tap_detect_status},
+    {"Test K4: still gravity gives peak 0, full swing gives 65,535",
+     test_tap_detect_gravity},
+    {"Test K5: spike leaves the window after 20 samples, ACCEPT clears it",
+     test_tap_detect_window},
+    {"Test K6: both tap config pages, exact bytes", test_tap_detect_encode},
+};
+
+/** Number of counted tap tests (6): a six-entry array count fits uint32_t. */
+#define TAP_COUNT ((uint32_t)(sizeof(g_tap) / sizeof(g_tap[0])))
 
 /** Number of counted display and orientation tests (9): the element count
  *  of a nine-entry array fits uint32_t. */
@@ -268,6 +286,10 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     printf("Display: Pass = %" PRIu32 " of %" PRIu32 "\n", display_passed,
            DISPLAY_COUNT);
 
+    uint32_t tap_passed = run_cases(g_tap, TAP_COUNT);
+
+    printf("Tap: Pass = %" PRIu32 " of %" PRIu32 "\n", tap_passed, TAP_COUNT);
+
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
@@ -275,7 +297,7 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
         (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
         (TELEMETRY_COUNT == telemetry_passed) &&
         (ASSET_COUNT == asset_passed) && (COORD_COUNT == coord_passed) &&
-        (DISPLAY_COUNT == display_passed))
+        (DISPLAY_COUNT == display_passed) && (TAP_COUNT == tap_passed))
     {
         status = 0;
     }
