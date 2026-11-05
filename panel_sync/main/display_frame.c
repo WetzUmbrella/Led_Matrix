@@ -133,10 +133,12 @@ uint32_t display_frame_source_led (uint32_t led, uint8_t orientation)
     uint32_t       src_row = row;
     uint32_t       src_col = col;
 
+    /* 90 and 270 directions measured on the bench 5 Nov 2026: the earlier
+     * mapping turned a tile rotated 90 degrees clockwise upside down. */
     if (DF_ORIENT_90 == orientation)
     {
-        src_col = row;
-        src_row = DF_LAST - col;
+        src_col = DF_LAST - row;
+        src_row = col;
     }
     else if (DF_ORIENT_180 == orientation)
     {
@@ -145,8 +147,8 @@ uint32_t display_frame_source_led (uint32_t led, uint8_t orientation)
     }
     else if (DF_ORIENT_270 == orientation)
     {
-        src_col = DF_LAST - row;
-        src_row = col;
+        src_col = row;
+        src_row = DF_LAST - col;
     }
     else
     {

@@ -38,6 +38,11 @@
 /** Orientation codes. */
 #define D_ORIENT_90  1u
 #define D_ORIENT_180 2u
+#define D_ORIENT_270 3u
+
+/** Corner LEDs, numbered row by row from the top-left. */
+#define D_LED_TOP_RIGHT   7u
+#define D_LED_BOTTOM_LEFT 56u
 
 /** Accelerometer readings: 1 g and a weak 0.25 g at 16,384 LSB/g. */
 #define O_ONE_G  16384
@@ -143,6 +148,17 @@ bool test_display_rotation (void)
 
         b_ok = (test_main_check(UINT64_MAX == seen, __LINE__)) && b_ok;
     }
+
+    /* Direction measured on the bench 5 Nov 2026: at 90 degrees the
+     * top-left LED shows source LED 7 (top-right), at 270 source LED 56. */
+    b_ok = (test_main_check(D_LED_TOP_RIGHT ==
+                                display_frame_source_led(0u, D_ORIENT_90),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(D_LED_BOTTOM_LEFT ==
+                                display_frame_source_led(0u, D_ORIENT_270),
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }

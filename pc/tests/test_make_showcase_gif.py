@@ -38,3 +38,8 @@ def test_gif_builds_two_tile_assets(tmp_path):
     for asset in assets.values():
         assert asset.frame_count == 480  # 8 s at 60 fps
         assert len(asset.payload) == 480 * 96
+
+
+def test_full_rows_fill_the_bottom_tiles():
+    frame = msg.rainbow_frames(1, msg.WALL)[0]
+    assert frame.getpixel((3, msg.WALL - 1)) != (0, 0, 0)

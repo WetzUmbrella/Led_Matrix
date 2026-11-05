@@ -1,6 +1,12 @@
 # Showcase runbook: two-tile video wall (5 Nov 2026)
 
-Branch `b3/showcase-5nov`, made from `master` at `8af7b15`. Nothing in the firmware changes: the showcase runs the real pipeline (dashboard, asset upload, Pico readiness, START_AT, synchronised playback) on the `bench-5nov-2` images already flashed at S1. The branch only adds a showcase GIF generator (`pc/tools/make_showcase_gif.py`, with pytest) and this file.
+Branch `b3/showcase-5nov`, made from `master` at `8af7b15`. The showcase runs the real pipeline (dashboard, asset upload, Pico readiness, START_AT, synchronised playback). The branch adds a showcase GIF generator (`pc/tools/make_showcase_gif.py`, with pytest), this file, and one firmware fix found on the day: the 90 and 270 degree rotation remap (`panel_sync/main/display_frame.c`, section 5).
+
+Ran on 5 Nov at Cheston's bench: Pico plus two tiles (nodes 3 and 5) on the top row, then a 2x2 wall of nodes 3, 5, 4 and 2, all built on this laptop from `master` plus this branch (ESP-IDF v5.3, Pico SDK 2.3.1, 0 warnings).
+
+**Use a new session number for every run** (`--session 2`, 3, ...). A tile that already holds the clip for the same session and CRC answers only the Pico, so the uploader waits about 70 s and the dashboard stops (section 5).
+
+For the 2x2 wall: `python pc/tools/make_showcase_gif.py --rows 16 --out showcase_2x2.gif`, then `config showcase_2x2.gif 2x2 3,5,0,4,2,0,0,0,0 continue 8`; readiness for nodes 2 to 5 is `0x01e`.
 
 ## 1. Set-up (10 min)
 
@@ -85,3 +91,14 @@ One GIF is decoded and partitioned on the PC, uploaded once to each tile, and pl
 2. Run the asset and fault tests (F2 to F5, G1, G7, E1 to E4) and the stress builds (G2, G5).
 3. Fix the open robustness items, then a second review round.
 4. Five-tile soak and router run; fill the Week 13 before/after evidence; Tribunal 2 on 23 Nov (to confirm).
+
+## 5. Found on the bench (5 Nov 2026)
+
+| # | Finding | Evidence | State |
+|---|---|---|---|
+| 1 | **Re-upload of a clip the tile already holds hangs the PC.** `as_on_manifest()` answers a MANIFEST that matches the published asset with ASSET_READY to the Pico only, then ignores every chunk without a CHUNK_ACK; the uploader retries about 70 s and the dashboard stops at that node, so later nodes are never uploaded. Hit after tiles rebooted and reloaded their session-1 clip from flash. | Tile 2: `ignored=932 erases=0`; a forced upload of a different clip: 45 of 45 ACKed in 4.3 s, no resend | Workaround: new session per run. Fix to do: the tile also answers the PC on that path and the uploader takes it as done (close to R1-8) |
+| 2 | **90 and 270 degree remaps were swapped.** A tile turned 90 degrees in its slot showed its piece upside down; 180 was right. | Bench observation; `ORIENT changed` codes 0, 1, 2 for clockwise turns | Fixed in `display_frame.c`, test pins LED 0 to source 7 at 90 and 56 at 270; flashed on all four tiles |
+| 3 | Turning the **whole wall** keeps each piece upright but leaves the pieces in the wrong slots. Slot position comes from the Node ID map (FR3, NFR11); position detection is out of scope (W6 1.4). | All four tiles changed orientation together | By design; whole-wall rotation would need the PC to rotate the map and re-upload (future work) |
+| 4 | Tile `lost=` beacon counter jumps by about 62,000 after a Pico restart: the beacon seq restarts at 0 and the wrap-aware gap counts it as loss. | `TN_STATS lost=61905` | Cosmetic; same root as the `tn_pico_restarted()` issue |
+| 5 | Tile 5 (`9c:13:9e:f1:2f:70`) had no board number; set to 5. Tile `b8:f8:62:d8:05:ec` is board 3. | NVS read and write with esptool | Done |
+| 6 | Rejoin works on hardware: all four tiles reflashed one at a time during playback came back to `online=0x01e ready=0x01e sync=0x01e`, state COORDINATING_PLAYBACK, from their cached clips. | Pico `CL_STATS` | First hardware evidence for FR19; timing not yet measured (H3) |

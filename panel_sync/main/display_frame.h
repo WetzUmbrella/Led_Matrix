@@ -18,9 +18,9 @@
  *   on the board in T-B5-06).
  * - Rotation (2-bit orientation, layout_table.md 5.7): a tile turned r
  *   degrees clockwise shows source pixel (column, row) = for 0: (c, r);
- *   90: (r, 7 - c); 180: (7 - c, 7 - r); 270: (7 - r, c), so the picture
- *   stays upright (PROVISIONAL, owner Jia Jun: direction to be confirmed in
- *   the T-B5-06 trials).
+ *   90: (7 - r, c); 180: (7 - c, 7 - r); 270: (r, 7 - c), so the picture
+ *   stays upright (direction corrected on the bench 5 Nov 2026: the first
+ *   guess had 90 and 270 swapped; T-B5-06 trials still to run).
  * - Frame index: frame k of the asset is shown on the k-th tick at or after
  *   the timeline origin, modulo frame_count; counting ticks instead of
  *   microseconds avoids the rounding of 1,000,000 / 60.

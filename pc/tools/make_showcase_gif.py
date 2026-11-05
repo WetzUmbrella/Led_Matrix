@@ -5,7 +5,7 @@ Owner: Cheston (Buddy 3).
 
 Builds a 16 x 16 GIF for the 2x2 layout with Node IDs 1 and 2 on the top
 row (map 1,2,0,0,0,0,0,0,0), so only rows 0 to 7 carry content and the
-bottom half stays black. Two scenes, chosen to make the sync visible:
+bottom half stays black; --rows 16 fills all four tiles of a 2x2 wall. Two scenes, chosen to make the sync visible:
 
   * sweep: a white bar crosses both tiles left to right and back. The bar
     spans the seam between tile 1 and tile 2, so any skew between the
@@ -54,8 +54,8 @@ def blank() -> Image.Image:
     return Image.new("RGB", (WALL, WALL), (0, 0, 0))
 
 
-def sweep_frames(count: int) -> List[Image.Image]:
-    """A white bar moving across both tiles and back (ping-pong)."""
+def sweep_frames(count: int, rows: int = ROWS_SHOWN) -> List[Image.Image]:
+    """A white bar moving across the wall and back (ping-pong)."""
     span = WALL - BAR_WIDTH
     frames = []
     for index in range(count):
@@ -63,7 +63,7 @@ def sweep_frames(count: int) -> List[Image.Image]:
         left = phase if phase < span else (2 * span) - phase
         frame = blank()
         for x in range(left, left + BAR_WIDTH):
-            for y in range(ROWS_SHOWN):
+            for y in range(rows):
                 frame.putpixel((x, y), (255, 255, 255))
         frames.append(frame)
     return frames
@@ -75,29 +75,30 @@ def hue_pixel(hue: float) -> Pixel:
     return (round(red * 255), round(green * 255), round(blue * 255))
 
 
-def rainbow_frames(count: int) -> List[Image.Image]:
+def rainbow_frames(count: int, rows: int = ROWS_SHOWN) -> List[Image.Image]:
     """Diagonal rainbow bands scrolling left to right."""
     frames = []
     for index in range(count):
         frame = blank()
         shift = index * RAINBOW_STEP
         for x in range(WALL):
-            for y in range(ROWS_SHOWN):
+            for y in range(rows):
                 hue = ((x + y) - shift) / RAINBOW_PERIOD
                 frame.putpixel((x, y), hue_pixel(hue))
         frames.append(frame)
     return frames
 
 
-def build(scene: str, seconds: float) -> List[Image.Image]:
+def build(scene: str, seconds: float,
+          rows: int = ROWS_SHOWN) -> List[Image.Image]:
     """Frames for one scene, or both scenes one after the other."""
     count = max(1, round(seconds * 1000 / DELAY_MS))
     if scene == "sweep":
-        return sweep_frames(count)
+        return sweep_frames(count, rows)
     if scene == "rainbow":
-        return rainbow_frames(count)
+        return rainbow_frames(count, rows)
     half = max(1, count // 2)
-    return sweep_frames(half) + rainbow_frames(count - half)
+    return sweep_frames(half, rows) + rainbow_frames(count - half, rows)
 
 
 def save(frames: List[Image.Image], path: str) -> None:
@@ -113,11 +114,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                         default="both")
     parser.add_argument("--seconds", type=float, default=8.0,
                         help="loop length; at most 10 s (PostTri NFR3)")
+    parser.add_argument("--rows", type=int, choices=(ROWS_SHOWN, WALL),
+                        default=ROWS_SHOWN,
+                        help="8 for two tiles on the top row, 16 for 2x2")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
     if not 0 < args.seconds <= 10:
         parser.error("--seconds must be above 0 and at most 10")
-    frames = build(args.scene, args.seconds)
+    frames = build(args.scene, args.seconds, args.rows)
     save(frames, args.out)
     print("wrote %s (%d frames, %d ms each)" % (args.out, len(frames),
                                                  DELAY_MS))
