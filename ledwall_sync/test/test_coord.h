@@ -18,6 +18,7 @@ bool test_coord_stale_rejected (void);
 bool test_coord_start_gate (void);
 bool test_coord_crc_mismatch (void);
 bool test_coord_session_validation (void);
+bool test_coord_session_while_busy (void);
 bool test_coord_status (void);
 bool test_coord_start_copies (void);
 bool test_coord_pause_resume_stop (void);

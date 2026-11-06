@@ -40,6 +40,9 @@ static test_case_t const g_cases[] = {
     {"C8 T-B2-04: ASSET_READY with the wrong CRC32 is not counted",
      test_coord_crc_mismatch},
     {"C9 T-B2-04: SESSION_CONFIG validation", test_coord_session_validation},
+    {"C9b re-plan: new SESSION_CONFIG refused in COORDINATING GAME and "
+     "COORDINATING PLAYBACK",
+     test_coord_session_while_busy},
     {"C10 T-B2-04: STATUS every 250 ms to the PC address", test_coord_status},
     {"C11 T-B2-05: START_AT 3 copies, one seq, t_start = copy 1 + 600 ms",
      test_coord_start_copies},

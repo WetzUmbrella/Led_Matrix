@@ -155,6 +155,13 @@ uint32_t coordinator_loop_test_skipped (void);
  * @return Detection time, or 0 if none.
  */
 uint64_t coordinator_loop_test_loss_time (uint8_t node_id);
+
+/**
+ * @brief  Force the coordinator state. COORDINATING GAME has no entry path
+ *         until build step 7, so a test reaches it only through this.
+ * @param  state  The state to set.
+ */
+void coordinator_loop_test_set_state (proto_coord_state_t state);
 #endif
 
 #endif /* COORDINATOR_LOOP_H */

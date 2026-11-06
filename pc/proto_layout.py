@@ -20,7 +20,7 @@ choice. PROVISIONAL (OD-05, owners Jolyn and Jia Jun): nibble order (a) in
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Tuple
+from typing import Dict, List, Mapping, Sequence, Tuple
 
 #: Width of the header fields, bits (layout_table.md section 2).
 TYPE_BITS = 5
@@ -39,6 +39,12 @@ NIBBLE_MAX = 8
 CHUNK_PAYLOAD_MAX = 1024
 CHUNK_INDEX_MAX = 112
 CHUNK_HEAD_BYTES = 5
+GRID_MAX = 9
+UP_MS_MAX = 2000
+SCORE_MAX = 99
+
+#: GAME_CONTROL commands (layout_table.md section 5.10).
+GAME_MODE_VIDEO, GAME_MODE_GAME, GAME_START, GAME_END = range(4)
 
 #: One field: (name, width in bits, smallest valid value, largest valid
 #: value). Order is the order on the wire.
@@ -48,6 +54,8 @@ _U16 = (1 << 16) - 1
 _U32 = (1 << 32) - 1
 _U64 = (1 << 64) - 1
 _NODE: Field = ("node_id", 4, 1, NODE_MAX)
+#: GAME_CONTROL and ACK: 0 = between the PC and the Pico.
+_NODE_OR_PC: Field = ("node_id", 4, 0, NODE_MAX)
 _CRC_MAX = _U32
 
 #: Message rows: name -> (type code, body fields after the header).
@@ -56,7 +64,8 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     "REGISTER": (0, [_NODE, ("cached_session_id", 8, 0, 255),
                      ("cached_crc32", 32, 0, _CRC_MAX)]),
     "HEARTBEAT": (1, [_NODE]),
-    "SESSION_CONFIG": (2, [("layout", 2, 0, 2), ("policy", 1, 0, 1)]
+    "SESSION_CONFIG": (2, [("rows", 4, 1, GRID_MAX), ("cols", 4, 1, GRID_MAX),
+                           ("policy", 1, 0, 1)]
                        + [("node_map[%d]" % slot, 4, 0, NODE_MAX)
                           for slot in range(MAP_SLOTS)]
                        + [("frame_count", 10, 1, FRAME_MAX)]
@@ -78,11 +87,20 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     "PAUSE": (13, []),
     "STOP": (14, []),
     "STATUS": (15, [("readiness", 9, 0, 0x1FF), ("online", 9, 0, 0x1FF),
-                    ("state", 4, 0, 11)]),
+                    ("state", 4, 0, 12),
+                    ("score", 8, -SCORE_MAX, SCORE_MAX)]),
     "TELEMETRY": (16, [_NODE, ("fault_word", 32, 0, _U32),
                        ("orientation", 2, 0, 3),
                        ("display_state", 3, 0, 6)]),
     "TELEMETRY_ACK": (17, [("acked_seq", 16, 0, _U16)]),
+    # Whack-a-mole re-plan, build step 3 (layout_table.md, PROVISIONAL).
+    "TAP": (18, [_NODE, ("peak", 16, 0, _U16), ("t_tap", 64, 0, _U64)]),
+    "MOLE_ON": (19, [_NODE, ("t_show", 64, 0, _U64),
+                     ("up_ms", 11, 1, UP_MS_MAX)]),
+    "FEEDBACK": (20, [_NODE, ("result", 2, 0, 2)]),
+    "GAME_CONTROL": (21, [_NODE_OR_PC, ("command", 4, 0, 3)]),
+    "SCORE_MASK": (22, [_NODE, ("mask", 64, 0, _U64)]),
+    "ACK": (23, [_NODE_OR_PC, ("acked_seq", 16, 0, _U16)]),
 }
 
 #: Type code -> message name.
@@ -132,6 +150,20 @@ def _check(field: str, value: int, low: int, high: int) -> None:
         raise LayoutError("%s=%r outside %d to %d" % (field, value, low, high))
 
 
+def _check_shape(name: str, fields: Mapping[str, object]) -> None:
+    """SESSION_CONFIG: rows x cols is at most 9 (whack-a-mole re-plan)."""
+    if name == "SESSION_CONFIG":
+        rows, cols = int(fields["rows"]), int(fields["cols"])  # type: ignore
+        if rows * cols > GRID_MAX:
+            raise LayoutError("rows x cols = %d x %d is more than %d tiles"
+                              % (rows, cols, GRID_MAX))
+
+
+def _to_signed(value: int, width: int) -> int:
+    """Two's complement field bits to a Python int (a field with low < 0)."""
+    return value - (1 << width) if value >= 1 << (width - 1) else value
+
+
 def encode(name: str, fields: Mapping[str, object]) -> bytes:
     """Encode one message from a dict of its fields.
 
@@ -156,8 +188,10 @@ def encode(name: str, fields: Mapping[str, object]) -> bytes:
     for field, width, low, high in header + body:
         item = flat.get(field)
         _check(field, item, low, high)  # type: ignore[arg-type]
-        value |= int(item) << bit  # type: ignore[call-overload]
+        # A signed field (low < 0) goes on the wire in two's complement.
+        value |= (int(item) & ((1 << width) - 1)) << bit  # type: ignore
         bit += width
+    _check_shape(name, flat)
     if name == "ASSET_CHUNK":
         payload = flat.get("payload")
         if not isinstance(payload, (bytes, bytearray)) \
@@ -200,12 +234,15 @@ def decode(data: bytes) -> Dict[str, object]:
     for (field, bit, width), (_, _, low, high) in zip(offsets(name),
                                                       LAYOUT[name][1]):
         item = (value >> bit) & ((1 << width) - 1)
+        if low < 0:
+            item = _to_signed(item, width)
         _check(field, item, low, high)
         if "[" in field:
             arrays.setdefault(field.split("[", 1)[0], []).append(item)
         else:
             result[field] = item
     result.update(arrays)
+    _check_shape(name, result)
     if name == "ASSET_CHUNK":
         result["payload"] = bytes(data[CHUNK_HEAD_BYTES:])
     return result
@@ -267,6 +304,36 @@ encode_telemetry = _named_encoder("TELEMETRY")
 decode_telemetry = _named_decoder("TELEMETRY")
 encode_telemetry_ack = _named_encoder("TELEMETRY_ACK")
 decode_telemetry_ack = _named_decoder("TELEMETRY_ACK")
+encode_tap = _named_encoder("TAP")
+decode_tap = _named_decoder("TAP")
+encode_mole_on = _named_encoder("MOLE_ON")
+decode_mole_on = _named_decoder("MOLE_ON")
+encode_feedback = _named_encoder("FEEDBACK")
+decode_feedback = _named_decoder("FEEDBACK")
+encode_game_control = _named_encoder("GAME_CONTROL")
+decode_game_control = _named_decoder("GAME_CONTROL")
+encode_score_mask = _named_encoder("SCORE_MASK")
+decode_score_mask = _named_decoder("SCORE_MASK")
+encode_ack = _named_encoder("ACK")
+decode_ack = _named_decoder("ACK")
+
+
+def grid_map(layout: str, node_map: Sequence[int],
+             crcs: Sequence[int]) -> Tuple[int, int, List[int], List[int]]:
+    """Old 3-column map to SESSION_CONFIG's rows, cols and row-major map.
+
+    ``layout`` is "RxC"; ``node_map`` and ``crcs`` hold 9 positions of a
+    3-column grid (position r x 3 + c), as asset_builder still uses until
+    build step 4. Returns (rows, cols, map, crcs), each list 9 long and
+    row-major over rows x cols (position r x cols + c), the rest 0.
+    """
+    rows, cols = (int(part) for part in layout.lower().split("x"))
+    new_map, new_crcs = [0] * MAP_SLOTS, [0] * MAP_SLOTS
+    for row in range(rows):
+        for col in range(cols):
+            old, new = row * 3 + col, row * cols + col
+            new_map[new], new_crcs[new] = node_map[old], crcs[old]
+    return rows, cols, new_map, new_crcs
 
 
 def pack_frame(values: List[int]) -> bytes:

@@ -20,11 +20,12 @@ import proto_layout as pl  # noqa: E402
 
 #: Encoded lengths from protocol/layout_table.md section 4 (typed in, so a
 #: width change in LAYOUT that the table does not follow fails here).
-LENGTHS = {"REGISTER": 10, "HEARTBEAT": 5, "SESSION_CONFIG": 46,
+LENGTHS = {"REGISTER": 10, "HEARTBEAT": 5, "SESSION_CONFIG": 47,
            "MANIFEST": 10, "CHUNK_ACK": 5, "NACK": 7, "BUSY": 7,
            "ASSET_READY": 9, "SYNC_READY": 5, "BEACON": 12, "START_AT": 12,
-           "RESUME_AT": 13, "PAUSE": 4, "STOP": 4, "STATUS": 7,
-           "TELEMETRY": 9, "TELEMETRY_ACK": 6}
+           "RESUME_AT": 13, "PAUSE": 4, "STOP": 4, "STATUS": 8,
+           "TELEMETRY": 9, "TELEMETRY_ACK": 6, "TAP": 15, "MOLE_ON": 14,
+           "FEEDBACK": 5, "GAME_CONTROL": 5, "SCORE_MASK": 13, "ACK": 7}
 
 
 def _expected(full: dict) -> dict:
@@ -60,7 +61,7 @@ def test_boundary_values_named_in_the_plan() -> None:
         assert pl.decode_telemetry(data)["fault_word"] == word
     for bitmap in (0, 0x1FF):
         data = pl.encode_status(session_id=1, seq=1, readiness=bitmap,
-                                online=bitmap, state=0)
+                                online=bitmap, state=0, score=0)
         decoded = pl.decode_status(data)
         assert decoded["readiness"] == bitmap == decoded["online"]
 
@@ -113,16 +114,35 @@ def test_payload_115200_does_not_match_a_600_frame_manifest() -> None:
     ("HEARTBEAT", {"node_id": 10}),
     ("MANIFEST", {"format_version": 2, "frame_count": 0, "crc32": 0}),
     ("MANIFEST", {"format_version": 2, "frame_count": 1024, "crc32": 0}),
-    ("STATUS", {"readiness": 0x200, "online": 0, "state": 0}),
-    ("STATUS", {"readiness": 0, "online": 0, "state": 12}),
+    ("STATUS", {"readiness": 0x200, "online": 0, "state": 0, "score": 0}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 13, "score": 0}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": 100}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": -100}),
+    ("TAP", {"node_id": 0, "peak": 0, "t_tap": 0}),
+    ("MOLE_ON", {"node_id": 1, "t_show": 0, "up_ms": 0}),
+    ("MOLE_ON", {"node_id": 1, "t_show": 0, "up_ms": 2001}),
+    ("FEEDBACK", {"node_id": 1, "result": 3}),
+    ("GAME_CONTROL", {"node_id": 10, "command": 0}),
+    ("GAME_CONTROL", {"node_id": 0, "command": 4}),
+    ("SCORE_MASK", {"node_id": 0, "mask": 0}),
+    ("ACK", {"node_id": 10, "acked_seq": 0}),
     ("TELEMETRY", {"node_id": 1, "fault_word": 0, "orientation": 0,
                    "display_state": 7}),
     ("ASSET_CHUNK", {"chunk_index": 113, "payload": b"\x00"}),
     ("ASSET_CHUNK", {"chunk_index": 0, "payload": b""}),
     ("ASSET_CHUNK", {"chunk_index": 0, "payload": bytes(1025)}),
-    ("SESSION_CONFIG", {"layout": 3, "policy": 0, "node_map": [0] * 9}),
-    ("SESSION_CONFIG", {"layout": 0, "policy": 0,
-                        "node_map": [10] + [0] * 8}),
+    ("SESSION_CONFIG", {"rows": 0, "cols": 1, "policy": 0,
+                        "node_map": [0] * 9, "frame_count": 1,
+                        "crc32": [0] * 9}),
+    ("SESSION_CONFIG", {"rows": 1, "cols": 10, "policy": 0,
+                        "node_map": [0] * 9, "frame_count": 1,
+                        "crc32": [0] * 9}),
+    ("SESSION_CONFIG", {"rows": 2, "cols": 5, "policy": 0,
+                        "node_map": [0] * 9, "frame_count": 1,
+                        "crc32": [0] * 9}),
+    ("SESSION_CONFIG", {"rows": 1, "cols": 1, "policy": 0,
+                        "node_map": [10] + [0] * 8, "frame_count": 1,
+                        "crc32": [0] * 9}),
 ])
 def test_encoder_refuses_out_of_range(name: str, fields: dict) -> None:
     fields = dict(fields, session_id=0, seq=0)
@@ -142,6 +162,85 @@ def test_decoder_rejects_wrong_length_type_and_range() -> None:
     value = int.from_bytes(beat, "little") & ~(0xF << 29)
     with pytest.raises(pl.LayoutError):
         pl.decode(value.to_bytes(len(beat), "little"))
-    # Type code 20 is not a message.
+    # Type code 24 is not a message.
     with pytest.raises(pl.LayoutError):
-        pl.decode(bytes((20, 0, 0, 0, 0)))
+        pl.decode(bytes((24, 0, 0, 0, 0)))
+
+
+def test_score_is_twos_complement() -> None:
+    """STATUS score -99 to 99: -1 is all ones in its 8 bits (bits 51-58)."""
+    for score in (-99, -1, 0, 99):
+        data = pl.encode_status(session_id=1, seq=1, readiness=0, online=0,
+                                state=12, score=score)
+        assert pl.decode_status(data)["score"] == score
+    data = pl.encode_status(session_id=0, seq=0, readiness=0, online=0,
+                            state=0, score=-1)
+    assert (int.from_bytes(data, "little") >> 51) & 0xFF == 0xFF
+
+
+def test_decoder_rejects_more_than_nine_tiles() -> None:
+    """rows and cols are each 1 to 9, but 2 x 5 = 10 tiles is refused."""
+    good = pl.encode_session_config(session_id=1, seq=1, rows=1, cols=9,
+                                    policy=0, node_map=list(range(1, 10)),
+                                    frame_count=1, crc32=[0] * 9)
+    assert pl.decode(good)["cols"] == 9
+    # rows at bit 29, cols at bit 33: write 2 x 5 straight into the bits.
+    value = int.from_bytes(good, "little") & ~(0xFF << 29)
+    value |= (2 << 29) | (5 << 33)
+    with pytest.raises(pl.LayoutError):
+        pl.decode(value.to_bytes(len(good), "little"))
+
+
+#: The six whack-a-mole rows (re-plan build step 3).
+GAME_ROWS = ["TAP", "MOLE_ON", "FEEDBACK", "GAME_CONTROL", "SCORE_MASK",
+             "ACK"]
+#: Rows whose node_id names a tile (1 to 9); the others allow 0 (PC-Pico).
+TILE_ONLY = ["TAP", "MOLE_ON", "FEEDBACK", "SCORE_MASK"]
+#: node_id sits at bit 29 in every game row, 4 bits wide.
+NODE_BIT = 29
+
+
+def _typical(name: str) -> bytes:
+    return pl.encode(name, dict(gv.TYPICAL[name], session_id=1, seq=1))
+
+
+def _with_bits(data: bytes, bit: int, width: int, value: int) -> bytes:
+    """data with the field at bit, width bits wide, set straight to value."""
+    word = int.from_bytes(data, "little") & ~(((1 << width) - 1) << bit)
+    return (word | (value << bit)).to_bytes(len(data), "little")
+
+
+@pytest.mark.parametrize("name", GAME_ROWS)
+def test_decoder_rejects_truncated_game_rows(name: str) -> None:
+    data = _typical(name)
+    assert pl.decode(data)["type"] == name
+    with pytest.raises(pl.LayoutError):
+        pl.decode(data[:-1])
+
+
+@pytest.mark.parametrize("name", GAME_ROWS)
+@pytest.mark.parametrize("node_id", [0] + list(range(10, 16)))
+def test_decoder_node_id_range_in_game_rows(name: str, node_id: int) -> None:
+    """node_id 10 to 15 is refused everywhere; 0 only where a tile is
+    required (GAME_CONTROL and ACK use 0 for the PC-Pico link)."""
+    data = _with_bits(_typical(name), NODE_BIT, 4, node_id)
+    if node_id == 0 and name not in TILE_ONLY:
+        assert pl.decode(data)["node_id"] == 0
+    else:
+        with pytest.raises(pl.LayoutError):
+            pl.decode(data)
+
+
+@pytest.mark.parametrize("bit", [29, 33])
+def test_decoder_rejects_rows_or_cols_of_zero(bit: int) -> None:
+    """rows at bit 29, cols at bit 33, 4 bits each; 0 is refused."""
+    data = _with_bits(_typical("SESSION_CONFIG"), bit, 4, 0)
+    with pytest.raises(pl.LayoutError):
+        pl.decode(data)
+
+
+def test_decoder_rejects_up_ms_of_zero() -> None:
+    """MOLE_ON up_ms at bit 97, 11 bits; 0 is refused."""
+    data = _with_bits(_typical("MOLE_ON"), 97, 11, 0)
+    with pytest.raises(pl.LayoutError):
+        pl.decode(data)

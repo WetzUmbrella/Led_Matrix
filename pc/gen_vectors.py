@@ -36,11 +36,11 @@ TYPICAL: Dict[str, Dict[str, object]] = {
     "REGISTER": {"node_id": 3, "cached_session_id": 0xA5,
                  "cached_crc32": 0x1234ABCD},
     "HEARTBEAT": {"node_id": 7},
-    "SESSION_CONFIG": {"layout": 1, "policy": 1,
-                       "node_map": [1, 2, 0, 3, 4, 0, 0, 0, 0],
+    "SESSION_CONFIG": {"rows": 2, "cols": 3, "policy": 1,
+                       "node_map": [1, 2, 0, 3, 4, 5, 0, 0, 0],
                        "frame_count": 600,
                        "crc32": [0x11111111, 0x22222222, 0, 0x33333333,
-                                 0x44444444, 0, 0, 0, 0]},
+                                 0x44444444, 0x55555555, 0, 0, 0]},
     "MANIFEST": {"format_version": 2, "frame_count": 600,
                  "crc32": 0xCBF43926},
     "ASSET_CHUNK": {"chunk_index": 56,
@@ -55,10 +55,23 @@ TYPICAL: Dict[str, Dict[str, object]] = {
     "RESUME_AT": {"t_resume": 9_876_543_210_987, "frame_index": 517},
     "PAUSE": {},
     "STOP": {},
-    "STATUS": {"readiness": 0x0A5, "online": 0x15A, "state": 8},
+    "STATUS": {"readiness": 0x0A5, "online": 0x15A, "state": 12,
+               "score": -7},
     "TELEMETRY": {"node_id": 8, "fault_word": 0x80000041,
                   "orientation": 2, "display_state": 4},
     "TELEMETRY_ACK": {"acked_seq": 0xBEEF},
+    "TAP": {"node_id": 5, "peak": 0x2A5C, "t_tap": 0x00000123456789AB},
+    "MOLE_ON": {"node_id": 3, "t_show": 1_234_567_890_123, "up_ms": 1200},
+    "FEEDBACK": {"node_id": 6, "result": 1},
+    "GAME_CONTROL": {"node_id": 2, "command": 2},
+    "SCORE_MASK": {"node_id": 7, "mask": 0x183C7EFFFF7E3C18},
+    "ACK": {"node_id": 4, "acked_seq": 0xA55A},
+}
+
+#: Largest-value corners that break a rule across fields: rows and cols
+#: may each be 9, but rows x cols is at most 9, so the max corner is 9 x 1.
+CORNER_MAX_OVERRIDE: Dict[str, Dict[str, object]] = {
+    "SESSION_CONFIG": {"cols": 1},
 }
 
 
@@ -73,6 +86,8 @@ def _corner(name: str, high: bool) -> Dict[str, object]:
         else:
             fields[field] = value
     fields.update(arrays)
+    if high:
+        fields.update(CORNER_MAX_OVERRIDE.get(name, {}))
     if name == "ASSET_CHUNK":
         size = pl.CHUNK_PAYLOAD_MAX if high else 1
         fields["payload"] = bytes((0xFF if high else 0x00,)) * size

@@ -31,12 +31,14 @@
 #define LE_U32        UINT32_C(0x01020304)
 #define LE_U64        UINT64_C(0x0102030405060708)
 #define LE_BYTES      8u
+#define SCORE_OVER    (PROTO_SCORE_MAX + 1)  /* 100, one above the range. */
+#define SCORE_UNDER   (-PROTO_SCORE_MAX - 1) /* -100, one below. */
 
 /** Encoded lengths copied from protocol/layout_table.md section 4, so a
  *  change of width in proto.h that the table does not follow fails here. */
 #define LEN_REGISTER       10u
 #define LEN_HEARTBEAT      5u
-#define LEN_SESSION_CONFIG 46u
+#define LEN_SESSION_CONFIG 47u
 #define LEN_MANIFEST       10u
 #define LEN_CHUNK_HEAD     5u
 #define LEN_CHUNK_ACK      5u
@@ -48,9 +50,24 @@
 #define LEN_START_AT       12u
 #define LEN_RESUME_AT      13u
 #define LEN_COMMAND        4u
-#define LEN_STATUS         7u
+#define LEN_STATUS         8u
 #define LEN_TELEMETRY      9u
 #define LEN_TELEMETRY_ACK  6u
+#define LEN_TAP            15u
+#define LEN_MOLE_ON        14u
+#define LEN_FEEDBACK       5u
+#define LEN_GAME_CONTROL   5u
+#define LEN_SCORE_MASK     13u
+#define LEN_ACK            7u
+
+/** The six whack-a-mole rows, and the largest value of the 4-bit node_id
+ *  field (15), for the decode-side refusals. */
+#define GAME_ROWS      6u
+#define NODE_FIELD_MAX ((1u << PROTO_NODE_BITS) - 1u)
+
+static proto_type_t const g_game_rows[GAME_ROWS] = {
+    PROTO_TYPE_TAP,          PROTO_TYPE_MOLE_ON,    PROTO_TYPE_FEEDBACK,
+    PROTO_TYPE_GAME_CONTROL, PROTO_TYPE_SCORE_MASK, PROTO_TYPE_ACK};
 
 static uint8_t  g_buf[BUF_BYTES];
 static uint8_t  g_payload[PROTO_CHUNK_PAYLOAD_MAX];
@@ -78,9 +95,20 @@ static void           rt_commands (uint32_t corner);
 static void           rt_status (uint32_t corner);
 static void           rt_telemetry (uint32_t corner);
 static void           rt_telemetry_ack (uint32_t corner);
+static void           rt_tap (uint32_t corner);
+static void           rt_mole_on (uint32_t corner);
+static void           rt_feedback (uint32_t corner);
+static void           rt_game_control (uint32_t corner);
+static void           rt_score_mask (uint32_t corner);
+static void           rt_ack (uint32_t corner);
+static bool           lengths_game (void);
 static bool           reject_encode (void);
 static bool           reject_decode_range (void);
 static bool           reject_length_type (void);
+static bool           reject_decode_game (void);
+static bool           reject_decode_grid (void);
+static uint32_t       game_encode (proto_type_t type);
+static bool           game_decode (proto_type_t type, uint32_t len);
 
 /**
  * @brief  Boundary set round trip for every message row.
@@ -109,12 +137,18 @@ bool test_messages_boundary (void)
         rt_status(corner);
         rt_telemetry(corner);
         rt_telemetry_ack(corner);
+        rt_tap(corner);
+        rt_mole_on(corner);
+        rt_feedback(corner);
+        rt_game_control(corner);
+        rt_score_mask(corner);
+        rt_ack(corner);
     }
 
-    /* 18 rows (PAUSE and STOP in rt_commands) in 2 corners. */
-    printf("    %" PRIu32 " cases (18 message rows x 2 corners), %" PRIu32
+    /* 24 rows (PAUSE and STOP in rt_commands) in 2 corners. */
+    printf("    %" PRIu32 " cases (24 message rows x 2 corners), %" PRIu32
            " mismatches\n",
-           (uint32_t)PROTO_TYPE_COUNT * CORNERS, g_mismatches); /* 18. */
+           (uint32_t)PROTO_TYPE_COUNT * CORNERS, g_mismatches); /* 24. */
 
     return test_main_check(0u == g_mismatches, __LINE__);
 }
@@ -129,7 +163,7 @@ bool test_messages_lengths (void)
     proto_header_t const         hdr   = header_at(CORNER_MIN);
     proto_register_t const       reg   = {hdr, 1u, 0u, 0u};
     proto_heartbeat_t const      beat  = {hdr, 1u};
-    proto_session_config_t const cfg   = {hdr, 0u, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {0u}, 1u, {0u}};
     proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
     proto_chunk_ack_t const      cack  = {hdr, 1u, 0u};
@@ -141,7 +175,7 @@ bool test_messages_lengths (void)
     proto_start_at_t const       start = {hdr, 0u};
     proto_resume_at_t const      res   = {hdr, 0u, 0u};
     proto_command_t const        cmd   = {hdr};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u};
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_telemetry_ack_t const  tack  = {hdr, 0u};
 
@@ -218,7 +252,49 @@ bool test_messages_lengths (void)
                                                      &tack, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
-    printf("    18 encoders return the layout_table.md lengths\n");
+    b_ok = (lengths_game()) && b_ok;
+    printf("    24 encoders return the layout_table.md lengths\n");
+
+    return b_ok;
+}
+
+/**
+ * @brief  Lengths of the six whack-a-mole rows (re-plan step 3).
+ * @return true when every length matches.
+ */
+static bool lengths_game (void)
+{
+    bool                       b_ok = true;
+    proto_header_t const       hdr  = header_at(CORNER_MIN);
+    proto_tap_t const          tap  = {hdr, 1u, 0u, 0u};
+    proto_mole_on_t const      mole = {hdr, 1u, 0u, 1u};
+    proto_feedback_msg_t const feed = {hdr, 1u, 0u};
+    proto_game_control_t const ctrl = {hdr, 0u, 0u};
+    proto_score_mask_t const   mask = {hdr, 1u, 0u};
+    proto_ack_t const          ack  = {hdr, 0u, 0u};
+
+    b_ok = (test_main_check(LEN_TAP == proto_encode_tap(&tap, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(LEN_MOLE_ON ==
+                                proto_encode_mole_on(&mole, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(LEN_FEEDBACK ==
+                                proto_encode_feedback(&feed, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(LEN_GAME_CONTROL == proto_encode_game_control(
+                                                    &ctrl, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(LEN_SCORE_MASK == proto_encode_score_mask(
+                                                  &mask, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(LEN_ACK == proto_encode_ack(&ack, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -233,11 +309,193 @@ bool test_messages_reject (void)
     bool const b_encode = reject_encode();
     bool const b_range  = reject_decode_range();
     bool const b_length = reject_length_type();
+    bool const b_game   = reject_decode_game();
+    bool const b_grid   = reject_decode_grid();
 
-    printf("    7 out-of-range encodes, 6 out-of-range decodes, wrong type, "
+    printf("    15 out-of-range encodes, 8 out-of-range decodes, wrong type, "
            "wrong lengths and a short buffer refused\n");
+    printf("    6 game rows: 1 byte short, node_id 10 to 15, and node_id 0 "
+           "where a tile is required, refused; rows 0 and cols 0 refused\n");
 
-    return b_encode && b_range && b_length;
+    return b_encode && b_range && b_length && b_game && b_grid;
+}
+
+/**
+ * @brief  Decoders refuse each game row one byte short, and with node_id 10
+ *         to 15 written into its bits. node_id 0 is refused where a tile is
+ *         required (TAP, MOLE_ON, FEEDBACK, SCORE_MASK) and accepted where
+ *         it means the PC-Pico link (GAME_CONTROL, ACK).
+ * @return true when every refusal (and acceptance) happened.
+ */
+static bool reject_decode_game (void)
+{
+    bool b_ok = true;
+
+    for (uint32_t row = 0u; row < GAME_ROWS; row++)
+    {
+        proto_type_t const type = g_game_rows[row];
+        bool const         b_pc_ok =
+            (PROTO_TYPE_GAME_CONTROL == type) || (PROTO_TYPE_ACK == type);
+        uint32_t const len = game_encode(type);
+
+        /* Valid as encoded, refused one byte short. */
+        b_ok = (test_main_check((0u != len) && (game_decode(type, len)),
+                                __LINE__)) &&
+               b_ok;
+        b_ok =
+            (test_main_check(!game_decode(type, len - 1u), __LINE__)) && b_ok;
+
+        for (uint32_t node = 0u; node <= NODE_FIELD_MAX; node++)
+        {
+            if ((0u == node) || (node > PROTO_NODE_MAX))
+            {
+                bool const b_expect = (0u == node) && (b_pc_ok);
+
+                (void)game_encode(type); /* A fresh valid message. */
+                proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_NODE_BITS, node);
+                b_ok = (test_main_check(b_expect == game_decode(type, len),
+                                        __LINE__)) &&
+                       b_ok;
+            }
+        }
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  The SESSION_CONFIG decoder refuses rows 0 and cols 0 written into
+ *         the bits of a valid 1 x 1 message.
+ * @return true when both refusals happened.
+ */
+static bool reject_decode_grid (void)
+{
+    bool                         b_ok = true;
+    proto_header_t const         hdr  = header_at(CORNER_MIN);
+    proto_session_config_t const cfg  = {hdr, 1u, 1u, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t       cfg_out;
+
+    for (uint32_t field = 0u; field < 2u; field++)
+    {
+        /* field 0 is rows (bit 29), field 1 is cols (bit 33). */
+        (void)proto_encode_session_config(&cfg, g_buf, BUF_BYTES); /* Valid. */
+        proto_put_bits(g_buf, PROTO_HEADER_BITS + (field * PROTO_GRID_BITS),
+                       PROTO_GRID_BITS, 0u);
+        b_ok = (test_main_check(!proto_decode_session_config(
+                                    g_buf, LEN_SESSION_CONFIG, &cfg_out),
+                                __LINE__)) &&
+               b_ok;
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Encode a valid message of one game row into g_buf.
+ * @param  type  One of g_game_rows.
+ * @return Its length in bytes, 0 for another type.
+ */
+static uint32_t game_encode (proto_type_t type)
+{
+    proto_header_t const hdr = header_at(CORNER_MIN);
+    uint32_t             len = 0u;
+
+    if (PROTO_TYPE_TAP == type)
+    {
+        proto_tap_t const msg = {hdr, 5u, 1u, 1u};
+
+        len = proto_encode_tap(&msg, g_buf, BUF_BYTES);
+    }
+    else if (PROTO_TYPE_MOLE_ON == type)
+    {
+        proto_mole_on_t const msg = {hdr, 3u, 1u, 1u};
+
+        len = proto_encode_mole_on(&msg, g_buf, BUF_BYTES);
+    }
+    else if (PROTO_TYPE_FEEDBACK == type)
+    {
+        proto_feedback_msg_t const msg = {hdr, 6u, 1u};
+
+        len = proto_encode_feedback(&msg, g_buf, BUF_BYTES);
+    }
+    else if (PROTO_TYPE_GAME_CONTROL == type)
+    {
+        proto_game_control_t const msg = {hdr, 2u, 2u};
+
+        len = proto_encode_game_control(&msg, g_buf, BUF_BYTES);
+    }
+    else if (PROTO_TYPE_SCORE_MASK == type)
+    {
+        proto_score_mask_t const msg = {hdr, 7u, 1u};
+
+        len = proto_encode_score_mask(&msg, g_buf, BUF_BYTES);
+    }
+    else if (PROTO_TYPE_ACK == type)
+    {
+        proto_ack_t const msg = {hdr, 4u, 1u};
+
+        len = proto_encode_ack(&msg, g_buf, BUF_BYTES);
+    }
+    else
+    {
+        len = 0u; /* Not a game row. */
+    }
+
+    return len;
+}
+
+/**
+ * @brief  Decode g_buf as one game row.
+ * @param  type  One of g_game_rows.
+ * @param  len   Bytes to decode.
+ * @return The decoder's result; false for another type.
+ */
+static bool game_decode (proto_type_t type, uint32_t len)
+{
+    bool b_ok = false;
+
+    if (PROTO_TYPE_TAP == type)
+    {
+        proto_tap_t out;
+
+        b_ok = proto_decode_tap(g_buf, len, &out);
+    }
+    else if (PROTO_TYPE_MOLE_ON == type)
+    {
+        proto_mole_on_t out;
+
+        b_ok = proto_decode_mole_on(g_buf, len, &out);
+    }
+    else if (PROTO_TYPE_FEEDBACK == type)
+    {
+        proto_feedback_msg_t out;
+
+        b_ok = proto_decode_feedback(g_buf, len, &out);
+    }
+    else if (PROTO_TYPE_GAME_CONTROL == type)
+    {
+        proto_game_control_t out;
+
+        b_ok = proto_decode_game_control(g_buf, len, &out);
+    }
+    else if (PROTO_TYPE_SCORE_MASK == type)
+    {
+        proto_score_mask_t out;
+
+        b_ok = proto_decode_score_mask(g_buf, len, &out);
+    }
+    else if (PROTO_TYPE_ACK == type)
+    {
+        proto_ack_t out;
+
+        b_ok = proto_decode_ack(g_buf, len, &out);
+    }
+    else
+    {
+        b_ok = false; /* Not a game row. */
+    }
+
+    return b_ok;
 }
 
 /**
@@ -250,11 +508,18 @@ static bool reject_encode (void)
     proto_header_t const   hdr   = header_at(CORNER_MIN);
     proto_heartbeat_t      beat  = {hdr, 0u};
     proto_manifest_t       man   = {hdr, 2u, 0u, 0u};
-    proto_status_t         stat  = {hdr, BITMAP_MAX + 1u, 0u, 0u};
+    proto_status_t         stat  = {hdr, BITMAP_MAX + 1u, 0u, 0u, 0u};
+    proto_status_t         hi    = {hdr, 0u, 0u, 0u, SCORE_OVER};
+    proto_status_t         lo    = {hdr, 0u, 0u, 0u, SCORE_UNDER};
     proto_telemetry_t      tel   = {hdr, 1u, 0u, 0u, PROTO_DISPLAY_COUNT};
     proto_asset_chunk_t    chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
                                     g_payload};
-    proto_session_config_t cfg = {hdr, PROTO_LAYOUT_COUNT, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t cfg   = {hdr, 2u, 5u, 0u, {0u}, 1u, {0u}};
+    proto_mole_on_t        mole  = {hdr, 1u, 0u, 0u};
+    proto_game_control_t   ctrl  = {hdr, 1u, 4u};
+    proto_feedback_msg_t   feed  = {hdr, 1u, 3u}; /* 3 = FEEDBACK_COUNT. */
+    proto_ack_t            ack   = {hdr, PROTO_NODE_MAX + 1u, 0u};
+    proto_tap_t            tap   = {hdr, 0u, 0u, 0u};
 
     /* Encoders refuse out-of-range fields. */
     b_ok =
@@ -284,6 +549,34 @@ static bool reject_encode (void)
                0u == proto_encode_session_config(&cfg, g_buf, BUF_BYTES),
                __LINE__)) &&
            b_ok;
+    b_ok = (test_main_check(0u == proto_encode_status(&hi, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(0u == proto_encode_status(&lo, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    mole.up_ms = 0u;
+    b_ok = (test_main_check(0u == proto_encode_mole_on(&mole, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    mole.up_ms = PROTO_UP_MS_MAX + 1u;
+    b_ok = (test_main_check(0u == proto_encode_mole_on(&mole, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(
+               0u == proto_encode_game_control(&ctrl, g_buf, BUF_BYTES),
+               __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check(0u == proto_encode_feedback(&feed, g_buf, BUF_BYTES),
+                         __LINE__)) &&
+        b_ok;
+    b_ok = (test_main_check(0u == proto_encode_ack(&ack, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(0u == proto_encode_tap(&tap, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -299,20 +592,22 @@ static bool reject_decode_range (void)
     proto_header_t const         hdr   = header_at(CORNER_MIN);
     proto_heartbeat_t const      beat  = {hdr, 1u};
     proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u};
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
-    proto_session_config_t const cfg   = {hdr, 0u, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {0u}, 1u, {0u}};
+    proto_mole_on_t const        mole  = {hdr, 1u, 0u, 1u};
     proto_heartbeat_t            beat_out;
     proto_manifest_t             man_out;
     proto_status_t               stat_out;
     proto_telemetry_t            tel_out;
     proto_asset_chunk_t          chunk_out;
     proto_session_config_t       cfg_out;
+    proto_mole_on_t              mole_out;
 
     /* Decoders refuse out-of-range fields written straight into the bits:
-     * Node ID 0, frame_count 0, coordinator state 12, display state 7,
-     * chunk index 113 and layout 3. */
+     * Node ID 0, frame_count 0, coordinator state 13, display state 7,
+     * chunk index 113, rows x cols > 9, score 100 and up_ms 0. */
     (void)proto_encode_heartbeat(&beat, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_NODE_BITS, 0u);
     b_ok = (test_main_check(
@@ -352,12 +647,28 @@ static bool reject_decode_range (void)
            b_ok;
 
     (void)proto_encode_session_config(&cfg, g_buf, BUF_BYTES); /* Valid. */
-    proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_LAYOUT_BITS,
-                   PROTO_LAYOUT_COUNT);
+    proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_GRID_BITS, 2u);
+    proto_put_bits(g_buf, PROTO_HEADER_BITS + PROTO_GRID_BITS, PROTO_GRID_BITS,
+                   5u);
     b_ok = (test_main_check(!proto_decode_session_config(
                                 g_buf, LEN_SESSION_CONFIG, &cfg_out),
                             __LINE__)) &&
            b_ok;
+
+    (void)proto_encode_status(&stat, g_buf, BUF_BYTES); /* Valid. */
+    proto_put_bits(g_buf, PROTO_STATUS_BITS - PROTO_SCORE_BITS,
+                   PROTO_SCORE_BITS, SCORE_OVER);
+    b_ok = (test_main_check(!proto_decode_status(g_buf, LEN_STATUS, &stat_out),
+                            __LINE__)) &&
+           b_ok;
+
+    (void)proto_encode_mole_on(&mole, g_buf, BUF_BYTES); /* Valid. */
+    proto_put_bits(g_buf, PROTO_MOLE_ON_BITS - PROTO_UP_MS_BITS,
+                   PROTO_UP_MS_BITS, 0u);
+    b_ok =
+        (test_main_check(!proto_decode_mole_on(g_buf, LEN_MOLE_ON, &mole_out),
+                         __LINE__)) &&
+        b_ok;
 
     return b_ok;
 }
@@ -549,11 +860,14 @@ static void rt_heartbeat (uint32_t corner)
 static void rt_session_config (uint32_t corner)
 {
     bool const             b_max = (CORNER_MIN != corner);
-    proto_session_config_t msg   = {header_at(corner), 0u, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t msg   = {
+        header_at(corner), 1u, 1u, 0u, {0u}, 1u, {0u}};
     proto_session_config_t out;
     bool                   b_same;
 
-    msg.layout = b_max ? (uint8_t)PROTO_LAYOUT_3X3 : 0u;   /* Code 2. */
+    /* rows 9 is the largest; 9 x 9 would break rows x cols <= 9, so the
+     * max corner is a 9 x 1 column. */
+    msg.rows   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u;
     msg.policy = b_max ? (uint8_t)PROTO_POLICY_PAUSE : 0u; /* Code 1. */
 
     msg.frame_count = b_max ? (uint16_t)PROTO_FRAME_MAX : 1u; /* 1023. */
@@ -568,7 +882,8 @@ static void rt_session_config (uint32_t corner)
 
     b_same = (proto_decode_session_config(g_buf, len, &out)) &&
              (same_header(&msg.header, &out.header)) &&
-             (msg.layout == out.layout) && (msg.policy == out.policy);
+             (msg.rows == out.rows) && (msg.cols == out.cols) &&
+             (msg.policy == out.policy);
 
     b_same = b_same && (msg.frame_count == out.frame_count);
 
@@ -796,14 +1111,15 @@ static void rt_status (uint32_t corner)
     bool const           b_max = (CORNER_MIN != corner);
     proto_status_t const msg   = {
         header_at(corner), b_max ? BITMAP_MAX : 0u, b_max ? BITMAP_MAX : 0u,
-        b_max ? (uint8_t)PROTO_COORD_FAULT : 0u}; /* Code 11. */
+        b_max ? (uint8_t)PROTO_COORD_COORDINATING_GAME : 0u, /* Code 12. */
+        b_max ? (int8_t)PROTO_SCORE_MAX : (int8_t)-PROTO_SCORE_MAX};
     proto_status_t out;
     uint32_t const len = proto_encode_status(&msg, g_buf, BUF_BYTES);
 
     tally((proto_decode_status(g_buf, len, &out)) &&
           (same_header(&msg.header, &out.header)) &&
           (msg.readiness == out.readiness) && (msg.online == out.online) &&
-          (msg.state == out.state));
+          (msg.state == out.state) && (msg.score == out.score));
 }
 
 /**
@@ -841,6 +1157,115 @@ static void rt_telemetry_ack (uint32_t corner)
     tally((proto_decode_telemetry_ack(g_buf, len, &out)) &&
           (same_header(&msg.header, &out.header)) &&
           (msg.acked_seq == out.acked_seq));
+}
+
+/**
+ * @brief  TAP round trip: node_id 1 or 9, peak and t_tap min or max.
+ * @param  corner  0 or 1.
+ */
+static void rt_tap (uint32_t corner)
+{
+    bool const        b_max = (CORNER_MIN != corner);
+    proto_tap_t const msg   = {header_at(corner), b_max ? PROTO_NODE_MAX : 1u,
+                             b_max ? UINT16_MAX : 0u, b_max ? UINT64_MAX : 0u};
+    proto_tap_t       out;
+    uint32_t const    len = proto_encode_tap(&msg, g_buf, BUF_BYTES);
+
+    tally((proto_decode_tap(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (msg.node_id == out.node_id) && (msg.peak == out.peak) &&
+          (msg.t_tap == out.t_tap));
+}
+
+/**
+ * @brief  MOLE_ON round trip: node_id 1 or 9, t_show 0 or max, up_ms 1 or
+ *         PROTO_UP_MS_MAX.
+ * @param  corner  0 or 1.
+ */
+static void rt_mole_on (uint32_t corner)
+{
+    bool const            b_max = (CORNER_MIN != corner);
+    proto_mole_on_t const msg = {header_at(corner), b_max ? PROTO_NODE_MAX : 1u,
+                                 b_max ? UINT64_MAX : 0u,
+                                 b_max ? PROTO_UP_MS_MAX : 1u};
+    proto_mole_on_t       out;
+    uint32_t const        len = proto_encode_mole_on(&msg, g_buf, BUF_BYTES);
+
+    tally((proto_decode_mole_on(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (msg.node_id == out.node_id) && (msg.t_show == out.t_show) &&
+          (msg.up_ms == out.up_ms));
+}
+
+/**
+ * @brief  FEEDBACK round trip: node_id 1 or 9, result 0 or 2 (the reserved
+ *         decoy code, the largest valid).
+ * @param  corner  0 or 1.
+ */
+static void rt_feedback (uint32_t corner)
+{
+    bool const b_max = (CORNER_MIN != corner);
+    /* Result 2 is PROTO_FEEDBACK_DECOY, 0 is PROTO_FEEDBACK_MISS. */
+    proto_feedback_msg_t const msg = {
+        header_at(corner), b_max ? PROTO_NODE_MAX : 1u, b_max ? 2u : 0u};
+    proto_feedback_msg_t out;
+    uint32_t const       len = proto_encode_feedback(&msg, g_buf, BUF_BYTES);
+
+    tally((proto_decode_feedback(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (msg.node_id == out.node_id) && (msg.result == out.result));
+}
+
+/**
+ * @brief  GAME_CONTROL round trip: node_id 0 or 9, command 0 or 3.
+ * @param  corner  0 or 1.
+ */
+static void rt_game_control (uint32_t corner)
+{
+    bool const                 b_max = (CORNER_MIN != corner);
+    proto_game_control_t const msg   = {
+        header_at(corner), b_max ? PROTO_NODE_MAX : 0u, b_max ? 3u : 0u};
+    proto_game_control_t out;
+    uint32_t const len = proto_encode_game_control(&msg, g_buf, BUF_BYTES);
+
+    tally((proto_decode_game_control(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (msg.node_id == out.node_id) && (msg.command == out.command));
+}
+
+/**
+ * @brief  SCORE_MASK round trip: node_id 1 or 9, mask 0 or max.
+ * @param  corner  0 or 1.
+ */
+static void rt_score_mask (uint32_t corner)
+{
+    bool const               b_max = (CORNER_MIN != corner);
+    proto_score_mask_t const msg   = {header_at(corner),
+                                    b_max ? PROTO_NODE_MAX : 1u,
+                                    b_max ? UINT64_MAX : 0u};
+    proto_score_mask_t       out;
+    uint32_t const len = proto_encode_score_mask(&msg, g_buf, BUF_BYTES);
+
+    tally((proto_decode_score_mask(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (msg.node_id == out.node_id) && (msg.mask == out.mask));
+}
+
+/**
+ * @brief  ACK round trip: node_id 0 or 9, acked_seq 0 or max.
+ * @param  corner  0 or 1.
+ */
+static void rt_ack (uint32_t corner)
+{
+    bool const        b_max = (CORNER_MIN != corner);
+    proto_ack_t const msg   = {header_at(corner), b_max ? PROTO_NODE_MAX : 0u,
+                             b_max ? UINT16_MAX : 0u};
+    proto_ack_t       out;
+    uint32_t const    len = proto_encode_ack(&msg, g_buf, BUF_BYTES);
+
+    tally((proto_decode_ack(g_buf, len, &out)) &&
+          (same_header(&msg.header, &out.header)) &&
+          (msg.node_id == out.node_id) && (msg.acked_seq == out.acked_seq));
 }
 
 /*** end of file ***/

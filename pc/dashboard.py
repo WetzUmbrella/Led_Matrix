@@ -39,6 +39,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asset_builder as ab  # noqa: E402
 import pico_link  # noqa: E402
+import proto_layout as pl  # noqa: E402
 
 STATES = ("IDLE", "CONFIGURING", "VALIDATING CONFIGURATION",
           "PREPARING ASSETS", "UPLOADING ASSETS", "VERIFYING UPLOADS",
@@ -202,9 +203,13 @@ class DashboardShell(cmd.Cmd):
             return
         frame_count = next(iter(model.assets.values())).frame_count
         crcs = [model.assets[n].crc32 if n else 0 for n in model.node_map]
-        code = ab.LAYOUTS[model.layout][0]
-        self.link.send_session_config(self.session_id, code, model.policy,
-                                      model.node_map, frame_count, crcs)
+        # The wire map is row-major over rows x cols (build step 3);
+        # asset_builder keeps its 3-column positions until build step 4.
+        rows, cols, wire_map, wire_crcs = pl.grid_map(model.layout,
+                                                      model.node_map, crcs)
+        self.link.send_session_config(self.session_id, rows, cols,
+                                      model.policy, wire_map, frame_count,
+                                      wire_crcs)
         for node, asset in sorted(model.assets.items()):
             print("node %d: %d frames, crc32 0x%08x" % (
                 node, asset.frame_count, asset.crc32))

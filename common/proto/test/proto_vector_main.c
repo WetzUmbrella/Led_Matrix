@@ -49,10 +49,11 @@ typedef struct
 
 /** Message names in type-code order (layout_table.md section 5.1). */
 static char const * const g_names[PROTO_TYPE_COUNT] = {
-    "REGISTER",  "HEARTBEAT", "SESSION_CONFIG", "MANIFEST",    "ASSET_CHUNK",
-    "CHUNK_ACK", "NACK",      "BUSY",           "ASSET_READY", "SYNC_READY",
-    "BEACON",    "START_AT",  "RESUME_AT",      "PAUSE",       "STOP",
-    "STATUS",    "TELEMETRY", "TELEMETRY_ACK"};
+    "REGISTER",  "HEARTBEAT",    "SESSION_CONFIG", "MANIFEST",    "ASSET_CHUNK",
+    "CHUNK_ACK", "NACK",         "BUSY",           "ASSET_READY", "SYNC_READY",
+    "BEACON",    "START_AT",     "RESUME_AT",      "PAUSE",       "STOP",
+    "STATUS",    "TELEMETRY",    "TELEMETRY_ACK",  "TAP",         "MOLE_ON",
+    "FEEDBACK",  "GAME_CONTROL", "SCORE_MASK",     "ACK"};
 
 static uint8_t g_in[READ_MAX];
 static uint8_t g_out[FILE_MAX];
@@ -67,6 +68,7 @@ static uint16_t arg_payload (vector_args_t const * p_args);
 static proto_header_t arg_header (vector_args_t const * p_args);
 static void           print_header (proto_header_t const * p_header);
 static void           print_u64 (char const * p_name, uint64_t value);
+static void           print_s64 (char const * p_name, int64_t value);
 static void           print_hex (uint8_t const * p_bytes, uint32_t len);
 static bool           decode_any (uint8_t const * p_buf, uint32_t len);
 static bool     decode_tile (uint8_t const * p_buf, uint32_t len, uint8_t type);
@@ -75,6 +77,10 @@ static bool     decode_tile_upload (uint8_t const * p_buf, uint32_t len,
 static bool     decode_coordinator (uint8_t const * p_buf, uint32_t len,
                                     uint8_t type);
 static bool     decode_pc (uint8_t const * p_buf, uint32_t len, uint8_t type);
+static bool     decode_game (uint8_t const * p_buf, uint32_t len, uint8_t type);
+static bool     decode_game_pico (uint8_t const * p_buf, uint32_t len,
+                                  uint8_t type);
+static uint32_t encode_game (uint32_t type, vector_args_t const * p_args);
 static uint32_t encode_any (char const * p_type, vector_args_t const * p_args);
 static uint32_t encode_tile (uint32_t type, vector_args_t const * p_args);
 static uint32_t encode_coordinator (uint32_t              type,
@@ -233,6 +239,32 @@ static uint16_t arg_u16 (vector_args_t const * p_args, char const * p_key)
 }
 
 /**
+ * @brief  Signed decimal value of a key, 0 when absent (the encoder then
+ *         refuses any field whose range excludes 0).
+ * @param  p_args  Arguments.
+ * @param  p_key   Key.
+ * @return The value, clamped to INT8_MAX when out of int8_t range.
+ */
+static int8_t arg_s8 (vector_args_t const * p_args, char const * p_key)
+{
+    char const * const p_value = find_arg(p_args, p_key);
+    int64_t            value   = 0;
+
+    if (NULL != p_value)
+    {
+        value = strtoll(p_value, NULL, DEC_BASE); /* Widens to 64 bits. */
+    }
+
+    if ((value < INT8_MIN) || (value > INT8_MAX))
+    {
+        value = INT8_MAX; /* Out of int8_t: the encoder refuses 127. */
+    }
+
+    /* value is -128 to 127 here, so it fits int8_t. */
+    return (int8_t)value;
+}
+
+/**
  * @brief  Value of a key, masked to 32 bits.
  * @param  p_args  Arguments.
  * @param  p_key   Key.
@@ -375,6 +407,16 @@ static void print_u64 (char const * p_name, uint64_t value)
 }
 
 /**
+ * @brief  Print one signed decimal field.
+ * @param  p_name  Field name.
+ * @param  value   Value.
+ */
+static void print_s64 (char const * p_name, int64_t value)
+{
+    printf("%s=%" PRId64 "\n", p_name, value);
+}
+
+/**
  * @brief  Print bytes as lowercase hex and a newline.
  * @param  p_bytes  Bytes.
  * @param  len      Count.
@@ -405,7 +447,9 @@ static bool decode_any (uint8_t const * p_buf, uint32_t len)
         b_ok = (decode_tile(p_buf, len, header.type)) ||
                (decode_tile_upload(p_buf, len, header.type)) ||
                (decode_coordinator(p_buf, len, header.type)) ||
-               (decode_pc(p_buf, len, header.type));
+               (decode_pc(p_buf, len, header.type)) ||
+               (decode_game(p_buf, len, header.type)) ||
+               (decode_game_pico(p_buf, len, header.type));
     }
 
     return b_ok;
@@ -481,6 +525,141 @@ static bool decode_tile (uint8_t const * p_buf, uint32_t len, uint8_t type)
                 print_u64("fault_word", msg.fault_word);
                 print_u64("orientation", msg.orientation);
                 print_u64("display_state", msg.display_state);
+            }
+        }
+        break;
+
+        default:
+            b_ok = false;
+            break;
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Decode and print a whack-a-mole row (TAP, ACK, MOLE_ON).
+ * @param  p_buf  Bytes.
+ * @param  len    Length.
+ * @param  type   Header type code.
+ * @return true when the type is one of these and it decoded.
+ */
+static bool decode_game (uint8_t const * p_buf, uint32_t len, uint8_t type)
+{
+    bool b_ok = false;
+
+    switch (type)
+    {
+        case PROTO_TYPE_TAP:
+        {
+            proto_tap_t msg;
+
+            b_ok = proto_decode_tap(p_buf, len, &msg);
+
+            if (b_ok)
+            {
+                print_header(&msg.header);
+                print_u64("node_id", msg.node_id);
+                print_u64("peak", msg.peak);
+                print_u64("t_tap", msg.t_tap);
+            }
+        }
+        break;
+
+        case PROTO_TYPE_ACK:
+        {
+            proto_ack_t msg;
+
+            b_ok = proto_decode_ack(p_buf, len, &msg);
+
+            if (b_ok)
+            {
+                print_header(&msg.header);
+                print_u64("node_id", msg.node_id);
+                print_u64("acked_seq", msg.acked_seq);
+            }
+        }
+        break;
+
+        case PROTO_TYPE_MOLE_ON:
+        {
+            proto_mole_on_t msg;
+
+            b_ok = proto_decode_mole_on(p_buf, len, &msg);
+
+            if (b_ok)
+            {
+                print_header(&msg.header);
+                print_u64("node_id", msg.node_id);
+                print_u64("t_show", msg.t_show);
+                print_u64("up_ms", msg.up_ms);
+            }
+        }
+        break;
+
+        default:
+            b_ok = false;
+            break;
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Decode and print a whack-a-mole row the Pico sends to a tile
+ *         (FEEDBACK, GAME_CONTROL, SCORE_MASK).
+ * @param  p_buf  Bytes.
+ * @param  len    Length.
+ * @param  type   Header type code.
+ * @return true when the type is one of these and it decoded.
+ */
+static bool decode_game_pico (uint8_t const * p_buf, uint32_t len, uint8_t type)
+{
+    bool b_ok = false;
+
+    switch (type)
+    {
+        case PROTO_TYPE_FEEDBACK:
+        {
+            proto_feedback_msg_t msg;
+
+            b_ok = proto_decode_feedback(p_buf, len, &msg);
+
+            if (b_ok)
+            {
+                print_header(&msg.header);
+                print_u64("node_id", msg.node_id);
+                print_u64("result", msg.result);
+            }
+        }
+        break;
+
+        case PROTO_TYPE_GAME_CONTROL:
+        {
+            proto_game_control_t msg;
+
+            b_ok = proto_decode_game_control(p_buf, len, &msg);
+
+            if (b_ok)
+            {
+                print_header(&msg.header);
+                print_u64("node_id", msg.node_id);
+                print_u64("command", msg.command);
+            }
+        }
+        break;
+
+        case PROTO_TYPE_SCORE_MASK:
+        {
+            proto_score_mask_t msg;
+
+            b_ok = proto_decode_score_mask(p_buf, len, &msg);
+
+            if (b_ok)
+            {
+                print_header(&msg.header);
+                print_u64("node_id", msg.node_id);
+                print_u64("mask", msg.mask);
             }
         }
         break;
@@ -662,6 +841,7 @@ static bool decode_coordinator (uint8_t const * p_buf, uint32_t len,
                 print_u64("readiness", msg.readiness);
                 print_u64("online", msg.online);
                 print_u64("state", msg.state);
+                print_s64("score", msg.score);
             }
         }
         break;
@@ -696,7 +876,8 @@ static bool decode_pc (uint8_t const * p_buf, uint32_t len, uint8_t type)
             if (b_ok)
             {
                 print_header(&msg.header);
-                print_u64("layout", msg.layout);
+                print_u64("rows", msg.rows);
+                print_u64("cols", msg.cols);
                 print_u64("policy", msg.policy);
                 printf("node_map=");
 
@@ -806,6 +987,11 @@ static uint32_t encode_any (char const * p_type, vector_args_t const * p_args)
         if (0u == written)
         {
             written = encode_pc(type, p_args);
+        }
+
+        if (0u == written)
+        {
+            written = encode_game(type, p_args);
         }
     }
 
@@ -964,11 +1150,89 @@ static uint32_t encode_coordinator (uint32_t type, vector_args_t const * p_args)
         case PROTO_TYPE_STATUS:
         {
             /* Masked to the member widths; the encoder checks the range. */
-            proto_status_t const msg = {header, arg_u16(p_args, "readiness"),
-                                        arg_u16(p_args, "online"),
-                                        arg_u8(p_args, "state")};
+            proto_status_t const msg = {
+                header, arg_u16(p_args, "readiness"), arg_u16(p_args, "online"),
+                arg_u8(p_args, "state"), arg_s8(p_args, "score")};
 
             written = proto_encode_status(&msg, g_out, FILE_MAX);
+        }
+        break;
+
+        default:
+            written = 0u;
+            break;
+    }
+
+    return written;
+}
+
+/**
+ * @brief  Encode a whack-a-mole row (TAP, MOLE_ON, FEEDBACK, GAME_CONTROL,
+ *         SCORE_MASK, ACK).
+ * @param  type    Type code.
+ * @param  p_args  Arguments.
+ * @return Bytes written, or 0.
+ */
+static uint32_t encode_game (uint32_t type, vector_args_t const * p_args)
+{
+    proto_header_t const header  = arg_header(p_args);
+    uint8_t const        node    = arg_u8(p_args, "node_id");
+    uint32_t             written = 0u;
+
+    switch (type)
+    {
+        case PROTO_TYPE_TAP:
+        {
+            proto_tap_t const msg = {header, node, arg_u16(p_args, "peak"),
+                                     arg_u64(p_args, "t_tap")};
+
+            written = proto_encode_tap(&msg, g_out, FILE_MAX);
+        }
+        break;
+
+        case PROTO_TYPE_MOLE_ON:
+        {
+            proto_mole_on_t const msg = {header, node,
+                                         arg_u64(p_args, "t_show"),
+                                         arg_u16(p_args, "up_ms")};
+
+            written = proto_encode_mole_on(&msg, g_out, FILE_MAX);
+        }
+        break;
+
+        case PROTO_TYPE_FEEDBACK:
+        {
+            proto_feedback_msg_t const msg = {header, node,
+                                              arg_u8(p_args, "result")};
+
+            written = proto_encode_feedback(&msg, g_out, FILE_MAX);
+        }
+        break;
+
+        case PROTO_TYPE_GAME_CONTROL:
+        {
+            proto_game_control_t const msg = {header, node,
+                                              arg_u8(p_args, "command")};
+
+            written = proto_encode_game_control(&msg, g_out, FILE_MAX);
+        }
+        break;
+
+        case PROTO_TYPE_SCORE_MASK:
+        {
+            proto_score_mask_t const msg = {header, node,
+                                            arg_u64(p_args, "mask")};
+
+            written = proto_encode_score_mask(&msg, g_out, FILE_MAX);
+        }
+        break;
+
+        case PROTO_TYPE_ACK:
+        {
+            proto_ack_t const msg = {header, node,
+                                     arg_u16(p_args, "acked_seq")};
+
+            written = proto_encode_ack(&msg, g_out, FILE_MAX);
         }
         break;
 
@@ -997,7 +1261,8 @@ static uint32_t encode_pc (uint32_t type, vector_args_t const * p_args)
         {
             /* Masked to 8 bits; the encoder checks the range. */
             proto_session_config_t msg = {header,
-                                          arg_u8(p_args, "layout"),
+                                          arg_u8(p_args, "rows"),
+                                          arg_u8(p_args, "cols"),
                                           arg_u8(p_args, "policy"),
                                           {0u},
                                           arg_u16(p_args, "frame_count"),

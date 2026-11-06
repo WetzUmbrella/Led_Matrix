@@ -78,24 +78,31 @@ def test_pico_link_sends_config_and_commands() -> None:
     pc.bind(("127.0.0.1", 0))
     link = plink.PicoLink("127.0.0.1", sock=pc)
     link.pico = ("127.0.0.1", pico.getsockname()[1])
-    link.send_session_config(7, 1, 1, [1, 2, 0, 3, 4, 0, 0, 0, 0], 600,
-                             [11, 22, 0, 33, 44, 0, 0, 0, 0])
+    rows, cols, wire_map, crcs = pl.grid_map(
+        "2x2", [1, 2, 0, 3, 4, 0, 0, 0, 0], [11, 22, 0, 33, 44, 0, 0, 0, 0])
+    assert (rows, cols) == (2, 2)
+    assert wire_map == [1, 2, 3, 4, 0, 0, 0, 0, 0]
+    assert crcs == [11, 22, 33, 44, 0, 0, 0, 0, 0]
+    link.send_session_config(7, rows, cols, 1, wire_map, 600, crcs)
     config = pl.decode(pico.recvfrom(128)[0])
     assert config["type"] == "SESSION_CONFIG"
     assert config["frame_count"] == 600
+    assert (config["rows"], config["cols"]) == (2, 2)
+    assert config["node_map"] == wire_map
     for send, name in ((link.start, "START_AT"), (link.pause, "PAUSE"),
                        (link.resume, "RESUME_AT"), (link.stop, "STOP")):
         send()
         msg = pl.decode(pico.recvfrom(128)[0])
         assert msg["type"] == name and msg["session_id"] == 7
     status = pl.encode_status(session_id=7, seq=1, readiness=3, online=3,
-                              state=7)
+                              state=7, score=-3)
     pico.sendto(status, pc.getsockname())
     import time
     time.sleep(0.05)
     got = link.poll_status()
     assert got is not None and got.readiness == 3
     assert got.state_name() == "READY"
+    assert got.score == -3
     pico.close()
     pc.close()
 

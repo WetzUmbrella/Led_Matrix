@@ -85,43 +85,45 @@
  },
  {
   "fields": {
+   "cols": 3,
    "crc32": [
     286331153,
     572662306,
     0,
     858993459,
     1145324612,
-    0,
+    1431655765,
     0,
     0,
     0
    ],
    "frame_count": 600,
-   "layout": 1,
    "node_map": [
     1,
     2,
     0,
     3,
     4,
-    0,
+    5,
     0,
     0,
     0
    ],
    "policy": 1,
+   "rows": 2,
    "seq": 4660,
    "session_id": 60
   },
   "file": "session_config_typical.bin",
-  "hex": "828746a22130040080654444448488888808000000c0cccccc0c1111111100000000000000000000000000000000",
+  "hex": "8287464266080c15006019111111212222220200000030333333434444445455555505000000000000000000000000",
   "kind": "message",
-  "length": 46,
+  "length": 47,
   "message": "SESSION_CONFIG",
   "name": "session_config_typical"
  },
  {
   "fields": {
+   "cols": 1,
    "crc32": [
     0,
     0,
@@ -134,7 +136,6 @@
     0
    ],
    "frame_count": 1,
-   "layout": 0,
    "node_map": [
     0,
     0,
@@ -147,18 +148,20 @@
     0
    ],
    "policy": 0,
+   "rows": 1,
    "seq": 0,
    "session_id": 0
   },
   "file": "session_config_min.bin",
-  "hex": "02000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "hex": "0200002002000000000400000000000000000000000000000000000000000000000000000000000000000000000000",
   "kind": "message",
-  "length": 46,
+  "length": 47,
   "message": "SESSION_CONFIG",
   "name": "session_config_min"
  },
  {
   "fields": {
+   "cols": 1,
    "crc32": [
     4294967295,
     4294967295,
@@ -171,7 +174,6 @@
     4294967295
    ],
    "frame_count": 1023,
-   "layout": 2,
    "node_map": [
     9,
     9,
@@ -184,13 +186,14 @@
     9
    ],
    "policy": 1,
+   "rows": 9,
    "seq": 65535,
    "session_id": 255
   },
   "file": "session_config_max.bin",
-  "hex": "e2ffffdf99999999f9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3f",
+  "hex": "e2ffff3f6366666666feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0f",
   "kind": "message",
-  "length": 46,
+  "length": 47,
   "message": "SESSION_CONFIG",
   "name": "session_config_max"
  },
@@ -687,14 +690,15 @@
   "fields": {
    "online": 346,
    "readiness": 165,
+   "score": -7,
    "seq": 4660,
    "session_id": 60,
-   "state": 8
+   "state": 12
   },
   "file": "status_typical.bin",
-  "hex": "8f8746a2945604",
+  "hex": "8f8746a29456ce07",
   "kind": "message",
-  "length": 7,
+  "length": 8,
   "message": "STATUS",
   "name": "status_typical"
  },
@@ -702,14 +706,15 @@
   "fields": {
    "online": 0,
    "readiness": 0,
+   "score": -99,
    "seq": 0,
    "session_id": 0,
    "state": 0
   },
   "file": "status_min.bin",
-  "hex": "0f000000000000",
+  "hex": "0f0000000000e804",
   "kind": "message",
-  "length": 7,
+  "length": 8,
   "message": "STATUS",
   "name": "status_min"
  },
@@ -717,14 +722,15 @@
   "fields": {
    "online": 511,
    "readiness": 511,
+   "score": 99,
    "seq": 65535,
    "session_id": 255,
-   "state": 11
+   "state": 12
   },
   "file": "status_max.bin",
-  "hex": "efffffffffff05",
+  "hex": "efffffffff7f1e03",
   "kind": "message",
-  "length": 7,
+  "length": 8,
   "message": "STATUS",
   "name": "status_max"
  },
@@ -814,6 +820,264 @@
   "length": 6,
   "message": "TELEMETRY_ACK",
   "name": "telemetry_ack_max"
+ },
+ {
+  "fields": {
+   "node_id": 5,
+   "peak": 10844,
+   "seq": 4660,
+   "session_id": 60,
+   "t_tap": 1250999896491
+  },
+  "file": "tap_typical.bin",
+  "hex": "928746a2b8545613cf8a4602000000",
+  "kind": "message",
+  "length": 15,
+  "message": "TAP",
+  "name": "tap_typical"
+ },
+ {
+  "fields": {
+   "node_id": 1,
+   "peak": 0,
+   "seq": 0,
+   "session_id": 0,
+   "t_tap": 0
+  },
+  "file": "tap_min.bin",
+  "hex": "120000200000000000000000000000",
+  "kind": "message",
+  "length": 15,
+  "message": "TAP",
+  "name": "tap_min"
+ },
+ {
+  "fields": {
+   "node_id": 9,
+   "peak": 65535,
+   "seq": 65535,
+   "session_id": 255,
+   "t_tap": 18446744073709551615
+  },
+  "file": "tap_max.bin",
+  "hex": "f2ffff3fffffffffffffffffffff01",
+  "kind": "message",
+  "length": 15,
+  "message": "TAP",
+  "name": "tap_max"
+ },
+ {
+  "fields": {
+   "node_id": 3,
+   "seq": 4660,
+   "session_id": 60,
+   "t_show": 1234567890123,
+   "up_ms": 1200
+  },
+  "file": "mole_on_typical.bin",
+  "hex": "938746629609f6e33e0200006009",
+  "kind": "message",
+  "length": 14,
+  "message": "MOLE_ON",
+  "name": "mole_on_typical"
+ },
+ {
+  "fields": {
+   "node_id": 1,
+   "seq": 0,
+   "session_id": 0,
+   "t_show": 0,
+   "up_ms": 1
+  },
+  "file": "mole_on_min.bin",
+  "hex": "1300002000000000000000000200",
+  "kind": "message",
+  "length": 14,
+  "message": "MOLE_ON",
+  "name": "mole_on_min"
+ },
+ {
+  "fields": {
+   "node_id": 9,
+   "seq": 65535,
+   "session_id": 255,
+   "t_show": 18446744073709551615,
+   "up_ms": 2000
+  },
+  "file": "mole_on_max.bin",
+  "hex": "f3ffff3fffffffffffffffffa10f",
+  "kind": "message",
+  "length": 14,
+  "message": "MOLE_ON",
+  "name": "mole_on_max"
+ },
+ {
+  "fields": {
+   "node_id": 6,
+   "result": 1,
+   "seq": 4660,
+   "session_id": 60
+  },
+  "file": "feedback_typical.bin",
+  "hex": "948746c202",
+  "kind": "message",
+  "length": 5,
+  "message": "FEEDBACK",
+  "name": "feedback_typical"
+ },
+ {
+  "fields": {
+   "node_id": 1,
+   "result": 0,
+   "seq": 0,
+   "session_id": 0
+  },
+  "file": "feedback_min.bin",
+  "hex": "1400002000",
+  "kind": "message",
+  "length": 5,
+  "message": "FEEDBACK",
+  "name": "feedback_min"
+ },
+ {
+  "fields": {
+   "node_id": 9,
+   "result": 2,
+   "seq": 65535,
+   "session_id": 255
+  },
+  "file": "feedback_max.bin",
+  "hex": "f4ffff3f05",
+  "kind": "message",
+  "length": 5,
+  "message": "FEEDBACK",
+  "name": "feedback_max"
+ },
+ {
+  "fields": {
+   "command": 2,
+   "node_id": 2,
+   "seq": 4660,
+   "session_id": 60
+  },
+  "file": "game_control_typical.bin",
+  "hex": "9587464204",
+  "kind": "message",
+  "length": 5,
+  "message": "GAME_CONTROL",
+  "name": "game_control_typical"
+ },
+ {
+  "fields": {
+   "command": 0,
+   "node_id": 0,
+   "seq": 0,
+   "session_id": 0
+  },
+  "file": "game_control_min.bin",
+  "hex": "1500000000",
+  "kind": "message",
+  "length": 5,
+  "message": "GAME_CONTROL",
+  "name": "game_control_min"
+ },
+ {
+  "fields": {
+   "command": 3,
+   "node_id": 9,
+   "seq": 65535,
+   "session_id": 255
+  },
+  "file": "game_control_max.bin",
+  "hex": "f5ffff3f07",
+  "kind": "message",
+  "length": 5,
+  "message": "GAME_CONTROL",
+  "name": "game_control_max"
+ },
+ {
+  "fields": {
+   "mask": 1746410393481133080,
+   "node_id": 7,
+   "seq": 4660,
+   "session_id": 60
+  },
+  "file": "score_mask_typical.bin",
+  "hex": "968746e23078fcfefffd783000",
+  "kind": "message",
+  "length": 13,
+  "message": "SCORE_MASK",
+  "name": "score_mask_typical"
+ },
+ {
+  "fields": {
+   "mask": 0,
+   "node_id": 1,
+   "seq": 0,
+   "session_id": 0
+  },
+  "file": "score_mask_min.bin",
+  "hex": "16000020000000000000000000",
+  "kind": "message",
+  "length": 13,
+  "message": "SCORE_MASK",
+  "name": "score_mask_min"
+ },
+ {
+  "fields": {
+   "mask": 18446744073709551615,
+   "node_id": 9,
+   "seq": 65535,
+   "session_id": 255
+  },
+  "file": "score_mask_max.bin",
+  "hex": "f6ffff3fffffffffffffffff01",
+  "kind": "message",
+  "length": 13,
+  "message": "SCORE_MASK",
+  "name": "score_mask_max"
+ },
+ {
+  "fields": {
+   "acked_seq": 42330,
+   "node_id": 4,
+   "seq": 4660,
+   "session_id": 60
+  },
+  "file": "ack_typical.bin",
+  "hex": "97874682b44a01",
+  "kind": "message",
+  "length": 7,
+  "message": "ACK",
+  "name": "ack_typical"
+ },
+ {
+  "fields": {
+   "acked_seq": 0,
+   "node_id": 0,
+   "seq": 0,
+   "session_id": 0
+  },
+  "file": "ack_min.bin",
+  "hex": "17000000000000",
+  "kind": "message",
+  "length": 7,
+  "message": "ACK",
+  "name": "ack_min"
+ },
+ {
+  "fields": {
+   "acked_seq": 65535,
+   "node_id": 9,
+   "seq": 65535,
+   "session_id": 255
+  },
+  "file": "ack_max.bin",
+  "hex": "f7ffff3fffff01",
+  "kind": "message",
+  "length": 7,
+  "message": "ACK",
+  "name": "ack_max"
  },
  {
   "fields": {

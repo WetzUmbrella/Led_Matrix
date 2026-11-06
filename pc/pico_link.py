@@ -33,7 +33,8 @@ STATUS_PORT = 4213
 COORD_STATES = ("BOOTING", "CONNECTING TO ROUTER", "WAITING FOR SESSION",
                 "VALIDATING SESSION", "WAITING FOR NODES",
                 "WAITING FOR TILE READINESS", "SYNCHRONISING", "READY",
-                "COORDINATING PLAYBACK", "PAUSED", "RECOVERING", "FAULT")
+                "COORDINATING PLAYBACK", "PAUSED", "RECOVERING", "FAULT",
+                "COORDINATING GAME")
 
 #: Failure policies (section 5.3).
 POLICY_CONTINUE = 0
@@ -48,6 +49,7 @@ class Status:
     online: int
     state: int
     received: float
+    score: int = 0
 
     def state_name(self) -> str:
         """Coordinator state name."""
@@ -93,15 +95,16 @@ class PicoLink:
         self.seq = (self.seq + 1) & 0xFFFF
         return self.seq
 
-    def send_session_config(self, session_id: int, layout_code: int,
+    def send_session_config(self, session_id: int, rows: int, cols: int,
                             policy: int, node_map: Sequence[int],
                             frame_count: int,
                             crcs: Sequence[int]) -> bytes:
-        """SESSION_CONFIG with the map, frame_count and one CRC32 per map
-        position (0 for blank); returns the bytes sent."""
+        """SESSION_CONFIG with the wall shape, the map (row-major over
+        rows x cols), frame_count and one CRC32 per map position (0 for
+        blank); returns the bytes sent."""
         self.session_id = session_id
         data = pl.encode_session_config(
-            session_id=session_id, seq=self._next_seq(), layout=layout_code,
+            session_id=session_id, seq=self._next_seq(), rows=rows, cols=cols,
             policy=policy, node_map=list(node_map), frame_count=frame_count,
             crc32=list(crcs))
         self._send(data)
@@ -148,7 +151,8 @@ class PicoLink:
             self.status = Status(int(msg["readiness"]),  # type: ignore
                                  int(msg["online"]),  # type: ignore
                                  int(msg["state"]),  # type: ignore
-                                 time.monotonic())
+                                 time.monotonic(),
+                                 int(msg["score"]))  # type: ignore
 
     def close(self) -> None:
         """Release the port."""

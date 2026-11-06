@@ -122,12 +122,6 @@
 #define CL_US_PER_S UINT64_C(1000000)
 #define CL_FPS      UINT64_C(60)
 
-/** Layout positions used by 1x1 and 2x2 in the 9-position map
- *  (layout_table.md SESSION_CONFIG: 0; 0, 1, 3, 4). */
-#define CL_USED_1X1 UINT16_C(0x0001)
-#define CL_USED_2X2 UINT16_C(0x001B)
-#define CL_USED_3X3 UINT16_C(0x01FF)
-
 /** All 9 node bits. */
 #define CL_ALL_NODES UINT16_C(0x01FF)
 
@@ -1015,16 +1009,22 @@ static void cl_from_pc (cl_rx_entry_t const *  p_entry,
  *         only while stopped (W6 statechart 2: "New session or layout while
  *         stopped"); it clears readiness and restarts the PC's seq baseline.
  *         The same session_id again is a repeat and is ignored.
+ *         "Stopped" is an explicit allow-list, WAITING FOR SESSION through
+ *         READY, so a state added later (as COORDINATING GAME was) refuses
+ *         SESSION_CONFIG until it is listed here (decision of 6 Nov 2026).
  * @param  p_entry  The datagram.
  */
 static void cl_session_apply (cl_rx_entry_t const * p_entry)
 {
     proto_session_config_t cfg;
 
-    bool const b_stopped = (PROTO_COORD_COORDINATING_PLAYBACK != g_state) &&
-                           (PROTO_COORD_PAUSED != g_state) &&
-                           (PROTO_COORD_RECOVERING != g_state) &&
-                           (PROTO_COORD_FAULT != g_state);
+    bool const b_stopped =
+        (PROTO_COORD_WAITING_FOR_SESSION == g_state) ||
+        (PROTO_COORD_VALIDATING_SESSION == g_state) ||
+        (PROTO_COORD_WAITING_FOR_NODES == g_state) ||
+        (PROTO_COORD_WAITING_FOR_TILE_READINESS == g_state) ||
+        (PROTO_COORD_SYNCHRONISING == g_state) ||
+        (PROTO_COORD_READY == g_state);
 
     if (!proto_decode_session_config(p_entry->bytes, p_entry->len, &cfg))
     {
@@ -1069,18 +1069,17 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
 
 /**
  * @brief  Check a SESSION_CONFIG beyond the codec's ranges: session_id 0 is
- *         reserved for "no session", positions outside the layout are
+ *         reserved for "no session", positions from rows x cols on are
  *         blank, at least one tile is required and no Node ID appears twice.
- *         Blank positions inside the layout are allowed (OD-21).
- * @param  p_cfg  The decoded message.
+ *         Blank positions inside the wall are allowed (OD-21).
+ * @param  p_cfg  The decoded message; the decoder checked rows x cols <= 9.
  * @return true when valid.
  */
 static bool cl_session_valid (proto_session_config_t const * p_cfg)
 {
-    static uint16_t const used_by_layout[PROTO_LAYOUT_COUNT] = {
-        CL_USED_1X1, CL_USED_2X2, CL_USED_3X3};
-
-    uint16_t const used = used_by_layout[p_cfg->layout];
+    /* The map is row-major over rows x cols (layout_table.md, re-plan
+     * step 3), so positions 0 to rows x cols - 1 are in the wall. */
+    uint32_t const used = (uint32_t)p_cfg->rows * p_cfg->cols;
     uint16_t       seen = 0u;
     bool           b_ok = (0u != p_cfg->header.session_id);
 
@@ -1088,7 +1087,7 @@ static bool cl_session_valid (proto_session_config_t const * p_cfg)
     {
         uint8_t const  node_id = p_cfg->node_map[slot];
         uint16_t const bit     = cl_node_bit(node_id);
-        bool const     b_in    = (0u != (used & (UINT16_C(1) << slot)));
+        bool const     b_in    = (slot < used);
 
         if ((0u != node_id) && ((!b_in) || (0u != (seen & bit))))
         {
@@ -1855,6 +1854,15 @@ uint64_t coordinator_loop_test_loss_time (uint8_t node_id)
     }
 
     return when;
+}
+
+/**
+ * @brief  Test: force the state (no event is logged, nothing is sent).
+ * @param  state  The state to set.
+ */
+void coordinator_loop_test_set_state (proto_coord_state_t state)
+{
+    g_state = state;
 }
 #else
 static struct udp_pcb * g_p_tx_pcb = NULL;
