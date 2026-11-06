@@ -130,14 +130,14 @@ bool test_tap_detect_threshold (void)
     tap_detect_init(&detect);
     tap_detect_sample(&detect, 0, 0, TEST_GRAVITY_LSB);
     tap_detect_sample(&detect, 0, 0, TEST_GRAVITY_LSB + TEST_BELOW_PEAK);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_REJECT_WEAK == got, __LINE__)) && b_ok;
 
     /* Fresh detector: exactly 2048 above baseline is accepted. */
     tap_detect_init(&detect);
     tap_detect_sample(&detect, 0, 0, TEST_GRAVITY_LSB);
     tap_detect_sample(&detect, 0, 0, TEST_GRAVITY_LSB + TEST_MIN_PEAK);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == event.count, __LINE__)) && b_ok;
     b_ok = (test_main_check(TEST_MIN_PEAK == event.peak, __LINE__)) && b_ok;
@@ -161,20 +161,20 @@ bool test_tap_detect_refractory (void)
     tap_detect_result_t got;
 
     seed_and_spike(&detect, 0, 0, TEST_GRAVITY_LSB, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == event.count, __LINE__)) && b_ok;
 
     /* Re-spike: still present in the window. */
     tap_detect_sample(&detect, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0 + TEST_REFRACTORY_MINUS_1,
-                            TEST_STATUS_Z_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0 + TEST_REFRACTORY_MINUS_1,
+                             TEST_STATUS_Z_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_REJECT_REFRACTORY == got, __LINE__)) &&
            b_ok;
 
     /* Same spike, exactly one refractory period later: accepted, count 2. */
-    got = tap_detect_on_irq(&detect, TEST_T0 + TEST_REFRACTORY,
-                            TEST_STATUS_Z_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0 + TEST_REFRACTORY,
+                             TEST_STATUS_Z_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
     b_ok = (test_main_check(2u == event.count, __LINE__)) && b_ok;
 
@@ -196,42 +196,37 @@ bool test_tap_detect_status (void)
 
     /* count 0 and axis 0 are both REJECT_STATUS; the window is untouched. */
     seed_and_spike(&detect, 0, 0, TEST_GRAVITY_LSB, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_COUNT0, &event);
-    b_ok = (test_main_check(TAP_DETECT_REJECT_STATUS == got, __LINE__)) &&
-           b_ok;
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_AXIS0, &event);
-    b_ok = (test_main_check(TAP_DETECT_REJECT_STATUS == got, __LINE__)) &&
-           b_ok;
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_COUNT0, &event);
+    b_ok = (test_main_check(TAP_DETECT_REJECT_STATUS == got, __LINE__)) && b_ok;
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_AXIS0, &event);
+    b_ok = (test_main_check(TAP_DETECT_REJECT_STATUS == got, __LINE__)) && b_ok;
     /* Window still holds the spike: a valid status is accepted. */
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == event.count, __LINE__)) && b_ok;
 
     /* 0xB1: axis Z, negative polarity. */
     seed_and_spike(&detect, 0, 0, TEST_GRAVITY_LSB, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_NEG, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_NEG, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
-    b_ok = (test_main_check(TAP_DETECT_AXIS_Z == event.axis, __LINE__)) &&
-           b_ok;
+    b_ok = (test_main_check(TAP_DETECT_AXIS_Z == event.axis, __LINE__)) && b_ok;
     b_ok = (test_main_check(false == event.b_positive, __LINE__)) && b_ok;
 
     /* 0x11: axis X. */
     seed_and_spike(&detect, 0, 0, TEST_GRAVITY_LSB, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_X_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_X_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
-    b_ok = (test_main_check(TAP_DETECT_AXIS_X == event.axis, __LINE__)) &&
-           b_ok;
+    b_ok = (test_main_check(TAP_DETECT_AXIS_X == event.axis, __LINE__)) && b_ok;
 
     /* 0x21: axis Y. */
     seed_and_spike(&detect, 0, 0, TEST_GRAVITY_LSB, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Y_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Y_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
-    b_ok = (test_main_check(TAP_DETECT_AXIS_Y == event.axis, __LINE__)) &&
-           b_ok;
+    b_ok = (test_main_check(TAP_DETECT_AXIS_Y == event.axis, __LINE__)) && b_ok;
 
     /* 0x32 (double tap): accepted. */
     seed_and_spike(&detect, 0, 0, TEST_GRAVITY_LSB, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_DOUBLE, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_DOUBLE, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
 
     return b_ok;
@@ -265,8 +260,8 @@ bool test_tap_detect_gravity (void)
                               dirs[idx][2]);
         }
 
-        b_ok = (test_main_check(0u == tap_detect_peak(&detect), __LINE__)) &&
-               b_ok;
+        b_ok =
+            (test_main_check(0u == tap_detect_peak(&detect), __LINE__)) && b_ok;
     }
 
     /* Extreme: seed at INT16_MIN, then INT16_MAX -> deviation 65,535. */
@@ -316,10 +311,9 @@ bool test_tap_detect_window (void)
     tap_detect_init(&detect);
     tap_detect_sample(&detect, 0, 0, TEST_GRAVITY_LSB);
     tap_detect_sample(&detect, 0, 0, TEST_SPIKE_LSB);
-    got = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
+    got  = tap_detect_on_irq(&detect, TEST_T0, TEST_STATUS_Z_POS, &event);
     b_ok = (test_main_check(TAP_DETECT_ACCEPT == got, __LINE__)) && b_ok;
-    b_ok = (test_main_check(0u == tap_detect_peak(&detect), __LINE__)) &&
-           b_ok;
+    b_ok = (test_main_check(0u == tap_detect_peak(&detect), __LINE__)) && b_ok;
 
     return b_ok;
 }

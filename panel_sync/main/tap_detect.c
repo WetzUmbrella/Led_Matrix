@@ -183,7 +183,7 @@ uint16_t tap_detect_peak (tap_detect_t const * p_detect)
  * @return TAP_DETECT_ACCEPT or a TAP_DETECT_REJECT_* reason.
  */
 tap_detect_result_t tap_detect_on_irq (tap_detect_t * p_detect, int64_t t_us,
-                                       uint8_t tap_status,
+                                       uint8_t              tap_status,
                                        tap_detect_event_t * p_event)
 {
     tap_detect_result_t result = TAP_DETECT_ACCEPT;
@@ -192,8 +192,8 @@ tap_detect_result_t tap_detect_on_irq (tap_detect_t * p_detect, int64_t t_us,
     uint8_t const count = (uint8_t)(tap_status & TAP_STATUS_COUNT_MASK);
 
     /* Masked to two bits, so it fits uint8_t. */
-    uint8_t const axis = (uint8_t)((tap_status >> TAP_STATUS_AXIS_SHIFT) &
-                                   TAP_STATUS_AXIS_MASK);
+    uint8_t const axis =
+        (uint8_t)((tap_status >> TAP_STATUS_AXIS_SHIFT) & TAP_STATUS_AXIS_MASK);
 
     /* Masked to one bit, so it fits uint8_t. */
     uint8_t const polarity =

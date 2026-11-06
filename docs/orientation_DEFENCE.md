@@ -43,7 +43,7 @@ Owner: Jia Jun (Buddy 5). Written for Jia Jun in Jia Jun's session (29 to 30 Oct
 ## 7. Tap detection (whack-a-mole re-plan, build step 2)
 
 - Source: `docs/plan/whack_a_mole_replan.md` "A press is a QMI8658 IMU tap"; TAP carries a peak, and dedupe keeps the highest peak.
-- Choice: the IMU tap engine raises INT1, and the interrupt only records the time; the task does all I2C. The pure module `tap_detect` validates the status, a 150 ms refractory period and a minimum peak. Host tests K1 to K6.
+- Choice: the IMU tap engine raises INT1 (or INT2, see `OR_TAP_INT_LINE`), and the interrupt only records the time; the task does all I2C. The pure module `tap_detect` validates the status, a 150 ms refractory period and a minimum peak. Host tests K1 to K6.
 - Sampling changed: the task reads at 100 Hz, the fastest whole-tick period at `CONFIG_FREERTOS_HZ=100`, because 50 Hz can miss a tap peak. Every second sample goes to `orient_filter`, so sections 2 and 3 still hold at 50 Hz. The 20 ms I2C timeout stays: one stuck read costs at most one orientation sample, and a 10 ms timeout would be one tick, which can expire almost at once.
 - Range changed: +/-8 g, not +/-2 g, because a tap clipped at 2 g gives every tile the same peak. 1 g is now 4,096 LSB, so the 0.5 g threshold is 2,048.
 - The interrupt is installed from `app_main` on core 0, so it cannot delay the Display Engine tick on core 1.
@@ -55,7 +55,7 @@ Owner: Jia Jun (Buddy 5). Written for Jia Jun in Jia Jun's session (29 to 30 Oct
 ## PROVISIONAL list for Jia Jun to confirm
 
 - QMI8658 register values (CTRL1 0x48, CTRL2 0x24, CTRL7 0x01, CTRL8 0xC1, CTRL9 command 0x0C, WHO_AM_I 0x05, data from 0x35, STATUS1 bit 1, TAP_STATUS 0x59). The tap values were written from memory of the datasheet, with no copy to hand: check them against it before tuning.
-- INT1 on GPIO10: unconfirmed, check the board schematic. If it is wrong, no `TAP` lines print.
+- INT1 on GPIO10 (default) or INT2 on GPIO13, picked by `OR_TAP_INT_LINE` in `orientation.c`: both unconfirmed, check the board schematic. ESPHome's board page notes IRQ1 works less well than IRQ2, so try 2 if no `TAP` lines print.
 - Tap engine timing (20 + 30 + 20 ms windows at 500 Hz, about 70 ms before the interrupt). This takes most of the 100 ms tap-to-flash target.
 - Quadrant mapping (+Y = 0, +X = 90, -Y = 180, -X = 270) and the 0.5 g threshold.
 - Re-initialise every 100 failed samples (1 s).

@@ -34,9 +34,24 @@
 #define OR_SDA_GPIO 11
 #define OR_SCL_GPIO 12
 
-/** QMI8658 INT1 pin. PROVISIONAL, owner Jia Jun: confirm against the board
- *  schematic, see orientation.h. */
-#define OR_TAP_INT_GPIO GPIO_NUM_10
+/** QMI8658 interrupt line for taps: the one constant to change.
+ *  1 = INT1 on GPIO10 (default). 2 = INT2 on GPIO13 (ESPHome's board page
+ *  notes IRQ1 works less well than IRQ2). It sets the GPIO, the CTRL1 INT
+ *  enable bit and the CTRL8 event routing together. PROVISIONAL, owner Jia
+ *  Jun: confirm both pins against the board schematic, see orientation.h. */
+#define OR_TAP_INT_LINE 1u
+
+#if (1u == OR_TAP_INT_LINE)
+#define OR_TAP_INT_GPIO  GPIO_NUM_10
+#define OR_CTRL1_INT_BIT 0x08u /* CTRL1 bit 3: INT1 enable. */
+#define OR_CTRL8_ACT_SEL 0x40u /* CTRL8 bit 6: motion events on INT1. */
+#elif (2u == OR_TAP_INT_LINE)
+#define OR_TAP_INT_GPIO  GPIO_NUM_13
+#define OR_CTRL1_INT_BIT 0x10u /* CTRL1 bit 4: INT2 enable. */
+#define OR_CTRL8_ACT_SEL 0x00u /* CTRL8 bit 6 clear: motion events on INT2. */
+#else
+#error "OR_TAP_INT_LINE must be 1 (INT1, GPIO10) or 2 (INT2, GPIO13)"
+#endif
 
 /** I2C clock, 400 kHz fast mode (plan choice). */
 #define OR_I2C_HZ 400000u
@@ -71,12 +86,15 @@
 #define OR_REG_AX_L      0x35u
 #define OR_REG_TAP       0x59u
 #define OR_WHO_AM_I      0x05u
-#define OR_CTRL1_VALUE   0x48u /* Auto-increment, little-endian, INT1 on. */
-#define OR_CTRL2_VALUE   0x24u /* +/-8 g, 500 Hz. */
+#define OR_CTRL1_AI      0x40u /* CTRL1 bit 6: address auto-increment. */
+#define OR_CTRL1_VALUE   (OR_CTRL1_AI | OR_CTRL1_INT_BIT) /* Little-endian. */
+#define OR_CTRL2_VALUE   0x24u                            /* +/-8 g, 500 Hz. */
 #define OR_CTRL7_OFF     0x00u
 #define OR_CTRL7_VALUE   0x01u
-#define OR_CTRL8_VALUE   0xC0u /* CTRL9 done in STATUSINT, motion on INT1. */
-#define OR_CTRL8_TAP     0xC1u /* The same, tap engine on. */
+#define OR_CTRL8_HSHAKE  0x80u /* CTRL8 bit 7: CTRL9 done in STATUSINT. */
+#define OR_CTRL8_TAP_EN  0x01u /* CTRL8 bit 0: tap engine on. */
+#define OR_CTRL8_VALUE   (OR_CTRL8_HSHAKE | OR_CTRL8_ACT_SEL)
+#define OR_CTRL8_TAP     (OR_CTRL8_VALUE | OR_CTRL8_TAP_EN)
 #define OR_CMD_ACK       0x00u
 #define OR_CMD_TAP       0x0Cu /* CTRL_CMD_CONFIGURE_TAP. */
 #define OR_CMD_DONE_BIT  0x80u /* STATUSINT: CTRL9 command done. */
@@ -107,19 +125,19 @@ static QueueHandle_t g_p_tap_queue = NULL; /* Accepted tap events. */
 static i2c_master_bus_handle_t g_p_bus = NULL;
 static i2c_master_dev_handle_t g_p_dev = NULL;
 
-static void orientation_task (void * p_arg);
-static void or_tap_isr (void * p_arg);
-static bool or_tap_pin_init (void);
-static void or_tap_service (tap_detect_t * p_detect);
-static void or_tap_publish (tap_detect_event_t const * p_event);
-static bool or_imu_init (void);
-static bool or_tap_config (void);
-static bool or_ctrl9_cmd (uint8_t cmd);
-static bool or_ctrl9_wait (bool b_done);
-static bool or_write_reg (uint8_t reg, uint8_t value);
-static bool or_write_cal (uint8_t const * p_page);
-static bool or_read_reg (uint8_t reg, uint8_t * p_value);
-static bool qmi_read_accel (int16_t * p_x, int16_t * p_y, int16_t * p_z);
+static void    orientation_task (void * p_arg);
+static void    or_tap_isr (void * p_arg);
+static bool    or_tap_pin_init (void);
+static void    or_tap_service (tap_detect_t * p_detect);
+static void    or_tap_publish (tap_detect_event_t const * p_event);
+static bool    or_imu_init (void);
+static bool    or_tap_config (void);
+static bool    or_ctrl9_cmd (uint8_t cmd);
+static bool    or_ctrl9_wait (bool b_done);
+static bool    or_write_reg (uint8_t reg, uint8_t value);
+static bool    or_write_cal (uint8_t const * p_page);
+static bool    or_read_reg (uint8_t reg, uint8_t * p_value);
+static bool    qmi_read_accel (int16_t * p_x, int16_t * p_y, int16_t * p_z);
 static int16_t or_join (uint8_t const * p_raw);
 
 /**
@@ -264,8 +282,9 @@ static void or_tap_isr (void * p_arg)
 }
 
 /**
- * @brief  Set up the INT1 pin: input, pulled low, interrupt on the rising
- *         edge. An ISR service already installed by another module is fine.
+ * @brief  Set up the tap INT pin (OR_TAP_INT_LINE): input, pulled low,
+ *         interrupt on the rising edge. An ISR service already installed by
+ *         another module is fine.
  * @return true when the handler is attached.
  */
 static bool or_tap_pin_init (void)
@@ -343,8 +362,9 @@ static void or_tap_publish (tap_detect_event_t const * p_event)
     {
         tap_detect_event_t oldest;
 
-        /* This task is the only writer, so the second send has room. */
+        /* Drop the oldest tap; the queue is full, so this cannot fail. */
         (void)xQueueReceive(g_p_tap_queue, &oldest, 0);
+        /* This task is the only writer, so the second send has room. */
         (void)xQueueSend(g_p_tap_queue, p_event, 0);
     }
 }

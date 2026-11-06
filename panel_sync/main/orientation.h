@@ -19,22 +19,26 @@
  *
  * Tap detection (re-plan build step 2): the task now samples X, Y and Z at
  * 100 Hz for tap_detect and passes every second sample to orient_filter, so
- * orientation stays at 50 Hz. The IMU tap engine raises INT1; the interrupt
+ * orientation stays at 50 Hz. The IMU tap engine raises INT1 or INT2, picked
+ * by the one constant OR_TAP_INT_LINE in orientation.c; the interrupt
  * records the time and the task does the I2C. +/-8 g replaces +/-2 g because
  * a tap would clip at 2 g and the peak could not rank tiles. Each interrupt
  * prints a "TAP result=" line, the data for tuning thresholds on the board.
  *
  * PROVISIONAL (owner Jia Jun, check on the board): QMI8658 set-up from its
- * datasheet register map: CTRL1 (0x02) = 0x48 (address auto-increment,
- * little-endian, INT1 on), CTRL2 (0x03) = 0x24 (+/-8 g, 500 Hz), CTRL7 (0x08)
- * = 0x01 (accelerometer on), CTRL8 (0x09) = 0xC1 (CTRL9 done in STATUSINT,
- * motion events on INT1, tap on); CTRL9 (0x0A) command 0x0C; WHO_AM_I (0x00)
- * reads 0x05; data AX_L at 0x35; STATUS1 (0x2F) bit 1; TAP_STATUS at 0x59.
- * The tap values were written from memory of the datasheet, with no copy to
- * hand: check them against it before tuning.
+ * datasheet register map: CTRL1 (0x02) = 0x48 with INT1 or 0x50 with INT2
+ * (address auto-increment, little-endian, that INT on), CTRL2 (0x03) = 0x24
+ * (+/-8 g, 500 Hz), CTRL7 (0x08) = 0x01 (accelerometer on), CTRL8 (0x09) =
+ * 0xC1 with INT1 or 0x81 with INT2 (CTRL9 done in STATUSINT, motion events
+ * on that INT, tap on); CTRL9 (0x0A) command 0x0C; WHO_AM_I (0x00) reads
+ * 0x05; data AX_L at 0x35; STATUS1 (0x2F) bit 1; TAP_STATUS at 0x59. The tap
+ * values were written from memory of the datasheet, with no copy to hand:
+ * check them against it before tuning. The full list with meanings is in
+ * docs/plan/overnight_log/SUMMARY_laptop.md.
  *
- * PROVISIONAL (owner Jia Jun, check on the schematic): INT1 on GPIO10 is
- * unconfirmed. If it is not wired there, no TAP lines print.
+ * PROVISIONAL (owner Jia Jun, check on the schematic): INT1 on GPIO10 (the
+ * default) and INT2 on GPIO13 are unconfirmed. If the chosen line is not
+ * wired there, no TAP lines print.
  *
  * DEVIATION D-2 (module-wide): ESP-IDF and FreeRTOS names and types.
  */

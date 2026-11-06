@@ -102,7 +102,7 @@ uint16_t tap_detect_peak (tap_detect_t const * p_detect);
  * @return TAP_DETECT_ACCEPT or a TAP_DETECT_REJECT_* reason.
  */
 tap_detect_result_t tap_detect_on_irq (tap_detect_t * p_detect, int64_t t_us,
-                                       uint8_t tap_status,
+                                       uint8_t              tap_status,
                                        tap_detect_event_t * p_event);
 
 /**
