@@ -1,4 +1,4 @@
-# Waveshare ESP32-S3-Matrix: the native console port is USB-Serial-JTAG.
+# Waveshare ESP32-S3-Matrix: the console is the native USB-Serial-JTAG port.
+# The sample rate comes from an esp_timer, so the FreeRTOS tick stays at its
+# default (100 Hz).
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
-# 1 kHz tick: 1 ms = 1 tick, matching the 1000 Hz accel ODR and the 10 ms windows.
-CONFIG_FREERTOS_HZ=1000

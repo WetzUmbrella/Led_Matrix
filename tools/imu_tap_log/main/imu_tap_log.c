@@ -1,48 +1,54 @@
 /**
  * @file    imu_tap_log.c
- * @brief   Tap-feasibility logger for hardware test card H6.
+ * @brief   Tap-feasibility logger for hardware test card H6
+ *          (docs/bench/2026-11-06_hardware_testing.md, tools/imu_tap_log/
+ *          README.md).
  *
- * QMI8658 accelerometer logger for the Waveshare ESP32-S3-Matrix (target
- * esp32s3). Logs how hard taps on the tile are so tap thresholds can be
- * chosen. See docs/bench/2026-11-06_hardware_testing.md section "H6".
+ * QMI8658 accelerometer on the Waveshare ESP32-S3-Matrix: I2C SDA GPIO11,
+ * SCL GPIO12, 400 kHz, address 0x6A then 0x6B, WHO_AM_I 0x05 (as
+ * panel_sync/main/orientation.c). Accelerometer only, +/-16 g (2048 LSB/g,
+ * the widest range, so a firm tap does not clip), ODR 1000 Hz.
  *
- * IMU setup: CTRL7=0x00 (sensors off), CTRL1=0x40 (address auto-increment,
- * little-endian), CTRL2=0x33 (accelerometer +/-16 g, ODR 1000 Hz: aFS bits
- * 6:4 = 011, aODR bits 3:0 = 0011), CTRL7=0x01 (accelerometer on).
- * +/-16 g is the widest range, so a firm finger tap does not saturate;
- * at +/-16 g the scale is 2048 LSB per g.
+ * Sample source (ITL_SOURCE_FIFO):
+ *   1 (default) the QMI8658 FIFO, 64 samples, stream mode. A periodic
+ *     esp_timer wakes the sampling task every 10 ms; the task drains the FIFO
+ *     (CTRL9 CTRL_CMD_REQ_FIFO, read the count, burst-read FIFO_DATA, leave
+ *     read mode). One drain is one window. FIFO_STATUS overflow counts as an
+ *     overrun.
+ *   0 (fallback) data-ready poll: the esp_timer wakes the task every 500 us;
+ *     the task reads STATUS0 and, when bit 0 is set, the sample counter,
+ *     temperature and accelerometer in one burst (0x30 to 0x3A). A jump in
+ *     the 24-bit sample counter counts the skipped samples as overruns.
+ * Either way the task blocks between wake-ups, so the IDLE tasks and the
+ * task watchdog are never starved, and the rate does not depend on the
+ * FreeRTOS tick (100 Hz by default).
  *
- * The sampling task polls STATUS0 bit 0 (accelerometer data ready), reads
- * the 6 bytes from AX_L (AX, AY, AZ, little-endian int16), computes
- * |a| = sqrt(ax^2+ay^2+az^2) in mg (mg = LSB * 1000 / 2048) and keeps the
- * peak of the current 10 ms window (windows aligned to
- * esp_timer_get_time() / 10000). When a window ends it prints exactly one
- * line: T,<ms since boot>,<peak |a| in mg as an integer> (ms = window start).
+ * Peak: per axis, a slow baseline b (exponential moving average, time
+ * constant 500 ms, so each sample moves b by 1/500 of the difference) stands
+ * for gravity. The baseline is held (not updated) while the current or the
+ * previous window's peak is over ITL_HOLD_MG, so a tap does not drag it. The
+ * per-sample deviation is |a - b| = sqrt(dx^2 + dy^2 + dz^2) in mg, and each
+ * window's line carries its largest deviation.
  *
- * At boot one header line is printed before any T line, for example:
- * H,board=<n or MAC aa:bb:cc:dd:ee:ff>,range_g=16,odr_hz=1000,window_ms=10
+ * Output, one line each, nothing read from the port:
+ *   H,board=<n or MAC>,range_g=16,odr_hz=1000,window_ms=10,src=<fifo|poll>,
+ *     tau_ms=500,hold_mg=<n>          every second (a logger started late
+ *                                     still sees it)
+ *   S,<ms>,<samples in the last second>,<overruns in the last second>
+ *   T,<ms>,<peak deviation in mg>     every 10 ms window
+ *   E,imu_not_found                   once a second while the IMU is missing
+ * ms is time since boot. Only the sampling task prints after start-up.
  *
- * The mark task reads characters typed in the serial monitor (usb_serial_jtag
- * driver, usb_serial_jtag_read_bytes with a short timeout; \r and \n ignored)
- * and prints MARK,<ms since boot>,<char> for each character.
- *
- * If the IMU is not found, E,imu_not_found is printed once a second and the
- * init is retried.
- *
- * One mutex guards every printf so T and MARK lines never interleave mid-line.
- *
- * Contexts: app_main installs the USB-Serial-JTAG driver, reads the board
- * number from NVS (namespace "board", key "number", u8; the MAC is the
- * fallback), brings up the IMU, prints the header, then starts the sampling
- * and mark tasks. Both tasks take g_print_mutex around each line.
+ * PROVISIONAL: the FIFO and sample-counter registers are from memory of the
+ * QMI8658A datasheet. The S line shows the real rate on the bench; if it is
+ * well under 1000 with src=fifo, set ITL_SOURCE_FIFO to 0 and rebuild.
  *
  * DEVIATION D-1 (module-wide): ESP-IDF and FreeRTOS names and types
- * (i2c_master_*, usb_serial_jtag_*, nvs_*, esp_timer_get_time, TickType_t,
- * UBaseType_t, BaseType_t, esp_err_t).
+ * (i2c_master_*, esp_timer_*, nvs_*, TaskHandle_t, BaseType_t, esp_err_t).
  */
-
 #include <inttypes.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -51,173 +57,467 @@
 #include "esp_mac.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
 #include "freertos/task.h"
-#include "driver/usb_serial_jtag.h"
 #include "nvs_flash.h"
 
-/* I2C bus (QMI8658 on Waveshare ESP32-S3-Matrix: SDA GPIO11, SCL GPIO12). */
-#define ITL_I2C_PORT  I2C_NUM_0
-#define ITL_SDA_GPIO  11u
-#define ITL_SCL_GPIO  12u
-#define ITL_I2C_HZ    400000u                 /* 400 kHz fast mode */
-#define ITL_I2C_TIMEOUT_MS 20u                /* 20 ms I2C timeouts */
+#ifndef ITL_SOURCE_FIFO
+/** 1 = QMI8658 FIFO (default), 0 = data-ready poll from an esp_timer. */
+#define ITL_SOURCE_FIFO 1
+#endif
 
-/* QMI8658 probe addresses: 0x6A then 0x6B. */
-#define ITL_ADDR_FIRST 0x6Au
-#define ITL_ADDR_LAST  0x6Bu
+/* I2C bus (QMI8658 on the Waveshare ESP32-S3-Matrix). */
+#define ITL_SDA_GPIO       11
+#define ITL_SCL_GPIO       12
+#define ITL_I2C_HZ         400000u
+#define ITL_I2C_TIMEOUT_MS 20
+#define ITL_GLITCH_CNT     7u
+#define ITL_ADDR_FIRST     0x6Au
+#define ITL_ADDR_LAST      0x6Bu
 
 /* QMI8658 registers and values. */
-#define ITL_REG_WHO_AM_I 0x00u
-#define ITL_WHO_AM_I     0x05u                /* must read 0x05 */
-#define ITL_REG_CTRL1    0x02u
-#define ITL_CTRL1_VALUE  0x40u                /* address auto-increment, little-endian */
-#define ITL_REG_CTRL2    0x03u
-#define ITL_CTRL2_VALUE  0x33u                /* aFS=011 (+/-16 g), aODR=0011 (1000 Hz) */
-#define ITL_REG_CTRL7    0x08u
-#define ITL_CTRL7_OFF    0x00u                /* sensors off */
-#define ITL_CTRL7_ON     0x01u                /* accelerometer on */
-#define ITL_REG_STATUS0  0x2Eu
-#define ITL_STATUS0_DRDY_BIT 0x01u            /* accelerometer data ready */
-#define ITL_REG_AX_L     0x35u                /* 6 bytes: AX, AY, AZ, little-endian int16 */
+#define ITL_REG_WHO_AM_I   0x00u
+#define ITL_WHO_AM_I       0x05u
+#define ITL_REG_CTRL1      0x02u
+#define ITL_CTRL1_VALUE    0x40u /* Address auto-increment, little-endian. */
+#define ITL_REG_CTRL2      0x03u
+#define ITL_CTRL2_VALUE    0x33u /* aFS 011 = +/-16 g, aODR 0011 = 1000 Hz. */
+#define ITL_REG_CTRL7      0x08u
+#define ITL_CTRL7_OFF      0x00u
+#define ITL_CTRL7_ACC_ON   0x01u
+#define ITL_REG_CTRL8      0x09u
+#define ITL_CTRL8_VALUE    0x80u /* CTRL9 done flag in STATUSINT bit 7. */
+#define ITL_REG_CTRL9      0x0Au
+#define ITL_CMD_ACK        0x00u
+#define ITL_CMD_RST_FIFO   0x04u
+#define ITL_CMD_REQ_FIFO   0x05u
+#define ITL_REG_FIFO_WTM   0x13u
+#define ITL_FIFO_WTM_VALUE 0x08u
+#define ITL_REG_FIFO_CTRL  0x14u
+#define ITL_FIFO_CTRL_ON   0x0Au /* Size 64 (bits 3:2 = 10), stream (10). */
+#define ITL_REG_FIFO_COUNT 0x15u /* FIFO_SMPL_CNT, then FIFO_STATUS. */
+#define ITL_FIFO_MSB_MASK  0x03u
+#define ITL_FIFO_OVERFLOW  0x20u
+#define ITL_REG_FIFO_DATA  0x17u
+#define ITL_REG_STATUSINT  0x2Du
+#define ITL_CMD_DONE_BIT   0x80u
+#define ITL_REG_STATUS0    0x2Eu
+#define ITL_STATUS0_ADA    0x01u
+#define ITL_REG_TIMESTAMP  0x30u /* 24-bit sample counter, then TEMP, AX.. */
 
-/* I2C frame sizes. */
-#define ITL_REG_ADDR_BYTES 1u                 /* one-byte register address */
-#define ITL_REG_WRITE_BYTES 2u                /* register + value */
-#define ITL_ACCEL_BYTES    6u                 /* AX_L..AZ_H */
-#define ITL_BYTE_BITS      8u                 /* bits per byte, to join halves */
+/* Sizes. */
+#define ITL_ACCEL_BYTES    6u
+#define ITL_TS_BYTES       3u
+#define ITL_TEMP_BYTES     2u
+#define ITL_POLL_BYTES     (ITL_TS_BYTES + ITL_TEMP_BYTES + ITL_ACCEL_BYTES)
+#define ITL_FIFO_SAMPLES   64u
+#define ITL_FIFO_MAX_BYTES (ITL_FIFO_SAMPLES * ITL_ACCEL_BYTES)
+#define ITL_FIFO_UNIT      2u /* The count is in 2-byte units. */
+#define ITL_BYTE_BITS      8u
+#define ITL_TS_MASK        0xFFFFFFu
+#define ITL_AXES           3u
 
-/* Accelerometer scale: +/-16 g => 2048 LSB per g. */
-#define ITL_LSB_PER_G 2048u
-#define ITL_MG_PER_G  1000u                   /* 1 g = 1000 mg */
+/* Scale and peak. */
+#define ITL_LSB_PER_G 2048.0f
+#define ITL_MG_PER_G  1000.0f
+#define ITL_EMA_DIV   500   /* tau 500 ms x 1000 samples/s. */
+#define ITL_Q_ONE     65536 /* 1 LSB in the Q16 baseline. */
+#define ITL_HOLD_MG   100
+#define ITL_TAU_MS    500u
 
-/* Sampling window: 10 ms = 10000 us, aligned to esp_timer_get_time(). */
-#define ITL_WINDOW_US 10000u
-#define ITL_WINDOW_MS 10u                     /* window start in ms */
-#define ITL_POLL_MS   1u                      /* poll period (1000 Hz ODR) */
+/* Timing. */
+#define ITL_US_PER_MS 1000u
+#define ITL_WINDOW_MS 10u
+#define ITL_WINDOW_US (ITL_WINDOW_MS * ITL_US_PER_MS)
+#define ITL_POLL_US   500u
+#define ITL_STATS_US  1000000u
+#define ITL_RETRY_MS  1000u
+#define ITL_WAIT_MS   100u
+#define ITL_CMD_POLLS 20u
+#define ITL_RANGE_G   16u
+#define ITL_ODR_HZ    1000u
 
-/* Mark task: USB-Serial-JTAG read timeout. */
-#define ITL_MARK_TIMEOUT_MS 10u
-#define ITL_US_PER_MS   1000u                 /* us -> ms */
-
-/* E line retry period. */
-#define ITL_RETRY_MS 1000u
-
-/* NVS board number: namespace "board", key "number", u8. */
+/* Board identity and the task. */
 #define ITL_NVS_NAMESPACE "board"
-#define ITL_NVS_KEY "number"
+#define ITL_NVS_KEY       "number"
+#define ITL_ID_SIZE       24u
+#define ITL_MAC_BYTES     6u
+#define ITL_STACK_BYTES   4096u
+#define ITL_TASK_PRIO     5u
+#define ITL_TASK_CORE     1
 
-/* USB-Serial-JTAG driver buffer sizes. */
-#define ITL_USB_RX_SIZE 1024u
-#define ITL_USB_TX_SIZE 1024u
+#if ITL_SOURCE_FIFO
+#define ITL_TICK_US  ITL_WINDOW_US
+#define ITL_SRC_NAME "fifo"
+#else
+#define ITL_TICK_US  ITL_POLL_US
+#define ITL_SRC_NAME "poll"
+#endif
 
-/* Tasks. */
-#define ITL_SAMPLE_STACK 4096u                /* words: I2C + math + printf */
-#define ITL_MARK_STACK   2048u                /* words: read + printf */
-#define ITL_PRIO_SAMPLE  5u
-#define ITL_PRIO_MARK    4u
-#define ITL_AFFINITY_CORE 0u
+static i2c_master_bus_handle_t g_p_bus  = NULL;
+static i2c_master_dev_handle_t g_p_dev  = NULL;
+static TaskHandle_t            g_p_task = NULL;
+static char                    g_board[ITL_ID_SIZE];
 
-/* NVS errors handled by erasing the namespace once. */
-#define ITL_NVS_ERR_NO_FREE_PAGES  ESP_ERR_NVS_NO_FREE_PAGES
-#define ITL_NVS_ERR_NEW_VERSION    ESP_ERR_NVS_NEW_VERSION_FOUND
+/* Sampling state: only the sampling task touches it. */
+static int64_t  g_base_q[ITL_AXES]; /* Baseline per axis, Q16 LSB. */
+static bool     g_b_seeded  = false;
+static int32_t  g_win_peak  = 0;  /* Peak deviation this window, mg. */
+static int32_t  g_prev_peak = 0;  /* Peak deviation last window, mg. */
+static uint32_t g_samples   = 0u; /* Samples since the last S line. */
+static uint32_t g_overruns  = 0u; /* Overruns since the last S line. */
+static uint64_t g_stats_us  = 0u; /* Time of the last S line. */
 
-/* Printed board identity buffer (MAC is 17 chars + NUL). */
-#define ITL_BOARD_ID_SIZE 32u
-
-/* One mutex serialises all printf output. */
-static SemaphoreHandle_t g_print_mutex = NULL;
-
-/* I2C bus and device, created once by itl_imu_init. */
-static i2c_master_bus_handle_t g_p_bus = NULL;
-static i2c_master_dev_handle_t g_p_dev = NULL;
-
-/* Board identity read from NVS; the MAC is the fallback. */
-static uint8_t  g_board_number = 0u;
-static bool     g_board_known  = false;
+static bool    itl_write_reg (uint8_t reg, uint8_t value);
+static bool    itl_read (uint8_t reg, uint8_t * p_buf, size_t len);
+static bool    itl_imu_init (void);
+static void    itl_board_identity (void);
+static void    itl_sample (uint8_t const * p_raw);
+static int16_t itl_s16 (uint8_t const * p_raw);
+static void    itl_window_end (uint64_t now_us);
+static void    itl_stats (uint64_t now_us);
+static void    itl_tick (void * p_arg);
+static void    itl_task (void * p_arg);
+#if ITL_SOURCE_FIFO
+static bool itl_ctrl9 (uint8_t cmd);
+static bool itl_ctrl9_wait (bool b_done);
+static void itl_fifo_drain (uint64_t now_us);
+#else
+static void itl_poll (uint64_t now_us);
+#endif
 
 /**
- * @brief  Write one QMI8658 register (20 ms timeout).
- * @param  reg    Register.
- * @param  value  Value.
- * @return true on success.
+ * @brief  Entry point: board identity, IMU, then the timer and the sampling
+ *         task. While the IMU is missing, E lines once a second.
  */
-static bool itl_write_reg (uint8_t reg, uint8_t value)
+void app_main (void)
 {
-    uint8_t const bytes[ITL_REG_WRITE_BYTES] = {reg, value};
+    esp_err_t const err = nvs_flash_init();
 
-    return (ESP_OK == i2c_master_transmit(g_p_dev, bytes, sizeof(bytes),
-                                          ITL_I2C_TIMEOUT_MS));
+    if ((ESP_ERR_NVS_NO_FREE_PAGES == err) ||
+        (ESP_ERR_NVS_NEW_VERSION_FOUND == err))
+    {
+        (void)nvs_flash_erase(); /* A failure shows in the init below. */
+        (void)nvs_flash_init();  /* The MAC is the fallback if this fails. */
+    }
+
+    itl_board_identity();
+
+    while (!itl_imu_init())
+    {
+        printf("E,imu_not_found\n");
+        vTaskDelay(pdMS_TO_TICKS(ITL_RETRY_MS));
+    }
+
+    if (pdPASS == xTaskCreatePinnedToCore(itl_task, "itl_sample",
+                                          ITL_STACK_BYTES, NULL, ITL_TASK_PRIO,
+                                          &g_p_task, ITL_TASK_CORE))
+    {
+        esp_timer_create_args_t const args  = {.callback = itl_tick,
+                                               .name     = "itl_tick"};
+        esp_timer_handle_t            timer = NULL;
+
+        if ((ESP_OK == esp_timer_create(&args, &timer)) &&
+            (ESP_OK == esp_timer_start_periodic(timer, ITL_TICK_US)))
+        {
+            g_stats_us = (uint64_t)esp_timer_get_time(); /* Never negative. */
+        }
+        else
+        {
+            printf("E,timer_failed\n");
+        }
+    }
+    else
+    {
+        printf("E,task_failed\n");
+    }
 }
 
 /**
- * @brief  Poll STATUS0 bit 0 (accelerometer data ready).
- * @param  p_ready  Receives true when a new accelerometer sample is ready.
- * @return true when the STATUS0 register was read successfully.
+ * @brief  esp_timer callback (esp_timer task): wake the sampling task.
+ * @param  p_arg  Unused.
  */
-static bool itl_status_ready (bool * p_ready)
+static void itl_tick (void * p_arg)
 {
-    uint8_t        reg  = ITL_REG_STATUS0;
-    uint8_t        status = 0u;
-    esp_err_t const err   = i2c_master_transmit_receive(
-        g_p_dev, &reg, ITL_REG_ADDR_BYTES, &status, 1u, ITL_I2C_TIMEOUT_MS);
-
-    *p_ready = (ESP_OK == err) && (0u != (status & ITL_STATUS0_DRDY_BIT));
-    return (ESP_OK == err);
+    (void)p_arg;                     /* No argument. */
+    (void)xTaskNotifyGive(g_p_task); /* Always pdPASS. */
 }
 
 /**
- * @brief  Read AX_L..AZ_H (6 bytes, little-endian int16) and return |a| in mg.
- * @param  p_mg  Receives the magnitude in mg.
- * @return true on success.
+ * @brief  Sampling task: wait for the timer, take the samples, and print
+ *         the T, S and H lines. Blocks between wake-ups.
+ * @param  p_arg  Unused.
  */
-static bool itl_read_accel_mg (int32_t * p_mg)
+static void itl_task (void * p_arg)
 {
-    uint8_t        reg  = ITL_REG_AX_L;
-    uint8_t        raw[ITL_ACCEL_BYTES];
-    esp_err_t const err = i2c_master_transmit_receive(
-        g_p_dev, &reg, ITL_REG_ADDR_BYTES, raw, sizeof(raw),
-        ITL_I2C_TIMEOUT_MS);
+    (void)p_arg; /* No argument. */
 
+    for (;;)
+    {
+        if (0u != ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ITL_WAIT_MS)))
+        {
+            uint64_t const now_us = (uint64_t)esp_timer_get_time(); /* >= 0 */
+
+#if ITL_SOURCE_FIFO
+            itl_fifo_drain(now_us);
+#else
+            itl_poll(now_us);
+#endif
+            itl_stats(now_us);
+        }
+    }
+}
+
+#if ITL_SOURCE_FIFO
+/**
+ * @brief  Drain the FIFO into the current window, then end the window. One
+ *         drain every 10 ms is one window.
+ * @param  now_us  Time of this drain.
+ */
+static void itl_fifo_drain (uint64_t now_us)
+{
+    static uint8_t buf[ITL_FIFO_MAX_BYTES];
+    uint8_t        count[2] = {0u, 0u};
+
+    if ((itl_ctrl9(ITL_CMD_REQ_FIFO)) &&
+        (itl_read(ITL_REG_FIFO_COUNT, count, sizeof(count))))
+    {
+        /* Widen the count bytes to uint32_t before shifting. */
+        uint32_t const msb = (uint32_t)count[1] & ITL_FIFO_MSB_MASK; /* u8 */
+        uint32_t bytes = ((msb << ITL_BYTE_BITS) | count[0]) * ITL_FIFO_UNIT;
+
+        if (0u != (count[1] & ITL_FIFO_OVERFLOW))
+        {
+            g_overruns++;
+        }
+
+        if (bytes > ITL_FIFO_MAX_BYTES)
+        {
+            bytes = ITL_FIFO_MAX_BYTES;
+        }
+
+        bytes -= bytes % ITL_ACCEL_BYTES;
+
+        if ((bytes > 0u) && (itl_read(ITL_REG_FIFO_DATA, buf, bytes)))
+        {
+            for (uint32_t off = 0u; off < bytes; off += ITL_ACCEL_BYTES)
+            {
+                itl_sample(&buf[off]);
+            }
+        }
+    }
+
+    /* Leave FIFO read mode (CTRL_CMD_REQ_FIFO set it). */
+    (void)itl_write_reg(ITL_REG_FIFO_CTRL, ITL_FIFO_CTRL_ON); /* Retried. */
+    itl_window_end(now_us);
+}
+
+/**
+ * @brief  Run one CTRL9 command: send, wait for done, acknowledge, wait for
+ *         the flag to clear (as panel_sync/main/orientation.c).
+ * @param  cmd  Command code.
+ * @return true when the IMU completed it.
+ */
+static bool itl_ctrl9 (uint8_t cmd)
+{
+    return (itl_write_reg(ITL_REG_CTRL9, cmd)) && (itl_ctrl9_wait(true)) &&
+           (itl_write_reg(ITL_REG_CTRL9, ITL_CMD_ACK)) &&
+           (itl_ctrl9_wait(false));
+}
+
+/**
+ * @brief  Poll the CTRL9 done flag in STATUSINT.
+ * @param  b_done  Wait for the flag to be set (true) or clear (false).
+ * @return true when it reached that value within ITL_CMD_POLLS reads.
+ */
+static bool itl_ctrl9_wait (bool b_done)
+{
     bool b_ok = false;
 
-    if (ESP_OK == err)
+    for (uint32_t idx = 0u; (!b_ok) && (idx < ITL_CMD_POLLS); idx++)
     {
-        /* Join high:low bytes into a uint16. */
-        uint16_t const raw_x =
-            (uint16_t)(((uint32_t)raw[1] << ITL_BYTE_BITS) | (uint32_t)raw[0]);
-        /* Same 16 bits read as signed. */
-        int16_t const ax = (int16_t)raw_x;
-        uint16_t const raw_y =
-            (uint16_t)(((uint32_t)raw[3] << ITL_BYTE_BITS) | (uint32_t)raw[2]);
-        int16_t const ay = (int16_t)raw_y;
-        uint16_t const raw_z =
-            (uint16_t)(((uint32_t)raw[5] << ITL_BYTE_BITS) | (uint32_t)raw[4]);
-        int16_t const az = (int16_t)raw_z;
+        uint8_t status = 0u;
 
-        /* LSB -> mg at 2048 LSB/g. */
-        int32_t const ax_mg = ((int32_t)ax * ITL_MG_PER_G) / ITL_LSB_PER_G;
-        int32_t const ay_mg = ((int32_t)ay * ITL_MG_PER_G) / ITL_LSB_PER_G;
-        int32_t const az_mg = ((int32_t)az * ITL_MG_PER_G) / ITL_LSB_PER_G;
-
-        /* |a| = sqrt(ax^2+ay^2+az^2) in mg; int64 avoids overflow on the sum. */
-        int64_t const sum_sq =
-            ((int64_t)ax_mg * (int64_t)ax_mg) +
-            ((int64_t)ay_mg * (int64_t)ay_mg) +
-            ((int64_t)az_mg * (int64_t)az_mg);
-        /* double -> int32: the peak is below 30 000 mg. */
-        int32_t const mag_mg = (int32_t)sqrt((double)sum_sq);
-
-        *p_mg = mag_mg;
-        b_ok  = true;
+        if (itl_read(ITL_REG_STATUSINT, &status, 1u))
+        {
+            b_ok = (b_done == (0u != (status & ITL_CMD_DONE_BIT)));
+        }
     }
 
     return b_ok;
 }
+#else
+/**
+ * @brief  Data-ready poll: read one sample if STATUS0 says one is ready,
+ *         count skipped samples from the sample counter, and end the window
+ *         when 10 ms have passed.
+ * @param  now_us  Time of this poll.
+ */
+static void itl_poll (uint64_t now_us)
+{
+    static uint32_t last_ts   = 0u;
+    static bool     b_have_ts = false;
+    static uint64_t win_start = 0u;
+    uint8_t         status    = 0u;
+    uint8_t         raw[ITL_POLL_BYTES];
+
+    if ((itl_read(ITL_REG_STATUS0, &status, 1u)) &&
+        (0u != (status & ITL_STATUS0_ADA)) &&
+        (itl_read(ITL_REG_TIMESTAMP, raw, sizeof(raw))))
+    {
+        uint32_t const high = (uint32_t)raw[2]; /* u8 widened to shift. */
+        uint32_t const mid  = (uint32_t)raw[1]; /* u8 widened to shift. */
+        uint32_t const stamp =
+            (high << (2u * ITL_BYTE_BITS)) | (mid << ITL_BYTE_BITS) | raw[0];
+        uint32_t const step = (stamp - last_ts) & ITL_TS_MASK;
+
+        if ((b_have_ts) && (step > 1u))
+        {
+            g_overruns += step - 1u;
+        }
+
+        last_ts   = stamp;
+        b_have_ts = true;
+        itl_sample(&raw[ITL_TS_BYTES + ITL_TEMP_BYTES]);
+    }
+
+    if ((now_us - win_start) >= ITL_WINDOW_US)
+    {
+        itl_window_end(now_us);
+        win_start = now_us;
+    }
+}
+#endif
+
+/**
+ * @brief  One accelerometer sample: update the baseline (unless held) and
+ *         the window's peak deviation.
+ * @param  p_raw  6 bytes AX, AY, AZ, little-endian int16.
+ */
+static void itl_sample (uint8_t const * p_raw)
+{
+    bool const b_hold =
+        (g_win_peak > ITL_HOLD_MG) || (g_prev_peak > ITL_HOLD_MG);
+    float sum_sq = 0.0f;
+
+    for (uint32_t axis = 0u; axis < ITL_AXES; axis++)
+    {
+        /* int16 in Q16, in int64 so the difference below cannot overflow. */
+        int64_t const x_q = (int64_t)itl_s16(&p_raw[2u * axis]) * ITL_Q_ONE;
+
+        if (!g_b_seeded)
+        {
+            g_base_q[axis] = x_q;
+        }
+        else if (!b_hold)
+        {
+            g_base_q[axis] += (x_q - g_base_q[axis]) / ITL_EMA_DIV;
+        }
+        else
+        {
+            /* Held: a tap is in this or the last window. */
+        }
+
+        /* Q16 LSB to LSB as float for the magnitude (|d| < 2^17). */
+        float const d_lsb = (float)(x_q - g_base_q[axis]) / (float)ITL_Q_ONE;
+
+        sum_sq += d_lsb * d_lsb;
+    }
+
+    g_b_seeded = true;
+    g_samples++;
+
+    /* LSB to mg, rounded to the nearest mg; at most about 55,000 mg. */
+    int32_t const dev_mg =
+        (int32_t)((sqrtf(sum_sq) * ITL_MG_PER_G / ITL_LSB_PER_G) + 0.5f);
+
+    if (dev_mg > g_win_peak)
+    {
+        g_win_peak = dev_mg;
+    }
+}
+
+/**
+ * @brief  Print the window's T line and start the next window.
+ * @param  now_us  End of the window.
+ */
+static void itl_window_end (uint64_t now_us)
+{
+    uint64_t const start_ms = (now_us - ITL_WINDOW_US) / ITL_US_PER_MS;
+
+    printf("T,%" PRIu64 ",%" PRId32 "\n", start_ms, g_win_peak);
+    g_prev_peak = g_win_peak;
+    g_win_peak  = 0;
+}
+
+/**
+ * @brief  Once a second: the H line, then the S line with the samples and
+ *         overruns since the last one.
+ * @param  now_us  Now.
+ */
+static void itl_stats (uint64_t now_us)
+{
+    if ((now_us - g_stats_us) >= ITL_STATS_US)
+    {
+        printf("H,board=%s,range_g=%u,odr_hz=%u,window_ms=%u,src=%s,"
+               "tau_ms=%u,hold_mg=%d\n",
+               g_board, ITL_RANGE_G, ITL_ODR_HZ, ITL_WINDOW_MS, ITL_SRC_NAME,
+               ITL_TAU_MS, ITL_HOLD_MG);
+        printf("S,%" PRIu64 ",%" PRIu32 ",%" PRIu32 "\n",
+               now_us / ITL_US_PER_MS, g_samples, g_overruns);
+        g_samples  = 0u;
+        g_overruns = 0u;
+        g_stats_us = now_us;
+    }
+}
+
+/**
+ * @brief  Little-endian int16 from two bytes.
+ * @param  p_raw  Low byte, then high byte.
+ * @return The value.
+ */
+static int16_t itl_s16 (uint8_t const * p_raw)
+{
+    uint32_t const high = (uint32_t)p_raw[1]; /* u8 widened to shift. */
+    uint16_t const bits =
+        (uint16_t)((high << ITL_BYTE_BITS) | p_raw[0]); /* 16 bits. */
+
+    return (int16_t)bits; /* Two's complement reinterpretation. */
+}
+
+/**
+ * @brief  Board identity for the H line: the NVS board number (namespace
+ *         "board", key "number", as panel_sync/main/tile_net.c), or the MAC.
+ */
+static void itl_board_identity (void)
+{
+    nvs_handle_t handle;
+    uint8_t      number = 0u;
+    bool         b_ok   = false;
+
+    if (ESP_OK == nvs_open(ITL_NVS_NAMESPACE, NVS_READONLY, &handle))
+    {
+        b_ok = (ESP_OK == nvs_get_u8(handle, ITL_NVS_KEY, &number));
+        nvs_close(handle);
+    }
+
+    if (b_ok)
+    {
+        (void)snprintf(g_board, sizeof(g_board), "%u", number); /* Fits. */
+    }
+    else
+    {
+        uint8_t mac[ITL_MAC_BYTES] = {0u};
+
+        (void)esp_read_mac(mac, ESP_MAC_WIFI_STA); /* Zeros if it fails. */
+        (void)snprintf(g_board, sizeof(g_board),   /* 17 characters, fits. */
+                       "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2],
+                       mac[3], mac[4], mac[5]);
+    }
+}
 
 /**
  * @brief  Create the I2C bus once, probe 0x6A then 0x6B, check WHO_AM_I and
- *         configure the accelerometer (off, CTRL1, CTRL2, on).
+ *         configure the accelerometer (and the FIFO when it is the source).
  * @return true when the IMU answered and was configured.
  */
 static bool itl_imu_init (void)
@@ -227,253 +527,76 @@ static bool itl_imu_init (void)
     if (!b_ok)
     {
         i2c_master_bus_config_t const bus_cfg = {
-            .i2c_port                     = ITL_I2C_PORT,
+            .i2c_port                     = I2C_NUM_0,
             .sda_io_num                   = ITL_SDA_GPIO,
             .scl_io_num                   = ITL_SCL_GPIO,
             .clk_source                   = I2C_CLK_SRC_DEFAULT,
-            .glitch_ignore_cnt            = 7u,
+            .glitch_ignore_cnt            = ITL_GLITCH_CNT,
             .flags.enable_internal_pullup = true,
         };
 
         b_ok = (ESP_OK == i2c_new_master_bus(&bus_cfg, &g_p_bus));
     }
 
-    if ((b_ok) && (NULL == g_p_dev))
+    for (uint16_t addr = ITL_ADDR_FIRST;
+         (b_ok) && (NULL == g_p_dev) && (addr <= ITL_ADDR_LAST); addr++)
     {
-        b_ok = false;
-
-        for (uint16_t addr = ITL_ADDR_FIRST; (!b_ok) && (addr <= ITL_ADDR_LAST);
-             addr++)
+        if (ESP_OK == i2c_master_probe(g_p_bus, addr, ITL_I2C_TIMEOUT_MS))
         {
-            if (ESP_OK == i2c_master_probe(g_p_bus, addr, ITL_I2C_TIMEOUT_MS))
-            {
-                i2c_device_config_t const dev_cfg = {
-                    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-                    .device_address  = addr,
-                    .scl_speed_hz    = ITL_I2C_HZ,
-                };
+            i2c_device_config_t const dev_cfg = {
+                .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+                .device_address  = addr,
+                .scl_speed_hz    = ITL_I2C_HZ,
+            };
 
-                b_ok = (ESP_OK ==
-                        i2c_master_bus_add_device(g_p_bus, &dev_cfg, &g_p_dev));
-            }
+            b_ok = (ESP_OK ==
+                    i2c_master_bus_add_device(g_p_bus, &dev_cfg, &g_p_dev));
         }
     }
 
-    if (b_ok)
-    {
-        uint8_t         reg = ITL_REG_WHO_AM_I;
-        uint8_t         who = 0u;
-        esp_err_t const err = i2c_master_transmit_receive(
-            g_p_dev, &reg, ITL_REG_ADDR_BYTES, &who, 1u, ITL_I2C_TIMEOUT_MS);
+    uint8_t who = 0u;
 
-        b_ok = (ESP_OK == err) && (ITL_WHO_AM_I == who) &&
-               (itl_write_reg(ITL_REG_CTRL7, ITL_CTRL7_OFF)) &&
-               (itl_write_reg(ITL_REG_CTRL1, ITL_CTRL1_VALUE)) &&
-               (itl_write_reg(ITL_REG_CTRL2, ITL_CTRL2_VALUE)) &&
-               (itl_write_reg(ITL_REG_CTRL7, ITL_CTRL7_ON));
-    }
+    b_ok = (b_ok) && (NULL != g_p_dev) &&
+           (itl_read(ITL_REG_WHO_AM_I, &who, 1u)) && (ITL_WHO_AM_I == who) &&
+           (itl_write_reg(ITL_REG_CTRL7, ITL_CTRL7_OFF)) &&
+           (itl_write_reg(ITL_REG_CTRL1, ITL_CTRL1_VALUE)) &&
+           (itl_write_reg(ITL_REG_CTRL2, ITL_CTRL2_VALUE)) &&
+           (itl_write_reg(ITL_REG_CTRL8, ITL_CTRL8_VALUE));
+#if ITL_SOURCE_FIFO
+    b_ok = (b_ok) && (itl_write_reg(ITL_REG_FIFO_WTM, ITL_FIFO_WTM_VALUE)) &&
+           (itl_write_reg(ITL_REG_FIFO_CTRL, ITL_FIFO_CTRL_ON)) &&
+           (itl_ctrl9(ITL_CMD_RST_FIFO));
+#endif
 
-    return b_ok;
+    return (b_ok) && (itl_write_reg(ITL_REG_CTRL7, ITL_CTRL7_ACC_ON));
 }
 
 /**
- * @brief  Read the board number from NVS namespace "board", key "number".
- * @param  p_number  Receives the number.
- * @return true when the key was read successfully.
+ * @brief  Write one register.
+ * @param  reg    Register.
+ * @param  value  Value.
+ * @return true on success.
  */
-static bool itl_board_number_read (uint8_t * p_number)
+static bool itl_write_reg (uint8_t reg, uint8_t value)
 {
-    nvs_handle_t handle;
-    bool         b_ok = false;
+    uint8_t const bytes[2] = {reg, value};
 
-    if (ESP_OK == nvs_open(ITL_NVS_NAMESPACE, NVS_READONLY, &handle))
-    {
-        esp_err_t const err = nvs_get_u8(handle, ITL_NVS_KEY, p_number);
-
-        nvs_close(handle); /* done with the namespace */
-        b_ok = (ESP_OK == err);
-    }
-
-    return b_ok;
+    return (ESP_OK == i2c_master_transmit(g_p_dev, bytes, sizeof(bytes),
+                                          ITL_I2C_TIMEOUT_MS));
 }
 
 /**
- * @brief  Write the board identity (the NVS number, or the MAC fallback)
- *         into a buffer.
- * @param  p_buf  Destination buffer.
- * @param  size   Buffer size.
- * @return Number of characters written (excluding the NUL terminator).
+ * @brief  Read len bytes from reg onwards (auto-increment is on; FIFO_DATA
+ *         does not increment).
+ * @param  reg    First register.
+ * @param  p_buf  Receives the bytes.
+ * @param  len    Bytes.
+ * @return true on success.
  */
-static int itl_board_identity (char * p_buf, size_t size)
+static bool itl_read (uint8_t reg, uint8_t * p_buf, size_t len)
 {
-    int n = 0;
-
-    if (g_board_known)
-    {
-        n = snprintf(p_buf, size, "%" PRIu8, g_board_number);
-    }
-    else
-    {
-        uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);
-        n = snprintf(p_buf, size, "%02x:%02x:%02x:%02x:%02x:%02x",
-                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    }
-
-    return n;
-}
-
-/**
- * @brief  Sampling task: poll STATUS0, keep the peak |a| of each 10 ms window
- *         and print one T line when the window ends.
- * @param  p_arg  Unused.
- */
-static void itl_sampling_task (void * p_arg)
-{
-    uint64_t last_win = UINT64_MAX; /* unset until the first sample */
-    int32_t  peak_mg  = 0;
-
-    (void)p_arg; /* The task takes no parameter. */
-
-    for (;;)
-    {
-        uint64_t const now_us = esp_timer_get_time();
-        uint64_t const win    = now_us / ITL_WINDOW_US; /* current 10 ms window */
-
-        if (win != last_win)
-        {
-            if (UINT64_MAX != last_win) /* the previous window ended */
-            {
-                uint64_t const ms = last_win * ITL_WINDOW_MS; /* window start */
-
-                if (pdTRUE == xSemaphoreTake(g_print_mutex, portMAX_DELAY))
-                {
-                    /* One complete T line. */
-                    printf("T,%" PRIu64 ",%" PRIi32 "\n", ms, peak_mg);
-                    xSemaphoreGive(g_print_mutex); /* line complete */
-                }
-            }
-
-            last_win = win;
-            peak_mg  = 0;
-        }
-
-        bool ready = false;
-
-        (void)itl_status_ready(&ready); /* best effort: a failed poll skips one sample */
-
-        if (ready)
-        {
-            int32_t mag_mg = 0;
-
-            if (itl_read_accel_mg(&mag_mg) && (mag_mg > peak_mg))
-            {
-                peak_mg = mag_mg;
-            }
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(ITL_POLL_MS));
-    }
-}
-
-/**
- * @brief  Mark task: read typed characters from USB-Serial-JTAG and print one
- *         MARK line per character (\r and \n ignored).
- * @param  p_arg  Unused.
- */
-static void itl_mark_task (void * p_arg)
-{
-    uint8_t buf[1];
-
-    (void)p_arg; /* The task takes no parameter. */
-
-    for (;;)
-    {
-        int const len = usb_serial_jtag_read_bytes(buf, sizeof(buf),
-                                                   pdMS_TO_TICKS(ITL_MARK_TIMEOUT_MS));
-
-        if (len > 0)
-        {
-            char const c = (char)buf[0]; /* byte -> char */
-
-            if (('\r' != c) && ('\n' != c))
-            {
-                uint64_t const ms = esp_timer_get_time() / ITL_US_PER_MS; /* us -> ms */
-
-                if (pdTRUE == xSemaphoreTake(g_print_mutex, portMAX_DELAY))
-                {
-                    /* One complete MARK line. */
-                    printf("MARK,%" PRIu64 ",%c\n", ms, c);
-                    xSemaphoreGive(g_print_mutex); /* line complete */
-                }
-            }
-        }
-    }
-}
-
-/**
- * @brief  Application entry point: console, board identity, IMU, header,
- *         then the sampling and mark tasks.
- */
-void app_main (void)
-{
-    esp_err_t const nvs_err = nvs_flash_init();
-
-    if ((ITL_NVS_ERR_NO_FREE_PAGES == nvs_err) ||
-        (ITL_NVS_ERR_NEW_VERSION == nvs_err))
-    {
-        (void)nvs_flash_erase(); /* Failure shows in the init below. */
-        (void)nvs_flash_init();
-    }
-
-    /* USB-Serial-JTAG is the board's native console port: install the driver
-     * before any output, so E lines and the header are not lost. */
-    {
-    usb_serial_jtag_driver_config_t usb_cfg = {
-        .rx_buffer_size = (int)ITL_USB_RX_SIZE,  /* u32 -> int for the config struct */
-        .tx_buffer_size = (int)ITL_USB_TX_SIZE,  /* u32 -> int for the config struct */
-    };
-
-    (void)usb_serial_jtag_driver_install(&usb_cfg); /* OK if already installed */
-    }
-
-    g_print_mutex = xSemaphoreCreateMutex();
-
-    /* Board number from NVS; the MAC is the fallback. */
-    g_board_known = itl_board_number_read(&g_board_number);
-
-    /* Bring up the IMU, printing E,imu_not_found once a second while missing. */
-    while (!itl_imu_init())
-    {
-        if (pdTRUE == xSemaphoreTake(g_print_mutex, portMAX_DELAY))
-        {
-            printf("E,imu_not_found\n");
-            xSemaphoreGive(g_print_mutex); /* line complete */
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(ITL_RETRY_MS));
-    }
-
-    /* Header before any T line. */
-    {
-        char board[ITL_BOARD_ID_SIZE];
-
-        itl_board_identity(board, sizeof(board));
-        printf("H,board=%s,range_g=16,odr_hz=1000,window_ms=10\n", board);
-    }
-
-    (void)xTaskCreatePinnedToCore(itl_sampling_task, "itl_sample",
-                                  (uint16_t)ITL_SAMPLE_STACK, /* words -> uint16_t */
-                                  NULL,
-                                  (UBaseType_t)ITL_PRIO_SAMPLE,
-                                  NULL,
-                                  (BaseType_t)ITL_AFFINITY_CORE);
-    (void)xTaskCreatePinnedToCore(itl_mark_task, "itl_mark",
-                                  (uint16_t)ITL_MARK_STACK,   /* words -> uint16_t */
-                                  NULL,
-                                  (UBaseType_t)ITL_PRIO_MARK,
-                                  NULL,
-                                  (BaseType_t)ITL_AFFINITY_CORE);
+    return (ESP_OK == i2c_master_transmit_receive(g_p_dev, &reg, 1u, p_buf, len,
+                                                  ITL_I2C_TIMEOUT_MS));
 }
 
 /*** end of file ***/

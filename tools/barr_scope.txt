@@ -73,3 +73,4 @@ tools/pico_tap/main.c
 tools/pico_tap/tap_ring.c
 tools/pico_tap/tap_ring.h
 tools/pico_tap/test/test_tap_ring.c
+tools/imu_tap_log/main/imu_tap_log.c
