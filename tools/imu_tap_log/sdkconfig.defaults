@@ -1,0 +1,4 @@
+# Waveshare ESP32-S3-Matrix: the native console port is USB-Serial-JTAG.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# 1 kHz tick: 1 ms = 1 tick, matching the 1000 Hz accel ODR and the 10 ms windows.
+CONFIG_FREERTOS_HZ=1000
