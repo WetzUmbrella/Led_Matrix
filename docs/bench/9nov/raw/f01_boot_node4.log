@@ -1,0 +1,280 @@
+[0;32mI (137) esp_image: segment 2: paddr=00038278 vaddr=403740ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037b96e
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x178c
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xcb8
+load:0x403cb700,len:0x2db0
+entry 0x403c8914
+[0;32mI (26) boot: ESP-IDF v5.3 2nd stage bootloader[0m
+[0;32mI (27) boot: compile time Nov  5 2026 16:36:19[0m
+[0;32mI (27) boot: Multicore bootloader[0m
+[0;32mI (30) boot: chip revision: v0.2[0m
+[0;32mI (33) boot.esp32s3: Boot SPI Speed : 80MHz[0m
+[0;32mI (38) boot.esp32s3: SPI Mode       : DIO[0m
+[0;32mI (43) boot.esp32s3: SPI Flash Size : 4MB[0m
+[0;32mI (48) boot: Enabling RNG early entropy source...[0m
+[0;32mI (53) boot: Partition Table:[0m
+[0;32mI (57) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (64) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (71) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (79) boot:  2 factory          factory app      00 00 00010000 00180000[0m
+[0;32mI (86) boot:  3 frames           Unknown data     01 40 00190000 00200000[0m
+[0;32mI (94) boot: End of partition table[0m
+[0;32mI (98) esp_image: segment 0: paddr=00010020 vaddr=3c090020 size=23650h (144976) map[0m
+[0;32mI (132) esp_image: segment 1: paddr=00033678 vaddr=3fc9b300 size=04bf8h ( 19448) load[0m
+[0;32mI (137) esp_image: segment 2: paddr=00038278 vaddr=40374000 size=07da0h ( 32160) load[0m
+[0;32mI (145) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=8f688h (587400) map[0m
+[0;32mI (252) esp_image: segment 4: paddr=000cf6b0 vaddr=4037bda0 size=0f474h ( 62580) load[0m
+[0;32mI (276) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (276) boot: Disabling RNG early entropy source...[0m
+[0;32mI (287) cpu_start: Multicore app[0m
+[0;32mI (297) cpu_start: Pro cpu start user code[0m
+[0;32mI (297) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (297) app_init: Application information:[0m
+[0;32mI (300) app_init: Project name:     panel_sync[0m
+[0;32mI (305) app_init: App version:      bench-5nov-2-21-g12f2f8d[0m
+[0;32mI (311) app_init: Compile time:     Nov  9 2026 15:04:21[0m
+[0;32mI (317) app_init: ELF file SHA256:  76bca67c0...[0m
+[0;32mI (323) app_init: ESP-IDF:          v5.3[0m
+[0;32mI (327) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (332) efuse_init: Max chip rev:     v0.99 [0m
+[0;32mI (337) efuse_init: Chip rev:         v0.2[0m
+[0;32mI (342) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (349) heap_init: At 3FCA57B0 len 00043F60 (271 KiB): RAM[0m
+[0;32mI (355) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM[0m
+[0;32mI (361) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM[0m
+[0;32mI (367) heap_init: At 600FE100 len 00001EE8 (7 KiB): RTCRAM[0m
+[0;32mI (375) spi_flash: detected chip: generic[0m
+[0;32mI (378) spi_flash: flash io: dio[0m
+[0;32mI (382) sleep: Configure to isolate all GPIO pins in sleep state[0m
+[0;32mI (389) sleep: Enable automatic switching of GPIO sleep configuration[0m
+[0;32mI (396) main_task: Started on CPU0[0m
+[0;32mI (406) main_task: Calling app_main()[0m
+ASSET ready session=5 frames=144 crc=0xce94d8b3 ram=0x3fcad634 region=internal
+ASSET cached reused
+[0;32mI (436) pp: pp rom version: e7ae62f[0m
+[0;32mI (436) net80211: net80211 rom version: e7ae62f[0m
+I (446) wifi:wifi driver task: 3fcb61e4, prio:23, stack:6656, core=0
+I (446) wifi:wifi firmware version: 0caa81945
+I (446) wifi:wifi certification version: v7.0
+I (446) wifi:config NVS flash: enabled
+I (456) wifi:config nano formating: disabled
+I (456) wifi:Init data frame dynamic rx buffer num: 32
+I (466) wifi:Init static rx mgmt buffer num: 5
+I (466) wifi:Init management short buffer num: 32
+I (466) wifi:Init dynamic tx buffer num: 32
+I (476) wifi:Init static tx FG buffer num: 2
+I (476) wifi:Init static rx buffer size: 1600
+I (486) wifi:Init static rx buffer num: 10
+I (486) wifi:Init dynamic rx buffer num: 32
+[0;32mI (496) wifi_init: rx ba win: 6[0m
+[0;32mI (496) wifi_init: accept mbox: 6[0m
+[0;32mI (496) wifi_init: tcpip mbox: 32[0m
+[0;32mI (506) wifi_init: udp mbox: 6[0m
+[0;32mI (506) wifi_init: tcp mbox: 6[0m
+[0;32mI (506) wifi_init: tcp tx win: 5760[0m
+[0;32mI (516) wifi_init: tcp rx win: 5760[0m
+[0;32mI (516) wifi_init: tcp mss: 1440[0m
+[0;32mI (526) wifi_init: WiFi IRAM OP enabled[0m
+[0;32mI (526) wifi_init: WiFi RX IRAM OP enabled[0m
+[0;32mI (536) phy_init: phy_version 680,a6008b2,Jun  4 2024,16:41:10[0m
+I (576) wifi:mode : sta (9c:13:9e:f1:2e:b0)
+I (576) wifi:enable tsf
+I (576) wifi:Set ps type: 0, coexist: 0
+
+tile_net: ESP-4, node 4, WiFi start ok
+TN_RX_HOOK 1 (1 = lwIP callback, 2 = recvfrom), node 4
+[0;32mI (586) gpio: GPIO[10]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 1| Intr:1 [0m
+TILE_TASKS cpu_mhz=160 cycle_wrap_s=26.8
+[0;32mI (596) gpio: GPIO[4]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+TN_COMMS CONNECTING TO WIFI
+[0;32mI (606) gpio: GPIO[14]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (596) gpio: GPIO[11]| InputEn: 1| OutputEn: 1| OpenDrain: 1| Pullup: 1| Pulldown: 0| Intr:0 [0m
+TILE_TASKS vTaskList (name state prio stack num core), 16 tasks
+display        	R	20	2016	16	1
+
+main           	X	1	1244	4	0
+
+IDLE1          	R	0	804	6	1
+
+IDLE0          	R	0	808	5	0
+
+playback       	B	15	3216	14	0
+
+timesync       	B	16	3332	13	0
+
+tiT            	B	18	2472	9	0
+
+asset_store    	B	8	2096	8	0
+
+tile_net       	B	12	2184	12	0
+
+ipc1           	S	24	532	2	1
+
+sys_evt        	B	20	1592	10	0
+
+wifi           	B	23	4224	11	0
+
+esp_timer      	S	22	3088	3	0
+
+ipc0           	S	1	440	1	0
+
+orientation    	B	5	1652	15	1
+
+Tmr Svc        	B	1	1312	7	-1
+
+[0;32mI (626) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 1| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (676) main_task: Returned from app_main()[0m
+ORIENT imu ready
+ORIENT changed 1
+I (1666) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (1666) wifi:state: init -> auth (0xb0)
+I (1676) wifi:state: auth -> assoc (0x0)
+I (1686) wifi:state: assoc -> run (0x10)
+I (1696) wifi:<ba-add>idx:0 (ifx:0, 88:d7:f6:be:85:70), tid:0, ssn:0, winSize:64
+I (1716) wifi:connected with <network>, aid = 5, channel 6, BW20, bssid = 88:d7:f6:be:85:70
+I (1726) wifi:security: WPA2-PSK, phy: bgn, rssi: -41
+I (1726) wifi:pm start, type: 0
+
+I (1726) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (1736) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (1796) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+[0;32mI (2756) esp_netif_handlers: sta ip: 192.168.1.6, mask: 255.255.255.0, gw: 192.168.1.1[0m
+HEAP largest_internal=155648 free_internal=221204 largest_spiram=0 od04=internal
+TN_COMMS REGISTERING TILE
+BCN,3223,327879270,2437834
+tile_net: REGISTER node 4
+TN_COMMS ASSET READY
+BCN,3224,327979288,2538523
+tile_net: REGISTER node 4
+BCN,3225,328079284,2638125
+tile_net: REGISTER node 4
+BCN,3226,328179276,2737961
+BCN,3227,328279268,2839503
+BCN,3228,328379273,2941820
+BCN,3229,328479284,3044293
+BCN,3230,328579278,3146714
+BCN,3231,328679286,3249124
+BCN,3232,328779261,3337921
+BCN,3233,328879276,3437953
+BCN,3234,328979266,3537953
+BCN,3235,329079281,3643673
+BCN,3236,329179276,3741507
+BCN,3237,329279266,3837946
+BCN,3238,329379277,3937766
+display_engine: test pin GPIO4, first tick 19767
+BCN,3239,329479264,4037937
+BCN,3240,329579286,4138095
+BCN,3241,329679277,4238012
+BCN,3242,329779265,4337952
+BCN,3243,329879277,4437994
+BCN,3244,329979264,4537962
+BCN,3245,330079283,4637998
+BCN,3246,330179282,4738023
+BCN,3247,330279261,4837958
+BCN,3248,330379274,4937898
+BCN,3249,330479270,5037983
+BCN,3250,330579280,5138120
+BCN,3251,330679277,5238042
+BCN,3252,330779259,5337970
+BCN,3253,330879275,5437985
+BCN,3254,330979268,5537983
+BCN,3255,331079278,5638067
+BCN,3256,331179282,5738037
+BCN,3257,331279262,5837983
+BCN,3258,331379277,5937977
+BCN,3259,331479266,6037975
+BCN,3260,331579284,6138368
+BCN,3261,331679279,6238316
+BCN,3262,331779266,6338638
+BCN,3263,331879280,6439109
+BCN,3264,331979265,6537991
+BCN,3265,332079281,6638054
+BCN,3266,332179286,6738219
+BCN,3267,332279263,6838027
+BCN,3268,332379273,6943627
+BCN,3269,332479264,7038069
+BCN,3270,332579286,7140446
+BCN,3271,332679280,7242889
+BCN,3272,332779264,7345260
+BCN,3273,332879272,7447662
+BCN,3274,332979268,7538020
+BCN,3275,333079282,7638065
+BCN,3276,333179278,7738065
+BCN,3277,333279263,7838012
+BCN,3278,333379273,7941894
+BCN,3279,333479262,8039143
+BCN,3280,333579281,8138154
+BCN,3281,333679276,8238082
+BCN,3282,333779263,8338029
+BCN,3283,333879271,8438042
+BCN,3284,333979265,8538035
+BCN,3285,334079281,8638086
+BCN,3286,334179277,8738086
+BCN,3287,334279268,8838338
+BCN,3288,334379276,8937966
+BCN,3289,334479266,9038031
+BCN,3290,334579279,9138128
+BCN,3291,334679281,9238091
+BCN,3292,334779262,9338042
+BCN,3293,334879276,9438058
+BCN,3294,334979264,9538039
+BCN,3295,335079279,9638085
+BCN,3296,335179285,9738091
+BCN,3297,335279266,9838042
+BCN,3298,335379271,9937975
+BCN,3299,335479261,10038042
+BCN,3300,335579281,10138147
+BCN,3301,335679290,10238134
+BCN,3302,335779266,10338069
+BCN,3303,335879279,10438085
+BCN,3304,335979266,10538042
+BCN,3305,336079281,10639227
+BCN,3306,336179279,10738112
+BCN,3307,336279264,10838054
+BCN,3308,336379279,10937857
+BCN,3309,336479261,11044431
+BCN,3310,336579281,11138174
+BCN,3311,336679279,11238656
+BCN,3312,336779261,11338977
+BCN,3313,336879279,11441379
+BCN,3314,336979266,11543794
+BCN,3315,337079278,11646191
+BCN,3316,337179285,11748599
+BCN,3317,337279265,11838075
+BCN,3318,337379277,11938007
+BCN,3319,337479261,12038074
+BCN,3320,337579279,12138505
+BCN,3321,337679282,12238132
+BCN,3322,337779265,12338091
+TN_STATS received=100 dropped=0 lost=0 log_dropped=0 tel_sent=9 tel_acked=0 ack_unknown=0 tel_q_dropped=0 upload_nacks=0 upload_wrong_session=0 tap_unsynced=0 foreign=0
+BCN,3323,337879276,12438115
+BCN,3324,337979271,12538091
+BCN,3325,338079282,12638118
+BCN,3326,338179279,12738135
+BCN,3327,338279266,12838093
+BCN,3328,338379273,12938019
+BCN,3329,338479265,13038091
+BCN,3330,338579281,13138200
+BCN,3331,338679279,13238159
+BCN,3332,338779268,13338099
+BCN,3333,338879279,13438114
+BCN,3334,338979267,13538105
+BCN,3335,339079278,13638169
+BCN,3336,339179277,13738155
+BCN,3337,339279263,13838103
+BCN,3338,339379273,13938051
+DE ticks=600 missed=0 rmt_busy=0 prep_max_us=151 orient=1
+DE_HIST,600,0,0,0,0,0,0,0,0,0,0
+BCN,3339,339479260,14044643
+BCN,3340,339579278,14138225
+BCN,3341,339679279,14238172
+BCN,3342,339779265,14338109
+BCN,3343,339879276,14438136
+BCN,3344,339979263,14538110
+BCN,3345,340079282,14638156
+BCN,3346,340179282,14738172

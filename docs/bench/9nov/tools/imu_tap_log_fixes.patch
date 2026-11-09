@@ -1,0 +1,54 @@
+diff --git i/tools/imu_tap_log/main/imu_tap_log.c w/tools/imu_tap_log/main/imu_tap_log.c
+index 8a4e7ec..ea31f24 100644
+--- i/tools/imu_tap_log/main/imu_tap_log.c
++++ w/tools/imu_tap_log/main/imu_tap_log.c
+@@ -62,7 +62,7 @@
+ 
+ #ifndef ITL_SOURCE_FIFO
+ /** 1 = QMI8658 FIFO (default), 0 = data-ready poll from an esp_timer. */
+-#define ITL_SOURCE_FIFO 1
++#define ITL_SOURCE_FIFO 0
+ #endif
+ 
+ /* I2C bus (QMI8658 on the Waveshare ESP32-S3-Matrix). */
+@@ -122,6 +122,9 @@
+ #define ITL_EMA_DIV   500   /* tau 500 ms x 1000 samples/s. */
+ #define ITL_Q_ONE     65536 /* 1 LSB in the Q16 baseline. */
+ #define ITL_HOLD_MG   100
++/* Longest hold, samples (200 ms at 1 kHz; a tap lasts well under 50 ms). A
++ * baseline seeded from a bad first sample would otherwise hold forever. */
++#define ITL_HOLD_MAX_SAMPLES 200u
+ #define ITL_TAU_MS    500u
+ 
+ /* Timing. */
+@@ -161,6 +164,7 @@ static char                    g_board[ITL_ID_SIZE];
+ /* Sampling state: only the sampling task touches it. */
+ static int64_t  g_base_q[ITL_AXES]; /* Baseline per axis, Q16 LSB. */
+ static bool     g_b_seeded  = false;
++static uint32_t g_hold_samples = 0u; /* Consecutive held samples. */
+ static int32_t  g_win_peak  = 0;  /* Peak deviation this window, mg. */
+ static int32_t  g_prev_peak = 0;  /* Peak deviation last window, mg. */
+ static uint32_t g_samples   = 0u; /* Samples since the last S line. */
+@@ -395,16 +399,20 @@ static void itl_poll (uint64_t now_us)
+  */
+ static void itl_sample (uint8_t const * p_raw)
+ {
+-    bool const b_hold =
++    bool const b_over =
+         (g_win_peak > ITL_HOLD_MG) || (g_prev_peak > ITL_HOLD_MG);
++    bool const b_reseed = (b_over) && (g_hold_samples >= ITL_HOLD_MAX_SAMPLES);
++    bool const b_hold   = (b_over) && (!b_reseed);
+     float sum_sq = 0.0f;
+ 
++    g_hold_samples = (b_hold) ? (g_hold_samples + 1u) : 0u;
++
+     for (uint32_t axis = 0u; axis < ITL_AXES; axis++)
+     {
+         /* int16 in Q16, in int64 so the difference below cannot overflow. */
+         int64_t const x_q = (int64_t)itl_s16(&p_raw[2u * axis]) * ITL_Q_ONE;
+ 
+-        if (!g_b_seeded)
++        if ((!g_b_seeded) || (b_reseed))
+         {
+             g_base_q[axis] = x_q;
+         }

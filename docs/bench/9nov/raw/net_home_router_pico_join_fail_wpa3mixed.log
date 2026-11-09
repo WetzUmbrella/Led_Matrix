@@ -1,0 +1,13 @@
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 start 15:54:13
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 15:54:13.326
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 15:54:13.826
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 15:54:14.328
+15:54:14.528 Joining <network> (timeout 10000 ms)
+15:54:21.339 COORDINATOR FAULT: router join not done in 10000 ms; retry in 1000 ms
+15:54:21.339 CL_EVENT t_ms=2 STATE node=0 value=1
+15:54:21.339 CL_EVENT t_ms=7595 STATE node=0 value=11
+15:54:21.339 CL_STATS state=11 sent=0 first_seq=0 last_seq=0 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x000 ready=0x000 sync=0x000
+15:54:21.339 LATE_HIST,0,0,0,0,0,0,0,0,0,0,0
+15:54:21.339 CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+15:54:21.340 DISPATCH_HIST,0,0,0,0,0,0,0,0,0,0,0
+15:54:22.341 Joining <network> (timeout 10000 ms)

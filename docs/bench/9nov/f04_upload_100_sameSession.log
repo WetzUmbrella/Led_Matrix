@@ -1,0 +1,38 @@
+>>> status
+pico WAITING FOR TILE READINESS readiness=0x010 online=0x018 score=0
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+<<< 0.0 s
+>>> config docs/bench/9nov/numbered_1x2.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794212326.686 configuration accepted
+<<< 0.0 s
+>>> build
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+<<< 0.1 s
+>>> upload
+failed: node 4 (0 of 57 chunks ACKed after 20 rounds)
+1794212416.603 uploaded to 172.20.10.5: 57 of 57 chunks ACKed, resent 0, 5.19 s
+1794212416.603 node 4 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+<<< 89.8 s
+>>> upload
+failed: none
+1794212424.800 uploaded to 172.20.10.4: 57 of 57 chunks ACKed, resent 0, 5.19 s
+<<< 5.2 s
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794212425.301 all tiles ready
+<<< 0.0 s
+>>> start
+<<< 0.0 s
+>>> status
+pico COORDINATING PLAYBACK readiness=0x018 online=0x018 score=0
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=4
+tile 5 172.20.10.5 faults=none orient=0 display=4
+<<< 0.0 s
+UPLOAD_SECONDS 89.8 then 5.2

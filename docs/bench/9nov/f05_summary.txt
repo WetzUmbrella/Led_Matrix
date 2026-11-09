@@ -1,0 +1,19 @@
+tile 4
+  own soft taps  n=20 min    30  p10   157  median  6039  max  9372 mg
+  own palm slaps n=20 min   359  p10  1376  median 19952  max 24133 mg
+  when the OTHER tile got soft: median    72  max   263 mg
+  when the OTHER tile got palm: median   503  max 10087 mg
+  knocks on the surface      : median  1403  max  1905 mg
+  quiet 27 s                 : p99    64  max   105 mg (n=2638 windows)
+  soft taps per threshold    : 100 mg:19/20  150 mg:18/20  200 mg:17/20  300 mg:17/20  500 mg:16/20
+tile 5
+  own soft taps  n=20 min  5034  p10 16294  median 18881  max 23486 mg
+  own palm slaps n=20 min 21685  p10 23106  median 25738  max 28430 mg
+  when the OTHER tile got soft: median   288  max  9461 mg
+  when the OTHER tile got palm: median 11649  max 22277 mg
+  knocks on the surface      : median  1539  max 12938 mg
+  quiet 27 s                 : p99   212  max   994 mg (n=2637 windows)
+  soft taps per threshold    : 100 mg:20/20  150 mg:20/20  200 mg:20/20  300 mg:20/20  500 mg:20/20
+per tap: does the rule pick the tapped tile? (other tile counted only if it also crossed 300 mg)
+  soft: other tile quiet 31 | both fired 9 -> highest peak right 7 wrong 2 | first-over-300mg right 7 wrong 2 same-10ms-window 0 | lead ms [-118, 10, 44, 59, 69, 96, 135, 146]
+  palm: other tile quiet 0 | both fired 40 -> highest peak right 34 wrong 6 | first-over-300mg right 29 wrong 10 same-10ms-window 1 | lead ms [-742, -550, -494, -423, -184, -122, -97, -26, -7, -1, 0, 2, 18, 19, 27, 27, 36, 62, 70, 101, 108, 116, 120, 125, 125, 127, 133, 134, 134, 138, 142, 143, 146, 147, 148, 160, 162, 222, 505, 691]

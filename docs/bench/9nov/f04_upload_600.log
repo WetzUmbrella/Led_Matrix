@@ -1,0 +1,25 @@
+>>> status
+pico: no STATUS yet
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+<<< 0.0 s
+>>> config docs/bench/9nov/noise_1x2_600.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794212011.375 configuration accepted
+<<< 0.0 s
+>>> build
+node 4: 600 frames, crc32 0xa7f62f08
+node 5: 600 frames, crc32 0x2222736a
+<<< 0.2 s
+>>> upload
+failed: node 5 (55 of 57 chunks ACKed after 20 rounds)
+1794212016.726 uploaded to 172.20.10.4: 57 of 57 chunks ACKed, resent 0, 5.19 s
+1794212026.869 node 5 not uploaded: 55 of 57 chunks ACKed after 20 rounds
+<<< 15.3 s
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc ERROR; start disabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+<<< 0.0 s
+UPLOAD_SECONDS 15.3
