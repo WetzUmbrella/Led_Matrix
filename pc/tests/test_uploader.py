@@ -153,3 +153,109 @@ def test_rate_limiter_spaces_sends() -> None:
     for _ in range(5):
         limiter.wait()
     assert slept == pytest.approx([0.01] * 4)
+
+
+class SilentTile(threading.Thread):
+    """A tile that already holds the asset: it reads the MANIFEST and
+    chunks but never answers the PC. The real tile sends ASSET_READY to the
+    Pico instead (bench 9 Nov, tile 1 log ``tile_net: ASSET_READY``)."""
+
+    def __init__(self) -> None:
+        super().__init__(daemon=True)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.settimeout(0.05)
+        self.port = self.sock.getsockname()[1]
+        self.received = 0
+        self.running = True
+
+    def run(self) -> None:
+        while self.running:
+            try:
+                self.sock.recvfrom(2048)
+            except socket.timeout:
+                continue
+            self.received += 1
+
+    def stop(self) -> None:
+        self.running = False
+        self.join()
+        self.sock.close()
+
+
+def test_tile_already_ready_ends_the_upload_as_success(asset: bytes) -> None:
+    """Bench 9 Nov: without the Pico's readiness the upload reported
+    '0 of 14 chunks ACKed after 20 rounds' although the tile was ready."""
+    tile = SilentTile()
+    tile.start()
+    uploader = up.Uploader(rate=0, settle_s=0.01, ack_timeout_s=0.05)
+    up.TILE_PORT = tile.port
+    stats = uploader.upload_asset("127.0.0.1", 5, asset,
+                                  already_ready=lambda: True)
+    uploader.sock.close()
+    tile.stop()
+    assert stats.already_ready
+    assert stats.acked == set() and stats.sent == 0
+
+
+def test_silent_tile_not_ready_still_fails(asset: bytes) -> None:
+    """No ACK and no readiness is still a failure, as before."""
+    tile = SilentTile()
+    tile.start()
+    uploader = up.Uploader(rate=0, settle_s=0.01, ack_timeout_s=0.001)
+    up.TILE_PORT = tile.port
+    with pytest.raises(up.UploadError, match="0 of 57 chunks ACKed"):
+        uploader.upload_asset("127.0.0.1", 5, asset,
+                              already_ready=lambda: False)
+    uploader.sock.close()
+    tile.stop()
+
+
+def test_readiness_ignored_once_chunks_are_acked(asset: bytes) -> None:
+    """A tile that is ACKing chunks is uploading; readiness must not cut
+    the upload short."""
+    tile = FakeTile()
+    tile.start()
+    uploader = up.Uploader(rate=0, settle_s=0.01, ack_timeout_s=0.05)
+    up.TILE_PORT = tile.port
+    stats = uploader.upload_asset("127.0.0.1", 5, asset, drop=[3],
+                                  already_ready=lambda: bool(tile.chunks))
+    uploader.sock.close()
+    tile.stop()
+    assert len(stats.acked) == 57 and not stats.already_ready
+    assert tile.payload() == asset
+
+
+def test_stale_busy_from_an_earlier_upload_is_ignored(asset: bytes) -> None:
+    """Bench 9 Nov: BUSY replies left over from an upload during playback
+    made every later upload fail at once with 'tile is playing (BUSY)'."""
+    tile = FakeTile(busy=True)
+    tile.start()
+    uploader = up.Uploader(rate=0, settle_s=0.01, ack_timeout_s=0.05)
+    up.TILE_PORT = tile.port
+    with pytest.raises(up.UploadError, match="BUSY"):
+        uploader.upload_asset("127.0.0.1", 5, asset)
+    tile.busy = False  # Playback stopped; more BUSY replies are queued.
+    # One more stale BUSY, answering a seq this upload never sent.
+    tile.sock.sendto(pl.encode_busy(session_id=5, seq=1, node_id=4,
+                                    ref_seq=60000),
+                     uploader.sock.getsockname())
+    stats = uploader.upload_asset("127.0.0.1", 5, asset)
+    uploader.sock.close()
+    tile.stop()
+    assert len(stats.acked) == 57
+    assert tile.payload() == asset
+
+
+def test_busy_answering_this_upload_still_stops_it(asset: bytes) -> None:
+    """The seq filter must not hide a real BUSY."""
+    tile = FakeTile(busy=True)
+    tile.start()
+    uploader = up.Uploader(rate=0, settle_s=0.01, ack_timeout_s=0.05)
+    up.TILE_PORT = tile.port
+    with pytest.raises(up.UploadError, match="BUSY"):
+        uploader.upload_asset("127.0.0.1", 5, asset)
+    with pytest.raises(up.UploadError, match="BUSY"):
+        uploader.upload_asset("127.0.0.1", 5, asset)
+    uploader.sock.close()
+    tile.stop()

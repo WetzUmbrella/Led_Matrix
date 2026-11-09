@@ -68,10 +68,11 @@ class FakeUploader:
     def __init__(self) -> None:
         self.sent = []  # type: list
 
-    def upload_asset(self, address, session_id, payload):  # type: ignore
+    def upload_asset(self, address, session_id, payload,  # type: ignore
+                     already_ready=None):
         self.sent.append((address, session_id, len(payload)))
         return types.SimpleNamespace(acked=set(), chunks=1, resent=0,
-                                     seconds=0.0)
+                                     seconds=0.0, already_ready=False)
 
 
 def _shell() -> db.DashboardShell:
@@ -185,3 +186,29 @@ def test_strip_gif_has_a_region_per_node_across_the_strip(tmp_path) -> None:  # 
     tiles = ab.partition_tiles(frames[:1], "1x9", list(range(1, 10)))
     for node in range(1, 10):
         assert tiles[node][0] == npat.region_pixels(node, 0)
+
+
+def test_upload_asks_the_pico_for_the_right_tile(tmp_path) -> None:  # type: ignore
+    """The readiness check given to the uploader is for the tile at that
+    address, read from the Pico's STATUS (bench 9 Nov: a tile that already
+    holds the asset tells only the Pico)."""
+    shell = _shell()
+    row = types.SimpleNamespace(address="10.0.0.2")
+    shell.telemetry.tiles = {2: row}
+    checks = {}
+
+    def upload_asset(address, session_id, payload,  # type: ignore
+                     already_ready=None):
+        checks[address] = already_ready
+        return types.SimpleNamespace(acked=set(), chunks=1, resent=0,
+                                     seconds=0.0, already_ready=True)
+
+    shell.uploader.upload_asset = upload_asset
+    shell._send_asset("10.0.0.2", 7, b"x")
+    shell.model.on_status(plink.Status(0b010, 0b010, 7, 0.0))
+    assert checks["10.0.0.2"]() is True  # Bit 1 = node 2.
+    shell.model.on_status(plink.Status(0b001, 0b011, 7, 0.0))
+    assert checks["10.0.0.2"]() is False
+    assert any("already holds" in m for m in shell.model.messages)
+    shell._send_asset("10.0.0.9", 7, b"x")  # No TELEMETRY from this address.
+    assert checks["10.0.0.9"]() is False

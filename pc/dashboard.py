@@ -498,12 +498,39 @@ class DashboardShell(cmd.Cmd):
                                       model.policy, list(model.node_map),
                                       frame_count, crcs)
 
+    def _node_at(self, address: str) -> Optional[int]:
+        """Node ID whose TELEMETRY last came from ``address``, or None."""
+        for node, row in self.telemetry.tiles.items():
+            if row.address == address:
+                return node
+        return None
+
+    def _ready_check(self, node: Optional[int]) -> Callable[[], bool]:
+        """For the uploader: does the Pico's newest STATUS count ``node``
+        ready? A tile that already holds the asset reports ASSET_READY to
+        the Pico only, never to the PC (bench 9 Nov)."""
+        def check() -> bool:
+            if node is None:
+                return False
+            status = self.link.poll_status()
+            if status is not None:
+                self.model.on_status(status)
+            return bool(self.model.readiness & (1 << (node - 1)))
+        return check
+
     def _send_asset(self, address: str, session_id: int,
                     payload: bytes) -> object:
-        stats = self.uploader.upload_asset(address, session_id, payload)
-        self.model._say("uploaded to %s: %d of %d chunks ACKed, resent %d, "
-                        "%.2f s" % (address, len(stats.acked), stats.chunks,
-                                    stats.resent, stats.seconds))
+        stats = self.uploader.upload_asset(
+            address, session_id, payload,
+            already_ready=self._ready_check(self._node_at(address)))
+        if stats.already_ready:
+            self.model._say("%s already holds this asset (Pico reports it "
+                            "ready), nothing sent" % address)
+        else:
+            self.model._say("uploaded to %s: %d of %d chunks ACKed, resent "
+                            "%d, %.2f s" % (address, len(stats.acked),
+                                            stats.chunks, stats.resent,
+                                            stats.seconds))
         return stats
 
     def upload_pending(self) -> Dict[int, str]:

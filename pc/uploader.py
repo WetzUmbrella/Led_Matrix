@@ -115,6 +115,14 @@ class UploadStats:
     queue_full_nacks: int = 0
     rounds: int = 0
     seconds: float = 0.0
+    #: True when the tile already held this asset: it answered the MANIFEST
+    #: with ASSET_READY to the Pico and sent no CHUNK_ACK (bench 9 Nov).
+    already_ready: bool = False
+    #: Replies dropped because they answer an earlier upload (stale BUSY or
+    #: NACK left in the socket) rather than a packet of this one.
+    stale_replies: int = 0
+    #: Seq of every MANIFEST and ASSET_CHUNK this upload sent.
+    sent_seqs: Set[int] = field(default_factory=set)
 
 
 def chunk_count(payload_len: int) -> int:
@@ -144,9 +152,38 @@ class Uploader:
         self.seq = (self.seq + 1) & 0xFFFF
         return self.seq
 
+    def _drain(self) -> int:
+        """Discard every datagram already waiting on the socket.
+
+        A BUSY or NACK from an earlier upload would otherwise be read as the
+        answer to this one (bench 9 Nov: one BUSY run made every later
+        ``upload`` fail at once). Returns how many were discarded.
+        """
+        dropped = 0
+        self.sock.settimeout(0.0)
+        while True:
+            try:
+                self.sock.recvfrom(64)
+            except (BlockingIOError, socket.timeout):
+                return dropped
+            except OSError:
+                # Windows reports an earlier ICMP port unreachable here.
+                return dropped
+            dropped += 1
+
+    def _send(self, data: bytes, seq: int, tile_ip: str,
+              stats: UploadStats) -> None:
+        """Send one MANIFEST or ASSET_CHUNK and remember its seq."""
+        stats.sent_seqs.add(seq)
+        self.sock.sendto(data, (tile_ip, TILE_PORT))
+
     def _read_replies(self, deadline: float, session_id: int,
                       stats: UploadStats) -> None:
-        """Collect CHUNK_ACK, NACK and BUSY until ``deadline``."""
+        """Collect CHUNK_ACK, NACK and BUSY until ``deadline``.
+
+        BUSY and NACK carry the seq they answer (``ref_seq``); one that does
+        not answer a packet of this upload is stale and only counted.
+        """
         while True:
             left = deadline - time.monotonic()
             if left <= 0:
@@ -161,6 +198,10 @@ class Uploader:
             except pl.LayoutError:
                 continue
             kind = msg["type"]
+            if kind in ("BUSY", "NACK") and \
+                    int(msg["ref_seq"]) not in stats.sent_seqs:  # type: ignore
+                stats.stale_replies += 1
+                continue
             if kind == "CHUNK_ACK" and msg["session_id"] == session_id:
                 stats.acked.add(int(msg["chunk_index"]))  # type: ignore
             elif kind == "BUSY":
@@ -176,8 +217,17 @@ class Uploader:
     def upload_asset(self, tile_ip: str, session_id: int, payload: bytes,
                      drop: Iterable[int] = (),
                      manifest_crc: Optional[int] = None,
-                     format_version: int = FORMAT_PACKED) -> UploadStats:
+                     format_version: int = FORMAT_PACKED,
+                     already_ready: Optional[Callable[[], bool]] = None
+                     ) -> UploadStats:
         """MANIFEST, then chunks until all are ACKed.
+
+        ``already_ready`` is asked, while no chunk has been ACKed, whether
+        the Pico already counts this tile ready. A tile that already holds
+        the asset answers the MANIFEST with ASSET_READY to the Pico and sends
+        the PC nothing, so without it the upload ends "0 of N chunks ACKed"
+        although it worked (bench 9 Nov). True ends the upload with
+        ``stats.already_ready`` set.
 
         ``drop`` is the T-B1-04 test hook: the first send of each listed
         chunk is skipped, as if lost, so it must be resent.
@@ -189,26 +239,36 @@ class Uploader:
         to_drop = set(drop)
         frame_bytes = FRAME_8BIT_BYTES if format_version == FORMAT_8BIT \
             else FRAME_BYTES
+        manifest_seq = self._next_seq()
         manifest = pl.encode_manifest(
-            session_id=session_id, seq=self._next_seq(),
+            session_id=session_id, seq=manifest_seq,
             format_version=format_version,
             frame_count=len(payload) // frame_bytes,
             crc32=zlib.crc32(payload) if manifest_crc is None
             else manifest_crc)
         start = time.monotonic()
-        self.sock.sendto(manifest, (tile_ip, TILE_PORT))
+        self._drain()
+        self._send(manifest, manifest_seq, tile_ip, stats)
         self._read_replies(time.monotonic() + self.settle_s, session_id,
                            stats)
-        self.retry_missing(tile_ip, session_id, payload, stats, to_drop)
+        self.retry_missing(tile_ip, session_id, payload, stats, to_drop,
+                           already_ready)
         stats.seconds = time.monotonic() - start
         return stats
 
     def retry_missing(self, tile_ip: str, session_id: int, payload: bytes,
-                      stats: UploadStats, to_drop: Set[int]) -> None:
+                      stats: UploadStats, to_drop: Set[int],
+                      already_ready: Optional[Callable[[], bool]] = None
+                      ) -> None:
         """Send every chunk not yet ACKed, a window at a time, until all
-        are ACKed or MAX_ROUNDS pass."""
+        are ACKed or MAX_ROUNDS pass. Stops early when nothing is ACKed and
+        ``already_ready()`` says the Pico counts the tile ready."""
         tried: Set[int] = set()
         while len(stats.acked) < stats.chunks:
+            if (not stats.acked) and (already_ready is not None) and \
+                    already_ready():
+                stats.already_ready = True
+                return
             stats.rounds += 1
             if stats.rounds > MAX_ROUNDS:
                 raise UploadError("%d of %d chunks ACKed after %d rounds" % (
@@ -223,11 +283,12 @@ class Uploader:
                         to_drop.discard(index)  # Lost once (test hook).
                         continue
                     self.limiter.wait()
+                    seq = self._next_seq()
                     data = pl.encode_asset_chunk(
-                        session_id=session_id, seq=self._next_seq(),
+                        session_id=session_id, seq=seq,
                         chunk_index=index,
                         payload=chunk_bytes(payload, index))
-                    self.sock.sendto(data, (tile_ip, TILE_PORT))
+                    self._send(data, seq, tile_ip, stats)
                     stats.sent += 1
                 self._read_replies(time.monotonic() + self.ack_timeout_s,
                                    session_id, stats)
