@@ -214,6 +214,18 @@ bool asset_store_post_upload (asset_store_upload_t const * p_item)
 }
 
 /**
+ * @brief  Drop every queued upload item (Network Task, single producer).
+ */
+void asset_store_drop_uploads (void)
+{
+    if (NULL != g_p_q_upload)
+    {
+        /* xQueueReset() always returns pdPASS; there is nothing to check. */
+        (void)xQueueReset(g_p_q_upload);
+    }
+}
+
+/**
  * @brief  Take one reply (Network Task).
  * @param  p_reply  Receives the reply when true.
  * @return true when a reply was waiting.

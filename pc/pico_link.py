@@ -16,6 +16,7 @@ t_start, t_resume and frame_index 0, because the Pico chooses them
 from __future__ import annotations
 
 import os
+import select
 import socket
 import sys
 import time
@@ -39,6 +40,13 @@ COORD_STATES = ("BOOTING", "CONNECTING TO ROUTER", "WAITING FOR SESSION",
 #: Failure policies (section 5.3).
 POLICY_CONTINUE = 0
 POLICY_PAUSE = 1
+
+#: GAME_CONTROL command codes for the mode switch (layout_table.md 5.10).
+MODE_VIDEO = 0
+MODE_GAME = 1
+
+#: Most TAP board numbers kept while nobody asks for them.
+TAP_KEEP = 16
 
 
 @dataclass
@@ -87,6 +95,8 @@ class PicoLink:
         self.seq = 0
         self.session_id = 0
         self.status: Optional[Status] = None
+        #: Board numbers of TAP datagrams not yet taken (build step 4).
+        self.taps: List[int] = []
 
     def _send(self, data: bytes) -> None:
         self.sock.sendto(data, self.pico)
@@ -121,6 +131,14 @@ class PicoLink:
         self._send(data)
         return data
 
+    def send_mode(self, command: int) -> bytes:
+        """GAME_CONTROL to the Pico (node_id 0): MODE_VIDEO or MODE_GAME."""
+        data = pl.encode("GAME_CONTROL", {
+            "session_id": self.session_id, "seq": self._next_seq(),
+            "node_id": 0, "command": command})
+        self._send(data)
+        return data
+
     def start(self) -> bytes:
         """Start: the Pico picks t_start (T-B2-05)."""
         return self._command("START_AT")
@@ -138,21 +156,41 @@ class PicoLink:
         return self._command("STOP")
 
     def poll_status(self) -> Optional[Status]:
-        """Read every waiting STATUS; returns the newest (or the last)."""
+        """Read every waiting datagram: STATUS updates the status, TAP is
+        queued for ``next_tap``. Returns the newest STATUS (or the last)."""
         while True:
             try:
                 data, _addr = self.sock.recvfrom(64)
             except (BlockingIOError, socket.timeout):
                 return self.status
             try:
-                msg = pl.decode_status(data)
+                msg = pl.decode(data)
             except pl.LayoutError:
+                continue
+            if msg["type"] == "TAP":
+                self.taps.append(int(msg["node_id"]))  # type: ignore
+                del self.taps[:-TAP_KEEP]
+                continue
+            if msg["type"] != "STATUS":
                 continue
             self.status = Status(int(msg["readiness"]),  # type: ignore
                                  int(msg["online"]),  # type: ignore
                                  int(msg["state"]),  # type: ignore
                                  time.monotonic(),
                                  int(msg["score"]))  # type: ignore
+
+    def next_tap(self, timeout_s: float) -> Optional[int]:
+        """Wait up to ``timeout_s`` for the next TAP; returns its board
+        number (the tapped tile), or None when no tap came in time."""
+        deadline = time.monotonic() + timeout_s
+        while True:
+            self.poll_status()
+            if self.taps:
+                return self.taps.pop(0)
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return None
+            select.select([self.sock], [], [], left)
 
     def close(self) -> None:
         """Release the port."""

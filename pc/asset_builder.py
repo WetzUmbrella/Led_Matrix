@@ -13,10 +13,11 @@ T-B1-02 (resample and partition):
   * Delays of 0 and 10 ms are read as 100 ms, as most browsers do
     (PROVISIONAL, OD-06 option (a), owner Jolyn).
   * More than 1023 frames is refused: frame_count is 10 bits on the wire.
-  * Each frame is resized to (columns x 8) by (rows x 8) and cut into one
-    8 x 8 region per Node ID from the layout and Node ID map
-    (layout_table.md SESSION_CONFIG: position k is row k // 3, column
-    k % 3; 0 = blank).
+  * Each frame is centre-cropped to the layout's aspect ratio (cols : rows),
+    resized to (cols x 8) by (rows x 8) and cut into one 8 x 8 region per
+    Node ID from the layout and Node ID map (build step 4: position k is row
+    k // cols, column k % cols over rows x cols; 0 = blank). Any shape with
+    rows and cols 1 to 9 and rows x cols at most 9 is accepted.
 
 T-B1-03 (pack and manifest):
   * Each channel value v becomes round(v x b / 255) on the PC only, where b
@@ -30,7 +31,7 @@ T-B1-03 (pack and manifest):
     60 is not on the wire (layout_table.md MANIFEST).
 
 Usage:
-    python3 pc/asset_builder.py in.gif --layout 2x2 --map 1,2,0,3,4,0,0,0,0
+    python3 pc/asset_builder.py in.gif --layout 2x2 --map 1,2,3,4,0,0,0,0,0
         [--brightness 8] [--session 1] --out assets/
 """
 
@@ -70,12 +71,6 @@ FORMAT_8BIT = 1
 
 #: Tile side in LEDs.
 TILE = 8
-
-#: Layout name -> (code, rows, columns) (layout_table.md section 5.2).
-LAYOUTS = {"1x1": (0, 1, 1), "2x2": (1, 2, 2), "3x3": (2, 3, 3)}
-
-#: Map slots per row in SESSION_CONFIG.
-MAP_COLUMNS = 3
 
 #: One RGB frame of a tile: 64 (r, g, b) tuples, LED 8 x row + column.
 Pixels = List[Tuple[int, int, int]]
@@ -155,19 +150,30 @@ def load_gif(path: str):  # type: ignore[no-untyped-def]
     return frames, delays
 
 
-def parse_layout(layout: str, node_map: Sequence[int]) -> Tuple[int, int, int]:
-    """Check the layout and map; returns (code, rows, columns)."""
-    if layout not in LAYOUTS:
-        raise AssetError("layout must be 1x1, 2x2 or 3x3 (FR3)")
-    code, rows, cols = LAYOUTS[layout]
+def parse_shape(layout: str) -> Tuple[int, int]:
+    """'RxC' to (rows, cols): each 1 to 9, rows x cols at most 9 (layout_table
+    section 5.2)."""
+    parts = layout.lower().split("x")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise AssetError("layout must be RxC, for example 2x2 or 1x9")
+    rows, cols = int(parts[0]), int(parts[1])
+    if not (1 <= rows <= pl.GRID_MAX and 1 <= cols <= pl.GRID_MAX):
+        raise AssetError("rows and cols are 1 to 9")
+    if rows * cols > pl.MAP_SLOTS:
+        raise AssetError("rows x cols must be at most 9 tiles")
+    return rows, cols
+
+
+def parse_layout(layout: str, node_map: Sequence[int]) -> Tuple[int, int]:
+    """Check the layout and map; returns (rows, cols)."""
+    rows, cols = parse_shape(layout)
     if len(node_map) != pl.MAP_SLOTS:
         raise AssetError("the Node ID map has 9 positions")
     used = []
     for slot, node in enumerate(node_map):
-        row, col = divmod(slot, MAP_COLUMNS)
         if not 0 <= node <= pl.NODE_MAX:
             raise AssetError("Node IDs are 1 to 9, 0 for blank")
-        if node and (row >= rows or col >= cols):
+        if node and slot >= rows * cols:
             raise AssetError("position %d is outside the %s layout"
                              % (slot, layout))
         if node:
@@ -176,22 +182,38 @@ def parse_layout(layout: str, node_map: Sequence[int]) -> Tuple[int, int, int]:
         raise AssetError("a Node ID appears twice in the map")
     if not used:
         raise AssetError("the map has no Node ID")
-    return code, rows, cols
+    return rows, cols
+
+
+def centre_crop(frame, rows: int, cols: int):  # type: ignore[no-untyped-def]
+    """Largest box with the wall's aspect ratio (cols : rows), centred."""
+    width, height = frame.size
+    if width * rows > height * cols:  # Too wide: trim the sides.
+        new_w = max(1, height * cols // rows)
+        left = (width - new_w) // 2
+        box = (left, 0, left + new_w, height)
+    else:  # Too tall (or exact): trim top and bottom.
+        new_h = max(1, width * rows // cols)
+        top = (height - new_h) // 2
+        box = (0, top, width, top + new_h)
+    return frame.crop(box)
 
 
 def partition_tiles(frames, layout: str,  # type: ignore[no-untyped-def]
                     node_map: Sequence[int]) -> Dict[int, List[Pixels]]:
-    """Resize each frame to the wall and cut one 8x8 region per Node ID."""
+    """Centre-crop and resize each frame to the wall, then cut one 8x8
+    region per Node ID (row-major over rows x cols)."""
     from PIL import Image
-    _code, rows, cols = parse_layout(layout, node_map)
+    rows, cols = parse_layout(layout, node_map)
     tiles: Dict[int, List[Pixels]] = {n: [] for n in node_map if n}
     for frame in frames:
-        wall = frame.resize((cols * TILE, rows * TILE), Image.BOX)
+        wall = centre_crop(frame, rows, cols).resize(
+            (cols * TILE, rows * TILE), Image.BOX)
         data = wall.load()
         for slot, node in enumerate(node_map):
             if not node:
                 continue
-            row, col = divmod(slot, MAP_COLUMNS)
+            row, col = divmod(slot, cols)
             pixels = [data[col * TILE + x, row * TILE + y]
                       for y in range(TILE) for x in range(TILE)]
             tiles[node].append(pixels)
@@ -284,9 +306,11 @@ def main(argv: List[str] = None) -> int:  # type: ignore[assignment]
     """Command line entry point; exit 1 with the reason on a refusal."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("gif")
-    parser.add_argument("--layout", default="1x1", choices=sorted(LAYOUTS))
+    parser.add_argument("--layout", default="1x1",
+                        help="RxC, rows and cols 1 to 9, rows x cols <= 9")
     parser.add_argument("--map", default="1,0,0,0,0,0,0,0,0",
-                        help="9 Node IDs, row by row in 3 columns, 0 = blank")
+                        help="9 Node IDs, row by row over rows x cols, "
+                             "0 = blank")
     parser.add_argument("--brightness", type=int, default=BRIGHTNESS_MAX)
     parser.add_argument("--session", type=int, default=1)
     parser.add_argument("--out", default="assets")

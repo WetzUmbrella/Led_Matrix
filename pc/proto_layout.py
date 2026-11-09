@@ -318,24 +318,6 @@ encode_ack = _named_encoder("ACK")
 decode_ack = _named_decoder("ACK")
 
 
-def grid_map(layout: str, node_map: Sequence[int],
-             crcs: Sequence[int]) -> Tuple[int, int, List[int], List[int]]:
-    """Old 3-column map to SESSION_CONFIG's rows, cols and row-major map.
-
-    ``layout`` is "RxC"; ``node_map`` and ``crcs`` hold 9 positions of a
-    3-column grid (position r x 3 + c), as asset_builder still uses until
-    build step 4. Returns (rows, cols, map, crcs), each list 9 long and
-    row-major over rows x cols (position r x cols + c), the rest 0.
-    """
-    rows, cols = (int(part) for part in layout.lower().split("x"))
-    new_map, new_crcs = [0] * MAP_SLOTS, [0] * MAP_SLOTS
-    for row in range(rows):
-        for col in range(cols):
-            old, new = row * 3 + col, row * cols + col
-            new_map[new], new_crcs[new] = node_map[old], crcs[old]
-    return rows, cols, new_map, new_crcs
-
-
 def pack_frame(values: List[int]) -> bytes:
     """Pack 192 channel values (0 to 8, R0 G0 B0 R1 ...) into 96 bytes.
 

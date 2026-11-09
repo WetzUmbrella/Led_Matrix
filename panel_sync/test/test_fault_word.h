@@ -40,6 +40,12 @@ bool test_fault_word_condition_owner (void);
 bool test_fault_word_merge_rule (void);
 
 /**
+ * @brief  Test F6: a new session clears QUEUE_OVERFLOW and nothing else.
+ * @return true when every check passed.
+ */
+bool test_fault_word_new_session (void);
+
+/**
  * @brief  Test F5: host forerunner of T-X-02 (not T-X-02 itself). Two setter
  *         threads, each with its own event bit, set it 100,000 times, each
  *         time waiting until it has been cleared; a reporter thread

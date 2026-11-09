@@ -60,6 +60,8 @@ static test_case_t const g_faults[] = {
      test_fault_word_merge_rule},
     {"Test F5: two setters and a reporter, 0 lost (T-X-02 forerunner)",
      test_fault_word_two_threads},
+    {"Test F6: a new session clears QUEUE_OVERFLOW only",
+     test_fault_word_new_session},
 };
 
 static test_case_t const g_playback[] = {

@@ -916,6 +916,14 @@ static void tn_handle_record (tn_record_t const * p_record)
             /* Same Pico, no restart seen. */
         }
 
+        if (p_record->session_id != g_session)
+        {
+            /* A new session (bench bug of 6 Nov 2026): drop the old upload
+             * queue and the overflow it left behind. */
+            asset_store_drop_uploads();
+            fault_word_new_session();
+        }
+
         g_b_bcn_seen       = true;
         g_last_bcn_session = p_record->session_id;
         g_last_bcn_seq     = p_record->seq;

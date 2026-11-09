@@ -10,3 +10,4 @@ __pycache__/
 **/build_vc4/
 **/build_bench*/
 .claude/settings.local.json
+pc/.last_session
