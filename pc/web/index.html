@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SE15 wall</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1.2rem; color: #1d1d1f; background: #fafafa; }
+  h1 { font-size: 1.3rem; margin: 0 0 0.6rem; }
+  h2 { font-size: 1rem; margin: 1.1rem 0 0.4rem; }
+  section { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 0.8rem 1rem; margin-bottom: 0.8rem; max-width: 46rem; }
+  .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  input[type=number] { width: 4.5rem; }
+  button { padding: 0.35rem 0.8rem; cursor: pointer; }
+  button:disabled, select:disabled, input:disabled { opacity: 0.45; cursor: not-allowed; }
+  #wall { display: grid; gap: 6px; margin-top: 0.4rem; }
+  .cell { width: 5.2rem; height: 4.2rem; border: 2px solid #999; border-radius: 6px; background: #eee;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.9rem; }
+  .cell.on { background: #d6ecd2; border-color: #3c8d2f; font-weight: 600; }
+  .cell.parked { background: #f4f4f4; border-style: dashed; color: #666; }
+  .cell.armed { background: #fff3c4; border-color: #c08a00; }
+  .cell small { font-size: 0.7rem; color: #555; }
+  #status { min-height: 1.2rem; margin-top: 0.5rem; color: #8a1c1c; }
+  #messages { font-family: ui-monospace, monospace; font-size: 0.78rem; color: #444; white-space: pre-wrap; margin: 0; }
+  .stat { font-size: 1rem; margin-right: 1.2rem; }
+  .muted { color: #666; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<h1>SE15 wall</h1>
+<section>
+  <div class="row">
+    <span class="stat">Pico: <b id="pico-state">connecting</b></span>
+    <span class="stat">Score: <b id="score">0</b></span>
+    <span class="stat">Mode: <b id="mode">video</b></span>
+    <span class="stat">Readiness: <b id="ready">0 of 0</b></span>
+  </div>
+  <div class="muted" id="missing"></div>
+</section>
+
+<section>
+  <h2>Grid size</h2>
+  <div class="row">
+    <label>Rows <input id="rows" type="number" min="1" max="9" value="1"></label>
+    <label>Columns <input id="cols" type="number" min="1" max="9" value="1"></label>
+    <button id="set-grid">Set grid</button>
+  </div>
+  <div class="muted">Rows x columns must be 9 tiles or fewer.</div>
+</section>
+
+<section>
+  <h2>Tiles on the wall</h2>
+  <div class="muted">Empty cell: click, then tap the tile for that cell. Numbered cell: click to switch it off.
+    Dashed cell (switched off): click to switch it back on.</div>
+  <div id="wall"></div>
+  <div class="muted" id="armed-note"></div>
+</section>
+
+<section>
+  <h2>Mode</h2>
+  <div class="row">
+    <select id="mode-select">
+      <option value="video">video</option>
+      <option value="game">game</option>
+    </select>
+    <button id="set-mode">Apply mode</button>
+    <span class="muted" id="mode-note"></span>
+  </div>
+</section>
+
+<section>
+  <h2>Game</h2>
+  <div class="row">
+    <button id="game-start">Start game</button>
+    <button id="game-abort">Abort</button>
+    <span class="muted">The game engine is build step 7; until then these answer "not built yet".</span>
+  </div>
+</section>
+
+<div id="status" role="status"></div>
+<section>
+  <h2>Recent messages</h2>
+  <pre id="messages"></pre>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  var POLL_MS = 250;
+  var state = null;
+  var lastKey = "";
+  var $ = function (id) { return document.getElementById(id); };
+
+  function show(text) { $("status").textContent = text || ""; }
+
+  function post(path, body) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) { throw new Error(data.error || ("HTTP " + res.status)); }
+        return data;
+      });
+    }).then(function (data) {
+      show("");
+      render(data);
+      return data;
+    }).catch(function (err) { show(err.message); });
+  }
+
+  function renderWall(s) {
+    var key = [s.rows, s.cols, s.node_map.join(","), s.parked.join(","), s.armed, s.stopped].join("|");
+    if (key === lastKey) { return; }
+    lastKey = key;
+    var wall = $("wall");
+    wall.innerHTML = "";
+    wall.style.gridTemplateColumns = "repeat(" + s.cols + ", 5.2rem)";
+    for (var slot = 0; slot < s.rows * s.cols; slot++) {
+      var node = s.node_map[slot];
+      var parked = s.parked[slot];
+      var cell = document.createElement("button");
+      cell.className = "cell";
+      var label;
+      if (node) {
+        cell.classList.add("on");
+        label = "Tile " + node;
+      } else if (parked) {
+        cell.classList.add("parked");
+        label = "Off (" + parked + ")";
+      } else {
+        label = "Empty";
+      }
+      if (s.armed === slot) { cell.classList.add("armed"); label = "Tap a tile"; }
+      cell.textContent = label;
+      var small = document.createElement("small");
+      small.textContent = "slot " + slot;
+      cell.appendChild(small);
+      cell.disabled = !s.stopped;
+      cell.dataset.slot = String(slot);
+      cell.addEventListener("click", onCell);
+      wall.appendChild(cell);
+    }
+    $("armed-note").textContent = s.armed === null ? "" : "Waiting for a tap (30 s).";
+  }
+
+  function onCell(ev) {
+    var slot = Number(ev.currentTarget.dataset.slot);
+    var on = state.node_map[slot] !== 0;
+    if (on) { post("/api/slot", { slot: slot, on: false }); }
+    else if (state.parked[slot]) { post("/api/slot", { slot: slot, on: true }); }
+    else { post("/api/place", { slot: slot }); }
+  }
+
+  function render(s) {
+    state = s;
+    $("pico-state").textContent = s.pico_state;
+    $("score").textContent = String(s.score);
+    $("mode").textContent = s.mode;
+    var mapped = s.node_map.filter(function (n) { return n !== 0; });
+    var ready = mapped.filter(function (n) { return (s.readiness >> (n - 1)) & 1; });
+    $("ready").textContent = ready.length + " of " + mapped.length;
+    $("missing").textContent = s.missing.length ? "Not ready: tile " + s.missing.join(", ") : "";
+    $("rows").value = s.rows;
+    $("cols").value = s.cols;
+    $("rows").disabled = $("cols").disabled = $("set-grid").disabled = !s.stopped;
+    $("mode-select").disabled = $("set-mode").disabled = !s.stopped;
+    $("mode-select").value = s.mode;
+    $("messages").textContent = (s.messages || []).join("\n");
+    renderWall(s);
+  }
+
+  function poll() {
+    fetch("/api/state", { cache: "no-store" }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) { throw new Error(data.error || ("HTTP " + res.status)); }
+        render(data);
+        show("");
+      });
+    }).catch(function (err) {
+      show("Lost the dashboard: " + err.message);
+    }).then(function () {
+      setTimeout(poll, POLL_MS);
+    });
+  }
+
+  $("set-grid").addEventListener("click", function () {
+    post("/api/grid", { rows: Number($("rows").value), cols: Number($("cols").value) });
+  });
+  $("set-mode").addEventListener("click", function () {
+    post("/api/mode", { mode: $("mode-select").value });
+  });
+  $("game-start").addEventListener("click", function () { post("/api/game/start", {}); });
+  $("game-abort").addEventListener("click", function () { post("/api/game/abort", {}); });
+
+  poll();
+})();
+</script>
+</body>
+</html>
