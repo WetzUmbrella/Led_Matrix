@@ -27,6 +27,10 @@ panel_sync/main/display_engine.h
 panel_sync/main/display_engine.c
 ledwall_sync/coordinator_loop.h
 ledwall_sync/coordinator_loop.c
+ledwall_sync/join_backoff.h
+ledwall_sync/join_backoff.c
+ledwall_sync/test/test_join_backoff.h
+ledwall_sync/test/test_join_backoff.c
 panel_sync/main/fault_word.h
 panel_sync/main/fault_word.c
 panel_sync/test/test_fault_word.h

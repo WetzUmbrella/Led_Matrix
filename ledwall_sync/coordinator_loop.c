@@ -46,6 +46,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "join_backoff.h"
+
 #ifdef CL_HOST_TEST
 #include "coordinator_port.h"
 #else
@@ -74,7 +76,8 @@
 /** Heartbeat timeout 2.5 s (proposed, VA-2.7; OD-18 may select 3 s). */
 #define CL_HEARTBEAT_TIMEOUT_US 2500000u
 
-/** CONNECTING timeout 10 s (proposed, W6D-2d). */
+/** One router join attempt is bounded by 10 s (proposed, W6D-2d). Attempts
+ *  repeat forever, spaced by join_backoff_ms(). */
 #define CL_CONNECT_TIMEOUT_MS 10000u
 
 /** Recovery timeout 5 s (proposed, W6D-2c). */
@@ -268,6 +271,9 @@ static uint32_t   g_dispatch_hist[CL_TIME_BINS];
 static bool       g_b_suppress_done = false;
 
 static void cl_reset_state (uint32_t bcast_addr, uint64_t now);
+#ifndef CL_HOST_TEST
+static void cl_on_link_lost (uint64_t now);
+#endif
 static void cl_pass (void);
 static void cl_beacon_routine (uint64_t now);
 static void cl_scan_heartbeats (uint64_t now);
@@ -510,9 +516,8 @@ static void cl_scan_heartbeats (uint64_t now)
 #ifndef CL_HOST_TEST
     if (CYW43_LINK_UP != cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA))
     {
-        /* Router lost: FAULT until reset (W6 statechart 2). */
         cl_log_event(CL_EV_LINK_DOWN, 0u, 0u, now);
-        cl_set_state(PROTO_COORD_FAULT);
+        cl_on_link_lost(now);
     }
 #endif
 
@@ -1866,39 +1871,28 @@ void coordinator_loop_test_set_state (proto_coord_state_t state)
 }
 #else
 static struct udp_pcb * g_p_tx_pcb = NULL;
+static uint32_t         g_join_failures = 0u; /* Retries scheduled so far. */
+static uint64_t         g_next_join_us  = 0u; /* Next join attempt, us. */
+static bool             g_b_pcbs_open   = false;
 
 static bool cl_connect_router (void);
+static bool cl_try_join (void);
+static void cl_schedule_join (uint64_t now);
+static void cl_rejoin_routine (uint64_t now);
 static void cl_open_pcbs (void);
 static void cl_rx_cb (void * p_arg, struct udp_pcb * p_pcb,
                       struct pbuf * p_pbuf, ip_addr_t const * p_addr,
                       u16_t port);
 
 /**
- * @brief  Join the router and run forever (see the file comment).
+ * @brief  Join the router and run forever (see the file comment). A failed
+ *         join leaves the coordinator in FAULT, and cl_rejoin_routine()
+ *         retries it on the join_backoff_ms() schedule.
  */
 void coordinator_loop_run (void)
 {
     cl_set_state(PROTO_COORD_CONNECTING_TO_ROUTER);
-
-    if (cl_connect_router())
-    {
-        struct netif * const p_netif = &cyw43_state.netif[CYW43_ITF_STA];
-        uint32_t const       addr = ip4_addr_get_u32(netif_ip4_addr(p_netif));
-        uint32_t const mask = ip4_addr_get_u32(netif_ip4_netmask(p_netif));
-
-        cl_open_pcbs();
-        cl_reset_state(addr | ~mask, cl_now_us());
-        printf("COORDINATOR up: ip=%s, beacons on %u, tiles to %u, PC to %u\n",
-               ip4addr_ntoa(netif_ip4_addr(p_netif)), CL_PORT_TILE_RX,
-               CL_PORT_FROM_TILE, CL_PORT_FROM_PC);
-    }
-    else
-    {
-        g_state = PROTO_COORD_FAULT;
-        printf("COORDINATOR FAULT: router join not done in %u ms; reset to "
-               "retry\n",
-               CL_CONNECT_TIMEOUT_MS);
-    }
+    (void)cl_try_join(); /* A failure schedules the next attempt. */
 
     for (;;)
     {
@@ -1910,11 +1904,90 @@ void coordinator_loop_run (void)
         }
         else
         {
-            /* FAULT: report and await reset (W6 statechart 2). The log
-             * routine still prints queued events. */
+            /* FAULT: retry the join when it is due; the log routine still
+             * prints queued events. */
+            cl_rejoin_routine(cl_now_us());
             cl_log_routine(cl_now_us());
         }
     }
+}
+
+/**
+ * @brief  One router join attempt. On success the PCBs are opened once and
+ *         the coordinator starts again from WAITING FOR SESSION: a session
+ *         does not survive a lost link, so the PC sends SESSION_CONFIG
+ *         again. On failure it stays in FAULT and schedules the next try.
+ * @return true when joined with an IP address.
+ */
+static bool cl_try_join (void)
+{
+    bool const b_joined = cl_connect_router();
+
+    if (b_joined)
+    {
+        struct netif * const p_netif = &cyw43_state.netif[CYW43_ITF_STA];
+        uint32_t const       addr = ip4_addr_get_u32(netif_ip4_addr(p_netif));
+        uint32_t const mask = ip4_addr_get_u32(netif_ip4_netmask(p_netif));
+
+        if (!g_b_pcbs_open)
+        {
+            cl_open_pcbs();
+            g_b_pcbs_open = true;
+        }
+
+        g_join_failures = 0u;
+        cl_reset_state(addr | ~mask, cl_now_us());
+        printf("COORDINATOR up: ip=%s, beacons on %u, tiles to %u, PC to %u\n",
+               ip4addr_ntoa(netif_ip4_addr(p_netif)), CL_PORT_TILE_RX,
+               CL_PORT_FROM_TILE, CL_PORT_FROM_PC);
+    }
+    else
+    {
+        cl_set_state(PROTO_COORD_FAULT);
+        cl_schedule_join(cl_now_us());
+    }
+
+    return b_joined;
+}
+
+/**
+ * @brief  Schedule the next join attempt: join_backoff_ms() of the retries
+ *         so far, then one more retry is counted. Reports the wait.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_schedule_join (uint64_t now)
+{
+    uint32_t const wait_ms = join_backoff_ms(g_join_failures);
+
+    g_join_failures++;
+    g_next_join_us = now + ((uint64_t)wait_ms * 1000u); /* ms to us. */
+    printf("COORDINATOR FAULT: router join not done in %u ms; retry in %u ms\n",
+           CL_CONNECT_TIMEOUT_MS, wait_ms);
+}
+
+/**
+ * @brief  In FAULT: retry the router join when it is due.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_rejoin_routine (uint64_t now)
+{
+    if (now >= g_next_join_us)
+    {
+        (void)cl_try_join(); /* The result is in g_state. */
+    }
+}
+
+/**
+ * @brief  The router link dropped: FAULT, then rejoin on the backoff
+ *         schedule. The first retry waits 1 s, as after a cold boot
+ *         (W6 statechart 2).
+ * @param  now  Current time, microseconds.
+ */
+static void cl_on_link_lost (uint64_t now)
+{
+    cl_set_state(PROTO_COORD_FAULT);
+    g_join_failures = 0u;
+    cl_schedule_join(now);
 }
 
 /**

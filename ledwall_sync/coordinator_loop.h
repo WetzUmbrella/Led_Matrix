@@ -19,7 +19,9 @@
  *   when 1 ms is left before the next beacon (OD-08); registry of 9 Node IDs
  *   (cl_registry[9]); heartbeat scan every 100 ms on its own absolute
  *   schedule with the 2.5 s timeout; router join bounded by the 10 s
- *   CONNECTING timeout, then FAULT until reset (cl_connect_router()).
+ *   CONNECTING timeout, retried forever on the 1, 2, 4, 8, 10 s backoff of
+ *   join_backoff.h while in FAULT, and rejoined the same way after a link
+ *   loss (cl_try_join(), cl_on_link_lost()).
  * - T-B2-04: the 12 states of W6 statechart 2; slots only from
  *   SESSION_CONFIG; one readiness bitmap per session written only in poll
  *   context; ASSET_READY counted only for the session and the manifest
@@ -76,7 +78,9 @@
 
 /**
  * @brief  Join the router and run the coordinator forever. Never returns.
- *         On a CONNECTING timeout the coordinator stays in FAULT until reset.
+ *         A failed join stays in FAULT and is retried with backoff; a
+ *         joined coordinator leaves FAULT and starts from WAITING FOR
+ *         SESSION.
  */
 void coordinator_loop_run (void);
 

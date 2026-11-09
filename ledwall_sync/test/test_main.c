@@ -14,6 +14,7 @@
 #include <stdio.h>
 
 #include "test_coord.h"
+#include "test_join_backoff.h"
 
 /** One test. */
 typedef struct
@@ -52,6 +53,8 @@ static test_case_t const g_cases[] = {
      test_coord_pause_policy},
     {"C14 T-B2-04: continue policy, others keep playing, rejoin RESUME_AT",
      test_coord_continue_rejoin},
+    {"C15 re-plan: router join retried with 1, 2, 4, 8, then 10 s backoff",
+     test_join_backoff_schedule},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

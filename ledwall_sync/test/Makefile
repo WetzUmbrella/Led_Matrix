@@ -6,8 +6,10 @@
 #               randomisation off (see panel_sync/test/Makefile)
 CC      = gcc
 CFLAGS  = -std=c11 -Wall -Wextra -Werror -O2 -DCL_HOST_TEST -I. -I.. -I../../common/proto
-SRC     = test_main.c test_coord.c coordinator_port.c ../coordinator_loop.c ../../common/proto/proto.c
-HDR     = test_main.h test_coord.h coordinator_port.h ../coordinator_loop.h ../../common/proto/proto.h
+SRC     = test_main.c test_coord.c coordinator_port.c ../coordinator_loop.c ../../common/proto/proto.c \
+          test_join_backoff.c ../join_backoff.c
+HDR     = test_main.h test_coord.h coordinator_port.h ../coordinator_loop.h ../../common/proto/proto.h \
+          test_join_backoff.h ../join_backoff.h
 
 .PHONY: run asan clean
 run: test_coordinator
