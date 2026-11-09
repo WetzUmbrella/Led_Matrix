@@ -14,7 +14,11 @@
 #include <stdio.h>
 
 #include "test_coord.h"
+#include "test_coord_game.h"
+#include "test_ack_outbox.h"
+#include "test_game_rules.h"
 #include "test_join_backoff.h"
+#include "test_score_font.h"
 
 /** One test. */
 typedef struct
@@ -55,6 +59,22 @@ static test_case_t const g_cases[] = {
      test_coord_continue_rejoin},
     {"C15 re-plan: router join retried with 1, 2, 4, 8, then 10 s backoff",
      test_join_backoff_schedule},
+    {"C16 re-plan: acked outbox resends until ACK, expires, refuses when full",
+     test_ack_outbox_limits},
+    {"C17 re-plan: 30 s round, mole 1200 to 500 ms, 300 ms gap, no repeats",
+     test_game_rules_timing},
+    {"C18 re-plan: hit +1, miss -1, dedupe within 50 ms by highest peak",
+     test_game_rules_scoring},
+    {"C19 re-plan: score font pixel counts, centring and tile slices",
+     test_score_font_slices},
+    {"C20 re-plan: START refused in video mode, mode and START ACKed, repeat "
+     "ACKed only",
+     test_coord_game_mode_and_start},
+    {"C21 re-plan: round: MOLE_ON resent until ACK, hit, STATUS score, END and "
+     "SCORE_MASK",
+     test_coord_game_round},
+    {"C22 re-plan: TAP ACKed and relayed once, SESSION_CONFIG refused in round",
+     test_coord_game_taps},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

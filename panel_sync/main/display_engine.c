@@ -41,6 +41,7 @@
 #include "asset_store.h"
 #include "display_frame.h"
 #include "fault_word.h"
+#include "game_tile.h"
 #include "orientation.h"
 #include "playback_control.h"
 #include "proto.h"
@@ -144,7 +145,7 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
                              timesync_reader_t * p_reader, uint64_t tick);
 static void     de_present (de_rmt_t const * p_rmt, int64_t deadline);
 static void     de_swap (void);
-static void     de_prepare_frame (uint64_t tick);
+static void     de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader);
 static void     de_log (void);
 static void     de_test_after_prepare (uint32_t frame, bool b_frame);
 #ifdef DE_PROFILE
@@ -244,7 +245,7 @@ static void de_task (void * p_arg)
 
     printf("display_engine: test pin GPIO%u, first tick %" PRIu64 "\n",
            DE_TEST_PIN, tick);
-    de_prepare_frame(tick);
+    de_prepare_frame(tick, &reader);
 
     for (;;)
     {
@@ -305,7 +306,7 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
         fault_word_set(FAULT_BIT_MISSED_DEADLINE);
         next =
             timesync_next_tick(DE_ORIGIN_US, timesync_now_corrected(p_reader));
-        de_prepare_frame(next);
+        de_prepare_frame(next, p_reader);
     }
     else
     {
@@ -325,7 +326,7 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
         gpio_ll_set_level(&GPIO, DE_PROF_PIN, 1u);
 #endif
 
-        de_prepare_frame(next);
+        de_prepare_frame(next, p_reader);
 
 #ifdef DE_TEST_SLOW_PREP
         esp_rom_delay_us(DE_SLOW_PREP_US); /* T-B5-07 (b). */
@@ -437,7 +438,7 @@ static void de_swap (void)
  *         stable orientation; otherwise a status pattern. Reports the state.
  * @param  tick  Tick number the buffer is for.
  */
-static void de_prepare_frame (uint64_t tick)
+static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
 {
     playback_control_timeline_t timeline;
     uint8_t const *             p_payload   = NULL;
@@ -450,6 +451,22 @@ static void de_prepare_frame (uint64_t tick)
 
     bool const b_timeline = playback_control_read_timeline(&timeline);
     bool const b_asset    = asset_store_get(&p_payload, &len, &frame_count);
+
+    /* Whack-a-mole (build step 7): the mole, its flash or the held score is
+     * drawn by the tile, unless video is playing (video takes the wall back
+     * when its START_AT arrives). */
+    game_tile_state_t game;
+
+    game_tile_read(&game);
+
+    if (((0u != game.b_game) || (0u != game.b_score)) &&
+        (!((b_timeline) && (timeline.b_running))))
+    {
+        game_tile_fill_wire(&game, timesync_now_corrected(p_reader),
+                            esp_timer_get_time(), g_orient, g_p_back);
+        de_test_after_prepare(0u, false);
+        return;
+    }
 
     if ((b_timeline) && (b_asset) && (timeline.b_held))
     {

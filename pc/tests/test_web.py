@@ -27,6 +27,7 @@ class FakeShell:
     def __init__(self) -> None:
         self.calls = []  # type: list
         self.playing = False
+        self.no_ack = False
         self.snap = {"rows": 1, "cols": 2, "node_map": [1, 2, 0, 0, 0, 0,
                                                        0, 0, 0],
                      "pico_state": "READY", "score": 0, "mode": "video",
@@ -60,11 +61,15 @@ class FakeShell:
 
     def start_game(self):  # type: ignore[no-untyped-def]
         self.calls.append(("start_game",))
-        raise NotImplementedError("game start is build step 7")
+        if self.playing:
+            raise db.Refused("the wall must be READY to start a round")
+        if self.no_ack:
+            raise OSError("the Pico did not acknowledge the round start")
+        return dict(self.snap)
 
     def abort_game(self):  # type: ignore[no-untyped-def]
         self.calls.append(("abort_game",))
-        raise NotImplementedError("game abort is build step 7")
+        return dict(self.snap)
 
 
 @pytest.fixture
@@ -173,12 +178,22 @@ def test_mode_refused_while_playing_and_bad_names(served) -> None:  # type: igno
     assert status == 409
 
 
-def test_game_start_and_abort_are_501_until_step_7(served) -> None:  # type: ignore
+def test_game_start_and_abort_reach_the_shell(served) -> None:  # type: ignore
     shell, base = served
-    for path in ("/api/game/start", "/api/game/abort"):
-        status, reply, _h = call(base, "POST", path)
-        assert status == 501 and "step 7" in reply["error"]
+    assert call(base, "POST", "/api/game/start")[0] == 200
+    assert call(base, "POST", "/api/game/abort")[0] == 200
     assert [c[0] for c in shell.calls] == ["start_game", "abort_game"]
+
+
+def test_game_start_refused_is_409_and_no_ack_is_500(served) -> None:  # type: ignore
+    shell, base = served
+    shell.playing = True
+    status, reply, _h = call(base, "POST", "/api/game/start")
+    assert status == 409 and "READY" in reply["error"]
+    shell.playing = False
+    shell.no_ack = True
+    status, reply, _h = call(base, "POST", "/api/game/start")
+    assert status == 500 and "acknowledge" in reply["error"]
 
 
 def test_get_on_a_post_endpoint_is_405(served) -> None:  # type: ignore
@@ -203,8 +218,8 @@ def test_bad_bodies_are_400(served) -> None:  # type: ignore
 
 def test_empty_post_body_is_an_empty_object(served) -> None:  # type: ignore
     _shell, base = served
-    status, reply, _h = call(base, "POST", "/api/game/abort")
-    assert status == 501 and "error" in reply
+    status, reply, _h = call(base, "POST", "/api/grid")
+    assert status == 400 and "rows" in reply["error"]
 
 
 def test_page_is_served_from_the_pc_with_no_cdn(served) -> None:  # type: ignore

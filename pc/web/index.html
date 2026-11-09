@@ -71,10 +71,12 @@
 <section>
   <h2>Game</h2>
   <div class="row">
-    <button id="game-start">Start game</button>
-    <button id="game-abort">Abort</button>
-    <span class="muted">The game engine is build step 7; until then these answer "not built yet".</span>
+    <button id="game-start">Start round</button>
+    <button id="game-abort">Abort round</button>
+    <span class="muted" id="game-note"></span>
   </div>
+  <div class="muted">A round lasts 30 seconds. A mole pops up on one tile: a tap on it scores +1,
+    any other tap scores -1. The score is shown here as it changes, and drawn across the wall at the end.</div>
 </section>
 
 <div id="status" role="status"></div>
@@ -166,6 +168,10 @@
     $("cols").value = s.cols;
     $("rows").disabled = $("cols").disabled = $("set-grid").disabled = !s.stopped;
     $("mode-select").disabled = $("set-mode").disabled = !s.stopped;
+    $("game-start").disabled = !s.game_start_enabled;
+    $("game-abort").disabled = !s.game_running;
+    $("game-note").textContent = s.game_running ? "Round running"
+      : (s.mode === "game" ? "" : "Switch the mode to game first");
     $("mode-select").value = s.mode;
     $("messages").textContent = (s.messages || []).join("\n");
     renderWall(s);

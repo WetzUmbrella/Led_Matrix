@@ -46,7 +46,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ack_outbox.h"
+#include "game_rules.h"
 #include "join_backoff.h"
+#include "score_font.h"
 
 #ifdef CL_HOST_TEST
 #include "coordinator_port.h"
@@ -113,6 +116,15 @@
  *  RESUME_AT, plus one rejoin, can overlap within 200 ms). */
 #define CL_SEND_SLOTS 4u
 
+/** Acked messages to a tile are resent every 50 ms until their ACK (plan
+ *  choice: well inside the 300 ms MOLE_ON lead). */
+#define CL_ACK_RETRY_US 50000u
+
+/** Lifetimes of acked messages after their first send (plan choices). A
+ *  MOLE_ON lives until its show time. */
+#define CL_FEEDBACK_LIFE_US 300000u
+#define CL_CONTROL_LIFE_US  1000000u
+
 /** Logged events waiting for a log slot (plan choice). */
 #define CL_EVENT_LEN 16u
 
@@ -157,6 +169,8 @@ typedef struct
 {
     bool           b_active;
     uint8_t        session_id;
+    uint8_t        rows;        /**< Wall rows, 1 to 9. */
+    uint8_t        cols;        /**< Wall columns, 1 to 9. */
     proto_policy_t policy;
     uint16_t       required;    /**< Node IDs in the map, bit n - 1. */
     uint16_t       frame_count; /**< 1 to 1023. */
@@ -193,6 +207,7 @@ typedef enum
     CL_EV_LINK_DOWN,
     CL_EV_REJOIN_SENT,
     CL_EV_SUPPRESS,
+    CL_EV_GAME_REFUSED,
     CL_EV_COUNT
 } cl_event_code_t;
 
@@ -255,6 +270,14 @@ static uint64_t g_next_log_us    = 0u;
 static uint16_t g_beacon_seq = 0u;
 static uint16_t g_cmd_seq    = 0u;
 static uint16_t g_status_seq = 0u;
+static uint16_t g_ack_seq    = 0u; /* ACK header seq: not acked itself. */
+
+/* Game (build step 7). The engine and the acked outbox are pure C. */
+static game_t       g_game;
+static ack_outbox_t g_outbox;
+static bool         g_b_game_mode = false; /* false video, true game. */
+static uint16_t     g_tap_seq[CL_MAX_NODES];
+static bool         g_b_tap_seen[CL_MAX_NODES];
 
 /* PC address, from the last valid datagram on CL_PORT_FROM_PC. */
 static bool     g_b_pc_known     = false;
@@ -276,6 +299,31 @@ static void cl_on_link_lost (uint64_t now);
 #endif
 static void cl_pass (void);
 static void cl_beacon_routine (uint64_t now);
+static void cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
+                         uint16_t acked_seq, uint8_t session_id);
+static void cl_on_tap (cl_rx_entry_t const * p_entry,
+                       proto_header_t const * p_header);
+static void cl_on_tile_ack (cl_rx_entry_t const * p_entry);
+static void cl_on_game_control (cl_rx_entry_t const * p_entry,
+                                proto_header_t const * p_header);
+static void cl_game_command (uint8_t command);
+static void cl_game_start (uint64_t now);
+static void cl_game_end (uint64_t now);
+static void cl_game_routine (uint64_t now);
+static void cl_outbox_routine (uint64_t now);
+static void cl_queue_tile (uint8_t node_id, proto_type_t type, uint16_t seq,
+                           uint8_t const * p_buf, uint32_t len, uint64_t now,
+                           uint64_t deadline_us);
+static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
+                              uint64_t life_us);
+static void cl_queue_mole (game_event_t const * p_event, uint64_t now);
+static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now);
+static void cl_queue_score (uint8_t node_id, int32_t score, uint64_t now);
+static void cl_game_sync_active (void);
+static bool cl_stopped (void);
+static int8_t cl_status_score (void);
+static uint16_t cl_next_cmd_seq (void);
+static uint16_t cl_active_slots (void);
 static void cl_scan_heartbeats (uint64_t now);
 static void cl_scan_one (uint32_t index, uint64_t now);
 static void cl_send_due_copy (uint64_t now);
@@ -376,6 +424,11 @@ static void cl_reset_state (uint32_t bcast_addr, uint64_t now)
     g_b_pc_seq_known    = false;
     g_b_suppress_done   = false;
     g_bcast_addr        = bcast_addr;
+    /* No round yet; the RNG is seeded from the clock. */
+    game_rules_init(&g_game, (uint32_t)now);
+    ack_outbox_init(&g_outbox);
+    (void)memset(g_b_tap_seen, 0, sizeof(g_b_tap_seen)); /* Returns it. */
+    (void)memset(g_tap_seq, 0, sizeof(g_tap_seq));       /* Returns it. */
     g_next_beacon_us    = now;
     g_next_scan_us      = now + CL_SCAN_PERIOD_US;
     g_next_status_us    = now + CL_STATUS_PERIOD_US;
@@ -391,6 +444,9 @@ static void cl_pass (void)
 {
     uint64_t const now     = cl_now_us();
     uint64_t const cmd_due = cl_earliest_due();
+    bool     const b_room  =
+        ((now + CL_DISPATCH_GUARD_US) <= g_next_beacon_us) &&
+        ((now + CL_DISPATCH_GUARD_US) <= cmd_due);
 
     if (now >= g_next_beacon_us)
     {
@@ -404,13 +460,19 @@ static void cl_pass (void)
     {
         cl_send_due_copy(now);
     }
+    else if ((b_room) && (ack_outbox_next_due(&g_outbox) <= now))
+    {
+        cl_outbox_routine(now);
+    }
     else if (now >= g_next_status_us)
     {
         cl_send_status(now);
     }
-    else if ((0u != g_ring_count) &&
-             ((now + CL_DISPATCH_GUARD_US) <= g_next_beacon_us) &&
-             ((now + CL_DISPATCH_GUARD_US) <= cmd_due))
+    else if ((b_room) && (game_rules_next_due(&g_game) <= now))
+    {
+        cl_game_routine(now);
+    }
+    else if ((0u != g_ring_count) && (b_room))
     {
         cl_dispatch_one(now);
     }
@@ -537,10 +599,13 @@ static void cl_scan_one (uint32_t index, uint64_t now)
         ((now - p_node->last_heard) > CL_HEARTBEAT_TIMEOUT_US))
     {
         /* index < 9, so index + 1 is a Node ID that fits uint8_t. */
+        /* index < 9. */
+            /* index < 9. */
         uint8_t const node_id = (uint8_t)(index + 1u);
 
         p_node->b_online     = false;
         p_node->loss_time_us = now;
+        cl_game_sync_active();
         cl_log_event(CL_EV_LOSS, node_id,
                      /* The silence is below 2^32 us after 2.6 s. */
                      (uint32_t)(now - p_node->last_heard), now);
@@ -737,7 +802,8 @@ static void cl_send_status (uint64_t now)
                           .seq        = g_status_seq},
             .readiness = g_readiness,
             .online    = cl_online_bits(),
-            .state     = (uint8_t)g_state, /* 12 states fit uint8_t. */
+            .state     = (uint8_t)g_state, /* 13 states fit uint8_t. */
+            .score     = cl_status_score(),
         };
         uint32_t const len = proto_encode_status(&msg, buf, sizeof(buf));
 
@@ -813,6 +879,15 @@ static void cl_from_tile (cl_rx_entry_t const *  p_entry,
         /* REGISTER restarts the sender's seq baseline and needs no
          * session: a tile registers before it knows the session. */
         cl_on_register(p_entry);
+    }
+    else if (PROTO_TYPE_TAP == cl_type_of(p_header))
+    {
+        /* TAP is ACKed and relayed whatever the session (tap-to-place). */
+        cl_on_tap(p_entry, p_header);
+    }
+    else if (PROTO_TYPE_ACK == cl_type_of(p_header))
+    {
+        cl_on_tile_ack(p_entry);
     }
     else if (p_header->session_id != g_session.session_id)
     {
@@ -995,6 +1070,12 @@ static void cl_from_pc (cl_rx_entry_t const *  p_entry,
     {
         cl_session_apply(p_entry);
     }
+    else if (PROTO_TYPE_GAME_CONTROL == cl_type_of(p_header))
+    {
+        /* Mode and round commands need no session, so a website can switch
+         * mode before SESSION_CONFIG. */
+        cl_on_game_control(p_entry, p_header);
+    }
     else if ((!g_session.b_active) ||
              (p_header->session_id != g_session.session_id) ||
              ((g_b_pc_seq_known) && (!cl_seq_newer(p_header->seq, g_pc_seq))))
@@ -1053,6 +1134,8 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
         /* The decoder checked policy < 2. */
         g_session.policy      = (proto_policy_t)cfg.policy;
         g_session.frame_count = cfg.frame_count;
+        g_session.rows        = cfg.rows;
+        g_session.cols        = cfg.cols;
         g_session.required    = 0u;
 
         for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
@@ -1292,6 +1375,7 @@ static void cl_node_seen (uint8_t node_id, uint32_t addr, uint64_t t_rx)
 static void cl_node_back (uint8_t node_id)
 {
     cl_log_event(CL_EV_BACK, node_id, 0u, cl_now_us());
+    cl_game_sync_active();
 
     if ((PROTO_COORD_RECOVERING == g_state) &&
         (g_session.required == (cl_online_bits() & g_session.required)))
@@ -1598,7 +1682,8 @@ static void cl_log_routine (uint64_t now)
                                                       "TILE_NACK",
                                                       "LINK_DOWN",
                                                       "REJOIN_SENT",
-                                                      "SUPPRESS"};
+                                                      "SUPPRESS",
+                                                      "GAME_REFUSED"};
 
     if (0u != g_event_count)
     {
@@ -1723,6 +1808,507 @@ static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
     {
         g_stats.rx_dropped++;
     }
+}
+
+/**
+ * @brief  ACK of a message: header plus node_id and acked_seq, from the ACK
+ *         counter (an ACK is not itself acked, so it has its own seq).
+ * @param  addr        Destination address.
+ * @param  port        Destination port.
+ * @param  node_id     0 for the PC, else the tile.
+ * @param  acked_seq   Header seq of the message acknowledged.
+ * @param  session_id  Session on the header.
+ */
+static void cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
+                         uint16_t acked_seq, uint8_t session_id)
+{
+    uint8_t              buf[PROTO_ACK_BYTES];
+    proto_ack_t const    msg = {
+        .header    = {.type       = PROTO_TYPE_ACK,
+                      .session_id = session_id,
+                      .seq        = g_ack_seq},
+        .node_id   = node_id,
+        .acked_seq = acked_seq,
+    };
+    uint32_t const len = proto_encode_ack(&msg, buf, sizeof(buf));
+
+    /* A lost ACK is recovered by the sender's resend. */
+    (void)cl_udp_send(addr, port, buf, len);
+    g_ack_seq++;
+}
+
+/**
+ * @brief  A TAP from a tile: ACKed every time (a repeat too, so the tile
+ *         stops resending), relayed once to the PC on the STATUS path, and
+ *         offered to the game while a round runs.
+ * @param  p_entry   The datagram.
+ * @param  p_header  Its decoded header.
+ */
+static void cl_on_tap (cl_rx_entry_t const * p_entry,
+                       proto_header_t const * p_header)
+{
+    proto_tap_t msg;
+
+    if (!proto_decode_tap(p_entry->bytes, p_entry->len, &msg))
+    {
+        g_stats.rx_bad++;
+    }
+    else
+    {
+        uint32_t const index = (uint32_t)msg.node_id - 1u; /* 1 to 9. */
+        bool const     b_new = (!g_b_tap_seen[index]) ||
+                           (cl_seq_newer(p_header->seq, g_tap_seq[index]));
+
+        cl_send_ack(p_entry->src_addr, CL_PORT_TILE_RX, msg.node_id,
+                    p_header->seq, g_session.session_id);
+
+        if (b_new)
+        {
+            g_b_tap_seen[index] = true;
+            g_tap_seq[index]    = p_header->seq;
+
+            if (g_b_pc_known)
+            {
+                /* Relayed unchanged (layout_table.md section 11, port 4213). */
+                (void)cl_udp_send(g_pc_addr, g_pc_port, p_entry->bytes,
+                                  p_entry->len);
+            }
+
+            if ((PROTO_COORD_COORDINATING_GAME == g_state) &&
+                (p_header->session_id == g_session.session_id))
+            {
+                game_rules_tap(&g_game, msg.node_id, msg.peak, msg.t_tap);
+            }
+        }
+        else
+        {
+            g_stats.stale++;
+        }
+    }
+}
+
+/**
+ * @brief  An ACK from a tile: frees the outbox message it names.
+ * @param  p_entry  The datagram.
+ */
+static void cl_on_tile_ack (cl_rx_entry_t const * p_entry)
+{
+    proto_ack_t msg;
+
+    if ((!proto_decode_ack(p_entry->bytes, p_entry->len, &msg)) ||
+        (0u == msg.node_id))
+    {
+        g_stats.rx_bad++;
+    }
+    else
+    {
+        /* Freed, or nothing waited: either way the ACK is done. */
+        (void)ack_outbox_ack(&g_outbox, msg.node_id, msg.acked_seq);
+    }
+}
+
+/**
+ * @brief  GAME_CONTROL from the PC (node_id 0): a mode switch, START or END.
+ *         Every valid one is ACKed, a repeat too, so the PC stops resending;
+ *         only a new seq acts.
+ * @param  p_entry   The datagram.
+ * @param  p_header  Its decoded header.
+ */
+static void cl_on_game_control (cl_rx_entry_t const * p_entry,
+                                proto_header_t const * p_header)
+{
+    proto_game_control_t msg;
+
+    if ((!proto_decode_game_control(p_entry->bytes, p_entry->len, &msg)) ||
+        (0u != msg.node_id))
+    {
+        g_stats.rx_bad++;
+    }
+    else
+    {
+        bool const b_new = (!g_b_pc_seq_known) ||
+                           (cl_seq_newer(p_header->seq, g_pc_seq));
+
+        if (b_new)
+        {
+            g_b_pc_seq_known = true;
+            g_pc_seq         = p_header->seq;
+            cl_game_command(msg.command);
+        }
+        else
+        {
+            g_stats.stale++;
+        }
+
+        cl_send_ack(g_pc_addr, g_pc_port, 0u, p_header->seq,
+                    g_session.session_id);
+    }
+}
+
+/**
+ * @brief  Act on one GAME_CONTROL command from the PC.
+ * @param  command  proto_game_cmd_t value (the decoder checked 0 to 3).
+ */
+static void cl_game_command (uint8_t command)
+{
+    uint64_t const now = cl_now_us();
+
+    if ((PROTO_GAME_MODE_VIDEO == command) || (PROTO_GAME_MODE_GAME == command))
+    {
+        /* The mode changes only while stopped (layout_table.md 5.10). */
+        if (cl_stopped())
+        {
+            g_b_game_mode = (PROTO_GAME_MODE_GAME == command);
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
+    }
+    else if (PROTO_GAME_START == command)
+    {
+        cl_game_start(now);
+    }
+    else if (PROTO_GAME_END == command)
+    {
+        if (PROTO_COORD_COORDINATING_GAME == g_state)
+        {
+            cl_game_end(now); /* The PC's abort. */
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
+    }
+    else
+    {
+        g_stats.rx_bad++;
+    }
+}
+
+/**
+ * @brief  START: from READY, in game mode, with an active session. The round
+ *         starts now, and START goes to every tile of the map.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_game_start (uint64_t now)
+{
+    if ((PROTO_COORD_READY == g_state) && (g_b_game_mode) &&
+        (g_session.b_active))
+    {
+        /* Bits 0 to 8, so the narrowing keeps them. */
+        uint16_t const mask = (uint16_t)(g_session.required & cl_online_bits());
+
+        game_rules_start(&g_game, now, mask);
+        cl_set_state(PROTO_COORD_COORDINATING_GAME);
+
+        for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+        {
+            /* index < 9. */
+            uint8_t const node_id = (uint8_t)(index + 1u);
+
+            if (0u != (mask & cl_node_bit(node_id)))
+            {
+                cl_queue_control(node_id, PROTO_GAME_START, now,
+                                 CL_CONTROL_LIFE_US);
+            }
+        }
+    }
+    else
+    {
+        cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+    }
+}
+
+/**
+ * @brief  End of a round, by the timer or by the PC's abort: no more moles,
+ *         END to every tile of the map, and the final score drawn across the
+ *         wall as one SCORE_MASK per tile. Back to READY.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_game_end (uint64_t now)
+{
+    int32_t const score = game_rules_score(&g_game);
+
+    game_rules_stop(&g_game);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_MOLE_ON);
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        /* index < 9. */
+        uint8_t const node_id = (uint8_t)(index + 1u);
+
+        if (0u != (g_session.required & cl_node_bit(node_id)))
+        {
+            cl_queue_control(node_id, PROTO_GAME_END, now, CL_CONTROL_LIFE_US);
+            cl_queue_score(node_id, score, now);
+        }
+    }
+
+    cl_set_state(PROTO_COORD_READY);
+    cl_evaluate();
+}
+
+/**
+ * @brief  Run the game engine's next event, if one is due: MOLE_ON and
+ *         FEEDBACK go to their tile through the outbox; a round end ends the
+ *         round.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_game_routine (uint64_t now)
+{
+    game_event_t event;
+
+    if (game_rules_poll(&g_game, now, &event))
+    {
+        if (GAME_EV_MOLE_ON == event.kind)
+        {
+            cl_queue_mole(&event, now);
+        }
+        else if (GAME_EV_FEEDBACK == event.kind)
+        {
+            cl_queue_feedback(event.node_id, event.result, now);
+        }
+        else if (GAME_EV_ROUND_END == event.kind)
+        {
+            cl_game_end(now);
+        }
+        else
+        {
+            /* GAME_EV_NONE is never returned with true. */
+        }
+    }
+}
+
+/**
+ * @brief  Send the due message of the acked outbox: one datagram, then its
+ *         next resend is set (CL_ACK_RETRY_US later).
+ * @param  now  Current time, microseconds.
+ */
+static void cl_outbox_routine (uint64_t now)
+{
+    uint32_t index = 0u;
+
+    if (ack_outbox_due(&g_outbox, now, &index))
+    {
+        ack_outbox_entry_t const * const p_entry = &g_outbox.slots[index];
+
+        if (!cl_udp_send(p_entry->addr, p_entry->port, p_entry->buf,
+                         p_entry->len))
+        {
+            g_stats.cmd_fail++;
+        }
+
+        ack_outbox_sent(&g_outbox, index, now, CL_ACK_RETRY_US);
+    }
+}
+
+/**
+ * @brief  Queue an acked message to one tile at its REGISTER address.
+ * @param  node_id      Tile, 1 to 9.
+ * @param  type         Message type.
+ * @param  seq          Header seq.
+ * @param  p_buf        Encoded message.
+ * @param  len          Its length.
+ * @param  now          Current time, microseconds.
+ * @param  deadline_us  Dropped at or after this time.
+ */
+static void cl_queue_tile (uint8_t node_id, proto_type_t type, uint16_t seq,
+                           uint8_t const * p_buf, uint32_t len, uint64_t now,
+                           uint64_t deadline_us)
+{
+    uint32_t const addr = g_registry[node_id - 1u].addr;
+
+    if (0u != addr)
+    {
+        /* Message types fit 5 bits, so uint8_t holds them. */
+        if (!ack_outbox_add(&g_outbox, node_id, (uint8_t)type, seq, addr,
+                            CL_PORT_TILE_RX, p_buf, len, now, deadline_us))
+        {
+            g_stats.cmd_fail++;
+        }
+    }
+}
+
+/**
+ * @brief  GAME_CONTROL to one tile (START or END).
+ * @param  node_id  Tile, 1 to 9.
+ * @param  command  proto_game_cmd_t value.
+ * @param  now      Current time, microseconds.
+ * @param  life_us  Lifetime after this send, microseconds.
+ */
+static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
+                              uint64_t life_us)
+{
+    uint16_t const seq = cl_next_cmd_seq();
+    proto_game_control_t const msg = {
+        .header  = {.type       = PROTO_TYPE_GAME_CONTROL,
+                    .session_id = g_session.session_id,
+                    .seq        = seq},
+        .node_id = node_id,
+        .command = command,
+    };
+    uint8_t  buf[PROTO_GAME_CONTROL_BYTES];
+    uint32_t const len = proto_encode_game_control(&msg, buf, sizeof(buf));
+
+    cl_queue_tile(node_id, PROTO_TYPE_GAME_CONTROL, seq, buf, len, now,
+                  now + life_us);
+}
+
+/**
+ * @brief  MOLE_ON for one tile. It lives until the show time: a late mole is
+ *         worse than none.
+ * @param  p_event  The engine's MOLE_ON.
+ * @param  now      Current time, microseconds.
+ */
+static void cl_queue_mole (game_event_t const * p_event, uint64_t now)
+{
+    uint16_t const seq = cl_next_cmd_seq();
+    proto_mole_on_t const msg = {
+        .header  = {.type       = PROTO_TYPE_MOLE_ON,
+                    .session_id = g_session.session_id,
+                    .seq        = seq},
+        .node_id = p_event->node_id,
+        .t_show  = p_event->t_show_us,
+        .up_ms   = p_event->up_ms,
+    };
+    uint8_t  buf[PROTO_MOLE_ON_BYTES];
+    uint32_t const len = proto_encode_mole_on(&msg, buf, sizeof(buf));
+
+    cl_queue_tile(p_event->node_id, PROTO_TYPE_MOLE_ON, seq, buf, len, now,
+                  p_event->t_show_us);
+}
+
+/**
+ * @brief  FEEDBACK to one tile: green on a hit, red on a miss.
+ * @param  node_id  Tile, 1 to 9.
+ * @param  result   proto_feedback_t value.
+ * @param  now      Current time, microseconds.
+ */
+static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now)
+{
+    uint16_t const seq = cl_next_cmd_seq();
+    proto_feedback_msg_t const msg = {
+        .header  = {.type       = PROTO_TYPE_FEEDBACK,
+                    .session_id = g_session.session_id,
+                    .seq        = seq},
+        .node_id = node_id,
+        .result  = result,
+    };
+    uint8_t  buf[PROTO_FEEDBACK_BYTES];
+    uint32_t const len = proto_encode_feedback(&msg, buf, sizeof(buf));
+
+    cl_queue_tile(node_id, PROTO_TYPE_FEEDBACK, seq, buf, len, now,
+                  now + CL_FEEDBACK_LIFE_US);
+}
+
+/**
+ * @brief  SCORE_MASK for one tile: its 8 x 8 slice of the final score.
+ * @param  node_id  Tile, 1 to 9, which must be in the map.
+ * @param  score    The round's final score.
+ * @param  now      Current time, microseconds.
+ */
+static void cl_queue_score (uint8_t node_id, int32_t score, uint64_t now)
+{
+    uint32_t slot = 0u;
+
+    if (cl_slot_of(node_id, &slot))
+    {
+        uint16_t const seq = cl_next_cmd_seq();
+        proto_score_mask_t const msg = {
+            .header  = {.type       = PROTO_TYPE_SCORE_MASK,
+                        .session_id = g_session.session_id,
+                        .seq        = seq},
+            .node_id = node_id,
+            .mask    = score_font_tile_mask(score, g_session.rows,
+                                            g_session.cols, cl_active_slots(),
+                                            (uint8_t)slot), /* slot < 9. */
+        };
+        uint8_t  buf[PROTO_SCORE_MASK_BYTES];
+        uint32_t const len = proto_encode_score_mask(&msg, buf, sizeof(buf));
+
+        cl_queue_tile(node_id, PROTO_TYPE_SCORE_MASK, seq, buf, len, now,
+                      now + CL_CONTROL_LIFE_US);
+    }
+}
+
+/**
+ * @brief  Keep the game's tile set in step with the online bitmap while a
+ *         round runs: a tile that drops out is not chosen for moles.
+ */
+static void cl_game_sync_active (void)
+{
+    if (PROTO_COORD_COORDINATING_GAME == g_state)
+    {
+        /* Bits 0 to 8, so the narrowing keeps them. */
+        game_rules_set_active(
+            &g_game, (uint16_t)(g_session.required & cl_online_bits()));
+    }
+}
+
+/**
+ * @brief  Whether the wall is stopped, so the mode may change: no session
+ *         yet, or a session that is not playing, synchronising or running a
+ *         round.
+ * @return true when stopped.
+ */
+static bool cl_stopped (void)
+{
+    return (PROTO_COORD_WAITING_FOR_SESSION == g_state) ||
+           (PROTO_COORD_VALIDATING_SESSION == g_state) ||
+           (PROTO_COORD_WAITING_FOR_NODES == g_state) ||
+           (PROTO_COORD_WAITING_FOR_TILE_READINESS == g_state) ||
+           (PROTO_COORD_READY == g_state);
+}
+
+/**
+ * @brief  Score for STATUS: the live score during a round, 0 otherwise
+ *         (layout_table.md, STATUS score).
+ * @return -99 to 99.
+ */
+static int8_t cl_status_score (void)
+{
+    int8_t score = 0;
+
+    if (PROTO_COORD_COORDINATING_GAME == g_state)
+    {
+        score = (int8_t)game_rules_score(&g_game); /* -99 to 99. */
+    }
+
+    return score;
+}
+
+/**
+ * @brief  Map positions that hold a Node ID, bit p for position p.
+ * @return The bitmap.
+ */
+static uint16_t cl_active_slots (void)
+{
+    uint16_t bits = 0u;
+
+    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    {
+        if (0u != g_session.node_map[slot])
+        {
+            bits |= (uint16_t)(UINT16_C(1) << slot); /* slot < 9. */
+        }
+    }
+
+    return bits;
+}
+
+/**
+ * @brief  Next seq of the command counter, the one all acked messages share
+ *         (layout_table.md section 10 item 13).
+ * @return The seq to use.
+ */
+static uint16_t cl_next_cmd_seq (void)
+{
+    uint16_t const seq = g_cmd_seq;
+
+    g_cmd_seq++;
+
+    return seq;
 }
 
 #ifdef CL_HOST_TEST
@@ -1985,6 +2571,7 @@ static void cl_rejoin_routine (uint64_t now)
  */
 static void cl_on_link_lost (uint64_t now)
 {
+    game_rules_stop(&g_game); /* A round does not survive a lost router. */
     cl_set_state(PROTO_COORD_FAULT);
     g_join_failures = 0u;
     cl_schedule_join(now);

@@ -32,6 +32,12 @@
  * - T-B2-05: START_AT and RESUME_AT 600 ms ahead, PAUSE and STOP, each sent
  *   3 times at 0, 100 and 200 ms with one seq; STOP from PAUSED.
  * - T-B2-06 instrumentation: callback and dispatch time histograms.
+ * - Build step 7 (whack-a-mole re-plan): COORDINATING GAME, entered from
+ *   READY by GAME_CONTROL START in game mode and left by END (the PC's abort
+ *   or the 30 s round end). The rules are in game_rules.c, the score drawing
+ *   in score_font.c, and the acked messages to tiles wait in the outbox of
+ *   common/proto/ack_outbox.c. Every TAP is ACKed and relayed to the PC on
+ *   port 4213 (once per TAP seq). GAME_CONTROL from the PC is ACKed on 4213.
  * Not yet implemented: CL_TEST_SUPPRESS_MS is a build option for T-B4-05
  *   (see coordinator_loop.c); the nine-sender load itself is
  *   pc/tools/sim_nodes.py (T-B2-06).
@@ -161,8 +167,7 @@ uint32_t coordinator_loop_test_skipped (void);
 uint64_t coordinator_loop_test_loss_time (uint8_t node_id);
 
 /**
- * @brief  Force the coordinator state. COORDINATING GAME has no entry path
- *         until build step 7, so a test reaches it only through this.
+ * @brief  Force the coordinator state (no event is logged, nothing is sent).
  * @param  state  The state to set.
  */
 void coordinator_loop_test_set_state (proto_coord_state_t state);

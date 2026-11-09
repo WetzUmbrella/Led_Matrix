@@ -12,12 +12,16 @@ JSON API (every answer is JSON; errors are {"error": text}):
   POST /api/place  {slot}         arm tap-to-place: the next TAP fills slot
   POST /api/slot   {slot, on}     off writes 0, on writes the board back;
                                   rebuilds and re-uploads
-  POST /api/mode   {mode}         video or game; 409 unless stopped
-  POST /api/game/start            501 until the game engine (step 7) exists
-  POST /api/game/abort            501 until the game engine (step 7) exists
+  POST /api/mode   {mode}         video or game; 409 unless stopped; the
+                                  Pico must ACK it, or 500 and no change
+  POST /api/game/start            a round: game mode and the wall READY;
+                                  409 when refused, 500 without the Pico's ACK
+  POST /api/game/abort            end the round now; 409 unless one runs,
+                                  500 without the Pico's ACK
 
 Status codes: 400 bad input, 404 unknown path, 405 wrong method, 409 refused
-because the wall is playing, 501 not built yet, 500 unexpected failure.
+because the wall is playing or not ready, 501 a feature not built, 500
+unexpected failure or no ACK from the Pico.
 
 Every request runs under one lock, so the shell is only used by one thread at
 a time. Usage:

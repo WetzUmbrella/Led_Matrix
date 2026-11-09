@@ -69,6 +69,9 @@ PLAYING_PICO_STATES = ("SYNCHRONISING", "COORDINATING PLAYBACK", "PAUSED",
 #: Modes of the wall (GAME_CONTROL codes are in pico_link).
 MODES = ("video", "game")
 
+#: The Pico's coordinator state while a round runs (layout_table.md 5.6).
+GAME_STATE = "COORDINATING GAME"
+
 #: How long a tap-to-place waits for a TAP, seconds.
 PLACE_WAIT_S = 30.0
 
@@ -361,6 +364,20 @@ class DashboardModel:
         self.mode = mode
         self._say("mode %s" % mode)
 
+    def start_game(self) -> None:
+        """Round start: game mode, and the Pico ready (every tile ready and
+        synchronised). Raises Refused otherwise."""
+        if self.mode != "game":
+            raise Refused("switch to game mode before starting a round")
+        if self.pico_state() != "READY":
+            raise Refused("the wall must be READY to start a round "
+                          "(now %s)" % self.pico_state())
+
+    def abort_game(self) -> None:
+        """Abort: only while the Pico runs a round."""
+        if self.pico_state() != GAME_STATE:
+            raise Refused("no round is running")
+
     def on_status(self, status: pico_link.Status) -> None:
         """New Pico STATUS: readiness, online losses, READY or not."""
         lost = self.online & ~status.online & self.required()
@@ -404,6 +421,9 @@ class DashboardModel:
             "readiness": self.readiness, "online": self.online,
             "score": status.score if status else 0,
             "mode": self.mode, "stopped": self.stopped(),
+            "game_running": self.pico_state() == GAME_STATE,
+            "game_start_enabled": (self.mode == "game" and
+                                   self.pico_state() == "READY"),
             "armed": self.armed[0] if self.armed else None,
             "pc_state": self.state, "gif": self.gif,
             "start_enabled": self.start_enabled(),
@@ -533,18 +553,32 @@ class DashboardShell(cmd.Cmd):
         return self.snapshot()
 
     def set_mode(self, mode: str) -> Dict[str, object]:
+        """Mode switch, acknowledged by the Pico; the old mode is kept when it
+        is not acknowledged."""
+        previous = self.model.mode
         self.model.set_mode(mode)
-        self.link.send_mode(pico_link.MODE_GAME if mode == "game"
-                            else pico_link.MODE_VIDEO)
+        code = pico_link.MODE_GAME if mode == "game" else pico_link.MODE_VIDEO
+        if not self.link.send_game_control(code):
+            self.model.mode = previous
+            raise OSError("the Pico did not acknowledge the mode change")
         return self.snapshot()
 
     def start_game(self) -> Dict[str, object]:
-        raise NotImplementedError("game start is build step 7; the game "
-                                  "engine is not built yet")
+        """Round start: refused unless ready in game mode; the Pico must
+        acknowledge the command."""
+        self._flush()
+        self.model.start_game()
+        if not self.link.send_game_control(pico_link.GAME_START):
+            raise OSError("the Pico did not acknowledge the round start")
+        return self.snapshot()
 
     def abort_game(self) -> Dict[str, object]:
-        raise NotImplementedError("game abort is build step 7; the game "
-                                  "engine is not built yet")
+        """Abort the round now (the Pico ends it as at the time limit)."""
+        self._flush()
+        self.model.abort_game()
+        if not self.link.send_game_control(pico_link.GAME_END):
+            raise OSError("the Pico did not acknowledge the abort")
+        return self.snapshot()
 
     # Shell commands.
 
@@ -648,11 +682,23 @@ class DashboardShell(cmd.Cmd):
                 row.node_id, row.address, row.faults(), row.orientation,
                 row.display_state))
 
+    def do_game(self, arg: str) -> None:
+        """game start|abort   (game mode, and the wall READY, to start)"""
+        try:
+            if arg.strip() == "start":
+                self.start_game()
+            elif arg.strip() == "abort":
+                self.abort_game()
+            else:
+                print("usage: game start|abort")
+        except (Refused, OSError) as err:
+            print("game refused: %s" % err)
+
     def do_mode(self, arg: str) -> None:
         """mode video|game   (only while stopped)"""
         try:
             self.set_mode(arg.strip())
-        except (ab.AssetError, Refused) as err:
+        except (ab.AssetError, Refused, OSError) as err:
             print("mode refused: %s" % err)
             return
         self._print_messages()

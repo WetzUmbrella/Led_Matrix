@@ -44,7 +44,10 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "ack_outbox.h"
 #include "asset_store.h"
+#include "game_tile.h"
+#include "orientation.h"
 #include "playback_control.h"
 #include "coord_lock.h"
 #include "fault_word.h"
@@ -94,6 +97,11 @@
 
 /** Heartbeat period 0.5 s (proposed, VA-2.7). */
 #define TN_HEARTBEAT_US INT64_C(500000)
+
+/** A TAP is resent every 50 ms until its ACK and dropped after 1 s (plan
+ *  choice, the same as the Pico's ACK retries). */
+#define TN_TAP_RETRY_US INT64_C(50000)
+#define TN_TAP_LIFE_US  INT64_C(1000000)
 
 /** Heartbeat stagger: (Node ID - 1) x 500 / 9 ms (derived, VA-2.10). */
 #define TN_STAGGER_US (TN_HEARTBEAT_US / (int64_t)PROTO_NODE_MAX)
@@ -223,6 +231,15 @@ static bool             g_b_had_ip     = false;
 static uint32_t         g_comms        = 0u; /* tile_net_comms_t. */
 static uint32_t         g_upload_nacks = 0u;
 static uint32_t         g_upload_wrong_session = 0u;
+
+/* Whack-a-mole (build step 7). The game state is published for the Display
+ * Engine (game_tile.h). The TAPs of this tile wait in g_tap_box until the
+ * Pico's ACK (layout_table.md section 10 item 13: one TAP seq counter). */
+static game_tile_state_t g_game;
+static ack_outbox_t      g_tap_box;
+static timesync_reader_t g_game_reader; /* Network Task only. */
+static uint16_t          g_tap_seq      = 0u;
+static uint16_t          g_game_ack_seq = 0u; /* ACK header seq, not acked. */
 #ifdef TN_TEST_INJECT_FAULTS
 static int64_t  g_next_inject_us = 0;
 static uint32_t g_injected       = 0u;
@@ -235,6 +252,10 @@ static void      tn_wifi_event (void * p_arg, esp_event_base_t base,
                                 int32_t event_id, void * p_data);
 static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
                             uint32_t src_addr);
+static void tn_on_game (uint8_t const * p_buf, uint32_t len, int64_t t_l,
+                        proto_type_t type);
+static void tn_send_game_ack (uint16_t acked_seq);
+static void tn_game_service (int64_t now);
 static void tn_on_beacon (uint8_t const * p_buf, uint32_t len, int64_t t_l,
                           uint32_t src_addr);
 static void tn_on_command (uint8_t const * p_buf, uint32_t len,
@@ -283,6 +304,9 @@ static int tn_rx_socket (void); /* DEVIATION D-2: lwIP int socket. */
 bool tile_net_start (void)
 {
     bool b_ok = false;
+
+    game_tile_init(&g_game);
+    ack_outbox_init(&g_tap_box);
 
     g_p_q_timesync =
         xQueueCreate(TILE_NET_TIMESYNC_QUEUE_LEN, sizeof(timesync_pair_t));
@@ -649,10 +673,128 @@ static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
         {
             tn_on_beacon(p_buf, len, t_l, src_addr);
         }
+        else if ((PROTO_TYPE_MOLE_ON == type) ||
+                 (PROTO_TYPE_FEEDBACK == type) ||
+                 (PROTO_TYPE_GAME_CONTROL == type) ||
+                 (PROTO_TYPE_SCORE_MASK == type) ||
+                 (PROTO_TYPE_ACK == type))
+        {
+            tn_on_game(p_buf, len, t_l, type);
+        }
         else
         {
             tn_on_command(p_buf, len, &header, src_addr);
         }
+    }
+}
+
+/**
+ * @brief  A game message from the Pico on port 4210 (whack-a-mole build step
+ *         7): MOLE_ON, FEEDBACK, GAME_CONTROL and SCORE_MASK go to the game
+ *         state and are ACKed when they are for this tile; an ACK frees the
+ *         TAP it names.
+ * @param  p_buf  Datagram.
+ * @param  len    Length.
+ * @param  t_l    Local receive time (the flash clock).
+ * @param  type   Message type, already decoded.
+ */
+static void tn_on_game (uint8_t const * p_buf, uint32_t len, int64_t t_l,
+                        proto_type_t type)
+{
+    if (PROTO_TYPE_ACK == type)
+    {
+        proto_ack_t msg;
+
+        if ((proto_decode_ack(p_buf, len, &msg)) &&
+            (g_node_id == msg.node_id))
+        {
+            /* Freed, or nothing waited: either way the ACK is done. */
+            (void)ack_outbox_ack(&g_tap_box, g_node_id, msg.acked_seq);
+        }
+    }
+    else
+    {
+        uint16_t acked_seq = 0u;
+
+        if (game_tile_on_pico(&g_game, g_node_id, p_buf, len, t_l,
+                              &acked_seq))
+        {
+            tn_send_game_ack(acked_seq);
+        }
+
+        game_tile_publish(&g_game);
+    }
+}
+
+/**
+ * @brief  ACK a message of the Pico to the Pico (port 4211). Sent once: the
+ *         Pico resends a message whose ACK is lost.
+ * @param  acked_seq  Header seq acknowledged.
+ */
+static void tn_send_game_ack (uint16_t acked_seq)
+{
+    uint8_t        buf[PROTO_ACK_BYTES];
+    uint32_t const len = game_tile_encode_ack(buf, g_session, g_game_ack_seq,
+                                              g_node_id, acked_seq);
+
+    g_game_ack_seq++;
+    tn_send(buf, len);
+}
+
+/**
+ * @brief  Game service, every housekeeping pass: each tap the Orientation
+ *         Task accepted becomes a TAP (time in the Pico's clock) in the
+ *         outbox, and the outbox sends what is due: each TAP is resent every
+ *         TN_TAP_RETRY_US until its ACK, and dropped after TN_TAP_LIFE_US.
+ * @param  now  Local time, microseconds.
+ */
+static void tn_game_service (int64_t now)
+{
+    tap_detect_event_t event;
+    uint32_t           taken = 0u;
+
+    while ((taken < ACK_OUTBOX_SLOTS) && (orientation_tap_take(&event)))
+    {
+        uint8_t  buf[PROTO_TAP_BYTES];
+        int64_t  t_pico = event.t_us;
+        uint32_t len    = 0u;
+
+        taken++;
+
+        if (timesync_read_snapshot(&g_game_reader))
+        {
+            t_pico = timesync_pico_from_local(&g_game_reader.snap, event.t_us);
+        }
+
+        len = game_tile_encode_tap(buf, g_session, g_tap_seq, g_node_id,
+                                   event.peak, t_pico);
+
+        if ((0u != len) && (g_b_pico_known))
+        {
+            /* Times are microseconds from boot: non-negative. */
+            (void)ack_outbox_add(&g_tap_box, g_node_id, PROTO_TYPE_TAP,
+                                 g_tap_seq, g_pico_addr, TN_PICO_PORT, buf,
+                                 len, (uint64_t)now,
+                                 (uint64_t)(now + TN_TAP_LIFE_US));
+        }
+
+        g_tap_seq++;
+    }
+
+    for (uint32_t count = 0u; count < ACK_OUTBOX_SLOTS; count++)
+    {
+        uint32_t index = 0u;
+
+        /* now is non-negative (microseconds from boot). */
+        if (!ack_outbox_due(&g_tap_box, (uint64_t)now, &index))
+        {
+            break;
+        }
+
+        tn_send(g_tap_box.slots[index].buf, g_tap_box.slots[index].len);
+        /* The retry interval is 50 ms, positive. */
+        ack_outbox_sent(&g_tap_box, index, (uint64_t)now,
+                        (uint64_t)TN_TAP_RETRY_US);
     }
 }
 
@@ -964,6 +1106,8 @@ static void tn_housekeeping (void)
 {
     int64_t const     now  = esp_timer_get_time();
     EventBits_t const bits = xEventGroupGetBits(g_p_events);
+
+    tn_game_service(now);
 
     if (0u == (bits & TN_EV_HAVE_IP))
     {

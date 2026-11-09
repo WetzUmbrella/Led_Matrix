@@ -1,5 +1,5 @@
-"""PC to Pico link: SESSION_CONFIG, Start, Pause, Resume, Stop and STATUS
-(T-B1-05).
+"""PC to Pico link: SESSION_CONFIG, Start, Pause, Resume, Stop, STATUS and the
+game's mode, start and end (T-B1-05, whack-a-mole build step 7).
 
 Owner: Jolyn (Buddy 1), task T-B1-05. Implemented by Ahsanul (B4) for
 Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session.
@@ -41,9 +41,20 @@ COORD_STATES = ("BOOTING", "CONNECTING TO ROUTER", "WAITING FOR SESSION",
 POLICY_CONTINUE = 0
 POLICY_PAUSE = 1
 
-#: GAME_CONTROL command codes for the mode switch (layout_table.md 5.10).
+#: GAME_CONTROL command codes (layout_table.md section 5.10): the mode
+#: switch, then a round's start and its end (the PC's abort).
 MODE_VIDEO = 0
 MODE_GAME = 1
+GAME_START = 2
+GAME_END = 3
+
+#: A GAME_CONTROL is sent again until the Pico's ACK: this many tries, each
+#: waiting this long for the ACK (plan choice; the Pico ACKs within a pass).
+GAME_TRIES = 5
+GAME_ACK_WAIT_S = 0.2
+
+#: Most ACKed sequence numbers kept while nobody asks for them.
+ACK_KEEP = 32
 
 #: Most TAP board numbers kept while nobody asks for them.
 TAP_KEEP = 16
@@ -97,6 +108,8 @@ class PicoLink:
         self.status: Optional[Status] = None
         #: Board numbers of TAP datagrams not yet taken (build step 4).
         self.taps: List[int] = []
+        #: Seq numbers of the Pico's ACKs (node 0) not yet taken.
+        self.acks: List[int] = []
 
     def _send(self, data: bytes) -> None:
         self.sock.sendto(data, self.pico)
@@ -132,12 +145,41 @@ class PicoLink:
         return data
 
     def send_mode(self, command: int) -> bytes:
-        """GAME_CONTROL to the Pico (node_id 0): MODE_VIDEO or MODE_GAME."""
+        """GAME_CONTROL to the Pico (node_id 0), sent once: MODE_VIDEO or
+        MODE_GAME. Use send_game_control() to wait for the ACK."""
         data = pl.encode("GAME_CONTROL", {
             "session_id": self.session_id, "seq": self._next_seq(),
             "node_id": 0, "command": command})
         self._send(data)
         return data
+
+    def send_game_control(self, command: int) -> bool:
+        """GAME_CONTROL to the Pico, resent with the same seq until the Pico
+        ACKs it (GAME_TRIES tries of GAME_ACK_WAIT_S each). Returns True when
+        acknowledged; a repeat with the same seq is ACKed again by the Pico
+        and changes nothing."""
+        seq = self._next_seq()
+        data = pl.encode("GAME_CONTROL", {
+            "session_id": self.session_id, "seq": seq,
+            "node_id": 0, "command": command})
+        for _ in range(GAME_TRIES):
+            self._send(data)
+            if self._wait_ack(seq, GAME_ACK_WAIT_S):
+                return True
+        return False
+
+    def _wait_ack(self, seq: int, wait_s: float) -> bool:
+        """Read datagrams for up to wait_s until the ACK of seq arrives."""
+        deadline = time.monotonic() + wait_s
+        while True:
+            self.poll_status()
+            if seq in self.acks:
+                self.acks.remove(seq)
+                return True
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return False
+            select.select([self.sock], [], [], left)
 
     def start(self) -> bytes:
         """Start: the Pico picks t_start (T-B2-05)."""
@@ -170,6 +212,11 @@ class PicoLink:
             if msg["type"] == "TAP":
                 self.taps.append(int(msg["node_id"]))  # type: ignore
                 del self.taps[:-TAP_KEEP]
+                continue
+            if msg["type"] == "ACK":
+                if int(msg["node_id"]) == 0:  # type: ignore
+                    self.acks.append(int(msg["acked_seq"]))  # type: ignore
+                    del self.acks[:-ACK_KEEP]
                 continue
             if msg["type"] != "STATUS":
                 continue

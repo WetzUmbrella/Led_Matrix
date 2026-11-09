@@ -20,6 +20,7 @@
 #include "test_display.h"
 #include "test_fault_word.h"
 #include "test_playback.h"
+#include "test_game_tile.h"
 #include "test_tap_detect.h"
 #include "test_telemetry_book.h"
 #include "test_timesync.h"
@@ -143,6 +144,14 @@ static test_case_t const g_tap[] = {
     {"Test K5: spike leaves the window after 20 samples, ACCEPT clears it",
      test_tap_detect_window},
     {"Test K6: both tap config pages, exact bytes", test_tap_detect_encode},
+    {"Game re-plan: mole is a fill in the Pico's clock, flash on hit and miss",
+     test_game_tile_mole_and_flash},
+    {"Game re-plan: only this tile's messages are ACKed, repeats not applied",
+     test_game_tile_acks},
+    {"Game re-plan: START, SCORE_MASK in the rotation, END keeps the score",
+     test_game_tile_score},
+    {"Game re-plan: TAP and ACK encodings, state publish reads back whole",
+     test_game_tile_codecs},
 };
 
 /** Number of counted tap tests (6): a six-entry array count fits uint32_t. */
