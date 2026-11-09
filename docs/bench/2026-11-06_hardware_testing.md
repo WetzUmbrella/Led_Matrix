@@ -30,6 +30,7 @@ These are the hardware checks that have to pass before the game work can be trus
 - **Never run `idf.py erase-flash` or esptool `erase_flash`.** It wipes the board number stored in NVS. If it happens, rerun `panel_sync/set_board_number.sh <n>` with that board's number.
 - **Only one coordinator Pico on the router at a time.** A second beaconing Pico corrupts every tile's clock (see [docs/week10/skew_2tile/bench_log.md](../week10/skew_2tile/bench_log.md), problem 1). The pico_tap Pico is fine, because it doesn't join WiFi.
 - **Power the coordinator Pico first,** then the tiles.
+- **Power-cycle the coordinator Pico after any router change.** It does not retry the join, so it stays off the network until it restarts.
 - **Some tiles reboot into download mode after a software reset** (ESP-4 does). If a tile sits at `boot:0x0 (DOWNLOAD...)`, unplug and replug its USB instead of pressing RESET.
 - **Between boards, connect only signal and GND wires.** Never join 3V3 or 5V pins.
 - **Logging:** start the logger before step 1 of a card and stop it after the last step (Ctrl+C). Use the same tool and header as the 5 Nov bench:
@@ -42,17 +43,18 @@ These are the hardware checks that have to pass before the game work can be trus
 
 ### Flash commands (used by several cards)
 
-- **Tile** (WSL, board attached with `usbipd attach --wsl --busid <BUSID>`):
+- **Tile** (flash and log from Windows, on the board's COM port). Don't attach the board to WSL. A board attached to WSL disappears from Windows, and then its COM port can't be used.
 
   ```
-  get_idf
-  cd panel_sync
+  cd panel_sync                        # from the ESP-IDF 5.3 prompt on Windows
   idf.py set-target esp32s3            # first time only
-  ./set_board_number.sh <n>            # first time per board only, 1 to 9, unique
-  idf.py -p /dev/ttyACM0 flash monitor
+  ./set_board_number.sh <n> COM<n>     # first time per board only, 1 to 9, unique; run in Git Bash
+  idf.py -p COM<n> flash monitor
   ```
 
   Expect `I am ESP-<n>`, then `joined <router>`, then `Pico found at ...`. Exit the monitor with `Ctrl+]`.
+
+  If you built in WSL, flash from Windows with the flashable folder from `tools/build_bench_images.sh` and the esptool command below, not `idf.py` run against a WSL build.
 - **Coordinator Pico:**
 
   ```
@@ -78,7 +80,8 @@ Put everything under `docs/bench/6nov/`, with your notes in `docs/bench/6nov/<na
    - WPA2-Personal (AES)
    - AP isolation **off**
    - DTIM interval **1**
-   - fixed channel (1, 6 or 11), 20 MHz width
+   - 20 MHz width
+   - channel: leave as it is. Setting a fixed channel while the WiFi was being changed made the network vanish.
 2. Disconnect the router's WAN/internet cable. The demo runs with no uplink.
 3. Flash and power the coordinator Pico. Note the IP and MAC from its log line `Joined <router>, ip=...`.
 4. On the router, add a DHCP reservation for that MAC.
@@ -96,7 +99,9 @@ Put everything under `docs/bench/6nov/`, with your notes in `docs/bench/6nov/<na
 
 1. Power all 5 tiles and the coordinator Pico from the **one multi-port USB charger** that will be used at the demo. Start the Pico first and log its serial.
 2. Each tile must already have a unique board number (1 to 5). If the Pico logs `IGNORED ... board number` or `IGNORED ... already`, fix it with `set_board_number.sh`.
-3. Start the dashboard on the PC, with WiFi power save off:
+3. Start the dashboard on the PC, with WiFi power save off. On Windows that means both settings:
+   - the Wi-Fi adapter's Power Management tab in Device Manager: untick "Allow the computer to turn off this device to save power";
+   - the power plan: Advanced power settings, Wireless Adapter Settings, Power Saving Mode, set to Maximum Performance.
 
    ```
    python3 pc/dashboard.py --pico <reserved IP from H1>
@@ -120,6 +125,8 @@ Put everything under `docs/bench/6nov/`, with your notes in `docs/bench/6nov/<na
 - No `LEAVE`/`JOIN` pairs on the Pico after the start.
 - No fresh-boot lines in any tile log. A reboot means a power or brightness problem.
 - All 5 tiles play the GIF the whole time.
+
+**Watch (not a pass condition):** MISSED_DEADLINE. Record whether the `missed=` count on the `DE ticks=` lines grows during playback.
 
 **Evidence:** `docs/bench/6nov/h2_pico_5tile.log`, plus a 10 s video of the wall.
 
@@ -154,7 +161,7 @@ Put everything under `docs/bench/6nov/`, with your notes in `docs/bench/6nov/<na
 
 **If it fails:** the tool is wrong, not the tile. Don't use pico_tap for evidence. Tell Ahsanul. The fallback is the gusmanb LogicAnalyzer firmware on the same Pico.
 
-**Also record (open item B1):** which header pin GPIO4 is on, and a photo of the wiring. [docs/HANDOVER.md](../HANDOVER.md) still lists GPIO4 on the header as unconfirmed.
+**Open item B1 is answered:** GPIO4 is on the header, at the right edge, 4th hole up from the bottom, between pins 3 and 5. No header pins are fitted. Keep a photo of the wiring with the evidence. [docs/HANDOVER.md](../HANDOVER.md) still lists GPIO4 on the header as unconfirmed, so it needs the same update.
 
 ## H4. Baseline sync skew on master (40 min)
 
@@ -232,7 +239,7 @@ There's no pass or fail here; the gap between the first number and the other two
 
 ## H7. Rotation check on one tile (20 min)
 
-**Why:** the re-plan applies rotation on the tile from gravity (orient_filter, about 300 ms of stability required). The 90° and 270° remap in [panel_sync/main/display_frame.c](../../panel_sync/main/display_frame.c) has to be checked on a real tile at each angle.
+**Why:** the re-plan applies rotation on the tile from gravity (orient_filter, about 520 ms of stability required: 26 samples x 20 ms, `ORIENT_FILTER_STABLE_SAMPLES` and `OR_PERIOD_MS`). The 90° and 270° remap in [panel_sync/main/display_frame.c](../../panel_sync/main/display_frame.c) has to be checked on a real tile at each angle.
 
 **Steps:**
 
