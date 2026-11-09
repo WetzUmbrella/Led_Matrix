@@ -409,4 +409,89 @@ static bool tst_scenario_dedupe (game_t * p_game, uint64_t * p_now)
     return b_ok;
 }
 
+/**
+ * @brief  Start a round on tiles 1 and 2 and read its first mole.
+ * @param  p_game  Engine; set up here.
+ * @param  p_now   Time, advanced to the MOLE_ON.
+ * @param  p_evt   Receives the MOLE_ON.
+ * @return true when a MOLE_ON was found.
+ */
+static bool tst_first_mole (game_t * p_game, uint64_t * p_now,
+                            game_event_t * p_evt)
+{
+    game_rules_init(p_game, TST_SEED);
+    game_rules_start(p_game, TST_T0, UINT16_C(0x0003));
+    *p_now = TST_T0;
+
+    return tst_next_kind(p_game, p_now, GAME_EV_MOLE_ON, p_evt);
+}
+
+/**
+ * @brief  Tap grace (C18b): a tap stamped 10 ms before the hide and delivered
+ *         at hide + 60 ms still hits; a tap stamped 5 ms after the hide and
+ *         delivered at hide + 60 ms misses; a timeout with no tap keeps the
+ *         score and the next mole shows 300 ms after the hide.
+ * @return true when every check passed.
+ */
+bool test_game_rules_grace (void)
+{
+    static game_t game;
+    game_event_t evt;
+    uint64_t     now  = TST_T0;
+    uint64_t     hide = 0u;
+    uint64_t     show = 0u;
+    uint8_t      mole = 0u;
+    bool         b_ok = true;
+
+    /* (a) Tap stamped hide - 10 ms, delivered at hide + 60 ms: hit, +1. */
+    b_ok = (test_main_check(tst_first_mole(&game, &now, &evt), __LINE__)) &&
+           b_ok;
+    show = evt.t_show_us;
+    mole = evt.node_id;
+    hide = show + (evt.up_ms * TST_MS);
+    now  = hide + (60u * TST_MS);
+    b_ok = (test_main_check(game.b_mole_up, __LINE__)) && b_ok;
+    game_rules_tap(&game, mole, 500u, hide - (10u * TST_MS));
+    b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK,
+                                          &evt), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_FEEDBACK_HIT == evt.result) &&
+                                (mole == evt.node_id) && (1 == evt.score),
+                            __LINE__)) && b_ok;
+
+    /* (b) Tap stamped hide + 5 ms, delivered at hide + 60 ms: miss, -1. */
+    b_ok = (test_main_check(tst_first_mole(&game, &now, &evt), __LINE__)) &&
+           b_ok;
+    show = evt.t_show_us;
+    mole = evt.node_id;
+    hide = show + (evt.up_ms * TST_MS);
+    now  = hide + (60u * TST_MS);
+    game_rules_tap(&game, mole, 500u, hide + (5u * TST_MS));
+    b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK,
+                                          &evt), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_FEEDBACK_MISS == evt.result) &&
+                                (-1 == evt.score), __LINE__)) && b_ok;
+
+    /* (c) No tap: the mole stays up through the grace, retires at hide +
+     * 100 ms with no score, and the next mole shows at hide + 300 ms. */
+    b_ok = (test_main_check(tst_first_mole(&game, &now, &evt), __LINE__)) &&
+           b_ok;
+    show = evt.t_show_us;
+    hide = show + (evt.up_ms * TST_MS);
+    b_ok = (test_main_check(game_rules_next_due(&game) == (hide + (100u *
+                                TST_MS)), __LINE__)) && b_ok;
+    now = hide + (99u * TST_MS);
+    b_ok = (test_main_check(!game_rules_poll(&game, now, &evt), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(game.b_mole_up, __LINE__)) && b_ok;
+    now = hide + (100u * TST_MS);
+    b_ok = (test_main_check(game_rules_poll(&game, now, &evt), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check((GAME_EV_MOLE_ON == evt.kind) &&
+                                (hide + (300u * TST_MS) == evt.t_show_us),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(0 == game_rules_score(&game), __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
 /*** end of file ***/

@@ -20,7 +20,9 @@
  *   timeout or the start of the round).
  * - A hit (a tap on the mole tile while it is up) scores +1 and ends the
  *   mole at once. A tap on any other active tile, or any tap while no mole
- *   is up, scores -1. A mole that times out with no tap scores 0.
+ *   is up, scores -1. A mole that times out with no tap scores 0. A mole
+ *   times out GAME_TAP_GRACE_MS after its hide time, so a tap stamped before
+ *   the hide that arrives late still hits it.
  * - Taps from several tiles within GAME_DEDUPE_MS (50 ms, from the first
  *   tap of the group, by the tile's own corrected time) count once: the
  *   highest peak wins, the others are dropped (plan choice for ties: the
@@ -55,6 +57,14 @@
 
 /** Tap dedupe window, milliseconds (re-plan: 50 ms). */
 #define GAME_DEDUPE_MS 50u
+
+/** Grace after a mole's hide time before it is retired, milliseconds (plan
+ *  choice). A tap stamped before the hide can still be in flight: the radio
+ *  hop plus the 50 ms resend. The mole stays up until hide + this grace and
+ *  no waiting tap stamped before the hide is left, so such a tap still hits.
+ *  The next show stays at hide + GAME_GAP_MS, so the grace must not pass the
+ *  planning point, GAME_GAP_MS - GAME_LEAD_MS (checked in game_rules.c). */
+#define GAME_TAP_GRACE_MS 100u
 
 /** Taps waiting for their dedupe window, at most (plan choice; 9 tiles tap
  *  at most once or twice per window). */

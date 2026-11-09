@@ -31,7 +31,8 @@
 <section>
   <div class="row">
     <span class="stat">Pico: <b id="pico-state">connecting</b></span>
-    <span class="stat">Score: <b id="score">0</b></span>
+    <span class="stat" id="score-wrap">Score: <b id="score">0</b></span>
+    <span class="stat" id="last-wrap">Last round: <b id="last-score">none yet</b></span>
     <span class="stat">Mode: <b id="mode">video</b></span>
     <span class="stat">Readiness: <b id="ready">0 of 0</b></span>
   </div>
@@ -159,6 +160,9 @@
     state = s;
     $("pico-state").textContent = s.pico_state;
     $("score").textContent = String(s.score);
+    $("score-wrap").hidden = !s.game_running;
+    $("last-wrap").hidden = s.game_running;
+    $("last-score").textContent = s.last_score === null ? "none yet" : String(s.last_score);
     $("mode").textContent = s.mode;
     var mapped = s.node_map.filter(function (n) { return n !== 0; });
     var ready = mapped.filter(function (n) { return (s.readiness >> (n - 1)) & 1; });

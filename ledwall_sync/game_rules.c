@@ -20,6 +20,12 @@
 #define GAME_GAP_US     (GAME_US_PER_MS * GAME_GAP_MS)
 #define GAME_LEAD_US    (GAME_US_PER_MS * GAME_LEAD_MS)
 #define GAME_DEDUPE_US  (GAME_US_PER_MS * GAME_DEDUPE_MS)
+#define GAME_GRACE_US   (GAME_US_PER_MS * GAME_TAP_GRACE_MS)
+
+/* The grace ends where the next mole is planned, so the next show stays at
+ * hide + GAME_GAP_MS (see game_rules.h). */
+_Static_assert(GAME_TAP_GRACE_MS <= (GAME_GAP_MS - GAME_LEAD_MS),
+               "tap grace must end by the planning point of the next mole");
 
 /** Score limits (layout_table.md, STATUS score: 8 bits, -99 to 99). */
 #define GAME_SCORE_LIMIT ((int32_t)PROTO_SCORE_MAX)
@@ -201,10 +207,10 @@ int32_t game_rules_score (game_t const * p_game)
 
 /**
  * @brief  Earliest time game_rules_poll() can produce an event or change state.
- *         Candidates: a waiting dedupe window, a mole's hide time (unless a
- *         waiting tap could still hit it, whose window is then the
- *         candidate), the next planning time, and the round end (once no mole
- *         or tap is left to judge).
+ *         Candidates: a waiting dedupe window, a mole's retire time (its hide
+ *         time plus GAME_TAP_GRACE_MS, unless a waiting tap could still hit
+ *         it, whose window is then the candidate), the next planning time, and
+ *         the round end (once no mole or tap is left to judge).
  * @param  p_game  Engine; must not be NULL.
  * @return Microseconds, or UINT64_MAX when no round is running.
  */
@@ -231,9 +237,11 @@ uint64_t game_rules_next_due (game_t const * p_game)
                 }
             }
 
-            if ((!b_tap_before_hide) && (p_game->hide_us < due))
+            uint64_t const retire_us = p_game->hide_us + GAME_GRACE_US;
+
+            if ((!b_tap_before_hide) && (retire_us < due))
             {
-                due = p_game->hide_us;
+                due = retire_us;
             }
         }
         else
@@ -496,15 +504,16 @@ static bool game_tap_better (game_tap_t const * p_a, game_tap_t const * p_b)
 }
 
 /**
- * @brief  Whether the mole is up past its hide time with no tap still
- *         waiting that could hit it.
+ * @brief  Whether the mole is up past its hide time plus the tap grace, with
+ *         no tap still waiting that could hit it.
  * @param  p_game  Engine; must not be NULL.
  * @param  now_us  Current time, microseconds.
  * @return true when the mole times out now.
  */
 static bool game_mole_expired (game_t const * p_game, uint64_t now_us)
 {
-    bool b_expired = (p_game->b_mole_up) && (now_us >= p_game->hide_us);
+    bool b_expired = (p_game->b_mole_up) &&
+                     (now_us >= (p_game->hide_us + GAME_GRACE_US));
 
     for (uint32_t index = 0u; (b_expired) && (index < p_game->tap_count);
          index++)

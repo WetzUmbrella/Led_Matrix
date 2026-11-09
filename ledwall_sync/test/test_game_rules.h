@@ -27,6 +27,15 @@ bool test_game_rules_timing (void);
  */
 bool test_game_rules_scoring (void);
 
+/**
+ * @brief  Tap grace: a tap stamped before the hide that arrives within the
+ *         grace hits (+1); a tap stamped at or after the hide misses (-1); a
+ *         mole that times out with no tap scores 0 and the next show is 300 ms
+ *         after the hide.
+ * @return true when every check passed.
+ */
+bool test_game_rules_grace (void);
+
 #endif /* TEST_GAME_RULES_H */
 
 /*** end of file ***/

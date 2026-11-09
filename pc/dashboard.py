@@ -171,6 +171,9 @@ class DashboardModel:
         self.readiness = 0
         self.online = 0
         self.status: Optional[pico_link.Status] = None
+        #: Final score of the last round, None before any round. STATUS
+        #: reports 0 outside a round, so it is kept when the round ends.
+        self.last_score: Optional[int] = None
         self.mode = "video"
         #: Tap-to-place: (slot, deadline) while the website waits for a TAP.
         self.armed: Optional[Tuple[int, float]] = None
@@ -383,6 +386,12 @@ class DashboardModel:
         lost = self.online & ~status.online & self.required()
         for node in pico_link.nodes_in(lost):
             self._say("tile %d lost (Pico STATUS online bit cleared)" % node)
+        prev = self.status
+        if (prev is not None) and (prev.state_name() == GAME_STATE) and \
+                (status.state_name() != GAME_STATE):
+            # The round ended: keep the last score the Pico reported in it.
+            self.last_score = prev.score
+            self._say("round over, score %d" % prev.score)
         self.status = status
         self.online = status.online
         self.readiness = status.readiness
@@ -420,6 +429,7 @@ class DashboardModel:
             "pico_state": self.pico_state(),
             "readiness": self.readiness, "online": self.online,
             "score": status.score if status else 0,
+            "last_score": self.last_score,
             "mode": self.mode, "stopped": self.stopped(),
             "game_running": self.pico_state() == GAME_STATE,
             "game_start_enabled": (self.mode == "game" and

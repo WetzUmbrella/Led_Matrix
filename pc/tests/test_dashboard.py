@@ -284,3 +284,42 @@ def test_send_game_control_gives_up_and_ignores_other_nodes(
     assert link.poll_status() is None and link.acks == []
     pico.close()
     pc.close()
+
+
+def test_last_score_is_none_before_any_round() -> None:
+    model = db.DashboardModel()
+    model.on_status(_ready_status(7))
+    assert model.snapshot()["last_score"] is None
+
+
+def test_last_score_keeps_the_final_score_after_the_round_ends() -> None:
+    model = db.DashboardModel()
+    model.on_status(_ready_status(7))
+    model.on_status(_ready_status(12, score=3))
+    model.on_status(_ready_status(12, score=5))
+    assert model.snapshot()["last_score"] is None  # Still in the round.
+    model.on_status(_ready_status(7, score=0))  # STATUS reports 0 after it.
+    snap = model.snapshot()
+    assert snap["last_score"] == 5
+    assert snap["score"] == 0
+    assert snap["game_running"] is False
+
+
+def test_last_score_is_replaced_by_the_next_round() -> None:
+    model = db.DashboardModel()
+    model.on_status(_ready_status(12, score=-2))
+    model.on_status(_ready_status(7))
+    assert model.snapshot()["last_score"] == -2
+    model.on_status(_ready_status(12, score=4))
+    model.on_status(_ready_status(7))
+    assert model.snapshot()["last_score"] == 4
+
+
+def test_last_score_is_in_the_json_state() -> None:
+    import json
+
+    model = db.DashboardModel()
+    model.on_status(_ready_status(12, score=1))
+    model.on_status(_ready_status(7))
+    body = json.loads(json.dumps(model.snapshot()))
+    assert body["last_score"] == 1 and body["score"] == 0

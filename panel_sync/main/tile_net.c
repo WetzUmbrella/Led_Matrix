@@ -231,6 +231,7 @@ static bool             g_b_had_ip     = false;
 static uint32_t         g_comms        = 0u; /* tile_net_comms_t. */
 static uint32_t         g_upload_nacks = 0u;
 static uint32_t         g_upload_wrong_session = 0u;
+static uint32_t         g_tap_unsynced = 0u; /* TAPs dropped: no clock. */
 
 /* Whack-a-mole (build step 7). The game state is published for the Display
  * Engine (game_tile.h). The TAPs of this tile wait in g_tap_box until the
@@ -755,27 +756,32 @@ static void tn_game_service (int64_t now)
 
     while ((taken < ACK_OUTBOX_SLOTS) && (orientation_tap_take(&event)))
     {
-        uint8_t  buf[PROTO_TAP_BYTES];
-        int64_t  t_pico = event.t_us;
-        uint32_t len    = 0u;
+        uint8_t buf[PROTO_TAP_BYTES];
 
         taken++;
 
-        if (timesync_read_snapshot(&g_game_reader))
+        if (!timesync_read_snapshot(&g_game_reader))
         {
-            t_pico = timesync_pico_from_local(&g_game_reader.snap, event.t_us);
+            /* No clock to map the tap to Pico time: the local time would
+             * mis-score it, so the tap is dropped and counted. */
+            g_tap_unsynced++;
         }
-
-        len = game_tile_encode_tap(buf, g_session, g_tap_seq, g_node_id,
-                                   event.peak, t_pico);
-
-        if ((0u != len) && (g_b_pico_known))
+        else
         {
-            /* Times are microseconds from boot: non-negative. */
-            (void)ack_outbox_add(&g_tap_box, g_node_id, PROTO_TYPE_TAP,
-                                 g_tap_seq, g_pico_addr, TN_PICO_PORT, buf,
-                                 len, (uint64_t)now,
-                                 (uint64_t)(now + TN_TAP_LIFE_US));
+            int64_t const t_pico =
+                timesync_pico_from_local(&g_game_reader.snap, event.t_us);
+            uint32_t const len = game_tile_encode_tap(buf, g_session,
+                                                      g_tap_seq, g_node_id,
+                                                      event.peak, t_pico);
+
+            if ((0u != len) && (g_b_pico_known))
+            {
+                /* Times are microseconds from boot: non-negative. */
+                (void)ack_outbox_add(&g_tap_box, g_node_id, PROTO_TYPE_TAP,
+                                     g_tap_seq, g_pico_addr, TN_PICO_PORT, buf,
+                                     len, (uint64_t)now,
+                                     (uint64_t)(now + TN_TAP_LIFE_US));
+            }
         }
 
         g_tap_seq++;
@@ -1079,11 +1085,12 @@ static void tn_handle_record (tn_record_t const * p_record)
                    " lost=%" PRIu32 " log_dropped=%" PRIu32 " tel_sent=%" PRIu32
                    " tel_acked=%" PRIu32 " ack_unknown=%" PRIu32
                    " tel_q_dropped=%" PRIu32 " upload_nacks=%" PRIu32
-                   " upload_wrong_session=%" PRIu32 " foreign=%" PRIu32 "\n",
+                   " upload_wrong_session=%" PRIu32 " tap_unsynced=%" PRIu32
+                   " foreign=%" PRIu32 "\n",
                    p_record->received, p_record->dropped, p_record->lost,
                    p_record->log_dropped, g_tel_sent, g_tel_acked,
                    g_ack_unknown, g_tel_status.dropped, g_upload_nacks,
-                   g_upload_wrong_session, p_record->foreign);
+                   g_upload_wrong_session, g_tap_unsynced, p_record->foreign);
         }
     }
     else if (TN_REC_NACK == p_record->kind)
