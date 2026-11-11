@@ -57,6 +57,11 @@
 /** Re-initialise the IMU every 1,000 failed samples (1 s) while it fails. */
 #define OR_REINIT_EVERY 1000u
 
+/** Samples ignored by the tap detector after the IMU is (re)configured
+ *  (200 ms): the first readings are not settled, and a baseline seeded from
+ *  them gave two false taps at every boot (bench 11 Nov 2026). */
+#define OR_SETTLE_SAMPLES 200u
+
 /** QMI8658 registers and values (see orientation.h). */
 #define OR_REG_WHO_AM_I 0x00u
 #define OR_REG_CTRL1    0x02u
@@ -170,6 +175,7 @@ static void orientation_task (void * p_arg)
     esp_timer_handle_t timer    = NULL;
     uint32_t           failures = 0u;
     uint32_t           samples  = 0u;
+    uint32_t           settle   = OR_SETTLE_SAMPLES;
 
     (void)p_arg; /* The task takes no parameter. */
 
@@ -204,8 +210,12 @@ static void orientation_task (void * p_arg)
         bool const    b_read =
             (b_imu) && (qmi_read_accel(&accel_x, &accel_y, &accel_z));
 
-        if ((b_read) && (tap_detect_sample(&detect, t_us, accel_x, accel_y,
-                                           accel_z, &event)))
+        if ((b_read) && (0u != settle))
+        {
+            settle--; /* The IMU is still settling: no taps yet. */
+        }
+        else if ((b_read) && (tap_detect_sample(&detect, t_us, accel_x,
+                                                accel_y, accel_z, &event)))
         {
             or_tap_publish(&event);
             tile_net_tap_ready();
@@ -228,6 +238,8 @@ static void orientation_task (void * p_arg)
         if ((0u != failures) && (0u == (failures % OR_REINIT_EVERY)))
         {
             b_imu = or_imu_init(); /* Monitoring retries (T-B5-05 row). */
+            settle = OR_SETTLE_SAMPLES;
+            tap_detect_init(&detect); /* A fresh baseline after settling. */
         }
     }
 }
