@@ -305,6 +305,12 @@ Drawn procedurally by the tile on 8x8, every channel 0 to 8, frames computed fro
 - **Wall pictures** (DS-09): yellow countdown digits, white score, yellow stars.
 - Hit and wrong differ by shape (burst against X), not only colour (D7).
 
+**As built (11 Nov 2026, step 3, host-tested; wall test pending):**
+- Results list per tile: sparkle 1.5 s, then the white score and the yellow stars 2.5 s each, looping until the next ARM or START. Countdown: 3, 2, 1 in yellow, 1 s each, 0.5 s after the start tap. Pictures scale by the largest whole number that fits the active tiles' box; stars are 5x5 (or 3x3 on 1x1 and 1x2) in a row or a pyramid, whichever is drawn larger; a wall under half full shows the whole small picture on each tile (score_font.c, host test C19b).
+- Tile ordering: MOLE_ON and FEEDBACK act only when newer than every message accepted; GAME_CONTROL when newer than the last GAME_CONTROL, and it clears only an older target or picture entry (a lost ARM resent after its start sprite still arms and keeps the sprite); WALL_PICTURE entries may arrive in any order (newer than their entry and than the last ARM or START).
+- The sprites live in `panel_sync/main/game_sprites.c` (Jia Jun's display subsystem); the tap pulse comes from the Orientation Task through an esp_timer one-shot, the mole and hit pulses from the frame where they start.
+- STATUS keeps the final score in RESULTS; the PC reads the round's end from RESULTS, not from the coordinator state.
+
 ### DS-12 Upload fixes (decided 11 Nov; built in step 4)
 
 Three failures seen on the 9 Nov bench (F-04). No wire change; the tile's silent drop of an upload for another session (T-X-08) stays.
