@@ -33,8 +33,9 @@ bool test_tap_detect_peak_window (void);
 bool test_tap_detect_ringing (void);
 
 /**
- * @brief  Test K4: two taps with 60 ms of quiet between them count twice; a
- *         second spike inside the quiet time counts once with the first.
+ * @brief  Test K4: two taps 300 ms apart count twice; a rebound 146 ms after
+ *         a slap (bench, round 13) and a spike inside the quiet time count
+ *         once with the first.
  * @return true when every check passed.
  */
 bool test_tap_detect_rearm (void);

@@ -1891,7 +1891,8 @@ static void cl_on_tap (cl_rx_entry_t const * p_entry,
             if ((PROTO_COORD_COORDINATING_GAME == g_state) &&
                 (p_header->session_id == g_session.session_id))
             {
-                game_rules_tap(&g_game, msg.node_id, msg.peak, msg.t_tap);
+                game_rules_tap_rx(&g_game, msg.node_id, msg.peak, msg.t_tap,
+                                  p_entry->t_rx_us);
                 /* Modulo 2^32 on purpose: the sign shows in the top bit. */
                 cl_log_event(CL_EV_GAME_TAP, msg.node_id,
                              (uint32_t)(p_entry->t_rx_us - msg.t_tap),

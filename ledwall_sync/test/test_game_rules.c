@@ -499,4 +499,55 @@ bool test_game_rules_grace (void)
     return b_ok;
 }
 
+/**
+ * @brief  C18c (bench 11 Nov 2026, round 11): a tap and its echo stamped
+ *         3 ms apart but delivered late by WiFi (the echo 61 ms after its
+ *         stamp, the real tap 10 ms after that) are one group: one HIT, no
+ *         MISS for the echo. A late tap stamped just before a closed group
+ *         is a duplicate too.
+ * @return true when every check passed.
+ */
+bool test_game_rules_late_echo (void)
+{
+    static game_t game;
+    game_event_t  evt;
+    uint64_t      now  = TST_T0;
+    bool          b_ok = true;
+
+    b_ok = (test_main_check(tst_first_mole(&game, &now, &evt), __LINE__)) &&
+           b_ok;
+
+    uint64_t const show   = evt.t_show_us;
+    uint8_t const  mole   = evt.node_id;
+    uint8_t const  other  = (1u == mole) ? 2u : 1u;
+    uint64_t const t_real = show + (40u * TST_MS);
+    uint64_t const t_echo = t_real + (3u * TST_MS);
+
+    /* The echo arrives first: no verdict until the group has collected. */
+    now = t_echo + (61u * TST_MS);
+    game_rules_tap_rx(&game, other, 300u, t_echo, now);
+    b_ok = (test_main_check((!game_rules_poll(&game, now, &evt)) ||
+                                (GAME_EV_FEEDBACK != evt.kind),
+                            __LINE__)) && b_ok;
+
+    now += 10u * TST_MS;
+    game_rules_tap_rx(&game, mole, 9000u, t_real, now);
+    b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK,
+                                          &evt), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_FEEDBACK_HIT == evt.result) &&
+                                (mole == evt.node_id) && (1 == evt.score),
+                            __LINE__)) && b_ok;
+
+    /* A straggler stamped 5 ms before the group's first tap: a duplicate. */
+    game_rules_tap_rx(&game, other, 300u, t_real - (5u * TST_MS), now);
+    b_ok = (test_main_check(1u == game.dedupe_drops, __LINE__)) && b_ok;
+    b_ok = (test_main_check((!tst_next_event(&game, &now,
+                                             now + (200u * TST_MS), &evt)) ||
+                                (GAME_EV_FEEDBACK != evt.kind),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(1 == game_rules_score(&game), __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
 /*** end of file ***/

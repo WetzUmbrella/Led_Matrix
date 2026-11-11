@@ -67,6 +67,12 @@
  *  planning point, GAME_GAP_MS - GAME_LEAD_MS (checked in game_rules.c). */
 #define GAME_TAP_GRACE_MS 100u
 
+/** Least time a group waits after its first TAP arrives, milliseconds
+ *  (bench 11 Nov 2026, round 11: WiFi delivered a tap and its echo 61 and 75
+ *  ms after their stamps, 10 ms apart; judging the group 30 ms after the
+ *  stamp scored the echo alone as a miss, then the real tap as a hit). */
+#define GAME_COLLECT_MS 20u
+
 /** Taps waiting for their dedupe window, at most (plan choice; 9 tiles tap
  *  at most once or twice per window). */
 #define GAME_TAP_SLOTS 16u
@@ -97,6 +103,7 @@ typedef struct
     uint8_t  node_id; /**< Tapped tile, 1 to 9. */
     uint16_t peak;    /**< tap_detect peak, mg. */
     uint64_t t_tap_us; /**< Tap time, Pico corrected clock. */
+    uint64_t t_rx_us;  /**< Arrival at the Pico, Pico clock. */
 } game_tap_t;
 
 /** The engine. Zero it with game_rules_init(). */
@@ -162,6 +169,20 @@ void game_rules_set_active (game_t * p_game, uint16_t active_mask);
  */
 void game_rules_tap (game_t * p_game, uint8_t node_id, uint16_t peak,
                uint64_t t_tap_us);
+
+/**
+ * @brief  A tap from a tile with its arrival time (the coordinator's call): a
+ *         group is judged only GAME_COLLECT_MS after its first tap arrived
+ *         and GAME_DEDUPE_MS after its first tap time, so a late echo still
+ *         joins it. Otherwise as game_rules_tap().
+ * @param  p_game    Engine; must not be NULL.
+ * @param  node_id   Tapped tile, 1 to 9.
+ * @param  peak      tap_detect peak, mg.
+ * @param  t_tap_us  Tap time, Pico corrected clock, microseconds.
+ * @param  t_rx_us   Arrival at the Pico, Pico clock, microseconds.
+ */
+void game_rules_tap_rx (game_t * p_game, uint8_t node_id, uint16_t peak,
+                        uint64_t t_tap_us, uint64_t t_rx_us);
 
 /**
  * @brief  Advance the rules to now_us and report at most one event.

@@ -223,6 +223,10 @@ static void orientation_task (void * p_arg)
                    "\n",
                    event.t_us, event.peak, event.count);
         }
+        else
+        {
+            /* No sample, or a sample with no completed tap. */
+        }
 
         samples++;
 

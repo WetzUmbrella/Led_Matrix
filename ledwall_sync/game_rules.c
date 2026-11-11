@@ -20,6 +20,7 @@
 #define GAME_GAP_US     (GAME_US_PER_MS * GAME_GAP_MS)
 #define GAME_LEAD_US    (GAME_US_PER_MS * GAME_LEAD_MS)
 #define GAME_DEDUPE_US  (GAME_US_PER_MS * GAME_DEDUPE_MS)
+#define GAME_COLLECT_US (GAME_US_PER_MS * GAME_COLLECT_MS)
 #define GAME_GRACE_US   (GAME_US_PER_MS * GAME_TAP_GRACE_MS)
 
 /* The grace ends where the next mole is planned, so the next show stays at
@@ -40,6 +41,7 @@ static uint32_t game_next_rand (game_t * p_game);
 static uint16_t game_bit (uint8_t node_id);
 static uint8_t  game_pick_node (game_t * p_game);
 static uint64_t game_earliest_tap (game_t const * p_game);
+static uint64_t game_group_due (game_t const * p_game);
 static bool     game_window_due (game_t const * p_game, uint64_t now_us);
 static bool     game_resolve_window (game_t * p_game, game_event_t * p_event);
 static bool     game_tap_better (game_tap_t const * p_a,
@@ -116,11 +118,30 @@ void game_rules_set_active (game_t * p_game, uint16_t active_mask)
 void game_rules_tap (game_t * p_game, uint8_t node_id, uint16_t peak,
                uint64_t t_tap_us)
 {
+    /* No arrival time: taken as arriving at its stamp (host tests). */
+    game_rules_tap_rx(p_game, node_id, peak, t_tap_us, t_tap_us);
+}
+
+/**
+ * @brief  A tap with its arrival time (see game_rules.h). A tap stamped
+ *         within GAME_DEDUPE_MS either side of a closed group's first tap is
+ *         a late duplicate and is dropped (counted).
+ * @param  p_game    Engine; must not be NULL.
+ * @param  node_id   Tapped tile, 1 to 9.
+ * @param  peak      tap_detect peak, mg.
+ * @param  t_tap_us  Tap time, Pico corrected clock, microseconds.
+ * @param  t_rx_us   Arrival at the Pico, microseconds.
+ */
+void game_rules_tap_rx (game_t * p_game, uint8_t node_id, uint16_t peak,
+                        uint64_t t_tap_us, uint64_t t_rx_us)
+{
     if ((p_game->b_running) && (0u != game_bit(node_id)) &&
         (0u != (p_game->active & game_bit(node_id))))
     {
+        /* Either side of the closed group's first tap (bench 11 Nov: an
+         * echo stamped 3 ms before the real tap arrived after it). */
         bool const b_dup = (p_game->b_window_seen) &&
-                           (t_tap_us >= p_game->window_us) &&
+                           ((t_tap_us + GAME_DEDUPE_US) > p_game->window_us) &&
                            (t_tap_us < (p_game->window_us + GAME_DEDUPE_US));
 
         if (b_dup)
@@ -138,6 +159,7 @@ void game_rules_tap (game_t * p_game, uint8_t node_id, uint16_t peak,
             p_tap->node_id   = node_id;
             p_tap->peak      = peak;
             p_tap->t_tap_us  = t_tap_us;
+            p_tap->t_rx_us   = t_rx_us;
             p_game->tap_count++;
         }
     }
@@ -222,7 +244,7 @@ uint64_t game_rules_next_due (game_t const * p_game)
     {
         if (0u != p_game->tap_count)
         {
-            due = game_earliest_tap(p_game) + GAME_DEDUPE_US;
+            due = game_group_due(p_game);
         }
 
         if (p_game->b_mole_up)
@@ -403,6 +425,30 @@ static uint64_t game_earliest_tap (game_t const * p_game)
 }
 
 /**
+ * @brief  When the waiting group can be judged: GAME_DEDUPE_MS after its
+ *         first tap time and GAME_COLLECT_MS after its first arrival.
+ * @param  p_game  Engine; must not be NULL; tap_count above 0.
+ * @return Microseconds.
+ */
+static uint64_t game_group_due (game_t const * p_game)
+{
+    uint64_t first_rx = UINT64_MAX;
+
+    for (uint32_t index = 0u; index < p_game->tap_count; index++)
+    {
+        if (p_game->taps[index].t_rx_us < first_rx)
+        {
+            first_rx = p_game->taps[index].t_rx_us;
+        }
+    }
+
+    uint64_t const by_stamp   = game_earliest_tap(p_game) + GAME_DEDUPE_US;
+    uint64_t const by_arrival = first_rx + GAME_COLLECT_US;
+
+    return (by_stamp > by_arrival) ? by_stamp : by_arrival;
+}
+
+/**
  * @brief  Whether the first waiting tap's window has closed.
  * @param  p_game  Engine; must not be NULL.
  * @param  now_us  Current time, microseconds.
@@ -410,8 +456,7 @@ static uint64_t game_earliest_tap (game_t const * p_game)
  */
 static bool game_window_due (game_t const * p_game, uint64_t now_us)
 {
-    return (0u != p_game->tap_count) &&
-           (now_us >= (game_earliest_tap(p_game) + GAME_DEDUPE_US));
+    return (0u != p_game->tap_count) && (now_us >= game_group_due(p_game));
 }
 
 /**

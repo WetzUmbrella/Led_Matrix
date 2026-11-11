@@ -22,7 +22,8 @@
  * - A tap: the first sample at or over the threshold; its peak is the
  *   largest deviation in the TAP_DETECT_PEAK_WINDOW_US after it; its time is
  *   that first sample's. The event is reported when the window ends.
- * - Re-arm: after TAP_DETECT_QUIET_US under half the threshold, or at most
+ * - Re-arm: no sooner than TAP_DETECT_DEAD_US after the tap, then after
+ *   TAP_DETECT_QUIET_US under half the threshold, or at most
  *   TAP_DETECT_REARM_MAX_US after the tap.
  */
 #ifndef TAP_DETECT_H
@@ -44,6 +45,13 @@
 
 /** Peak window after the first sample over the threshold, microseconds. */
 #define TAP_DETECT_PEAK_WINDOW_US INT64_C(10000)
+
+/** Least time after a tap before the detector can re-arm, us (bench 11 Nov
+ *  2026, round 13: a 16.9 g slap rebounded with 652 mg 146 ms later, after a
+ *  short quiet spell, and counted again; a mole is gone after its hit and the
+ *  next is never on the same tile, so a second tap within 250 ms means
+ *  nothing). */
+#define TAP_DETECT_DEAD_US INT64_C(250000)
 
 /** Quiet time under half the threshold that re-arms the detector, us. */
 #define TAP_DETECT_QUIET_US INT64_C(30000)

@@ -269,9 +269,11 @@ static bool td_phase (tap_detect_t * p_detect, int64_t t_us, uint32_t dev_mg,
             /* The quiet run continues. */
         }
 
-        if (((p_detect->b_quiet) &&
+        int64_t const since = t_us - p_detect->t_first_us;
+
+        if (((since >= TAP_DETECT_DEAD_US) && (p_detect->b_quiet) &&
              ((t_us - p_detect->t_quiet_us) >= TAP_DETECT_QUIET_US)) ||
-            ((t_us - p_detect->t_first_us) >= TAP_DETECT_REARM_MAX_US))
+            (since >= TAP_DETECT_REARM_MAX_US))
         {
             p_detect->phase = TAP_DETECT_ARMED;
         }

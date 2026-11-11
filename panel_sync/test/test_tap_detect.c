@@ -143,12 +143,22 @@ bool test_tap_detect_rearm (void)
     tst_run_t run;
     bool      b_ok = true;
 
+    /* Two taps 300 ms apart, quiet between: two taps. */
     tst_start(&run);
     tst_feed(&run, 2u, 0, 0, TST_G + 2000);
-    tst_feed(&run, 60u, 0, 0, TST_G);
+    tst_feed(&run, 298u, 0, 0, TST_G);
     tst_feed(&run, 2u, 0, 0, TST_G + 2000);
     tst_feed(&run, 60u, 0, 0, TST_G);
     b_ok = (test_main_check(2u == run.taps, __LINE__)) && b_ok;
+
+    /* Bench 11 Nov, round 13: a slap, quiet, then a 652 mg rebound 146 ms
+     * later: one tap (the rebound is inside the 250 ms dead time). */
+    tst_start(&run);
+    tst_feed(&run, 3u, 0, 0, TST_G + 30000);
+    tst_feed(&run, 143u, 0, 0, TST_G);
+    tst_feed(&run, 2u, 0, 0, TST_G + 1335); /* 652 mg. */
+    tst_feed(&run, 300u, 0, 0, TST_G);
+    b_ok = (test_main_check(1u == run.taps, __LINE__)) && b_ok;
 
     /* Second spike 20 ms into the quiet time: part of the first tap. */
     tst_start(&run);

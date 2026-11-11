@@ -36,6 +36,14 @@ bool test_game_rules_scoring (void);
  */
 bool test_game_rules_grace (void);
 
+/**
+ * @brief  C18c: a tap and its echo delivered late (bench 11 Nov, round 11)
+ *         are one group; a late straggler stamped just before a closed group
+ *         is a duplicate.
+ * @return true when every check passed.
+ */
+bool test_game_rules_late_echo (void);
+
 #endif /* TEST_GAME_RULES_H */
 
 /*** end of file ***/

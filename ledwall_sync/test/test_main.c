@@ -68,6 +68,8 @@ static test_case_t const g_cases[] = {
     {"C18b re-plan: tap in flight at the hide still hits, tap after it misses, "
      "timeout keeps the score",
      test_game_rules_grace},
+    {"C18c re-plan: a late tap and its late echo are one group, one HIT",
+     test_game_rules_late_echo},
     {"C19 re-plan: score font pixel counts, centring and tile slices",
      test_score_font_slices},
     {"C20 re-plan: START refused in video mode, mode and START ACKed, repeat "
