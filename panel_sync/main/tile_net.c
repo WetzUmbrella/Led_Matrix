@@ -143,11 +143,22 @@
 /** Kinds of log record. */
 #define TN_REC_BEACON 1u
 #define TN_REC_NACK   2u
+#define TN_REC_GAME   3u
+
+/** Largest game datagram a record carries (MOLE_ON is the longest today). */
+#define TN_GAME_MAX_BYTES 16u
+
+_Static_assert((PROTO_MOLE_ON_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_FEEDBACK_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_GAME_CONTROL_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_SCORE_MASK_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_ACK_BYTES <= TN_GAME_MAX_BYTES),
+               "every game datagram must fit a log record");
 
 /** One record from the receive context to the Network Task. */
 typedef struct
 {
-    uint8_t  kind;       /**< TN_REC_BEACON or TN_REC_NACK. */
+    uint8_t  kind;       /**< TN_REC_BEACON, TN_REC_NACK or TN_REC_GAME. */
     uint8_t  session_id; /**< Beacon: its session; NACK: the command's. */
     uint16_t seq;        /**< Beacon seq, or the rejected command's seq. */
     uint32_t src_addr;   /**< Sender address (the Pico). */
@@ -158,6 +169,8 @@ typedef struct
     uint32_t lost;
     uint32_t log_dropped;
     uint32_t foreign; /**< Beacons from another coordinator (lock). */
+    uint32_t game_len; /**< Game: datagram length. */
+    uint8_t  game[TN_GAME_MAX_BYTES]; /**< Game: the datagram. */
 } tn_record_t;
 
 /** One Telemetry Queue item: the status and the producer's drop count. */
@@ -267,6 +280,7 @@ static bool tn_decode_command (uint8_t const * p_buf, uint32_t len,
 static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
                                  uint32_t * p_drops);
 static void tn_service (TickType_t wait);
+static void tn_post_game (uint8_t const * p_buf, uint32_t len, int64_t t_l);
 static bool tn_pico_restarted (tn_record_t const * p_record);
 static void tn_handle_record (tn_record_t const * p_record);
 static void tn_housekeeping (void);
@@ -680,7 +694,7 @@ static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
                  (PROTO_TYPE_SCORE_MASK == type) ||
                  (PROTO_TYPE_ACK == type))
         {
-            tn_on_game(p_buf, len, t_l, type);
+            tn_post_game(p_buf, len, t_l);
         }
         else
         {
@@ -690,10 +704,40 @@ static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
 }
 
 /**
+ * @brief  Hand a game datagram to the Network Task (receive context). With
+ *         TN_RX_HOOK_LWIP the receive context is lwIP's tcpip thread, where
+ *         a socket call (the ACK's sendto) waits on that same thread for ever
+ *         (bench 11 Nov 2026: both tiles left the network 3 s into the first
+ *         round). The game state and the TAP outbox are also the Network
+ *         Task's, so all game handling runs there, as NACK sending does.
+ * @param  p_buf  Datagram.
+ * @param  len    Length.
+ * @param  t_l    Local receive time (the flash clock).
+ */
+static void tn_post_game (uint8_t const * p_buf, uint32_t len, int64_t t_l)
+{
+    if (len <= TN_GAME_MAX_BYTES)
+    {
+        tn_record_t record = {
+            .kind        = TN_REC_GAME,
+            .t_l         = t_l,
+            .received    = g_received,
+            .dropped     = g_dropped,
+            .lost        = g_lost,
+            .log_dropped = g_log_dropped,
+            .game_len    = len,
+        };
+
+        (void)memcpy(record.game, p_buf, len); /* Returns record.game. */
+        tn_post_drop_oldest(g_p_q_log, &record, &g_log_dropped);
+    }
+}
+
+/**
  * @brief  A game message from the Pico on port 4210 (whack-a-mole build step
- *         7): MOLE_ON, FEEDBACK, GAME_CONTROL and SCORE_MASK go to the game
- *         state and are ACKed when they are for this tile; an ACK frees the
- *         TAP it names.
+ *         7), in the Network Task: MOLE_ON, FEEDBACK, GAME_CONTROL and
+ *         SCORE_MASK go to the game state and are ACKed when they are for
+ *         this tile; an ACK frees the TAP it names.
  * @param  p_buf  Datagram.
  * @param  len    Length.
  * @param  t_l    Local receive time (the flash clock).
@@ -1098,6 +1142,17 @@ static void tn_handle_record (tn_record_t const * p_record)
         /* NACK reason 2 fits uint8_t. */
         tn_send_nack((uint8_t)PROTO_NACK_COMMAND_QUEUE_FULL,
                      p_record->session_id, p_record->seq, false);
+    }
+    else if (TN_REC_GAME == p_record->kind)
+    {
+        proto_header_t header;
+
+        if (proto_decode_header(p_record->game, p_record->game_len, &header))
+        {
+            /* Posted only for game types, below 24: a valid proto_type_t. */
+            tn_on_game(p_record->game, p_record->game_len, p_record->t_l,
+                       (proto_type_t)header.type);
+        }
     }
     else
     {

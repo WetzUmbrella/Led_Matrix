@@ -1,0 +1,24 @@
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> stop
+>>> mode game
+1794369023.373 mode game
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> game start
+  0.0 s  READY score=0 online=0x018
+  0.3 s  COORDINATING GAME score=0 online=0x018
+  2.8 s  COORDINATING GAME score=0 online=0x000
+ 30.0 s  WAITING FOR NODES score=0 online=0x000
+>>> status
+pico WAITING FOR NODES readiness=0x018 online=0x000 score=0
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794369055.467 round over, score 0
