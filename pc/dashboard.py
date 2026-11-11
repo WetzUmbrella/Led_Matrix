@@ -577,10 +577,17 @@ class DashboardShell(cmd.Cmd):
             raise
 
     def send_config(self) -> None:
-        """SESSION_CONFIG: the shape, the map and one CRC32 per position."""
+        """SESSION_CONFIG: the shape, the map and one CRC32 per position.
+        With no video built (game only, A14) it carries 1 frame and no CRC
+        (0): the Pico needs no video in game mode."""
         model = self.model
-        frame_count = next(iter(model.assets.values())).frame_count
-        crcs = [model.assets[n].crc32 if n else 0 for n in model.node_map]
+        if model.assets:
+            frame_count = next(iter(model.assets.values())).frame_count
+            crcs = [model.assets[n].crc32 if n else 0
+                    for n in model.node_map]
+        else:
+            frame_count = 1
+            crcs = [0] * len(model.node_map)
         rows, cols = model.shape()
         self.link.send_session_config(self.session_id, rows, cols,
                                       model.policy, list(model.node_map),
@@ -602,9 +609,12 @@ class DashboardShell(cmd.Cmd):
 
     def publish(self) -> Dict[int, str]:
         """Rebuild, send SESSION_CONFIG and upload what is pending. Used after
-        every change of GIF, layout, slot or brightness (build step 6)."""
+        every change of GIF, layout, slot or brightness (build step 6).
+        With no GIF chosen only the layout is sent (a game needs no video,
+        A14)."""
         if self.model.gif is None:
-            raise ab.AssetError("no GIF configured yet (config first)")
+            self.send_config()
+            return {}
         self.build()
         self.send_config()
         return self.upload_pending()
@@ -632,9 +642,9 @@ class DashboardShell(cmd.Cmd):
             self.model._say("publish failed: %s" % err)
 
     def _after_change(self) -> Dict[str, object]:
-        """Rebuild and re-upload after a layout change, when a GIF is set."""
-        if self.model.gif is not None:
-            self.publish()
+        """After a layout change: rebuild and re-upload when a GIF is set,
+        otherwise send the layout alone (A14)."""
+        self.publish()
         return self.snapshot()
 
     def set_grid(self, rows: int, cols: int) -> Dict[str, object]:

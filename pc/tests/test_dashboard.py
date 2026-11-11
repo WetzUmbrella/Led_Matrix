@@ -434,3 +434,31 @@ def test_tap_test_not_acknowledged_keeps_the_old_state() -> None:
     with pytest.raises(OSError):
         shell.set_tap_test(True)
     assert shell.model.tap_test is False
+
+
+class _LayoutLink(_FakeLink):
+    """Records SESSION_CONFIG as well."""
+
+    def __init__(self) -> None:
+        super().__init__(True)
+        self.configs = []  # type: list
+
+    def send_session_config(self, session_id, rows, cols, policy,  # type: ignore
+                            node_map, frame_count, crcs):
+        self.configs.append((session_id, rows, cols, list(node_map),
+                             frame_count, list(crcs)))
+        return b""
+
+
+def test_layout_without_a_gif_is_sent_for_a_game() -> None:
+    # A14: no GIF chosen, a grid change sends the layout with 1 frame and
+    # no CRCs, and nothing is uploaded.
+    shell = _shell(state=7, mode="game")
+    shell.link = _LayoutLink()  # type: ignore[assignment]
+    shell.session_id = 9
+    shell.uploader = None  # type: ignore[assignment]
+    shell.set_grid(1, 2)
+    assert len(shell.link.configs) == 1
+    session, rows, cols, _node_map, frames, crcs = shell.link.configs[0]
+    assert (session, rows, cols, frames) == (9, 1, 2, 1)
+    assert crcs == [0] * len(crcs)

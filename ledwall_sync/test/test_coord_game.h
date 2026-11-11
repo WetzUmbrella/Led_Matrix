@@ -69,6 +69,12 @@ bool test_coord_game_tap_test (void);
  */
 bool test_coord_game_status (void);
 
+/**
+ * @brief  C28: game mode reaches READY without a video (A14).
+ * @return true when every check passed.
+ */
+bool test_coord_game_no_video (void);
+
 #endif /* TEST_COORD_GAME_H */
 
 /*** end of file ***/

@@ -64,6 +64,8 @@ static bool gt_in_state (proto_coord_state_t state);
 static void gt_rx_tile (uint8_t node_id, uint8_t const * p_buf, uint32_t len);
 static void gt_rx_pc (uint8_t const * p_buf, uint32_t len);
 static void gt_to_ready (void);
+static void gt_to_layout (bool b_assets);
+static void gt_pc_start (void);
 static void gt_pc_command (uint8_t command, uint8_t level, uint8_t threshold,
                            uint16_t seq);
 static void gt_pc_control (uint8_t command, uint16_t seq);
@@ -189,6 +191,16 @@ static uint32_t gt_addr (uint8_t node_id)
  */
 static void gt_to_ready (void)
 {
+    gt_to_layout(true);
+}
+
+/**
+ * @brief  Two tiles (Node IDs 1 and 2) on a 2 x 2 wall, registered, live and
+ *         synchronised; with b_assets, also each tile's ASSET_READY.
+ * @param  b_assets  true to send ASSET_READY (the videos are loaded).
+ */
+static void gt_to_layout (bool b_assets)
+{
     uint8_t const map[PROTO_MAP_SLOTS] = {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     uint8_t       buf[PROTO_SESSION_CONFIG_BYTES];
     proto_session_config_t msg = {
@@ -236,9 +248,14 @@ static void gt_to_ready (void)
             node_id};
 
         g_tile_seq[node_id] += 2u;
-        gt_rx_tile(node_id, ready_buf,
-                   proto_encode_asset_ready(&ar_msg, ready_buf,
-                                            sizeof(ready_buf)));
+
+        if (b_assets)
+        {
+            gt_rx_tile(node_id, ready_buf,
+                       proto_encode_asset_ready(&ar_msg, ready_buf,
+                                                sizeof(ready_buf)));
+        }
+
         gt_rx_tile(node_id, sync_buf,
                    proto_encode_sync_ready(&sr_msg, sync_buf,
                                            sizeof(sync_buf)));
@@ -1575,6 +1592,59 @@ bool test_coord_game_status (void)
                                 (0u == status.missed) &&
                                 (0u == status.reaction_ms),
                             __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  The PC's video START (START_AT, its fields 0) with the next seq.
+ */
+static void gt_pc_start (void)
+{
+    uint8_t                buf[PROTO_START_AT_BYTES];
+    proto_start_at_t const msg = {
+        {PROTO_TYPE_START_AT, GT_SESSION, g_pc_seq}, 0u};
+
+    g_pc_seq++;
+    gt_rx_pc(buf, proto_encode_start_at(&msg, buf, sizeof(buf)));
+}
+
+/**
+ * @brief  C28 (A14): with no video loaded the wall waits for tile
+ *         readiness in video mode; game mode needs none and reaches READY,
+ *         where a round can be armed; video START is refused in game mode;
+ *         back in video mode the wall waits for the videos again.
+ * @return true when every check passed.
+ */
+bool test_coord_game_no_video (void)
+{
+    bool b_ok = true;
+
+    gt_to_layout(false);
+    b_ok = (test_main_check(
+                gt_in_state(PROTO_COORD_WAITING_FOR_TILE_READINESS),
+                __LINE__)) && b_ok;
+
+    gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+
+    /* Video START in game mode: refused, still READY. */
+    gt_pc_start();
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+
+    /* A round arms with no video. */
+    gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
+                            __LINE__)) && b_ok;
+    gt_pc(PROTO_GAME_END, 0u, 0u);
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+
+    /* Back to video: the videos are needed again. */
+    gt_pc(PROTO_GAME_MODE_VIDEO, 0u, 0u);
+    b_ok = (test_main_check(
+                gt_in_state(PROTO_COORD_WAITING_FOR_TILE_READINESS),
+                __LINE__)) && b_ok;
 
     return b_ok;
 }

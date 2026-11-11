@@ -13,7 +13,8 @@ A single process keeps one command seq and one session, so the Pico never
 sees a restarted PC (the stale-command bug found 11 Nov). Usage:
     .venv/bin/python docs/bench/11nov/game_round.py <pico ip> <session> \\
         <gif> <map> [--level easy|normal|hard] [--threshold MG] \\
-        [--tap-test S] [--start-now] [--legacy] [--layout 1x2]
+        [--tap-test S] [--start-now] [--legacy] [--layout 1x2] [--no-video]
+(with --no-video the gif argument is not used: pass -)
 """
 import argparse
 import sys
@@ -38,6 +39,8 @@ parser.add_argument("--start-now", action="store_true",
                     help="skip the start sprite")
 parser.add_argument("--legacy", action="store_true",
                     help="the step 1 round: START at once")
+parser.add_argument("--no-video", action="store_true",
+                    help="send the layout only, no GIF upload (A14)")
 parser.add_argument("--wait", type=float, default=120.0,
                     help="give up after this many seconds without RESULTS")
 args = parser.parse_args()
@@ -86,12 +89,20 @@ def follow(seconds, until=None):
 
 
 settle(3)
-run("config %s %s %s pause 8" % (args.gif, args.layout, args.map))
-run("build")
-run("upload")
-settle(3)
-run("upload")
-settle(3)
+if args.no_video:
+    # A14: the layout alone (1 frame, no CRCs); the tiles get no video.
+    sh.model.layout = args.layout
+    sh.model.node_map = [int(n) for n in args.map.split(",")]
+    print(">>> layout only %s %s" % (args.layout, args.map), flush=True)
+    sh.send_config()
+    settle(3)
+else:
+    run("config %s %s %s pause 8" % (args.gif, args.layout, args.map))
+    run("build")
+    run("upload")
+    settle(3)
+    run("upload")
+    settle(3)
 run("status")
 # A tile with a fault (a DISPLAY fault: no LED output) must not be played
 # on; the round would run on the Pico with nothing on the wall (bench

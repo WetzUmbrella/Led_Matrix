@@ -484,6 +484,17 @@ static void cl_reset_state (uint32_t bcast_addr, uint64_t now)
     g_b_pc_seq_known    = false;
     g_b_suppress_done   = false;
     g_bcast_addr        = bcast_addr;
+    /* Video mode, no round (the game state of steps 1 to 4). */
+    g_b_game_mode       = false;
+    g_round             = PROTO_ROUND_IDLE;
+    g_level             = (uint8_t)PROTO_LEVEL_EASY; /* 3 levels fit. */
+    g_threshold         = 0u;
+    g_start_node        = 0u;
+    g_start_show_us     = 0u;
+    g_arm_deadline_us   = 0u;
+    g_play_at_us        = 0u;
+    g_round_mask        = 0u;
+    g_b_tap_test        = false;
     /* No round yet; the RNG is seeded from the clock. */
     game_rules_init(&g_game, (uint32_t)now);
     ack_outbox_init(&g_outbox);
@@ -1295,13 +1306,15 @@ static void cl_pc_command (proto_type_t type)
 }
 
 /**
- * @brief  Start: accepted only in READY, which means every required tile
- *         sent a matching ASSET_READY and SYNC_READY (T-B2-04). START_AT
- *         goes to every tile 3 times; t_start is fixed at copy 1.
+ * @brief  Start: accepted only in READY in video mode, which means every
+ *         required tile sent a matching ASSET_READY and SYNC_READY
+ *         (T-B2-04); in game mode READY needs no asset (A14), so video does
+ *         not start. START_AT goes to every tile 3 times; t_start is fixed
+ *         at copy 1.
  */
 static void cl_cmd_start_at (void)
 {
-    if (PROTO_COORD_READY == g_state)
+    if ((PROTO_COORD_READY == g_state) && (!g_b_game_mode))
     {
         cl_triple_send(PROTO_TYPE_START_AT, 0u, g_bcast_addr);
         cl_set_state(PROTO_COORD_COORDINATING_PLAYBACK);
@@ -1482,10 +1495,10 @@ static void cl_maybe_rejoin (uint8_t node_id)
 
 /**
  * @brief  Move along the automatic part of W6 statechart 2 (solid arrows):
- *         required tiles online, then every ASSET_READY, then every
- *         SYNC_READY, then READY; a pending Resume or a return from
- *         recovery goes on to RESUME_AT or PAUSED. Only the pre-playback
- *         states move here.
+ *         required tiles online, then every ASSET_READY (video mode only:
+ *         a game needs no video, A14), then every SYNC_READY, then READY;
+ *         a pending Resume or a return from recovery goes on to RESUME_AT
+ *         or PAUSED. Only the pre-playback states move here.
  */
 static void cl_evaluate (void)
 {
@@ -1506,8 +1519,9 @@ static void cl_evaluate (void)
     {
         cl_set_state(PROTO_COORD_WAITING_FOR_NODES);
     }
-    else if (required != (g_readiness & required))
+    else if ((!g_b_game_mode) && (required != (g_readiness & required)))
     {
+        /* Video needs every tile's asset; game mode does not (A14). */
         cl_set_state(PROTO_COORD_WAITING_FOR_TILE_READINESS);
     }
     else if (required != (g_sync & required))
@@ -2065,6 +2079,7 @@ static void cl_game_command (proto_game_control_t const * p_msg)
             g_b_game_mode = (PROTO_GAME_MODE_GAME == command);
             g_round       = PROTO_ROUND_IDLE;
             g_b_tap_test  = false;
+            cl_evaluate(); /* Readiness depends on the mode (A14). */
         }
         else
         {
