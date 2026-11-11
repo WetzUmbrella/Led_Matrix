@@ -825,6 +825,10 @@ static void tn_game_service (int64_t now)
                                      g_tap_seq, g_pico_addr, TN_PICO_PORT, buf,
                                      len, (uint64_t)now,
                                      (uint64_t)(now + TN_TAP_LIFE_US));
+                /* DS-13 event log: the TAP and its time in the Pico clock. */
+                printf("TN_TAP seq=%" PRIu16 " peak=%" PRIu16
+                       " t_pico=%" PRId64 "\n",
+                       g_tap_seq, event.peak, t_pico);
             }
         }
 
@@ -1098,10 +1102,14 @@ static void tn_handle_record (tn_record_t const * p_record)
             g_b_pico_known    = true;
             g_pico_addr       = p_record->src_addr;
             g_b_need_register = true;
+            g_game.b_seq_known = 0u; /* A new Pico: its command seq starts. */
         }
         else if (tn_pico_restarted(p_record))
         {
             g_b_need_register = true; /* R1-1: same IP, Pico rebooted. */
+            /* A restarted Pico counts its commands from 0 again: without this
+             * the tile would drop them as stale (mirror of host test C23). */
+            g_game.b_seq_known = 0u;
         }
         else
         {
@@ -1149,6 +1157,10 @@ static void tn_handle_record (tn_record_t const * p_record)
 
         if (proto_decode_header(p_record->game, p_record->game_len, &header))
         {
+            /* DS-13 event log: every game datagram the tile handles. */
+            printf("TN_GAME type=%" PRIu32 " seq=%" PRIu32 " t_l=%" PRId64 "\n",
+                   (uint32_t)header.type, (uint32_t)header.seq,
+                   p_record->t_l);
             /* Posted only for game types, below 24: a valid proto_type_t. */
             tn_on_game(p_record->game, p_record->game_len, p_record->t_l,
                        (proto_type_t)header.type);

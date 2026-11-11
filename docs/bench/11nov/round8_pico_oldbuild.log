@@ -1,0 +1,89 @@
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 start 12:14:58
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 12:14:58.082
+12:15:01.297 CL_EVENT t_ms=142145 STATE node=0 value=3
+12:15:01.297 CL_EVENT t_ms=142145 STATE node=0 value=5
+12:15:04.713 CL_STATS state=5 sent=1399 first_seq=0 last_seq=1398 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:15:04.713 LATE_HIST,1398,0,0,0,0,0,0,0,0,0,1
+12:15:04.713 CB_HIST,1081,0,0,0,0,0,0,0,0,0,0
+12:15:04.713 DISPATCH_HIST,1043,18,9,9,1,1,0,0,0,0,0
+12:15:14.763 CL_STATS state=5 sent=1499 first_seq=0 last_seq=1498 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:15:14.763 LATE_HIST,1498,0,0,0,0,0,0,0,0,0,1
+12:15:14.763 CB_HIST,1161,0,0,0,0,0,0,0,0,0,0
+12:15:14.763 DISPATCH_HIST,1122,19,9,9,1,1,0,0,0,0,0
+12:15:24.814 CL_STATS state=5 sent=1599 first_seq=0 last_seq=1598 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:15:24.814 LATE_HIST,1598,0,0,0,0,0,0,0,0,0,1
+12:15:24.814 CB_HIST,1241,0,0,0,0,0,0,0,0,0,0
+12:15:24.814 DISPATCH_HIST,1202,19,9,9,1,1,0,0,0,0,0
+12:15:34.662 CL_STATS state=5 sent=1699 first_seq=0 last_seq=1698 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:15:34.662 LATE_HIST,1698,0,0,0,0,0,0,0,0,0,1
+12:15:34.662 CB_HIST,1321,0,0,0,0,0,0,0,0,0,0
+12:15:34.662 DISPATCH_HIST,1282,19,9,9,1,1,0,0,0,0,0
+12:15:44.717 CL_STATS state=5 sent=1799 first_seq=0 last_seq=1798 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:15:44.717 LATE_HIST,1798,0,0,0,0,0,0,0,0,0,1
+12:15:44.717 CB_HIST,1401,0,0,0,0,0,0,0,0,0,0
+12:15:44.717 DISPATCH_HIST,1361,20,9,9,1,1,0,0,0,0,0
+12:15:54.775 CL_STATS state=5 sent=1899 first_seq=0 last_seq=1898 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:15:54.775 LATE_HIST,1898,0,0,0,0,0,0,0,0,0,1
+12:15:54.775 CB_HIST,1481,0,0,0,0,0,0,0,0,0,0
+12:15:54.775 DISPATCH_HIST,1441,20,9,9,1,1,0,0,0,0,0
+12:16:04.826 CL_STATS state=5 sent=1999 first_seq=0 last_seq=1998 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:16:04.826 LATE_HIST,1998,0,0,0,0,0,0,0,0,0,1
+12:16:04.826 CB_HIST,1561,0,0,0,0,0,0,0,0,0,0
+12:16:04.826 DISPATCH_HIST,1521,20,9,9,1,1,0,0,0,0,0
+12:16:14.674 CL_STATS state=5 sent=2099 first_seq=0 last_seq=2098 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:16:14.674 LATE_HIST,2098,0,0,0,0,0,0,0,0,0,1
+12:16:14.674 CB_HIST,1641,0,0,0,0,0,0,0,0,0,0
+12:16:14.674 DISPATCH_HIST,1601,20,9,9,1,1,0,0,0,0,0
+12:16:24.725 CL_STATS state=5 sent=2199 first_seq=0 last_seq=2198 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x000 sync=0x018
+12:16:24.725 LATE_HIST,2198,0,0,0,0,0,0,0,0,0,1
+12:16:24.726 CB_HIST,1719,0,0,0,0,0,0,0,0,0,0
+12:16:24.726 DISPATCH_HIST,1679,20,9,9,1,1,0,0,0,0,0
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:33.671
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:34.172
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:34.673
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:35.174
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:35.674
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:36.175
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:36.675
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:37.176
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:37.676
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:38.177
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:38.677
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:39.178
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:39.678
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:40.179
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:40.680
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:41.181
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:41.681
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:42.182
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:42.682
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:43.182
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:43.683
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:44.184
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:44.684
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:45.185
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:45.685
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:46.186
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:46.686
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:47.186
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:47.687
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:48.187
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:48.688
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:49.188
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:49.689
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:50.189
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:50.690
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:51.190
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:51.691
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:52.191
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:52.692
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:53.192
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:53.693
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:54.193
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:54.694
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:55.194
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:55.694
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:56.195
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:56.696
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:57.196
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:16:57.696

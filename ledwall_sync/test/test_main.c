@@ -78,6 +78,8 @@ static test_case_t const g_cases[] = {
      test_coord_game_round},
     {"C22 re-plan: TAP ACKed and relayed once, SESSION_CONFIG refused in round",
      test_coord_game_taps},
+    {"C23 re-plan: a re-registered tile's TAPs from a low seq are new",
+     test_coord_game_tap_restart},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

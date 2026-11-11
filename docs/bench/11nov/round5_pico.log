@@ -1,0 +1,19 @@
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 start 12:06:37
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 12:06:37.019
+12:06:40.237 CL_EVENT t_ms=55402 STATE node=0 value=3
+12:06:40.237 CL_EVENT t_ms=55402 STATE node=0 value=5
+12:06:40.437 CL_STATS state=5 sent=501 first_seq=0 last_seq=500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=26 dispatch_max_us=292 online=0x018 ready=0x000 sync=0x008
+12:06:40.437 LATE_HIST,501,0,0,0,0,0,0,0,0,0,0
+12:06:40.437 CB_HIST,322,0,0,0,0,0,0,0,0,0,0
+12:06:40.437 DISPATCH_HIST,314,1,7,0,0,0,0,0,0,0,0
+12:06:50.495 CL_STATS state=5 sent=601 first_seq=0 last_seq=600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=26 dispatch_max_us=369 online=0x018 ready=0x008 sync=0x018
+12:06:50.495 LATE_HIST,601,0,0,0,0,0,0,0,0,0,0
+12:06:50.495 CB_HIST,406,0,0,0,0,0,0,0,0,0,0
+12:06:50.495 DISPATCH_HIST,395,1,8,2,0,0,0,0,0,0,0
+12:06:50.495 CL_EVENT t_ms=65657 STATE node=0 value=7
+12:07:00.546 CL_STATS state=7 sent=701 first_seq=0 last_seq=700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=27 dispatch_max_us=369 online=0x018 ready=0x018 sync=0x018
+12:07:00.546 LATE_HIST,701,0,0,0,0,0,0,0,0,0,0
+12:07:00.546 CB_HIST,492,0,0,0,0,0,0,0,0,0,0
+12:07:00.546 DISPATCH_HIST,475,2,9,6,0,0,0,0,0,0,0
+12:07:06.779 CL_EVENT t_ms=81938 STATE node=0 value=12
+12:07:06.980 CL_EVENT t_ms=82238 GAME_MOLE node=5 value=1193

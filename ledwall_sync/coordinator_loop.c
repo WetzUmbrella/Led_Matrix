@@ -208,6 +208,11 @@ typedef enum
     CL_EV_REJOIN_SENT,
     CL_EV_SUPPRESS,
     CL_EV_GAME_REFUSED,
+    CL_EV_GAME_MOLE,     /* DS-13: node, value up_ms, time = show time. */
+    CL_EV_GAME_TAP,      /* DS-13: node, value arrival minus tap time, us
+                          * (a 32-bit two's complement: above 2^31 means the
+                          * tap is stamped after it arrived). */
+    CL_EV_GAME_FEEDBACK, /* DS-13: node, value 1 hit or 0 miss. */
     CL_EV_COUNT
 } cl_event_code_t;
 
@@ -935,6 +940,12 @@ static void cl_on_register (cl_rx_entry_t const * p_entry)
         p_node->b_seq_known = true;
         p_node->last_seq    = msg.header.seq;
         g_sync &= (uint16_t)~bit; /* 9-bit mask. */
+
+        /* A REGISTER restarts the baseline of every counter of this tile
+         * (layout_table.md section 10 item 13), the TAP counter too: a tile
+         * that restarted counts its TAPs from 0 again, and those would be
+         * dropped as stale (bench 11 Nov 2026, host test C23). */
+        g_b_tap_seen[msg.node_id - 1u] = false;
 
         if ((g_session.b_active) &&
             (msg.cached_session_id == g_session.session_id) &&
@@ -1683,7 +1694,10 @@ static void cl_log_routine (uint64_t now)
                                                       "LINK_DOWN",
                                                       "REJOIN_SENT",
                                                       "SUPPRESS",
-                                                      "GAME_REFUSED"};
+                                                      "GAME_REFUSED",
+                                                      "GAME_MOLE",
+                                                      "GAME_TAP",
+                                                      "GAME_FEEDBACK"};
 
     if (0u != g_event_count)
     {
@@ -1878,6 +1892,10 @@ static void cl_on_tap (cl_rx_entry_t const * p_entry,
                 (p_header->session_id == g_session.session_id))
             {
                 game_rules_tap(&g_game, msg.node_id, msg.peak, msg.t_tap);
+                /* Modulo 2^32 on purpose: the sign shows in the top bit. */
+                cl_log_event(CL_EV_GAME_TAP, msg.node_id,
+                             (uint32_t)(p_entry->t_rx_us - msg.t_tap),
+                             p_entry->t_rx_us);
             }
         }
         else
@@ -2064,10 +2082,14 @@ static void cl_game_routine (uint64_t now)
         if (GAME_EV_MOLE_ON == event.kind)
         {
             cl_queue_mole(&event, now);
+            cl_log_event(CL_EV_GAME_MOLE, event.node_id, event.up_ms,
+                         event.t_show_us);
         }
         else if (GAME_EV_FEEDBACK == event.kind)
         {
             cl_queue_feedback(event.node_id, event.result, now);
+            cl_log_event(CL_EV_GAME_FEEDBACK, event.node_id, event.result,
+                         now);
         }
         else if (GAME_EV_ROUND_END == event.kind)
         {

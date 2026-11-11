@@ -37,6 +37,13 @@ bool test_coord_game_round (void);
  */
 bool test_coord_game_taps (void);
 
+/**
+ * @brief  C23: after a tile's REGISTER, its TAPs from a low seq are new, not
+ *         stale (the tile restarted its TAP counter).
+ * @return true when every check passed.
+ */
+bool test_coord_game_tap_restart (void);
+
 #endif /* TEST_COORD_GAME_H */
 
 /*** end of file ***/

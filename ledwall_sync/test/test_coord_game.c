@@ -987,4 +987,43 @@ bool test_coord_game_taps (void)
     return b_ok;
 }
 
+
+/**
+ * @brief  C23: a tile that restarts (REGISTER) starts its TAP seq again at a
+ *         low value; the Pico takes those TAPs as new (layout_table.md section
+ *         10 item 13), not as stale repeats of the TAPs before the restart.
+ *         Bench 11 Nov 2026: node 4's taps were dropped as stale after a
+ *         reflash, so its moles never turned green.
+ * @return true when every check passed.
+ */
+bool test_coord_game_tap_restart (void)
+{
+    bool                   b_ok   = true;
+    uint16_t const         before = 1000u; /* Seq the tile reached before. */
+    uint16_t const         after  = 3u;    /* Its seq after the restart. */
+    uint8_t                reg[PROTO_REGISTER_BYTES];
+    proto_register_t const reg_msg = {
+        {PROTO_TYPE_REGISTER, 0u, 0u}, 1u, 0u, 0u};
+
+    gt_to_ready();
+
+    gt_tap(1u, 900u, coordinator_port_now_us(), before);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT,
+                                               before),
+                            __LINE__)) && b_ok;
+
+    /* The tile restarts: REGISTER, then TAPs from a low seq. */
+    gt_rx_tile(1u, reg, proto_encode_register(&reg_msg, reg, sizeof(reg)));
+    gt_advance(10u * GT_MS);
+    gt_tap(1u, 900u, coordinator_port_now_us(), after);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(1u == gt_ack_count(1u, after), __LINE__)) && b_ok;
+    b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT,
+                                               after),
+                            __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
 /*** end of file ***/

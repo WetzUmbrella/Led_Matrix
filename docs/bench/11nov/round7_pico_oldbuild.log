@@ -1,0 +1,52 @@
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 start 12:12:50
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 12:12:50.681
+12:12:54.702 CL_STATS state=5 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=247 online=0x018 ready=0x000 sync=0x018
+12:12:54.703 LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+12:12:54.703 CB_HIST,81,0,0,0,0,0,0,0,0,0,0
+12:12:54.703 DISPATCH_HIST,77,3,1,0,0,0,0,0,0,0,0
+12:13:04.755 ,0,0,0,0,0,0,0,0,0,0,0,0,0
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 12:13:08.718
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 12:13:09.219
+12:13:10.223 CL_EVENT t_ms=31105 BACK node=5 value=0
+12:13:10.223 CL_EVENT t_ms=31105 BACK node=4 value=0
+12:13:10.223 CL_EVENT t_ms=31106 STATE node=0 value=7
+12:13:14.644 CL_STATS state=7 sent=299 first_seq=0 last_seq=298 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=247 online=0x018 ready=0x018 sync=0x018
+12:13:14.644 LATE_HIST,298,0,0,0,0,0,0,0,0,0,1
+12:13:14.644 CB_HIST,208,0,0,0,0,0,0,0,0,0,0
+12:13:14.644 DISPATCH_HIST,201,6,1,0,0,0,0,0,0,0,0
+12:13:24.699 CL_STATS state=7 sent=399 first_seq=0 last_seq=398 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=282 online=0x018 ready=0x018 sync=0x018
+12:13:24.699 LATE_HIST,398,0,0,0,0,0,0,0,0,0,1
+12:13:24.699 CB_HIST,286,0,0,0,0,0,0,0,0,0,0
+12:13:24.699 DISPATCH_HIST,274,7,5,0,0,0,0,0,0,0,0
+12:13:34.751 CL_STATS state=7 sent=499 first_seq=0 last_seq=498 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=282 online=0x018 ready=0x018 sync=0x018
+12:13:34.751 LATE_HIST,498,0,0,0,0,0,0,0,0,0,1
+12:13:34.751 CB_HIST,366,0,0,0,0,0,0,0,0,0,0
+12:13:34.751 DISPATCH_HIST,353,8,5,0,0,0,0,0,0,0,0
+12:13:44.801 CL_STATS state=7 sent=599 first_seq=0 last_seq=598 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=282 online=0x018 ready=0x018 sync=0x018
+12:13:44.801 LATE_HIST,598,0,0,0,0,0,0,0,0,0,1
+12:13:44.801 CB_HIST,446,0,0,0,0,0,0,0,0,0,0
+12:13:44.801 DISPATCH_HIST,432,9,5,0,0,0,0,0,0,0,0
+12:13:54.649 CL_STATS state=7 sent=699 first_seq=0 last_seq=698 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=282 online=0x018 ready=0x018 sync=0x018
+12:13:54.649 LATE_HIST,698,0,0,0,0,0,0,0,0,0,1
+12:13:54.649 CB_HIST,526,0,0,0,0,0,0,0,0,0,0
+12:13:54.649 DISPATCH_HIST,511,10,5,0,0,0,0,0,0,0,0
+12:14:04.699 CL_STATS state=7 sent=799 first_seq=0 last_seq=798 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x018 sync=0x018
+12:14:04.699 LATE_HIST,798,0,0,0,0,0,0,0,0,0,1
+12:14:04.699 CB_HIST,614,0,0,0,0,0,0,0,0,0,0
+12:14:04.699 DISPATCH_HIST,590,13,7,2,1,1,0,0,0,0,0
+12:14:14.748 CL_STATS state=7 sent=899 first_seq=0 last_seq=898 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x018 sync=0x018
+12:14:14.749 LATE_HIST,898,0,0,0,0,0,0,0,0,0,1
+12:14:14.749 CB_HIST,696,0,0,0,0,0,0,0,0,0,0
+12:14:14.749 DISPATCH_HIST,667,14,7,6,1,1,0,0,0,0,0
+12:14:24.799 CL_STATS state=7 sent=999 first_seq=0 last_seq=998 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x018 sync=0x018
+12:14:24.799 LATE_HIST,998,0,0,0,0,0,0,0,0,0,1
+12:14:24.799 CB_HIST,770,0,0,0,0,0,0,0,0,0,0
+12:14:24.799 DISPATCH_HIST,736,15,8,9,1,1,0,0,0,0,0
+12:14:34.654 CL_STATS state=7 sent=1099 first_seq=0 last_seq=1098 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x018 sync=0x018
+12:14:34.654 LATE_HIST,1098,0,0,0,0,0,0,0,0,0,1
+12:14:34.654 CB_HIST,848,0,0,0,0,0,0,0,0,0,0
+12:14:34.654 DISPATCH_HIST,813,16,8,9,1,1,0,0,0,0,0
+12:14:44.708 CL_STATS state=7 sent=1199 first_seq=0 last_seq=1198 send_fail=0 skipped=2 rx_dropped=0 rx_bad=0 stale=6 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=28 dispatch_max_us=529 online=0x018 ready=0x018 sync=0x018
+12:14:44.708 LATE_HIST,1198,0,0,0,0,0,0,0,0,0,1
+12:14:44.708 CB_HIST,920,0,0,0,0,0,0,0,0,0,0
+12:14:44.708 DISPATCH_HIST,884,17,8,9,1,1,0,0,0,0,0
