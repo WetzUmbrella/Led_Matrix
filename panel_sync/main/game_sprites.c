@@ -73,7 +73,7 @@ static uint32_t gs_hash (uint32_t value);
  * @brief  Clear the canvas to dark.
  * @param  p_canvas  Canvas.
  */
-void game_sprite_clear (game_canvas_t * p_canvas)
+void game_sprites_clear (game_canvas_t * p_canvas)
 {
     game_rgb_t const dark = {0u, 0u, 0u};
 
@@ -87,7 +87,7 @@ void game_sprite_clear (game_canvas_t * p_canvas)
  * @brief  The hole on the bottom two rows.
  * @param  p_canvas  Canvas.
  */
-void game_sprite_hole (game_canvas_t * p_canvas)
+void game_sprites_hole (game_canvas_t * p_canvas)
 {
     for (uint32_t row = 0u; row < 2u; row++)
     {
@@ -107,7 +107,7 @@ void game_sprite_hole (game_canvas_t * p_canvas)
  * @param  p_canvas  Canvas.
  * @param  rows_up   0 to 8.
  */
-void game_sprite_mole (game_canvas_t * p_canvas, uint32_t rows_up)
+void game_sprites_mole (game_canvas_t * p_canvas, uint32_t rows_up)
 {
     uint32_t const shown = (rows_up > GAME_SPRITE_SIDE) ? GAME_SPRITE_SIDE
                                                         : rows_up;
@@ -144,7 +144,7 @@ void game_sprite_mole (game_canvas_t * p_canvas, uint32_t rows_up)
  * @param  elapsed_us  Time since the show time.
  * @return 0 to 8.
  */
-uint32_t game_sprite_rows_up (int64_t elapsed_us)
+uint32_t game_sprites_rows_up (int64_t elapsed_us)
 {
     uint32_t rows = 0u;
 
@@ -170,7 +170,7 @@ uint32_t game_sprite_rows_up (int64_t elapsed_us)
  * @param  p_canvas  Canvas.
  * @param  t_us      Shared time.
  */
-void game_sprite_start (game_canvas_t * p_canvas, int64_t t_us)
+void game_sprites_start (game_canvas_t * p_canvas, int64_t t_us)
 {
     int64_t const  half  = GAME_SPRITE_PULSE_US / 2;
     int64_t const  phase = ((t_us % GAME_SPRITE_PULSE_US) +
@@ -178,9 +178,10 @@ void game_sprite_start (game_canvas_t * p_canvas, int64_t t_us)
     int64_t const  rise  = (phase < half) ? phase
                                           : (GAME_SPRITE_PULSE_US - phase);
     int64_t const  span  = (int64_t)(GS_START_HIGH - GS_START_LOW); /* 4. */
-    /* rise <= half, so the level is 4 to 8: fits uint8_t. */
-    game_rgb_t const colour = {
-        0u, (uint8_t)(GS_START_LOW + (uint32_t)((rise * span) / half)), 0u};
+    /* 0 <= rise <= half, so the step is 0 to 4 and the level 4 to 8. */
+    uint32_t const step = (uint32_t)((rise * span) / half); /* 0 to 4. */
+    uint8_t const  level = (uint8_t)(GS_START_LOW + step); /* 4 to 8. */
+    game_rgb_t const colour = {0u, level, 0u};
 
     for (uint32_t row = 0u; row < GAME_SPRITE_SIDE; row++)
     {
@@ -205,10 +206,10 @@ void game_sprite_start (game_canvas_t * p_canvas, int64_t t_us)
  * @param  elapsed_us  0 to GAME_SPRITE_HIT_US.
  * @param  b_squash    true when a mole was hit.
  */
-void game_sprite_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
+void game_sprites_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
                       bool b_squash)
 {
-    game_sprite_clear(p_canvas);
+    game_sprites_clear(p_canvas);
 
     if ((b_squash) && (elapsed_us < GAME_SPRITE_SQUASH_US))
     {
@@ -216,8 +217,8 @@ void game_sprite_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
         uint32_t const rows =
             (elapsed_us < GAME_SPRITE_ROW_STEP_US) ? 5u : 3u;
 
-        game_sprite_hole(p_canvas);
-        game_sprite_mole(p_canvas, rows);
+        game_sprites_hole(p_canvas);
+        game_sprites_mole(p_canvas, rows);
     }
     else
     {
@@ -263,7 +264,7 @@ void game_sprite_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
  * @param  p_canvas    Canvas.
  * @param  elapsed_us  0 to GAME_SPRITE_WRONG_US.
  */
-void game_sprite_wrong (game_canvas_t * p_canvas, int64_t elapsed_us)
+void game_sprites_wrong (game_canvas_t * p_canvas, int64_t elapsed_us)
 {
     bool const b_on = (elapsed_us >= 0) &&
                       (0 == ((elapsed_us / GS_BLINK_US) % 2));
@@ -284,12 +285,12 @@ void game_sprite_wrong (game_canvas_t * p_canvas, int64_t elapsed_us)
  * @param  mask      Bit n = pixel n lit.
  * @param  colour    proto_colour_t value.
  */
-void game_sprite_picture (game_canvas_t * p_canvas, uint64_t mask,
+void game_sprites_picture (game_canvas_t * p_canvas, uint64_t mask,
                           uint8_t colour)
 {
-    game_rgb_t const lit = game_sprite_colour(colour);
+    game_rgb_t const lit = game_sprites_colour(colour);
 
-    game_sprite_clear(p_canvas);
+    game_sprites_clear(p_canvas);
 
     for (uint32_t pixel = 0u; pixel < GAME_SPRITE_PIXELS; pixel++)
     {
@@ -307,14 +308,14 @@ void game_sprite_picture (game_canvas_t * p_canvas, uint64_t mask,
  * @param  colour    proto_colour_t value.
  * @param  t_us      Shared time.
  */
-void game_sprite_sparkle (game_canvas_t * p_canvas, uint8_t colour,
+void game_sprites_sparkle (game_canvas_t * p_canvas, uint8_t colour,
                           int64_t t_us)
 {
-    game_rgb_t const lit  = game_sprite_colour(colour);
+    game_rgb_t const lit  = game_sprites_colour(colour);
     /* Modulo 2^32 on purpose: only the change from step to step matters. */
     uint32_t const   step = (uint32_t)(t_us / GAME_SPRITE_TWINKLE_US);
 
-    game_sprite_clear(p_canvas);
+    game_sprites_clear(p_canvas);
 
     for (uint32_t pixel = 0u; pixel < GAME_SPRITE_PIXELS; pixel++)
     {
@@ -331,7 +332,7 @@ void game_sprite_sparkle (game_canvas_t * p_canvas, uint8_t colour,
  * @param  colour  proto_colour_t value.
  * @return The colour; white for an unknown code.
  */
-game_rgb_t game_sprite_colour (uint8_t colour)
+game_rgb_t game_sprites_colour (uint8_t colour)
 {
     return (colour < PROTO_COLOUR_COUNT) ? g_colours[colour]
                                          : g_colours[PROTO_COLOUR_WHITE];

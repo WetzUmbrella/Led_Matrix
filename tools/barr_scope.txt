@@ -18,6 +18,8 @@ panel_sync/main/tile_tasks.c
 panel_sync/main/timesync.h
 panel_sync/main/game_tile.h
 panel_sync/main/game_tile.c
+panel_sync/main/game_sprites.h
+panel_sync/main/game_sprites.c
 panel_sync/test/test_game_tile.h
 panel_sync/test/test_game_tile.c
 panel_sync/main/timesync.c

@@ -136,12 +136,14 @@ static uint32_t tst_control (uint8_t * p_buf, uint16_t seq, uint8_t command,
  * @return Bytes written.
  */
 static uint32_t tst_picture (uint8_t * p_buf, uint16_t seq, uint8_t slot,
-                             uint8_t effect, uint8_t b_repeat, uint64_t t_show,
+                             uint8_t effect, uint8_t b_repeat, int64_t t_show,
                              uint16_t dur_ms, uint64_t mask)
 {
     proto_wall_picture_t const msg = {
         {PROTO_TYPE_WALL_PICTURE, TST_SESSION, seq}, TST_NODE, slot, effect,
-        (uint8_t)PROTO_COLOUR_YELLOW, b_repeat, t_show, dur_ms, mask};
+        (uint8_t)PROTO_COLOUR_YELLOW, /* Enum code 1: fits uint8_t. */
+        b_repeat, (uint64_t)t_show, /* The tests' times are non-negative. */
+        dur_ms, mask};
 
     return proto_encode_wall_picture(&msg, p_buf, PROTO_WALL_PICTURE_BYTES);
 }
@@ -236,6 +238,54 @@ static game_rgb_t const g_red    = {8u, 0u, 0u};
 static game_rgb_t const g_yellow = {7u, 5u, 0u};
 
 /**
+ * @brief  G1, the miss: the red X on for 75 ms over the mole, off, on,
+ *         then gone; the mole stays up throughout; and an unknown colour
+ *         code draws white.
+ * @param  p_state  State, after the hit of G1.
+ * @return true when every check passed.
+ */
+static bool tst_check_miss (game_tile_state_t * p_state)
+{
+    uint8_t  buf[TST_BUF_BYTES];
+    uint8_t  wire[GAME_TILE_WIRE_BYTES];
+    uint16_t ack = 0u;
+    uint32_t len = 0u;
+    bool b_ok = true;
+
+    /* A miss: the red X on for 75 ms over the mole, off, on, then gone; the
+     * mole stays up throughout. */
+    len = tst_mole_on(buf, TST_NODE, 7u, TST_T_SHOW + 2000000, 1000u);
+    b_ok = (test_main_check(game_tile_on_pico(p_state, TST_NODE, buf, len, 0,
+                                              &ack), __LINE__)) && b_ok;
+    len = tst_feedback(buf, TST_NODE, 8u, PROTO_FEEDBACK_MISS);
+    b_ok = (test_main_check(game_tile_on_pico(p_state, TST_NODE, buf, len,
+                                              3000 * TST_MS, &ack),
+                            __LINE__)) && b_ok;
+    game_tile_fill_wire(p_state, TST_T_SHOW + 2500000, 3010 * TST_MS, 0u, wire);
+    b_ok = (test_main_check((tst_px(wire, 0u, 0u, g_red)) &&
+                                (tst_px(wire, 1u, 1u, g_red)) &&
+                                (tst_px(wire, 0u, 2u, g_body)),
+                            __LINE__)) && b_ok;
+    game_tile_fill_wire(p_state, TST_T_SHOW + 2500000, 3100 * TST_MS, 0u, wire);
+    b_ok = (test_main_check((tst_px(wire, 0u, 0u, g_dark)) &&
+                                (tst_px(wire, 1u, 1u, g_body)),
+                            __LINE__)) && b_ok;
+    game_tile_fill_wire(p_state, TST_T_SHOW + 2500000, 3160 * TST_MS, 0u, wire);
+    b_ok = (test_main_check(tst_px(wire, 1u, 1u, g_red), __LINE__)) && b_ok;
+    game_tile_fill_wire(p_state, TST_T_SHOW + 2500000, 3310 * TST_MS, 0u, wire);
+    b_ok = (test_main_check((tst_px(wire, 1u, 1u, g_body)) &&
+                                (1u == p_state->b_mole),
+                            __LINE__)) && b_ok;
+
+    /* An unknown colour code draws white. */
+    b_ok = (test_main_check(4u == game_sprites_colour(9u).red, __LINE__)) &&
+           b_ok;
+
+
+    return b_ok;
+}
+
+/**
  * @brief  G1: the mole rises out of its hole (2 rows every 40 ms), stays up
  *         until its hide time and sinks back; a hit squashes it and plays
  *         the green burst (the mole ends); a miss blinks the red X twice
@@ -257,12 +307,12 @@ bool test_game_tile_mole_and_flash (void)
     b_ok = (test_main_check(5u == ack, __LINE__)) && b_ok;
 
     /* Rows out of the hole: 2 at once, 2 more every 40 ms. */
-    b_ok = (test_main_check((0u == game_sprite_rows_up(-1)) &&
-                                (2u == game_sprite_rows_up(0)) &&
-                                (2u == game_sprite_rows_up(39999)) &&
-                                (4u == game_sprite_rows_up(40000)) &&
-                                (8u == game_sprite_rows_up(120000)) &&
-                                (8u == game_sprite_rows_up(500000)),
+    b_ok = (test_main_check((0u == game_sprites_rows_up(-1)) &&
+                                (2u == game_sprites_rows_up(0)) &&
+                                (2u == game_sprites_rows_up(39999)) &&
+                                (4u == game_sprites_rows_up(40000)) &&
+                                (8u == game_sprites_rows_up(120000)) &&
+                                (8u == game_sprites_rows_up(500000)),
                             __LINE__)) && b_ok;
 
     /* Dark before the show; at the show the top 2 sprite rows show on the
@@ -270,22 +320,22 @@ bool test_game_tile_mole_and_flash (void)
     game_tile_fill_wire(&state, TST_T_SHOW - 1, 0, 0u, wire);
     b_ok = (test_main_check(tst_uniform(wire, 0u, 0u, 0u), __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW, 0, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 6u, 2u, g_body) &&
-                                tst_px(wire, 6u, 0u, g_dark) &&
-                                tst_px(wire, 7u, 1u, g_body) &&
-                                tst_px(wire, 0u, 2u, g_dark),
+    b_ok = (test_main_check((tst_px(wire, 6u, 2u, g_body)) &&
+                                (tst_px(wire, 6u, 0u, g_dark)) &&
+                                (tst_px(wire, 7u, 1u, g_body)) &&
+                                (tst_px(wire, 0u, 2u, g_dark)),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW + (160 * TST_MS), 0, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 0u, 2u, g_body) &&
-                                tst_px(wire, 2u, 2u, g_eye) &&
-                                tst_px(wire, 3u, 3u, g_nose) &&
-                                tst_px(wire, 0u, 0u, g_dark),
+    b_ok = (test_main_check((tst_px(wire, 0u, 2u, g_body)) &&
+                                (tst_px(wire, 2u, 2u, g_eye)) &&
+                                (tst_px(wire, 3u, 3u, g_nose)) &&
+                                (tst_px(wire, 0u, 0u, g_dark)),
                             __LINE__)) && b_ok;
 
     /* At the hide time it starts sinking (6 rows up), gone 160 ms later. */
     game_tile_fill_wire(&state, TST_T_SHOW + (1000 * TST_MS), 0, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 2u, 2u, g_body) &&
-                                tst_px(wire, 0u, 2u, g_dark),
+    b_ok = (test_main_check((tst_px(wire, 2u, 2u, g_body)) &&
+                                (tst_px(wire, 0u, 2u, g_dark)),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW + (1160 * TST_MS), 0, 0u, wire);
     b_ok = (test_main_check(tst_uniform(wire, 0u, 0u, 0u), __LINE__)) && b_ok;
@@ -300,51 +350,24 @@ bool test_game_tile_mole_and_flash (void)
     b_ok = (test_main_check((0u == state.b_mole) && (1u == state.b_squash),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW, 1510 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 3u, 2u, g_body) &&
-                                tst_px(wire, 7u, 0u, g_body) &&
-                                tst_px(wire, 0u, 2u, g_dark),
+    b_ok = (test_main_check((tst_px(wire, 3u, 2u, g_body)) &&
+                                (tst_px(wire, 7u, 0u, g_body)) &&
+                                (tst_px(wire, 0u, 2u, g_dark)),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW, 1600 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 3u, 3u, g_gold) &&
-                                tst_px(wire, 2u, 2u, g_green) &&
-                                tst_px(wire, 0u, 0u, g_dark),
+    b_ok = (test_main_check((tst_px(wire, 3u, 3u, g_gold)) &&
+                                (tst_px(wire, 2u, 2u, g_green)) &&
+                                (tst_px(wire, 0u, 0u, g_dark)),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW, 1700 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 0u, 0u, g_green) &&
-                                tst_px(wire, 2u, 2u, g_dark) &&
-                                tst_px(wire, 4u, 4u, g_gold),
+    b_ok = (test_main_check((tst_px(wire, 0u, 0u, g_green)) &&
+                                (tst_px(wire, 2u, 2u, g_dark)) &&
+                                (tst_px(wire, 4u, 4u, g_gold)),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW, 1760 * TST_MS, 0u, wire);
     b_ok = (test_main_check(tst_uniform(wire, 0u, 0u, 0u), __LINE__)) && b_ok;
 
-    /* A miss: the red X on for 75 ms over the mole, off, on, then gone; the
-     * mole stays up throughout. */
-    len = tst_mole_on(buf, TST_NODE, 7u, TST_T_SHOW + 2000000, 1000u);
-    b_ok = (test_main_check(game_tile_on_pico(&state, TST_NODE, buf, len, 0,
-                                              &ack), __LINE__)) && b_ok;
-    len = tst_feedback(buf, TST_NODE, 8u, PROTO_FEEDBACK_MISS);
-    b_ok = (test_main_check(game_tile_on_pico(&state, TST_NODE, buf, len,
-                                              3000 * TST_MS, &ack),
-                            __LINE__)) && b_ok;
-    game_tile_fill_wire(&state, TST_T_SHOW + 2500000, 3010 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 0u, 0u, g_red) &&
-                                tst_px(wire, 1u, 1u, g_red) &&
-                                tst_px(wire, 0u, 2u, g_body),
-                            __LINE__)) && b_ok;
-    game_tile_fill_wire(&state, TST_T_SHOW + 2500000, 3100 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 0u, 0u, g_dark) &&
-                                tst_px(wire, 1u, 1u, g_body),
-                            __LINE__)) && b_ok;
-    game_tile_fill_wire(&state, TST_T_SHOW + 2500000, 3160 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 1u, 1u, g_red), __LINE__)) && b_ok;
-    game_tile_fill_wire(&state, TST_T_SHOW + 2500000, 3310 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 1u, 1u, g_body) &&
-                                (1u == state.b_mole),
-                            __LINE__)) && b_ok;
-
-    /* An unknown colour code draws white. */
-    b_ok = (test_main_check(4u == game_sprite_colour(9u).red, __LINE__)) &&
-           b_ok;
+    b_ok = (tst_check_miss(&state)) && b_ok;
 
     return b_ok;
 }
@@ -404,6 +427,35 @@ bool test_game_tile_acks (void)
 }
 
 /**
+ * @brief  G3, the order: a lost ARM (seq 30) resent after its start
+ *         sprite (seq 31) still arms the round, and the sprite stays.
+ * @param  p_state  State (reset here).
+ * @return true when every check passed.
+ */
+static bool tst_check_late_arm (game_tile_state_t * p_state)
+{
+    uint8_t  buf[TST_BUF_BYTES];
+    bool b_ok = true;
+
+    /* A lost ARM (seq 30) resent after its start sprite (seq 31): the round
+     * is armed and the sprite stays. */
+    game_tile_init(p_state);
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_start_sprite(buf, 31u, TST_T_SHOW),
+                                     0), __LINE__)) && b_ok;
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_control(buf, 30u, PROTO_GAME_ARM, 0u),
+                                     0), __LINE__)) && b_ok;
+    b_ok = (test_main_check((1u == p_state->b_round) &&
+                                (1u == p_state->b_mole) &&
+                                (0u == game_tile_threshold_mg(p_state)),
+                            __LINE__)) && b_ok;
+
+
+    return b_ok;
+}
+
+/**
  * @brief  G3: the round phases on the tile: ARM shows the holes and carries
  *         the tap threshold; the start sprite pulses until tapped (a hit
  *         without a squash); an ARM resent after the sprite still arms and
@@ -431,10 +483,10 @@ bool test_game_tile_round (void)
 
     /* The hole: a dim purple arc on the bottom two rows. */
     game_tile_fill_wire(&state, 0, 0, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 7u, 0u, g_hole) &&
-                                tst_px(wire, 6u, 0u, g_dark) &&
-                                tst_px(wire, 6u, 1u, g_hole) &&
-                                tst_px(wire, 0u, 0u, g_dark),
+    b_ok = (test_main_check((tst_px(wire, 7u, 0u, g_hole)) &&
+                                (tst_px(wire, 6u, 0u, g_dark)) &&
+                                (tst_px(wire, 6u, 1u, g_hole)) &&
+                                (tst_px(wire, 0u, 0u, g_dark)),
                             __LINE__)) && b_ok;
 
     /* The start sprite: a triangle from column 2, pulsing 4 to 8, still up
@@ -443,9 +495,9 @@ bool test_game_tile_round (void)
                                      tst_start_sprite(buf, 21u, TST_T_SHOW),
                                      0), __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW + (250 * TST_MS), 0, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 0u, 2u, half) &&
-                                tst_px(wire, 3u, 5u, half) &&
-                                tst_px(wire, 0u, 3u, g_dark),
+    b_ok = (test_main_check((tst_px(wire, 0u, 2u, half)) &&
+                                (tst_px(wire, 3u, 5u, half)) &&
+                                (tst_px(wire, 0u, 3u, g_dark)),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW + (500 * TST_MS), 0, 0u, wire);
     b_ok = (test_main_check(tst_px(wire, 4u, 5u, g_green), __LINE__)) && b_ok;
@@ -489,7 +541,7 @@ bool test_game_tile_round (void)
                                                  PROTO_GAME_TAP_TEST_ON, 0u),
                                      0), __LINE__)) && b_ok;
     game_tile_fill_wire(&state, 0, 10000 * TST_MS, 0u, wire);
-    b_ok = (test_main_check(tst_px(wire, 7u, 0u, g_hole) &&
+    b_ok = (test_main_check((tst_px(wire, 7u, 0u, g_hole)) &&
                                 (game_tile_active(&state, 10000 * TST_MS)),
                             __LINE__)) && b_ok;
     b_ok = (test_main_check(tst_feed(&state, buf,
@@ -499,18 +551,128 @@ bool test_game_tile_round (void)
     b_ok = (test_main_check(!game_tile_active(&state, 10000 * TST_MS),
                             __LINE__)) && b_ok;
 
-    /* A lost ARM (seq 30) resent after its start sprite (seq 31): the round
-     * is armed and the sprite stays. */
-    game_tile_init(&state);
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_start_sprite(buf, 31u, TST_T_SHOW),
+    b_ok = (tst_check_late_arm(&state)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  G4, the rotation: only bit 0 of the piece, until replaced; under
+ *         each rotation exactly one LED lights, the one that
+ *         display_frame_source_led() maps to pixel 0.
+ * @param  p_state  State.
+ * @param  t_1      A Pico time to draw at.
+ * @return true when every check passed.
+ */
+static bool tst_check_pic_rotation (game_tile_state_t * p_state, int64_t t_1)
+{
+    uint8_t  buf[TST_BUF_BYTES];
+    uint8_t  wire[GAME_TILE_WIRE_BYTES];
+    uint8_t  rgb[3];
+    bool b_ok = true;
+
+    /* Only bit 0 of the piece, until replaced: under each rotation exactly
+     * one LED lights, the one display_frame_source_led() maps to pixel 0. */
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_picture(buf, 50u, 0u,
+                                                 PROTO_PIC_PICTURE, 0u, 0u, 0u,
+                                                 UINT64_C(1)),
                                      0), __LINE__)) && b_ok;
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_control(buf, 30u, PROTO_GAME_ARM, 0u),
+
+    for (uint8_t orientation = 0u; orientation < 4u; orientation++)
+    {
+        uint32_t lit      = 0u;
+        uint32_t expected = 0u;
+
+        game_tile_fill_wire(p_state, t_1, 0, orientation, wire);
+
+        for (uint32_t led = 0u; led < GAME_TILE_LEDS; led++)
+        {
+            tst_led(wire, led, rgb);
+            lit += (0u != rgb[0]) ? 1u : 0u;
+
+            if (0u == display_frame_source_led(led, orientation))
+            {
+                expected = led;
+            }
+        }
+
+        tst_led(wire, expected, rgb);
+        b_ok = (test_main_check((1u == lit) && (0u != rgb[0]), __LINE__)) &&
+               b_ok;
+    }
+
+
+    return b_ok;
+}
+
+/**
+ * @brief  G4, the results: sparkle 1.5 s, then entries 1 and 2 (2.5 s
+ *         each), the second looping back to the first; END keeps the
+ *         list; CLEAR empties it.
+ * @param  p_state  State, armed.
+ * @param  t_1      Show time of the sparkle, Pico clock.
+ * @return true when every check passed.
+ */
+static bool tst_check_results (game_tile_state_t * p_state, int64_t t_1)
+{
+    uint8_t  buf[TST_BUF_BYTES];
+    uint8_t  wire[GAME_TILE_WIRE_BYTES];
+    uint8_t  rgb[3];
+    bool b_ok = true;
+
+    /* The results: sparkle 1.5 s, then entries 1 and 2 (2.5 s each), the
+     * second looping back to the first. */
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_picture(buf, 41u, 0u,
+                                                 PROTO_PIC_SPARKLE, 0u,
+                                                 t_1, 1500u, 0u),
                                      0), __LINE__)) && b_ok;
-    b_ok = (test_main_check((1u == state.b_round) && (1u == state.b_mole) &&
-                                (0u == game_tile_threshold_mg(&state)),
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_picture(buf, 42u, 1u,
+                                                 PROTO_PIC_PICTURE, 0u,
+                                                 t_1 + 1500000,
+                                                 2500u, UINT64_C(2)),
+                                     0), __LINE__)) && b_ok;
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_picture(buf, 43u, 2u,
+                                                 PROTO_PIC_PICTURE, 1u,
+                                                 t_1 + 4000000,
+                                                 2500u, UINT64_C(4)),
+                                     0), __LINE__)) && b_ok;
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_control(buf, 44u, PROTO_GAME_END, 0u),
+                                     0), __LINE__)) && b_ok;
+    b_ok = (test_main_check((1u == tst_showing(p_state, t_1 + 2000000)) &&
+                                (2u == tst_showing(p_state, t_1 + 4500000)) &&
+                                (1u == tst_showing(p_state, t_1 + 6600000)) &&
+                                (2u == tst_showing(p_state, t_1 + 9100000)) &&
+                                (1u == tst_showing(p_state, t_1 + 11600000)),
                             __LINE__)) && b_ok;
+
+    /* The sparkle lights some pixels, not all. */
+    {
+        uint32_t lit = 0u;
+
+        game_tile_fill_wire(p_state, t_1 + 500000, 0, 0u, wire);
+
+        for (uint32_t led = 0u; led < GAME_TILE_LEDS; led++)
+        {
+            tst_led(wire, led, rgb);
+            lit += (0u != rgb[0]) ? 1u : 0u;
+        }
+
+        b_ok = (test_main_check((lit >= 3u) && (lit <= 24u), __LINE__)) &&
+               b_ok;
+    }
+
+    /* CLEAR empties the list: nothing left to draw. */
+    b_ok = (test_main_check(tst_feed(p_state, buf,
+                                     tst_picture(buf, 45u, 0u, PROTO_PIC_CLEAR,
+                                                 0u, 0u, 0u, 0u),
+                                     0), __LINE__)) && b_ok;
+    b_ok = (test_main_check(!game_tile_active(p_state, 0), __LINE__)) && b_ok;
+
 
     return b_ok;
 }
@@ -528,7 +690,6 @@ bool test_game_tile_pictures (void)
     game_tile_state_t state;
     uint8_t           buf[TST_BUF_BYTES];
     uint8_t           wire[GAME_TILE_WIRE_BYTES];
-    uint8_t           rgb[3];
     int64_t const     t_0 = 10000 * TST_MS;
     int64_t const     t_1 = 20000 * TST_MS;
     bool              b_ok = true;
@@ -539,14 +700,13 @@ bool test_game_tile_pictures (void)
     for (uint32_t index = 0u; index < 3u; index++)
     {
         uint8_t const slot = (uint8_t)((index + 2u) % 3u); /* 2, 0, 1. */
+        uint16_t const seq = (uint16_t)(30u + slot); /* 30 to 32. */
 
         b_ok = (test_main_check(tst_feed(&state, buf,
-                                         tst_picture(buf,
-                                                     (uint16_t)(30u + slot),
-                                                     slot, PROTO_PIC_PICTURE,
-                                                     0u,
-                                                     (uint64_t)(t_0 + (slot *
-                                                                1000 * TST_MS)),
+                                         tst_picture(buf, seq, slot,
+                                                     PROTO_PIC_PICTURE, 0u,
+                                                     t_0 + (slot * 1000 *
+                                                            TST_MS),
                                                      1000u,
                                                      UINT64_C(1) << slot),
                                          0), __LINE__)) && b_ok;
@@ -568,95 +728,16 @@ bool test_game_tile_pictures (void)
     b_ok = (test_main_check(tst_feed(&state, buf,
                                      tst_picture(buf, 35u, 3u,
                                                  PROTO_PIC_PICTURE, 0u,
-                                                 (uint64_t)t_0, 0u,
+                                                 t_0, 0u,
                                                  UINT64_C(8)),
                                      0), __LINE__)) && b_ok;
     b_ok = (test_main_check((4u == tst_showing(&state, t_0)) &&
                                 (0u == state.pic[3].b_valid),
                             __LINE__)) && b_ok;
 
-    /* The results: sparkle 1.5 s, then entries 1 and 2 (2.5 s each), the
-     * second looping back to the first. */
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_picture(buf, 41u, 0u,
-                                                 PROTO_PIC_SPARKLE, 0u,
-                                                 (uint64_t)t_1, 1500u, 0u),
-                                     0), __LINE__)) && b_ok;
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_picture(buf, 42u, 1u,
-                                                 PROTO_PIC_PICTURE, 0u,
-                                                 (uint64_t)(t_1 + 1500000),
-                                                 2500u, UINT64_C(2)),
-                                     0), __LINE__)) && b_ok;
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_picture(buf, 43u, 2u,
-                                                 PROTO_PIC_PICTURE, 1u,
-                                                 (uint64_t)(t_1 + 4000000),
-                                                 2500u, UINT64_C(4)),
-                                     0), __LINE__)) && b_ok;
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_control(buf, 44u, PROTO_GAME_END, 0u),
-                                     0), __LINE__)) && b_ok;
-    b_ok = (test_main_check((1u == tst_showing(&state, t_1 + 2000000)) &&
-                                (2u == tst_showing(&state, t_1 + 4500000)) &&
-                                (1u == tst_showing(&state, t_1 + 6600000)) &&
-                                (2u == tst_showing(&state, t_1 + 9100000)) &&
-                                (1u == tst_showing(&state, t_1 + 11600000)),
-                            __LINE__)) && b_ok;
+    b_ok = (tst_check_results(&state, t_1)) && b_ok;
 
-    /* The sparkle lights some pixels, not all. */
-    {
-        uint32_t lit = 0u;
-
-        game_tile_fill_wire(&state, t_1 + 500000, 0, 0u, wire);
-
-        for (uint32_t led = 0u; led < GAME_TILE_LEDS; led++)
-        {
-            tst_led(wire, led, rgb);
-            lit += (0u != rgb[0]) ? 1u : 0u;
-        }
-
-        b_ok = (test_main_check((lit >= 3u) && (lit <= 24u), __LINE__)) &&
-               b_ok;
-    }
-
-    /* CLEAR empties the list: nothing left to draw. */
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_picture(buf, 45u, 0u, PROTO_PIC_CLEAR,
-                                                 0u, 0u, 0u, 0u),
-                                     0), __LINE__)) && b_ok;
-    b_ok = (test_main_check(!game_tile_active(&state, 0), __LINE__)) && b_ok;
-
-    /* Only bit 0 of the piece, until replaced: under each rotation exactly
-     * one LED lights, the one display_frame_source_led() maps to pixel 0. */
-    b_ok = (test_main_check(tst_feed(&state, buf,
-                                     tst_picture(buf, 50u, 0u,
-                                                 PROTO_PIC_PICTURE, 0u, 0u, 0u,
-                                                 UINT64_C(1)),
-                                     0), __LINE__)) && b_ok;
-
-    for (uint8_t orientation = 0u; orientation < 4u; orientation++)
-    {
-        uint32_t lit      = 0u;
-        uint32_t expected = 0u;
-
-        game_tile_fill_wire(&state, t_1, 0, orientation, wire);
-
-        for (uint32_t led = 0u; led < GAME_TILE_LEDS; led++)
-        {
-            tst_led(wire, led, rgb);
-            lit += (0u != rgb[0]) ? 1u : 0u;
-
-            if (0u == display_frame_source_led(led, orientation))
-            {
-                expected = led;
-            }
-        }
-
-        tst_led(wire, expected, rgb);
-        b_ok = (test_main_check((1u == lit) && (0u != rgb[0]), __LINE__)) &&
-               b_ok;
-    }
+    b_ok = (tst_check_pic_rotation(&state, t_1)) && b_ok;
 
     return b_ok;
 }
@@ -681,7 +762,8 @@ bool test_game_tile_pulses (void)
                                      0), __LINE__)) && b_ok;
     b_ok = (test_main_check(
                 (GAME_TILE_PULSE_MOLE_US ==
-                 game_tile_pulse_us(&state, TST_T_SHOW - 1, TST_T_SHOW, 0, 0)) &&
+                 game_tile_pulse_us(&state, TST_T_SHOW - 1, TST_T_SHOW, 0,
+                                    0)) &&
                     (0u == game_tile_pulse_us(&state, TST_T_SHOW,
                                               TST_T_SHOW + frame, 0, 0)) &&
                     (0u == game_tile_pulse_us(&state, TST_T_SHOW - frame,

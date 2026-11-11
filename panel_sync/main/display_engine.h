@@ -74,6 +74,15 @@
  */
 bool display_engine_start (void);
 
+/**
+ * @brief  The game-mode tap pulse on the test pin (DS-13): high now, low
+ *         GAME_TILE_PULSE_TAP_US later (an esp_timer one-shot), only while
+ *         the last frame drawn was the game's. Video mode keeps its tick
+ *         pulses untouched. Called by the Orientation Task when a tap is
+ *         detected; never blocks.
+ */
+void display_engine_tap_pulse (void);
+
 #endif /* DISPLAY_ENGINE_H */
 
 /*** end of file ***/

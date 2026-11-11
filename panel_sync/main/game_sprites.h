@@ -61,13 +61,13 @@ typedef struct
  * @brief  Clear the canvas to dark.
  * @param  p_canvas  Canvas; must not be NULL.
  */
-void game_sprite_clear (game_canvas_t * p_canvas);
+void game_sprites_clear (game_canvas_t * p_canvas);
 
 /**
  * @brief  The hole: a dim purple arc on the bottom two rows.
  * @param  p_canvas  Canvas; must not be NULL.
  */
-void game_sprite_hole (game_canvas_t * p_canvas);
+void game_sprites_hole (game_canvas_t * p_canvas);
 
 /**
  * @brief  The mole with its top rows_up rows out of the hole (0 to 8),
@@ -75,7 +75,7 @@ void game_sprite_hole (game_canvas_t * p_canvas);
  * @param  p_canvas  Canvas; must not be NULL.
  * @param  rows_up   Rows shown, 0 (hidden) to 8 (fully up).
  */
-void game_sprite_mole (game_canvas_t * p_canvas, uint32_t rows_up);
+void game_sprites_mole (game_canvas_t * p_canvas, uint32_t rows_up);
 
 /**
  * @brief  Rows of the mole out of the hole a time after it starts rising:
@@ -83,7 +83,7 @@ void game_sprite_mole (game_canvas_t * p_canvas, uint32_t rows_up);
  * @param  elapsed_us  Time since the show time; negative: 0 rows.
  * @return 0 to 8.
  */
-uint32_t game_sprite_rows_up (int64_t elapsed_us);
+uint32_t game_sprites_rows_up (int64_t elapsed_us);
 
 /**
  * @brief  The start sprite: a green play triangle pointing right, pulsing
@@ -91,7 +91,7 @@ uint32_t game_sprite_rows_up (int64_t elapsed_us);
  * @param  p_canvas  Canvas; must not be NULL.
  * @param  t_us      Shared time, microseconds (the pulse phase).
  */
-void game_sprite_start (game_canvas_t * p_canvas, int64_t t_us);
+void game_sprites_start (game_canvas_t * p_canvas, int64_t t_us);
 
 /**
  * @brief  The hit, elapsed_us after the tap was judged: the mole squashes
@@ -102,7 +102,7 @@ void game_sprite_start (game_canvas_t * p_canvas, int64_t t_us);
  * @param  b_squash    true when a mole was hit (not the start sprite or a
  *                     tap test).
  */
-void game_sprite_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
+void game_sprites_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
                       bool b_squash);
 
 /**
@@ -111,7 +111,7 @@ void game_sprite_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
  * @param  p_canvas    Canvas; must not be NULL.
  * @param  elapsed_us  0 to GAME_SPRITE_WRONG_US.
  */
-void game_sprite_wrong (game_canvas_t * p_canvas, int64_t elapsed_us);
+void game_sprites_wrong (game_canvas_t * p_canvas, int64_t elapsed_us);
 
 /**
  * @brief  A wall picture piece: the lit bits of mask in one colour, the rest
@@ -120,7 +120,7 @@ void game_sprite_wrong (game_canvas_t * p_canvas, int64_t elapsed_us);
  * @param  mask      The tile's 8 x 8 piece.
  * @param  colour    proto_colour_t value.
  */
-void game_sprite_picture (game_canvas_t * p_canvas, uint64_t mask,
+void game_sprites_picture (game_canvas_t * p_canvas, uint64_t mask,
                           uint8_t colour);
 
 /**
@@ -130,7 +130,7 @@ void game_sprite_picture (game_canvas_t * p_canvas, uint64_t mask,
  * @param  colour    proto_colour_t value.
  * @param  t_us      Shared time, microseconds.
  */
-void game_sprite_sparkle (game_canvas_t * p_canvas, uint8_t colour,
+void game_sprites_sparkle (game_canvas_t * p_canvas, uint8_t colour,
                           int64_t t_us);
 
 /**
@@ -138,7 +138,7 @@ void game_sprite_sparkle (game_canvas_t * p_canvas, uint8_t colour,
  * @param  colour  proto_colour_t value; an unknown value gives white.
  * @return The colour, channels 0 to 8.
  */
-game_rgb_t game_sprite_colour (uint8_t colour);
+game_rgb_t game_sprites_colour (uint8_t colour);
 
 #endif /* GAME_SPRITES_H */
 

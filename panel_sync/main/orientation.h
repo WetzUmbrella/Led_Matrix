@@ -65,6 +65,14 @@ uint8_t orientation_current (void);
  */
 bool orientation_tap_take (tap_detect_event_t * p_event);
 
+/**
+ * @brief  Ask for a new tap threshold (any task; never blocks). The
+ *         Orientation Task applies it before its next sample.
+ * @param  threshold_mg  Threshold, mg; 0 = the default
+ *                       (TAP_DETECT_THRESHOLD_MG).
+ */
+void orientation_set_tap_threshold (uint32_t threshold_mg);
+
 #endif /* ORIENTATION_H */
 
 /*** end of file ***/

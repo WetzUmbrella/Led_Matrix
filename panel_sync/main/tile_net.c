@@ -768,6 +768,8 @@ static void tn_on_game (uint8_t const * p_buf, uint32_t len, int64_t t_l,
             tn_send_game_ack(acked_seq);
         }
 
+        /* ARM's tap threshold (A12); unchanged values cost one store. */
+        orientation_set_tap_threshold(game_tile_threshold_mg(&g_game));
         game_tile_publish(&g_game);
     }
 }

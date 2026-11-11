@@ -20,6 +20,7 @@
 #include "orientation.h"
 
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -29,6 +30,7 @@
 #include "driver/i2c_master.h"
 #include "esp_timer.h"
 
+#include "display_engine.h"
 #include "orient_filter.h"
 #include "tap_detect.h"
 #include "tile_net.h"
@@ -90,6 +92,10 @@
 static QueueHandle_t g_p_mailbox   = NULL; /* Length 1, overwrite only. */
 static QueueHandle_t g_p_tap_queue = NULL; /* Accepted tap events. */
 static TaskHandle_t  g_p_task      = NULL; /* Woken by the sample timer. */
+
+/* Tap threshold asked for (mg, 0 = default); written by the Network Task,
+ * applied by the Orientation Task. */
+static _Atomic uint32_t g_threshold_mg = 0u;
 
 /* Orientation Task only. */
 static i2c_master_bus_handle_t g_p_bus = NULL;
@@ -162,6 +168,15 @@ uint8_t orientation_current (void)
 }
 
 /**
+ * @brief  Ask for a new tap threshold (see orientation.h).
+ * @param  threshold_mg  Threshold, mg; 0 = the default.
+ */
+void orientation_set_tap_threshold (uint32_t threshold_mg)
+{
+    atomic_store(&g_threshold_mg, threshold_mg);
+}
+
+/**
  * @brief  Orientation Task: one sample per 1 ms timer tick through the tap
  *         detector; every 20th through the orientation filter; a change is
  *         written to the mailbox and logged. Ticks missed while a sample was
@@ -206,6 +221,15 @@ static void orientation_task (void * p_arg)
          * run twice. The returned count is not needed. */
         (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
+        uint32_t const asked = atomic_load(&g_threshold_mg);
+        uint32_t const want  = (0u == asked) ? TAP_DETECT_THRESHOLD_MG : asked;
+
+        if (want != detect.threshold_mg)
+        {
+            tap_detect_set_threshold(&detect, want);
+            printf("TAP threshold_mg=%" PRIu32 "\n", detect.threshold_mg);
+        }
+
         int64_t const t_us = esp_timer_get_time();
         bool const    b_read =
             (b_imu) && (qmi_read_accel(&accel_x, &accel_y, &accel_z));
@@ -217,6 +241,7 @@ static void orientation_task (void * p_arg)
         else if ((b_read) && (tap_detect_sample(&detect, t_us, accel_x,
                                                 accel_y, accel_z, &event)))
         {
+            display_engine_tap_pulse(); /* DS-13: first, for timing. */
             or_tap_publish(&event);
             tile_net_tap_ready();
             printf("TAP t_us=%" PRId64 " peak_mg=%" PRIu16 " count=%" PRIu32

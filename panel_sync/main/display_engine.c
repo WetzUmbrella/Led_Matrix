@@ -22,6 +22,7 @@
 
 #include <inttypes.h>
 #include <stddef.h>
+#include <stdatomic.h>
 #include <stdio.h>
 
 #include "freertos/FreeRTOS.h"
@@ -139,6 +140,17 @@ static uint32_t     g_state       = PROTO_DISPLAY_COUNT; /* None reported. */
 static uint8_t      g_orient      = PROTO_ORIENT_0;
 static bool         g_b_rmt_fault = false;
 
+/* Game-mode event pulses (DS-13). The frame prepared next is the game's
+ * (g_b_game_frame) with this pulse width (0: none); the previous game frame's
+ * times find the events that start in it. g_b_game_shown is read by the
+ * Orientation Task for the tap pulse. */
+static bool           g_b_game_frame   = false;
+static uint32_t       g_game_pulse_us  = 0u;
+static int64_t        g_game_prev_pico = 0;
+static int64_t        g_game_prev_local = 0;
+static _Atomic bool   g_b_game_shown   = false;
+static esp_timer_handle_t g_p_tap_timer = NULL;
+
 static void     de_task (void * p_arg);
 static void     de_report (proto_display_state_t state);
 static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
@@ -148,6 +160,7 @@ static void     de_swap (void);
 static void     de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader);
 static void     de_log (void);
 static void     de_test_after_prepare (uint32_t frame, bool b_frame);
+static void     de_tap_pulse_end (void * p_arg);
 #ifdef DE_PROFILE
 static uint32_t g_prof[DE_PROF_BINS];
 #endif
@@ -196,6 +209,14 @@ static void de_task (void * p_arg)
 
     (void)gpio_config(&pin_cfg);           /* Fixed, valid configuration. */
     (void)gpio_set_level(DE_TEST_PIN, 0u); /* Valid pin and level. */
+
+    esp_timer_create_args_t const tap_args = {.callback = de_tap_pulse_end,
+                                              .name     = "de_tap"};
+
+    if (ESP_OK != esp_timer_create(&tap_args, &g_p_tap_timer))
+    {
+        g_p_tap_timer = NULL; /* No tap pulses; the ticks still run. */
+    }
 #ifdef DE_PROFILE
     gpio_config_t const prof_cfg = {
         .pin_bit_mask = (UINT64_C(1) << DE_PROF_PIN),
@@ -310,10 +331,19 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
     }
     else
     {
+        /* Video: the tick pulse, wider on a marker. Game (DS-13): a pulse
+         * only on a frame where an event starts, as wide as its kind; the
+         * falling edge keeps the tick's pace either way. */
+        bool const    b_game = g_b_game_frame;
+        bool const    b_high = (!b_game) || (0u != g_game_pulse_us);
         int64_t const width =
-            (0u == (tick % DE_MARKER_PERIOD)) ? DE_MARKER_US : DE_PULSE_US;
+            (b_game && (0u != g_game_pulse_us))
+                ? (int64_t)g_game_pulse_us /* At most 10,000. */
+                : ((0u == (tick % DE_MARKER_PERIOD)) ? DE_MARKER_US
+                                                     : DE_PULSE_US);
 
-        de_arm_next(p_timer, lead, true);
+        atomic_store(&g_b_game_shown, b_game);
+        de_arm_next(p_timer, lead, b_high);
         de_wait_alarm(); /* Rising edge: tick n. */
         de_present(p_rmt, deadline);
         de_arm_next(p_timer, width, false);
@@ -459,15 +489,31 @@ static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
 
     game_tile_read(&game);
 
-    if ((game_tile_active(&game, esp_timer_get_time())) &&
+    int64_t const now_local = esp_timer_get_time();
+
+    if ((game_tile_active(&game, now_local)) &&
         (!((b_timeline) && (timeline.b_running))))
     {
-        game_tile_fill_wire(&game, timesync_now_corrected(p_reader),
-                            esp_timer_get_time(),
+        int64_t const now_pico = timesync_now_corrected(p_reader);
+
+        game_tile_fill_wire(&game, now_pico, now_local,
                             display_frame_mounted(g_orient), g_p_back);
+        /* The first game frame has no previous one: no event pulse. */
+        g_game_pulse_us   = g_b_game_frame
+                                ? game_tile_pulse_us(&game, g_game_prev_pico,
+                                                     now_pico,
+                                                     g_game_prev_local,
+                                                     now_local)
+                                : 0u;
+        g_b_game_frame    = true;
+        g_game_prev_pico  = now_pico;
+        g_game_prev_local = now_local;
         de_test_after_prepare(0u, false);
         return;
     }
+
+    g_b_game_frame  = false;
+    g_game_pulse_us = 0u;
 
     if ((b_timeline) && (b_asset) && (timeline.b_held))
     {
@@ -520,6 +566,33 @@ static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
     }
 
     de_test_after_prepare(frame, b_frame);
+}
+
+/**
+ * @brief  The game-mode tap pulse (see display_engine.h): the pin goes high
+ *         now and a one-shot esp_timer drops it. A tap during an event pulse
+ *         of the tick timer is rare (a tap on the mole's first frame); the
+ *         two edges then overlap and pico_tap sees one wider pulse.
+ */
+void display_engine_tap_pulse (void)
+{
+    if ((atomic_load(&g_b_game_shown)) && (NULL != g_p_tap_timer))
+    {
+        gpio_ll_set_level(&GPIO, DE_TEST_PIN, 1u);
+        /* A stopped or finished one-shot restarts; a running one is left. */
+        (void)esp_timer_start_once(g_p_tap_timer, GAME_TILE_PULSE_TAP_US);
+    }
+}
+
+/**
+ * @brief  End of the tap pulse (esp_timer task context).
+ * @param  p_arg  Unused.
+ */
+static void de_tap_pulse_end (void * p_arg)
+{
+    (void)p_arg; /* The callback takes no parameter. */
+
+    gpio_ll_set_level(&GPIO, DE_TEST_PIN, 0u);
 }
 
 /**

@@ -308,11 +308,11 @@ void game_tile_fill_wire (game_tile_state_t const * p_state,
         game_tile_showing(p_state, now_pico_us);
     int64_t const since = now_local_us - p_state->flash_start_us;
 
-    game_sprite_clear(&canvas);
+    game_sprites_clear(&canvas);
 
     if ((0u != p_state->b_round) || (0u != p_state->b_tap_test))
     {
-        game_sprite_hole(&canvas);
+        game_sprites_hole(&canvas);
     }
 
     game_tile_draw_target(p_state, now_pico_us, &canvas);
@@ -324,12 +324,12 @@ void game_tile_fill_wire (game_tile_state_t const * p_state,
     else if (PROTO_PIC_SPARKLE == p_pic->effect)
     {
         /* Below 8 colours: fits uint8_t. */
-        game_sprite_sparkle(&canvas, (uint8_t)p_pic->colour, now_pico_us);
+        game_sprites_sparkle(&canvas, (uint8_t)p_pic->colour, now_pico_us);
     }
     else
     {
         /* Below 8 colours: fits uint8_t. */
-        game_sprite_picture(&canvas, p_pic->mask, (uint8_t)p_pic->colour);
+        game_sprites_picture(&canvas, p_pic->mask, (uint8_t)p_pic->colour);
     }
 
     if (!game_tile_flash_on(p_state, now_local_us))
@@ -338,11 +338,11 @@ void game_tile_fill_wire (game_tile_state_t const * p_state,
     }
     else if (GAME_TILE_RESULT_HIT == p_state->flash_result)
     {
-        game_sprite_hit(&canvas, since, 0u != p_state->b_squash);
+        game_sprites_hit(&canvas, since, 0u != p_state->b_squash);
     }
     else
     {
-        game_sprite_wrong(&canvas, since);
+        game_sprites_wrong(&canvas, since);
     }
 
     for (uint32_t led = 0u; led < GAME_TILE_LEDS; led++)
@@ -750,6 +750,7 @@ static game_tile_pic_t const * game_tile_showing (
     for (uint32_t index = 0u; index < GAME_TILE_PICS; index++)
     {
         game_tile_pic_t const * const p_pic = &p_state->pic[index];
+        /* dur_ms is at most 8,191, so the product fits int64_t. */
         int64_t const end = p_pic->t_show +
                             ((int64_t)p_pic->dur_ms * GAME_TILE_US_PER_MS);
 
@@ -802,7 +803,7 @@ static void game_tile_draw_target (game_tile_state_t const * p_state,
     }
     else if (GAME_TILE_KIND_START == p_state->kind)
     {
-        game_sprite_start(p_canvas, now_pico_us);
+        game_sprites_start(p_canvas, now_pico_us);
     }
     else if (GAME_TILE_KIND_MOLE != p_state->kind)
     {
@@ -810,16 +811,16 @@ static void game_tile_draw_target (game_tile_state_t const * p_state,
     }
     else if (now_pico_us < p_state->hide_us)
     {
-        game_sprite_mole(p_canvas,
-                         game_sprite_rows_up(now_pico_us - p_state->show_us));
+        game_sprites_mole(p_canvas,
+                         game_sprites_rows_up(now_pico_us - p_state->show_us));
     }
     else
     {
         /* Missed: it sinks back, the reverse of the rise. */
         uint32_t const gone =
-            game_sprite_rows_up(now_pico_us - p_state->hide_us);
+            game_sprites_rows_up(now_pico_us - p_state->hide_us);
 
-        game_sprite_mole(p_canvas, GAME_SPRITE_SIDE - gone);
+        game_sprites_mole(p_canvas, GAME_SPRITE_SIDE - gone);
     }
 }
 
