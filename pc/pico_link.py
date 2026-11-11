@@ -119,8 +119,10 @@ class Status:
         return "unknown %d" % self.level
 
     def hits(self) -> int:
-        """Moles hit: every mole shown is hit or missed (no penalty, C2)."""
-        return max(self.shown - self.missed, 0)
+        """Moles hit: the score, since a hit is +1 and nothing takes a
+        point away (C2). shown - missed would count a mole still up as a
+        hit (seen on the wall 12 Nov 2026)."""
+        return max(self.score, 0)
 
     def stars(self) -> int:
         """Stars as the Pico draws them (game_rules_stars())."""

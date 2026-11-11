@@ -87,8 +87,24 @@
 #define TN_STATS_EVERY 100u
 
 /** Receive buffer: one byte more than the longest message on port 4210
- *  (RESUME_AT, 13 B), so a longer datagram is seen as the wrong length. */
-#define TN_RX_BYTES (PROTO_RESUME_AT_BYTES + 1u)
+ *  (WALL_PICTURE, 23 B, since step 3), so a longer datagram is seen as the
+ *  wrong length. It was RESUME_AT + 1 (14 B) until 12 Nov 2026, which cut
+ *  every WALL_PICTURE short: the tile could not decode, store or ACK it, so
+ *  no countdown or results showed (bench 12 Nov 2026, round 1). The check
+ *  below keeps every message of the port inside it. */
+#define TN_RX_BYTES (PROTO_WALL_PICTURE_BYTES + 1u)
+
+_Static_assert((PROTO_BEACON_BYTES < TN_RX_BYTES) &&
+                   (PROTO_START_AT_BYTES < TN_RX_BYTES) &&
+                   (PROTO_PAUSE_BYTES < TN_RX_BYTES) &&
+                   (PROTO_RESUME_AT_BYTES < TN_RX_BYTES) &&
+                   (PROTO_STOP_BYTES < TN_RX_BYTES) &&
+                   (PROTO_MOLE_ON_BYTES < TN_RX_BYTES) &&
+                   (PROTO_FEEDBACK_BYTES < TN_RX_BYTES) &&
+                   (PROTO_GAME_CONTROL_BYTES < TN_RX_BYTES) &&
+                   (PROTO_WALL_PICTURE_BYTES < TN_RX_BYTES) &&
+                   (PROTO_ACK_BYTES < TN_RX_BYTES),
+               "every port 4210 message must fit the receive buffer");
 
 /** Receive buffer for port 4214: one byte more than the longest message
  *  there (ASSET_CHUNK, 5 + 1,024 B), so a longer datagram is seen as the

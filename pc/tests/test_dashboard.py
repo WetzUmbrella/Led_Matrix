@@ -310,15 +310,15 @@ def test_last_score_keeps_the_final_score_after_the_round_ends() -> None:
     model.on_status(_ready_status(12, score=5, round_state=PLAYING))
     assert model.snapshot()["last_score"] is None  # Still in the round.
     # RESULTS: READY, and the Pico keeps the final score on STATUS.
-    model.on_status(_ready_status(7, score=5, round_state=RESULTS,
+    model.on_status(_ready_status(7, score=8, round_state=RESULTS,
                                   shown=10, missed=2, wrong=1,
                                   reaction_ms=420))
     snap = model.snapshot()
-    assert snap["last_score"] == 5
+    assert snap["last_score"] == 8
     assert snap["game_running"] is False
     assert snap["round_state"] == "RESULTS"
     assert snap["last_result"] == {
-        "score": 5, "hits": 8, "missed": 2, "wrong": 1, "shown": 10,
+        "score": 8, "hits": 8, "missed": 2, "wrong": 1, "shown": 10,
         "reaction_ms": 420, "stars": 3}
 
 
@@ -351,12 +351,17 @@ def test_last_score_is_in_the_json_state() -> None:
     assert body["last_score"] == 1 and body["score"] == 1
 
 
+def test_hits_do_not_count_a_mole_still_up() -> None:
+    # Mid-round: 3 moles shown, 2 hit, 1 still up and not yet judged.
+    assert _ready_status(12, score=2, shown=3, missed=0).hits() == 2
+
+
 def test_stars_follow_the_pico_rule() -> None:
     # 80% or more 3, 50% or more 2, otherwise 1; no moles: 1.
-    assert _ready_status(7, shown=10, missed=2).stars() == 3
-    assert _ready_status(7, shown=10, missed=3).stars() == 2
-    assert _ready_status(7, shown=10, missed=5).stars() == 2
-    assert _ready_status(7, shown=10, missed=6).stars() == 1
+    assert _ready_status(7, score=8, shown=10, missed=2).stars() == 3
+    assert _ready_status(7, score=7, shown=10, missed=3).stars() == 2
+    assert _ready_status(7, score=5, shown=10, missed=5).stars() == 2
+    assert _ready_status(7, score=4, shown=10, missed=6).stars() == 1
     assert _ready_status(7).stars() == 1
 
 
