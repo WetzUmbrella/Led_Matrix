@@ -1,27 +1,42 @@
 /**
  * @file    game_tile.h
- * @brief   Whack-a-mole on the tile (whack-a-mole re-plan, build step 7):
- *          the tile's game state, the handling of MOLE_ON, FEEDBACK,
- *          GAME_CONTROL, WALL_PICTURE and the ACK of a TAP, the pixels it draws
- *          (a solid mole, a green or red flash, the final score), the TAP and
- *          ACK encoders, and a seqlock that hands the state to the Display
- *          Engine. Pure C with no ESP-IDF call except the atomics of the
- *          seqlock (DEVIATION D-1, as playback_control.c), so the host test
- *          in panel_sync/test runs it on a PC.
+ * @brief   Whack-a-mole on the tile (whack-a-mole re-plan, build steps 7 and
+ *          3): the tile's game state, the handling of MOLE_ON (a target),
+ *          FEEDBACK, GAME_CONTROL, WALL_PICTURE and the ACK of a TAP, the
+ *          frame it draws (game_sprites.h), the game-mode GPIO4 event
+ *          pulses (DS-13), the TAP and ACK encoders, and a seqlock that hands
+ *          the state to the Display Engine. Pure C with no ESP-IDF call
+ *          except the atomics of the seqlock (DEVIATION D-1, as
+ *          playback_control.c), so the host test in panel_sync/test runs it
+ *          on a PC.
  *
  * Owner: Cheston (Buddy 3) for the tile comms rows, Jia Jun (Buddy 5) for the
- * display, per the re-plan's report allocation. Written for build step 7.
+ * display, per the re-plan's report allocation. Written for build step 7;
+ * round phases, sprites and the picture list for step 3.
  *
  * Rules on the tile (layout_table.md sections 3 and 5):
- * - The tile draws the mole itself: a solid fill from t_show until
- *   t_show + up_ms x 1000 us, in the Pico's corrected clock. No asset.
- * - FEEDBACK flashes the whole tile green (hit) or red (miss) for
- *   GAME_TILE_FLASH_US on the tile's own clock, and ends a mole on a hit.
- * - WALL_PICTURE is the tile's 8 x 8 slice of the final score, before the
- *   tile's rotation; it stays on the tile until the next round starts.
+ * - A target (MOLE_ON) shows from t_show in the Pico's corrected clock. A
+ *   mole rises out of its hole (160 ms), stays until t_show + up_ms and
+ *   sinks back (160 ms). The start sprite (kind START, up_ms 0) stays until
+ *   tapped or cleared.
+ * - FEEDBACK hit: the target ends and the hit burst plays (250 ms); miss:
+ *   the red X blinks over the tile (300 ms); both on the tile's own clock.
+ * - GAME_CONTROL: ARM (the round is armed: holes, the tap threshold), START
+ *   (the round plays), END (the round is over: the holes and the target go,
+ *   the picture list stays), TAP_TEST_ON and OFF (holes, every hit lights).
+ *   ARM and START clear the picture list and the target.
+ * - WALL_PICTURE fills one entry of a list of 4; the entry showing is the
+ *   latest started one that has not ended (dur_ms 0: until replaced). An
+ *   entry with repeat starts the list again from entry 1 when it ends.
+ *   Effect CLEAR empties the list.
  * - Every MOLE_ON, FEEDBACK, GAME_CONTROL and WALL_PICTURE addressed to this
- *   tile is ACKed, a repeat too. Only a newer seq acts (the Pico shares one
- *   seq counter for these, layout_table.md section 10 item 13).
+ *   tile is ACKed, a repeat too. Order (layout_table.md section 10 item 13,
+ *   one Pico seq counter for these): MOLE_ON and FEEDBACK act only when
+ *   newer than every message accepted; GAME_CONTROL when newer than the last
+ *   GAME_CONTROL (a lost and resent ARM still arms), and it clears only a
+ *   target or picture entry older than itself; WALL_PICTURE when newer than
+ *   its entry and than the last clearing GAME_CONTROL (entries may arrive in
+ *   any order).
  */
 #ifndef GAME_TILE_H
 #define GAME_TILE_H
@@ -35,26 +50,55 @@
 #define GAME_TILE_LEDS 64u
 #define GAME_TILE_WIRE_BYTES 192u
 
-/** Flash length after a FEEDBACK, microseconds (plan choice: a quarter of a
- *  second, long enough to see on the wall, short enough for the next mole). */
-#define GAME_TILE_FLASH_US 250000
+/** Entries of the picture list (WALL_PICTURE slot, 2 bits). */
+#define GAME_TILE_PICS 4u
 
-/** The game state of one tile. Every field is a 32-bit or 64-bit integer, so
- *  the struct is a whole number of 32-bit words for the seqlock. */
+/** Game-mode GPIO4 pulse widths, microseconds (DS-13): tap detected, the
+ *  hit burst's first frame, the mole's first frame. */
+#define GAME_TILE_PULSE_TAP_US  2000u
+#define GAME_TILE_PULSE_HIT_US  6000u
+#define GAME_TILE_PULSE_MOLE_US 10000u
+
+/** One entry of the picture list. Words only, for the seqlock. */
 typedef struct
 {
-    uint32_t b_game;        /**< 1 while a round runs (START seen, no END). */
-    uint32_t b_mole;        /**< 1 when this tile has a mole window. */
-    uint32_t b_flash;       /**< 1 while a FEEDBACK flash runs. */
+    uint32_t b_valid;  /**< 1 when the entry holds a picture. */
+    uint32_t seq;      /**< Header seq it came with. */
+    uint32_t effect;   /**< proto_pic_effect_t. */
+    uint32_t colour;   /**< proto_colour_t. */
+    uint32_t b_repeat; /**< 1 = start again from entry 1 after this one. */
+    uint32_t dur_ms;   /**< 0 = until replaced. */
+    int64_t  t_show;   /**< Show time, Pico corrected clock, us. */
+    uint64_t mask;     /**< The tile's piece, before the rotation. */
+} game_tile_pic_t;
+
+/** The game state of one tile. Every field is a 32-bit or 64-bit integer,
+ *  32-bit fields first and an even count of them, so the struct is a whole
+ *  number of 32-bit words for the seqlock. */
+typedef struct
+{
+    uint32_t b_game;        /**< 1 while a round plays (START, no END). */
+    uint32_t b_round;       /**< 1 from ARM or START to END: holes shown. */
+    uint32_t b_tap_test;    /**< 1 while the tap test is on (A11). */
+    uint32_t b_mole;        /**< 1 when this tile has a target. */
+    uint32_t kind;          /**< proto_target_kind_t of the target. */
+    uint32_t target_seq;    /**< Header seq of the target. */
+    uint32_t b_flash;       /**< 1 once a FEEDBACK was shown. */
     uint32_t flash_result;  /**< proto_feedback_t of the flash. */
-    uint32_t b_score;       /**< 1 when a WALL_PICTURE is held. */
-    uint32_t b_seq_known;   /**< 1 once a command seq was accepted. */
-    uint32_t seq;           /**< Newest accepted command seq. */
-    uint32_t reserved;      /**< Keeps the struct a whole number of words. */
-    int64_t  show_us;       /**< Mole show time, Pico corrected clock. */
-    int64_t  hide_us;       /**< Mole hide time, Pico corrected clock. */
-    int64_t  flash_until_us; /**< Flash end, tile local clock. */
-    uint64_t wall_picture;    /**< WALL_PICTURE bits, before the rotation. */
+    uint32_t b_squash;      /**< 1 when the hit was on an up mole. */
+    uint32_t b_seq_known;   /**< 1 once a message seq was accepted. */
+    uint32_t seq;           /**< Newest accepted message seq. */
+    uint32_t b_ctl_known;   /**< 1 once a GAME_CONTROL was accepted. */
+    uint32_t ctl_seq;       /**< Newest accepted GAME_CONTROL seq. */
+    uint32_t b_clear_known; /**< 1 once ARM or START cleared the list. */
+    uint32_t clear_seq;     /**< Seq of that ARM or START. */
+    uint32_t threshold;     /**< ARM's tap threshold, 20 mg steps; 0 = the
+                                 tile's default. */
+    int64_t  show_us;       /**< Target show time, Pico corrected clock. */
+    int64_t  hide_us;       /**< Target hide time, Pico corrected clock;
+                                 INT64_MAX until tapped (start sprite). */
+    int64_t  flash_start_us; /**< FEEDBACK shown from, tile local clock. */
+    game_tile_pic_t pic[GAME_TILE_PICS]; /**< The picture list. */
 } game_tile_state_t;
 
 /**
@@ -79,11 +123,24 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
                         int64_t now_local_us, uint16_t * p_acked_seq);
 
 /**
+ * @brief  Whether the game owns the tile's display: a round armed or
+ *         playing, the tap test, a picture list, or a FEEDBACK still
+ *         showing.
+ * @param  p_state       State; must not be NULL.
+ * @param  now_local_us  Tile local time, microseconds (the flash clock).
+ * @return true when game_tile_fill_wire() should draw the tile.
+ */
+bool game_tile_active (game_tile_state_t const * p_state,
+                       int64_t now_local_us);
+
+/**
  * @brief  Fill the 64 LEDs of the tile for one moment, in the panel's order
- *         (R, G, B per LED, LED 0 first), channel values 0 to 8. Priority:
- *         a flash, then the mole, then the held score; otherwise dark.
+ *         (R, G, B per LED, LED 0 first), channel values 0 to 8. Layers,
+ *         bottom up: the hole (round or tap test), the target, the picture
+ *         showing (it covers the tile), then the hit burst or the red X.
  * @param  p_state        State; must not be NULL.
- * @param  now_pico_us    Pico corrected time, microseconds (the mole clock).
+ * @param  now_pico_us    Pico corrected time, microseconds (targets and
+ *                        pictures).
  * @param  now_local_us   Tile local time, microseconds (the flash clock).
  * @param  orientation    Rotation to draw, 0 to 3: the measured orientation
  *                        with the mount offset (display_frame_mounted()).
@@ -92,6 +149,28 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
 void game_tile_fill_wire (game_tile_state_t const * p_state,
                           int64_t now_pico_us, int64_t now_local_us,
                           uint8_t orientation, uint8_t * p_wire);
+
+/**
+ * @brief  The game-mode GPIO4 pulse for a frame (DS-13): the mole's first
+ *         frame (its show time fell after the previous frame) or the hit
+ *         burst's first frame. The tap pulse is the Orientation Task's.
+ * @param  p_state        State; must not be NULL.
+ * @param  prev_pico_us   Pico time of the previous frame.
+ * @param  now_pico_us    Pico time of this frame.
+ * @param  prev_local_us  Local time of the previous frame.
+ * @param  now_local_us   Local time of this frame.
+ * @return Pulse width, microseconds (the longer when both), or 0 for none.
+ */
+uint32_t game_tile_pulse_us (game_tile_state_t const * p_state,
+                             int64_t prev_pico_us, int64_t now_pico_us,
+                             int64_t prev_local_us, int64_t now_local_us);
+
+/**
+ * @brief  The tap threshold ARM carried, in mg.
+ * @param  p_state  State; must not be NULL.
+ * @return Threshold, mg; 0 when the tile keeps its default.
+ */
+uint32_t game_tile_threshold_mg (game_tile_state_t const * p_state);
 
 /**
  * @brief  Encode a TAP for the Pico (port 4211, acked).
@@ -129,8 +208,9 @@ uint32_t game_tile_encode_ack (uint8_t * p_buf, uint8_t session_id,
 void game_tile_publish (game_tile_state_t const * p_state);
 
 /**
- * @brief  Read the published state (reader: the Display Engine). A read that
- *         overlaps a publish is retried. Before any publish every field is 0.
+ * @brief  Read the published state (readers: the Display Engine and the
+ *         Orientation Task). A read that overlaps a publish is retried.
+ *         Before any publish every field is 0.
  * @param  p_state  Receives the state; must not be NULL.
  */
 void game_tile_read (game_tile_state_t * p_state);

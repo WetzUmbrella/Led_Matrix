@@ -11,29 +11,40 @@
 #include <stdbool.h>
 
 /**
- * @brief  The mole is a solid fill from show to hide in the Pico's clock; a
- *         FEEDBACK flashes green (a hit ends the mole) or red (the mole stays)
- *         on the tile's own clock.
+ * @brief  G1: the mole rises, stays and sinks; hit squash and burst; the
+ *         red X on a miss.
  * @return true when every check passed.
  */
 bool test_game_tile_mole_and_flash (void);
 
 /**
- * @brief  Only messages for this tile are ACKed; a repeat (same seq) is ACKed
- *         but not applied; an older seq is neither applied nor ACKed twice.
+ * @brief  G2: only messages for this tile are ACKed; a repeat (same seq) is
+ *         ACKed but not applied.
  * @return true when every check passed.
  */
 bool test_game_tile_acks (void);
 
 /**
- * @brief  START clears the score, WALL_PICTURE is drawn in the tile's rotation,
- *         END keeps the score on the tile.
+ * @brief  G3: ARM, the start sprite, START, END, the tap test, and the
+ *         GAME_CONTROL order.
  * @return true when every check passed.
  */
-bool test_game_tile_score (void);
+bool test_game_tile_round (void);
 
 /**
- * @brief  TAP and ACK encodings decode back, out-of-range Node IDs are
+ * @brief  G4: the picture list: timed entries, loop, clears, rotation.
+ * @return true when every check passed.
+ */
+bool test_game_tile_pictures (void);
+
+/**
+ * @brief  G5: the game-mode GPIO4 pulse widths.
+ * @return true when every check passed.
+ */
+bool test_game_tile_pulses (void);
+
+/**
+ * @brief  G6: TAP and ACK encodings decode back, out-of-range Node IDs are
  *         refused, and the state publishes and reads back whole.
  * @return true when every check passed.
  */

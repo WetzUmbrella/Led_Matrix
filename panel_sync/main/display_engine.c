@@ -459,7 +459,7 @@ static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
 
     game_tile_read(&game);
 
-    if (((0u != game.b_game) || (0u != game.b_score)) &&
+    if ((game_tile_active(&game, esp_timer_get_time())) &&
         (!((b_timeline) && (timeline.b_running))))
     {
         game_tile_fill_wire(&game, timesync_now_corrected(p_reader),
