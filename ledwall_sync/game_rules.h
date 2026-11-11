@@ -14,13 +14,18 @@
  * - One mole at a time on a random active tile. Never the same tile twice
  *   in a row, unless only one tile is active (then the rule cannot hold and
  *   the same tile repeats; plan choice).
- * - The mole stays up for 1200 ms at the start of the round, shrinking
- *   linearly to 500 ms at GAME_ROUND_MS (up_ms is an integer, rounded down).
+ * - The mole stays up for a level's first time at the start of the round,
+ *   shrinking linearly to its last time at GAME_ROUND_MS (up_ms is an
+ *   integer, rounded down): Easy 2000 to 1200 ms, Normal 1500 to 800 ms,
+ *   Hard 1200 to 500 ms (B4, build step 3; Hard is the v1 curve).
  * - 300 ms gap between moles (plan choice: the gap starts at the hit, the
  *   timeout or the start of the round).
  * - A hit (a tap on the mole tile while it is up) scores +1 and ends the
  *   mole at once. A tap on any other active tile, or any tap while no mole
- *   is up, scores -1. A mole that times out with no tap scores 0. A mole
+ *   is up, is a wrong tap: FEEDBACK miss (the red X), the score unchanged
+ *   and the wrong count up by one (C2, build step 3: no penalty for
+ *   children). A mole that times out with no tap scores 0 and counts as
+ *   missed (C3). A mole
  *   times out GAME_TAP_GRACE_MS after its hide time, so a tap stamped before
  *   the hide that arrives late still hits it.
  * - Taps from several tiles within GAME_DEDUPE_MS (30 ms, from the first
@@ -43,9 +48,13 @@
 /** Round length, milliseconds (re-plan: a fixed 30 s round). */
 #define GAME_ROUND_MS 30000u
 
-/** Mole time at the start and at the end of the round, milliseconds. */
-#define GAME_UP_FIRST_MS 1200u
-#define GAME_UP_LAST_MS  500u
+/** Levels (proto_level_t): Easy, Normal, Hard. */
+#define GAME_LEVELS 3u
+
+/** Star thresholds, hits as a percentage of targets shown (C6): 3 stars
+ *  at 80% or more, 2 at 50% or more, else 1. */
+#define GAME_STARS_3_PCT 80u
+#define GAME_STARS_2_PCT 50u
 
 /** Gap between a mole ending and the next one showing, milliseconds (plan
  *  choice; the re-plan says only "300 ms gap between moles"). */
@@ -127,6 +136,12 @@ typedef struct
     uint64_t    window_us;      /**< Start of the last closed window. */
     uint32_t    dedupe_drops;   /**< Taps dropped as duplicates. */
     uint32_t    tap_drops;      /**< Taps dropped: no room to wait. */
+    uint8_t     level;          /**< proto_level_t of the round. */
+    uint32_t    hits;           /**< Hits this round. */
+    uint32_t    missed;         /**< Moles that timed out this round. */
+    uint32_t    wrong;          /**< Wrong taps this round. */
+    uint32_t    shown;          /**< Moles planned (shown) this round. */
+    uint64_t    reaction_us;    /**< Sum of show-to-tap times of the hits. */
 } game_t;
 
 /**
@@ -138,12 +153,15 @@ typedef struct
 void game_rules_init (game_t * p_game, uint32_t seed);
 
 /**
- * @brief  Start a round at now_us with the tiles in active_mask.
+ * @brief  Start a round at now_us with the tiles in active_mask: score and
+ *         counts back to 0.
  * @param  p_game       Engine; must not be NULL.
  * @param  now_us       Round start, Pico clock, microseconds.
  * @param  active_mask  Bit n - 1 for each Node ID in the wall.
+ * @param  level        proto_level_t; out of range is taken as Hard.
  */
-void game_rules_start (game_t * p_game, uint64_t now_us, uint16_t active_mask);
+void game_rules_start (game_t * p_game, uint64_t now_us, uint16_t active_mask,
+                       uint8_t level);
 
 /**
  * @brief  Stop the round now (abort): no further events, taps ignored.
@@ -210,13 +228,38 @@ int32_t game_rules_score (game_t const * p_game);
 uint64_t game_rules_next_due (game_t const * p_game);
 
 /**
- * @brief  Mole time for a moment of the round: 1200 ms at the start, 500 ms
- *         at GAME_ROUND_MS, linear in between, rounded down.
+ * @brief  Mole time for a moment of the round at a level: the level's first
+ *         time at the start, its last at GAME_ROUND_MS, linear in between,
+ *         rounded down.
+ * @param  level       proto_level_t; out of range is taken as Hard.
  * @param  elapsed_us  Time since the round started, microseconds (values
  *                     past the round use the end value).
- * @return Milliseconds, 500 to 1200.
+ * @return Milliseconds, 500 to 2,000.
  */
-uint16_t game_rules_up_ms (uint64_t elapsed_us);
+uint16_t game_rules_up_ms (uint8_t level, uint64_t elapsed_us);
+
+/**
+ * @brief  Stars for the round (C6): hits over moles shown, 3 at 80% or more,
+ *         2 at 50% or more, else 1 (at least 1, also with no mole shown).
+ * @param  p_game  Engine; must not be NULL.
+ * @return 1 to 3.
+ */
+uint8_t game_rules_stars (game_t const * p_game);
+
+/**
+ * @brief  Average show-to-tap time of this round's hits, ms.
+ * @param  p_game  Engine; must not be NULL.
+ * @return Milliseconds, 0 when there was no hit.
+ */
+uint32_t game_rules_reaction_ms (game_t const * p_game);
+
+/**
+ * @brief  Whole seconds left in the running round, rounded up.
+ * @param  p_game  Engine; must not be NULL.
+ * @param  now_us  Current time, Pico clock, microseconds.
+ * @return Seconds, 0 when no round runs or it is over.
+ */
+uint32_t game_rules_time_left_s (game_t const * p_game, uint64_t now_us);
 
 #endif /* GAME_RULES_H */
 

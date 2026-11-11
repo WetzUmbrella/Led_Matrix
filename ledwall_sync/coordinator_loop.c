@@ -133,6 +133,16 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
 #define CL_FEEDBACK_LIFE_US 300000u
 #define CL_CONTROL_LIFE_US  1000000u
 
+/** Round phases (DS-08, build step 3): the armed start sprite waits 60 s
+ *  for its tap; the countdown is 3 s; wall pictures go out 500 ms before
+ *  they show (DS-09). */
+#define CL_ARM_TIMEOUT_US  60000000u
+#define CL_COUNTDOWN_STEPS 3u
+#define CL_STEP_MS         1000u
+#define CL_STEP_US         (UINT64_C(1000) * CL_STEP_MS)
+#define CL_COUNTDOWN_US    (CL_COUNTDOWN_STEPS * CL_STEP_US)
+#define CL_PIC_LEAD_US     500000u
+
 /** Logged events waiting for a log slot (plan choice). */
 #define CL_EVENT_LEN 16u
 
@@ -289,6 +299,17 @@ static uint16_t g_ack_seq    = 0u; /* ACK header seq: not acked itself. */
 static game_t       g_game;
 static ack_outbox_t g_outbox;
 static bool         g_b_game_mode = false; /* false video, true game. */
+
+/* Round phases (DS-08, build step 3). ARMED, COUNTDOWN and PLAYING run in
+ * COORDINATING GAME; IDLE and RESULTS in READY. */
+static proto_round_state_t g_round      = PROTO_ROUND_IDLE;
+static uint8_t             g_level      = (uint8_t)PROTO_LEVEL_EASY; /* 3. */
+static uint8_t             g_threshold  = 0u; /* 20 mg steps; 0 default. */
+static uint8_t             g_start_node = 0u; /* Tile of the start sprite. */
+static uint64_t            g_arm_deadline_us = 0u;
+static uint64_t            g_play_at_us      = 0u;
+static uint16_t            g_round_mask      = 0u; /* Tiles of the round. */
+static bool                g_b_tap_test      = false;
 static uint16_t     g_tap_seq[CL_MAX_NODES];
 static bool         g_b_tap_seen[CL_MAX_NODES];
 
@@ -319,7 +340,23 @@ static void cl_on_tap (cl_rx_entry_t const * p_entry,
 static void cl_on_tile_ack (cl_rx_entry_t const * p_entry);
 static void cl_on_game_control (cl_rx_entry_t const * p_entry,
                                 proto_header_t const * p_header);
-static void cl_game_command (uint8_t command);
+static void cl_game_command (proto_game_control_t const * p_msg);
+static void cl_round_arm (uint64_t now);
+static void cl_round_countdown (uint64_t now);
+static void cl_round_play (uint64_t now);
+static void cl_round_abort (uint64_t now);
+static void cl_round_to_tiles (uint8_t command, uint64_t now);
+static uint8_t  cl_centre_node (uint16_t mask);
+static uint64_t cl_round_next_due (void);
+static void cl_send_countdown (uint64_t t_first);
+static void cl_send_results (uint64_t t_first);
+static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
+                              uint8_t colour, uint8_t b_repeat, uint64_t t_show,
+                              uint16_t dur_ms, uint64_t mask);
+static uint8_t  cl_count7 (uint32_t count);
+static uint16_t cl_reaction11 (uint32_t reaction_ms);
+static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
+                             uint8_t kind, uint64_t now, uint64_t deadline_us);
 static void cl_game_start (uint64_t now);
 static void cl_game_end (uint64_t now);
 static void cl_game_routine (uint64_t now);
@@ -481,7 +518,7 @@ static void cl_pass (void)
     {
         cl_send_status(now);
     }
-    else if ((b_room) && (game_rules_next_due(&g_game) <= now))
+    else if ((b_room) && (cl_round_next_due() <= now))
     {
         cl_game_routine(now);
     }
@@ -817,6 +854,14 @@ static void cl_send_status (uint64_t now)
             .online    = cl_online_bits(),
             .state     = (uint8_t)g_state, /* 13 states fit uint8_t. */
             .score     = cl_status_score(),
+            .round_state = (uint8_t)g_round, /* 5 states fit uint8_t. */
+            .level       = g_level,
+            .missed      = cl_count7(g_game.missed),
+            .wrong       = cl_count7(g_game.wrong),
+            .shown       = cl_count7(g_game.shown),
+            /* At most 30 s: fits uint8_t. */
+            .time_left_s = (uint8_t)game_rules_time_left_s(&g_game, now),
+            .reaction_ms = cl_reaction11(game_rules_reaction_ms(&g_game)),
         };
         uint32_t const len = proto_encode_status(&msg, buf, sizeof(buf));
 
@@ -825,8 +870,7 @@ static void cl_send_status (uint64_t now)
         g_status_seq++;
     }
 
-    g_next_status_us += CL_STATUS_PERIOD_US;
-    (void)now; /* The schedule is absolute. */
+    g_next_status_us += CL_STATUS_PERIOD_US; /* An absolute schedule. */
 }
 
 /**
@@ -1896,8 +1940,22 @@ static void cl_on_tap (cl_rx_entry_t const * p_entry,
                                   p_entry->len);
             }
 
-            if ((PROTO_COORD_COORDINATING_GAME == g_state) &&
-                (p_header->session_id == g_session.session_id))
+            if ((PROTO_ROUND_ARMED == g_round) &&
+                (msg.node_id == g_start_node))
+            {
+                /* The child tapped the start sprite (DS-08). */
+                cl_queue_feedback(msg.node_id, (uint8_t)PROTO_FEEDBACK_HIT,
+                                  p_entry->t_rx_us);
+                cl_round_countdown(p_entry->t_rx_us);
+            }
+            else if ((g_b_tap_test) && (PROTO_COORD_READY == g_state))
+            {
+                /* Tap test (A11): every tap lights its own tile. */
+                cl_queue_feedback(msg.node_id, (uint8_t)PROTO_FEEDBACK_HIT,
+                                  p_entry->t_rx_us);
+            }
+            else if ((PROTO_COORD_COORDINATING_GAME == g_state) &&
+                     (p_header->session_id == g_session.session_id))
             {
                 game_rules_tap_rx(&g_game, msg.node_id, msg.peak, msg.t_tap,
                                   p_entry->t_rx_us);
@@ -1905,6 +1963,10 @@ static void cl_on_tap (cl_rx_entry_t const * p_entry,
                 cl_log_event(CL_EV_GAME_TAP, msg.node_id,
                              (uint32_t)(p_entry->t_rx_us - msg.t_tap),
                              p_entry->t_rx_us);
+            }
+            else
+            {
+                /* Outside a round: the relay to the PC was all. */
             }
         }
         else
@@ -1960,7 +2022,7 @@ static void cl_on_game_control (cl_rx_entry_t const * p_entry,
         {
             g_b_pc_seq_known = true;
             g_pc_seq         = p_header->seq;
-            cl_game_command(msg.command);
+            cl_game_command(&msg);
         }
         else
         {
@@ -1973,12 +2035,16 @@ static void cl_on_game_control (cl_rx_entry_t const * p_entry,
 }
 
 /**
- * @brief  Act on one GAME_CONTROL command from the PC.
- * @param  command  proto_game_cmd_t value (the decoder checked 0 to 3).
+ * @brief  Act on one GAME_CONTROL command from the PC (DS-08).
+ * @param  p_msg  The decoded command (node_id 0).
  */
-static void cl_game_command (uint8_t command)
+static void cl_game_command (proto_game_control_t const * p_msg)
 {
-    uint64_t const now = cl_now_us();
+    uint64_t const now     = cl_now_us();
+    uint8_t const  command = p_msg->command;
+    bool const     b_round = (PROTO_ROUND_ARMED == g_round) ||
+                         (PROTO_ROUND_COUNTDOWN == g_round) ||
+                         (PROTO_ROUND_PLAYING == g_round);
 
     if ((PROTO_GAME_MODE_VIDEO == command) || (PROTO_GAME_MODE_GAME == command))
     {
@@ -1986,6 +2052,8 @@ static void cl_game_command (uint8_t command)
         if (cl_stopped())
         {
             g_b_game_mode = (PROTO_GAME_MODE_GAME == command);
+            g_round       = PROTO_ROUND_IDLE;
+            g_b_tap_test  = false;
         }
         else
         {
@@ -1994,13 +2062,49 @@ static void cl_game_command (uint8_t command)
     }
     else if (PROTO_GAME_START == command)
     {
+        /* v1: a round at once, no start sprite and no countdown. */
+        g_level = p_msg->level;
         cl_game_start(now);
+    }
+    else if (PROTO_GAME_ARM == command)
+    {
+        g_level     = p_msg->level;
+        g_threshold = p_msg->threshold;
+        cl_round_arm(now);
+    }
+    else if (PROTO_GAME_START_NOW == command)
+    {
+        if (PROTO_ROUND_ARMED == g_round)
+        {
+            cl_round_countdown(now);
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
     }
     else if (PROTO_GAME_END == command)
     {
-        if (PROTO_COORD_COORDINATING_GAME == g_state)
+        if (PROTO_ROUND_PLAYING == g_round)
         {
-            cl_game_end(now); /* The PC's abort. */
+            cl_game_end(now); /* An abort mid-round still shows the score. */
+        }
+        else if (b_round)
+        {
+            cl_round_abort(now);
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
+    }
+    else if ((PROTO_GAME_TAP_TEST_ON == command) ||
+             (PROTO_GAME_TAP_TEST_OFF == command))
+    {
+        if ((PROTO_COORD_READY == g_state) && (!b_round))
+        {
+            g_b_tap_test = (PROTO_GAME_TAP_TEST_ON == command);
+            cl_round_to_tiles(command, now);
         }
         else
         {
@@ -2026,7 +2130,9 @@ static void cl_game_start (uint64_t now)
         /* Bits 0 to 8, so the narrowing keeps them. */
         uint16_t const mask = (uint16_t)(g_session.required & cl_online_bits());
 
-        game_rules_start(&g_game, now, mask);
+        game_rules_start(&g_game, now, mask, g_level);
+        g_round      = PROTO_ROUND_PLAYING;
+        g_round_mask = mask;
         cl_set_state(PROTO_COORD_COORDINATING_GAME);
 
         for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
@@ -2072,8 +2178,287 @@ static void cl_game_end (uint64_t now)
         }
     }
 
+    g_round = PROTO_ROUND_RESULTS;
+    cl_send_results(now + CL_PIC_LEAD_US);
+    g_round_mask = 0u;
     cl_set_state(PROTO_COORD_READY);
     cl_evaluate();
+}
+
+/**
+ * @brief  ARM (DS-08): from READY, in game mode, with an active session: the
+ *         tiles get ARM (with the tap threshold) and the tile nearest the
+ *         wall's centre the start sprite, up until tapped. 60 s with no tap
+ *         returns to GAME IDLE.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_arm (uint64_t now)
+{
+    /* Bits 0 to 8, so the narrowing keeps them. */
+    uint16_t const mask  = (uint16_t)(g_session.required & cl_online_bits());
+    uint8_t const  start = cl_centre_node(mask);
+
+    if ((PROTO_COORD_READY == g_state) && (g_b_game_mode) &&
+        (g_session.b_active) && (0u != start))
+    {
+        g_round_mask      = mask;
+        g_start_node      = start;
+        g_round           = PROTO_ROUND_ARMED;
+        g_arm_deadline_us = now + CL_ARM_TIMEOUT_US;
+        g_b_tap_test      = false;
+        cl_set_state(PROTO_COORD_COORDINATING_GAME);
+        cl_round_to_tiles(PROTO_GAME_ARM, now);
+        cl_queue_target(start, now + (UINT64_C(1000) * GAME_LEAD_MS), 0u,
+                        (uint8_t)PROTO_TARGET_START, now, /* 5 kinds fit. */
+                        now + CL_CONTROL_LIFE_US);
+    }
+    else
+    {
+        cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+    }
+}
+
+/**
+ * @brief  COUNTDOWN (DS-08, DS-09): 3, 2, 1 across the wall, then the round.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_countdown (uint64_t now)
+{
+    uint64_t const t_first = now + CL_PIC_LEAD_US;
+
+    g_round      = PROTO_ROUND_COUNTDOWN;
+    g_play_at_us = t_first + CL_COUNTDOWN_US;
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_MOLE_ON); /* The start sprite. */
+    cl_send_countdown(t_first);
+}
+
+/**
+ * @brief  The countdown is over: the round starts (START to the tiles).
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_play (uint64_t now)
+{
+    /* Tiles that left during the countdown are not chosen for moles. */
+    uint16_t const mask =
+        (uint16_t)(g_round_mask & cl_online_bits()); /* Bits 0 to 8. */
+
+    game_rules_start(&g_game, now, mask, g_level);
+    g_round = PROTO_ROUND_PLAYING;
+    cl_round_to_tiles(PROTO_GAME_START, now);
+}
+
+/**
+ * @brief  Abort before a round plays (DS-08): END to the tiles (they clear),
+ *         no score, back to GAME IDLE in READY.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_abort (uint64_t now)
+{
+    game_rules_stop(&g_game);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_MOLE_ON);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE);
+    cl_round_to_tiles(PROTO_GAME_END, now);
+    g_round      = PROTO_ROUND_IDLE;
+    g_round_mask = 0u;
+    cl_set_state(PROTO_COORD_READY);
+    cl_evaluate();
+}
+
+/**
+ * @brief  One GAME_CONTROL to every tile of the round (ARM carries the level
+ *         and the tap threshold); outside a round, to every online tile of
+ *         the map.
+ * @param  command  proto_game_cmd_t value.
+ * @param  now      Current time, microseconds.
+ */
+static void cl_round_to_tiles (uint8_t command, uint64_t now)
+{
+    /* Bits 0 to 8, so the narrowing keeps them. */
+    uint16_t const mask = (0u != g_round_mask)
+                              ? g_round_mask
+                              : (uint16_t)(g_session.required &
+                                           cl_online_bits());
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        /* index < 9. */
+        uint8_t const node_id = (uint8_t)(index + 1u);
+
+        if (0u != (mask & cl_node_bit(node_id)))
+        {
+            cl_queue_control(node_id, command, now, CL_CONTROL_LIFE_US);
+        }
+    }
+}
+
+/**
+ * @brief  The tile nearest the centre of the wall among the given tiles
+ *         (the start sprite's tile, B7); ties go to the lower map position.
+ * @param  mask  Node IDs, bit n - 1.
+ * @return Node ID, or 0 when no tile of the mask is in the map.
+ */
+static uint8_t cl_centre_node (uint16_t mask)
+{
+    uint8_t  best      = 0u;
+    uint32_t best_dist = UINT32_MAX;
+
+    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    {
+        uint8_t const node_id = g_session.node_map[slot];
+
+        if ((0u != node_id) && (0u != (mask & cl_node_bit(node_id))) &&
+            (0u != g_session.cols))
+        {
+            /* Doubled coordinates, so the centre is a whole number; slot,
+             * rows and cols are below 10. */
+            int32_t const row  = (int32_t)(slot / g_session.cols); /* < 9. */
+            int32_t const col  = (int32_t)(slot % g_session.cols); /* < 9. */
+            int32_t const rows = (int32_t)g_session.rows; /* 1 to 9. */
+            int32_t const cols = (int32_t)g_session.cols; /* 1 to 9. */
+            int32_t const d_r  = (2 * row) - (rows - 1);
+            int32_t const d_c  = (2 * col) - (cols - 1);
+            /* A sum of squares: non-negative and below 400. */
+            uint32_t const dist = (uint32_t)((d_r * d_r) + (d_c * d_c));
+
+            if (dist < best_dist)
+            {
+                best_dist = dist;
+                best      = node_id;
+            }
+        }
+    }
+
+    return best;
+}
+
+/**
+ * @brief  Earliest time the game or a round phase needs a pass: the
+ *         engine's next event, the arm timeout, or the end of the countdown.
+ * @return Microseconds, or UINT64_MAX when nothing is due.
+ */
+static uint64_t cl_round_next_due (void)
+{
+    uint64_t due = game_rules_next_due(&g_game);
+
+    if ((PROTO_ROUND_ARMED == g_round) && (g_arm_deadline_us < due))
+    {
+        due = g_arm_deadline_us;
+    }
+    else if ((PROTO_ROUND_COUNTDOWN == g_round) && (g_play_at_us < due))
+    {
+        due = g_play_at_us;
+    }
+    else
+    {
+        /* Only the engine's own time. */
+    }
+
+    return due;
+}
+
+/**
+ * @brief  One WALL_PICTURE entry for one tile (DS-09).
+ * @param  node_id   Tile, 1 to 9.
+ * @param  slot      List entry, 0 to 3.
+ * @param  effect    proto_pic_effect_t.
+ * @param  colour    proto_colour_t.
+ * @param  b_repeat  1 = loop back to slot 1 after this entry.
+ * @param  t_show    Show time, Pico clock, microseconds.
+ * @param  dur_ms    Duration, ms; 0 = until replaced.
+ * @param  mask      The tile's 8 x 8 piece.
+ */
+static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
+                              uint8_t colour, uint8_t b_repeat, uint64_t t_show,
+                              uint16_t dur_ms, uint64_t mask)
+{
+    uint16_t const             seq = cl_next_cmd_seq();
+    proto_wall_picture_t const msg = {
+        .header   = {.type       = PROTO_TYPE_WALL_PICTURE,
+                     .session_id = g_session.session_id,
+                     .seq        = seq},
+        .node_id  = node_id,
+        .slot     = slot,
+        .effect   = effect,
+        .colour   = colour,
+        .b_repeat = b_repeat,
+        .t_show   = t_show,
+        .dur_ms   = dur_ms,
+        .mask     = mask,
+    };
+    uint8_t        buf[PROTO_WALL_PICTURE_BYTES];
+    uint32_t const len = proto_encode_wall_picture(&msg, buf, sizeof(buf));
+
+    /* It must arrive before it shows: dropped at its show time. */
+    cl_queue_tile(node_id, PROTO_TYPE_WALL_PICTURE, seq, buf, len, cl_now_us(),
+                  t_show);
+}
+
+/**
+ * @brief  The countdown (DS-09): 3, 2 and 1 in yellow across the wall, one
+ *         second each from t_first, as a timed list on every tile of the
+ *         round, so all tiles change together.
+ * @param  t_first  Show time of the 3, Pico clock, microseconds.
+ */
+static void cl_send_countdown (uint64_t t_first)
+{
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+        uint32_t      slot    = 0u;
+
+        if ((0u != (g_round_mask & cl_node_bit(node_id))) &&
+            (cl_slot_of(node_id, &slot)))
+        {
+            for (uint32_t step = 0u; step < CL_COUNTDOWN_STEPS; step++)
+            {
+                /* 3, 2, 1: step < 3, so the digit and the slot fit. */
+                int32_t const  digit = (int32_t)(CL_COUNTDOWN_STEPS - step);
+                uint64_t const mask  = score_font_tile_mask(
+                    digit, g_session.rows, g_session.cols, cl_active_slots(),
+                    (uint8_t)slot); /* slot < 9. */
+
+                cl_queue_picture(node_id, (uint8_t)step, /* step < 3. */
+                                 (uint8_t)PROTO_PIC_PICTURE,   /* 3 fit. */
+                                 (uint8_t)PROTO_COLOUR_YELLOW, /* 7 fit. */
+                                 0u, t_first + (step * CL_STEP_US),
+                                 CL_STEP_MS, mask);
+            }
+        }
+    }
+}
+
+/**
+ * @brief  The results (DS-09): the end of round pictures. Filled in by the
+ *         wall pictures work (task 8); until then the v1 score picture of
+ *         cl_game_end() shows.
+ * @param  t_first  Show time of the first entry, Pico clock, microseconds.
+ */
+static void cl_send_results (uint64_t t_first)
+{
+    (void)t_first; /* The results list comes with the wall pictures. */
+}
+
+/**
+ * @brief  A count capped to its 7 STATUS bits.
+ * @param  count  The count.
+ * @return 0 to 127.
+ */
+static uint8_t cl_count7 (uint32_t count)
+{
+    /* Capped first, so the narrowing keeps the value. */
+    return (uint8_t)((count > PROTO_COUNT_MAX) ? PROTO_COUNT_MAX : count);
+}
+
+/**
+ * @brief  A reaction time capped to its 11 STATUS bits.
+ * @param  reaction_ms  Milliseconds.
+ * @return 0 to 2,047.
+ */
+static uint16_t cl_reaction11 (uint32_t reaction_ms)
+{
+    /* Capped first, so the narrowing keeps the value. */
+    return (uint16_t)((reaction_ms > PROTO_REACTION_MAX) ? PROTO_REACTION_MAX
+                                                         : reaction_ms);
 }
 
 /**
@@ -2086,7 +2471,15 @@ static void cl_game_routine (uint64_t now)
 {
     game_event_t event;
 
-    if (game_rules_poll(&g_game, now, &event))
+    if ((PROTO_ROUND_ARMED == g_round) && (now >= g_arm_deadline_us))
+    {
+        cl_round_abort(now); /* 60 s with no tap on the start sprite. */
+    }
+    else if ((PROTO_ROUND_COUNTDOWN == g_round) && (now >= g_play_at_us))
+    {
+        cl_round_play(now);
+    }
+    else if (game_rules_poll(&g_game, now, &event))
     {
         if (GAME_EV_MOLE_ON == event.kind)
         {
@@ -2108,6 +2501,10 @@ static void cl_game_routine (uint64_t now)
         {
             /* GAME_EV_NONE is never returned with true. */
         }
+    }
+    else
+    {
+        /* Nothing due yet. */
     }
 }
 
@@ -2176,8 +2573,10 @@ static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
         .header  = {.type       = PROTO_TYPE_GAME_CONTROL,
                     .session_id = g_session.session_id,
                     .seq        = seq},
-        .node_id = node_id,
-        .command = command,
+        .node_id   = node_id,
+        .command   = command,
+        .level     = g_level,
+        .threshold = g_threshold,
     };
     uint8_t  buf[PROTO_GAME_CONTROL_BYTES];
     uint32_t const len = proto_encode_game_control(&msg, buf, sizeof(buf));
@@ -2194,20 +2593,38 @@ static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
  */
 static void cl_queue_mole (game_event_t const * p_event, uint64_t now)
 {
+    cl_queue_target(p_event->node_id, p_event->t_show_us, p_event->up_ms,
+                    (uint8_t)PROTO_TARGET_MOLE, /* 5 kinds fit. */
+                    now, p_event->t_show_us);
+}
+
+/**
+ * @brief  MOLE_ON (a target) for one tile.
+ * @param  node_id      Tile, 1 to 9.
+ * @param  t_show       Show time, Pico clock, microseconds.
+ * @param  up_ms        Up time, ms; 0 = until tapped or cleared.
+ * @param  kind         proto_target_kind_t.
+ * @param  now          Current time, microseconds.
+ * @param  deadline_us  Dropped at or after this time.
+ */
+static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
+                             uint8_t kind, uint64_t now, uint64_t deadline_us)
+{
     uint16_t const seq = cl_next_cmd_seq();
     proto_mole_on_t const msg = {
         .header  = {.type       = PROTO_TYPE_MOLE_ON,
                     .session_id = g_session.session_id,
                     .seq        = seq},
-        .node_id = p_event->node_id,
-        .t_show  = p_event->t_show_us,
-        .up_ms   = p_event->up_ms,
+        .node_id = node_id,
+        .t_show  = t_show,
+        .up_ms   = up_ms,
+        .kind    = kind,
     };
     uint8_t  buf[PROTO_MOLE_ON_BYTES];
     uint32_t const len = proto_encode_mole_on(&msg, buf, sizeof(buf));
 
-    cl_queue_tile(p_event->node_id, PROTO_TYPE_MOLE_ON, seq, buf, len, now,
-                  p_event->t_show_us);
+    cl_queue_tile(node_id, PROTO_TYPE_MOLE_ON, seq, buf, len, now,
+                  deadline_us);
 }
 
 /**
@@ -2301,7 +2718,7 @@ static int8_t cl_status_score (void)
 {
     int8_t score = 0;
 
-    if (PROTO_COORD_COORDINATING_GAME == g_state)
+    if ((PROTO_ROUND_PLAYING == g_round) || (PROTO_ROUND_RESULTS == g_round))
     {
         score = (int8_t)game_rules_score(&g_game); /* -99 to 99. */
     }
@@ -2603,6 +3020,7 @@ static void cl_rejoin_routine (uint64_t now)
 static void cl_on_link_lost (uint64_t now)
 {
     game_rules_stop(&g_game); /* A round does not survive a lost router. */
+    g_round = PROTO_ROUND_IDLE;
     cl_set_state(PROTO_COORD_FAULT);
     g_join_failures = 0u;
     cl_schedule_join(now);

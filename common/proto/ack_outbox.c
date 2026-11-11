@@ -56,7 +56,7 @@ bool ack_outbox_add (ack_outbox_t * p_box, uint8_t node_id, uint8_t type,
                 p_entry->seq         = seq;
                 p_entry->addr        = addr;
                 p_entry->port        = port;
-                p_entry->len         = (uint8_t)len; /* At most 16. */
+                p_entry->len         = (uint8_t)len; /* At most 24. */
                 p_entry->next_us     = now_us;
                 p_entry->deadline_us = deadline_us;
                 p_entry->sends       = 0u;

@@ -16,6 +16,9 @@
 #include "test_main.h"
 
 /** Round start, 1 s after boot (plan choice), and one millisecond. */
+/** The v1 mole curve; 3 levels fit uint8_t. */
+#define TST_HARD ((uint8_t)PROTO_LEVEL_HARD)
+
 #define TST_T0 UINT64_C(1000000)
 #define TST_MS UINT64_C(1000)
 
@@ -143,7 +146,8 @@ static bool tst_check_mole (game_event_t const * p_evt, uint8_t last_node)
 {
     bool b_ok = true;
 
-    b_ok = (test_main_check(game_rules_up_ms(p_evt->t_show_us - TST_T0) ==
+    b_ok = (test_main_check(game_rules_up_ms(TST_HARD,
+                                             p_evt->t_show_us - TST_T0) ==
                                 p_evt->up_ms, __LINE__)) && b_ok;
     b_ok = (test_main_check((p_evt->node_id >= 1u) &&
                                 (p_evt->node_id <= 5u), __LINE__)) && b_ok;
@@ -153,6 +157,23 @@ static bool tst_check_mole (game_event_t const * p_evt, uint8_t last_node)
                             __LINE__)) && b_ok;
 
     return b_ok;
+}
+
+/**
+ * @brief  A level's mole time at 0 s, 15 s, 30 s and 45 s of the round.
+ * @param  level  proto_level_t.
+ * @param  first  Expected at 0 s.
+ * @param  mid    Expected at 15 s.
+ * @param  last   Expected at 30 s and 45 s.
+ * @return true when all four match.
+ */
+static bool tst_curve (uint8_t level, uint16_t first, uint16_t mid,
+                       uint16_t last)
+{
+    return (first == game_rules_up_ms(level, 0u)) &&
+           (mid == game_rules_up_ms(level, 15000u * TST_MS)) &&
+           (last == game_rules_up_ms(level, 30000u * TST_MS)) &&
+           (last == game_rules_up_ms(level, 45000u * TST_MS));
 }
 
 /**
@@ -171,20 +192,22 @@ bool test_game_rules_timing (void)
     uint8_t  last_node = 0u;
 
     game_rules_init(&game, TST_SEED);
-    game_rules_start(&game, TST_T0, TST_ACTIVE_FIVE);
+    game_rules_start(&game, TST_T0, TST_ACTIVE_FIVE, TST_HARD);
     b_ok = (test_main_check(game_rules_next_due(&game) <=
                                 (TST_T0 + (100u * TST_MS)), __LINE__)) && b_ok;
     b_ok = (test_main_check(tst_run(&game, TST_T0,
                                     TST_T0 + (TST_ROUND_MS + 1000u) * TST_MS,
                                     &log), __LINE__)) && b_ok;
 
-    /* The rule times. */
-    b_ok = (test_main_check(1200u == game_rules_up_ms(0u), __LINE__)) && b_ok;
-    b_ok = (test_main_check(850u == game_rules_up_ms(15000u * TST_MS),
+    /* The rule times: Hard is the v1 curve, Easy and Normal are slower
+     * (B4, build step 3); an unknown level is taken as Hard. */
+    b_ok = (test_main_check(tst_curve(PROTO_LEVEL_HARD, 1200u, 850u, 500u),
                             __LINE__)) && b_ok;
-    b_ok = (test_main_check(500u == game_rules_up_ms(30000u * TST_MS),
+    b_ok = (test_main_check(tst_curve(PROTO_LEVEL_NORMAL, 1500u, 1150u, 800u),
                             __LINE__)) && b_ok;
-    b_ok = (test_main_check(500u == game_rules_up_ms(45000u * TST_MS),
+    b_ok = (test_main_check(tst_curve(PROTO_LEVEL_EASY, 2000u, 1600u, 1200u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(500u == game_rules_up_ms(7u, 30000u * TST_MS),
                             __LINE__)) && b_ok;
 
     /* The first mole shows 300 ms into the round, up 1193 ms (elapsed 300
@@ -298,8 +321,9 @@ static bool tst_scenario_hit (game_t * p_game, uint64_t * p_now,
 
 /**
  * @brief  C18: hits (+1, the mole ends at once), wrong tiles and taps with no
- *         mole up (-1), dedupe within GAME_DEDUPE_MS (highest peak counts,
- *         later taps count separately), and a stopped round ignores taps.
+ *         mole up (the red X: score unchanged, wrong count +1, C2), dedupe
+ *         within GAME_DEDUPE_MS (highest peak counts, later taps count
+ *         separately), and a stopped round ignores taps.
  * @return true when every check passed.
  */
 bool test_game_rules_scoring (void)
@@ -313,7 +337,7 @@ bool test_game_rules_scoring (void)
     bool         b_ok  = true;
 
     game_rules_init(&game, TST_SEED);
-    game_rules_start(&game, TST_T0, UINT16_C(0x0003)); /* Tiles 1 and 2. */
+    game_rules_start(&game, TST_T0, UINT16_C(0x0003), TST_HARD);
 
     b_ok = (tst_scenario_hit(&game, &now, &show, &mole)) && b_ok;
     b_ok = (test_main_check(1 == game_rules_score(&game), __LINE__)) && b_ok;
@@ -328,31 +352,35 @@ bool test_game_rules_scoring (void)
     b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK, &evt),
                             __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_FEEDBACK_MISS == evt.result) &&
-                                (0 == evt.score), __LINE__)) && b_ok;
+                                (1 == evt.score) && (1u == game.wrong),
+                            __LINE__)) && b_ok;
 
-    /* A tap on the other tile while the mole is up is a miss: -1. */
+    /* A tap on the other tile while the mole is up: wrong, no penalty. */
     game_rules_tap(&game, other, 300u, show + (100u * TST_MS));
     b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK, &evt),
                             __LINE__)) && b_ok;
-    b_ok = (test_main_check((other == evt.node_id) && (-1 == evt.score),
+    b_ok = (test_main_check((other == evt.node_id) && (1 == evt.score) &&
+                                (2u == game.wrong),
                             __LINE__)) && b_ok;
 
-    /* The mole is still up: a tap on it now is a hit, back to 0. */
+    /* The mole is still up: a tap on it now is a hit, 2. */
     game_rules_tap(&game, mole, 300u, show + (200u * TST_MS));
     b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK, &evt),
                             __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_FEEDBACK_HIT == evt.result) &&
-                                (0 == evt.score), __LINE__)) && b_ok;
+                                (2 == evt.score) && (2u == game.hits),
+                            __LINE__)) && b_ok;
 
     return (b_ok) && (tst_scenario_dedupe(&game, &now));
 }
 
 /**
  * @brief  Dedupe: the mole's tile (peak 100) and the other tile (peak 900)
- *         tap 20 ms apart. Only the higher peak counts, once: one miss, -1.
+ *         tap 15 ms apart. Only the higher peak counts, once: one wrong tap.
  *         A late duplicate inside the closed window is dropped and counted.
  *         A tap 70 ms after the first is outside its window and counts on
- *         its own. Net: -1, then +1 and -1 on the mole, score -1.
+ *         its own. Net: a wrong tap, then a hit and a wrong tap on the mole:
+ *         score +1, wrong +2.
  * @param  p_game  Engine, in a round with a mole up or planned.
  * @param  p_now   Time, advanced.
  * @return true when every check passed.
@@ -364,6 +392,8 @@ static bool tst_scenario_dedupe (game_t * p_game, uint64_t * p_now)
     uint8_t      mole  = 0u;
     uint8_t      other = 0u;
     bool         b_ok  = true;
+    int32_t const  score = game_rules_score(p_game);
+    uint32_t const wrong = p_game->wrong;
 
     b_ok = (test_main_check(tst_next_kind(p_game, p_now, GAME_EV_MOLE_ON,
                                           &evt), __LINE__)) && b_ok;
@@ -377,7 +407,10 @@ static bool tst_scenario_dedupe (game_t * p_game, uint64_t * p_now)
     b_ok = (test_main_check(tst_next_kind(p_game, p_now, GAME_EV_FEEDBACK,
                                           &evt), __LINE__)) && b_ok;
     b_ok = (test_main_check((other == evt.node_id) &&
-                                (-1 == evt.score), __LINE__)) && b_ok;
+                                (PROTO_FEEDBACK_MISS == evt.result) &&
+                                (score == evt.score) &&
+                                ((wrong + 1u) == p_game->wrong),
+                            __LINE__)) && b_ok;
 
     /* The dropped tap made no second feedback. */
     b_ok = (test_main_check((!tst_next_event(p_game, p_now,
@@ -401,8 +434,10 @@ static bool tst_scenario_dedupe (game_t * p_game, uint64_t * p_now)
     b_ok = (test_main_check(tst_next_kind(p_game, p_now, GAME_EV_FEEDBACK,
                                           &evt), __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_FEEDBACK_MISS == evt.result) &&
-                                (-1 == evt.score), __LINE__)) && b_ok;
-    b_ok = (test_main_check(-1 == game_rules_score(p_game), __LINE__)) && b_ok;
+                                ((score + 1) == evt.score), __LINE__)) && b_ok;
+    b_ok = (test_main_check((score + 1) == game_rules_score(p_game),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check((wrong + 2u) == p_game->wrong, __LINE__)) && b_ok;
 
     /* A stopped round ignores taps and reports nothing. */
     game_rules_stop(p_game);
@@ -425,7 +460,7 @@ static bool tst_first_mole (game_t * p_game, uint64_t * p_now,
                             game_event_t * p_evt)
 {
     game_rules_init(p_game, TST_SEED);
-    game_rules_start(p_game, TST_T0, UINT16_C(0x0003));
+    game_rules_start(p_game, TST_T0, UINT16_C(0x0003), TST_HARD);
     *p_now = TST_T0;
 
     return tst_next_kind(p_game, p_now, GAME_EV_MOLE_ON, p_evt);
@@ -463,7 +498,7 @@ bool test_game_rules_grace (void)
                                 (mole == evt.node_id) && (1 == evt.score),
                             __LINE__)) && b_ok;
 
-    /* (b) Tap stamped hide + 5 ms, delivered at hide + 60 ms: miss, -1. */
+    /* (b) Tap stamped hide + 5 ms, delivered at hide + 60 ms: wrong, 0. */
     b_ok = (test_main_check(tst_first_mole(&game, &now, &evt), __LINE__)) &&
            b_ok;
     show = evt.t_show_us;
@@ -474,7 +509,8 @@ bool test_game_rules_grace (void)
     b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK,
                                           &evt), __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_FEEDBACK_MISS == evt.result) &&
-                                (-1 == evt.score), __LINE__)) && b_ok;
+                                (0 == evt.score) && (1u == game.wrong),
+                            __LINE__)) && b_ok;
 
     /* (c) No tap: the mole stays up through the grace, retires at hide +
      * 100 ms with no score, and the next mole shows at hide + 300 ms. */
@@ -495,6 +531,7 @@ bool test_game_rules_grace (void)
                                 (hide + (300u * TST_MS) == evt.t_show_us),
                             __LINE__)) && b_ok;
     b_ok = (test_main_check(0 == game_rules_score(&game), __LINE__)) && b_ok;
+    b_ok = (test_main_check(1u == game.missed, __LINE__)) && b_ok;
 
     return b_ok;
 }

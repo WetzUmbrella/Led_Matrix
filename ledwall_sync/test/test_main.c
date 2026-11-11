@@ -82,6 +82,14 @@ static test_case_t const g_cases[] = {
      test_coord_game_taps},
     {"C23 re-plan: a re-registered tile's TAPs from a low seq are new",
      test_coord_game_tap_restart},
+    {"C24 step 3: ARM, start sprite on the centre tile, countdown, level",
+     test_coord_game_arm},
+    {"C25 step 3: START_NOW, abort in the countdown, 60 s arm timeout",
+     test_coord_game_abort},
+    {"C26 step 3: tap test lights the tapped tile, refused while armed",
+     test_coord_game_tap_test},
+    {"C27 step 3: STATUS level, time left, wrong, missed, shown, reaction",
+     test_coord_game_status},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

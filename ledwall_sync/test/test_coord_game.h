@@ -44,6 +44,31 @@ bool test_coord_game_taps (void);
  */
 bool test_coord_game_tap_restart (void);
 
+/**
+ * @brief  C24: ARM, the start sprite on the centre tile, its tap, the
+ *         countdown on every tile, then the round at the armed level.
+ * @return true when every check passed.
+ */
+bool test_coord_game_arm (void);
+
+/**
+ * @brief  C25: START_NOW, END in the countdown, and the 60 s arm timeout.
+ * @return true when every check passed.
+ */
+bool test_coord_game_abort (void);
+
+/**
+ * @brief  C26: the tap test lights the tapped tile; refused while armed.
+ * @return true when every check passed.
+ */
+bool test_coord_game_tap_test (void);
+
+/**
+ * @brief  C27: STATUS level, time left, wrong, missed, shown, reaction.
+ * @return true when every check passed.
+ */
+bool test_coord_game_status (void);
+
 #endif /* TEST_COORD_GAME_H */
 
 /*** end of file ***/

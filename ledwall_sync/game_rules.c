@@ -14,6 +14,16 @@
 
 #include <string.h>
 
+/** Mole times per level, milliseconds: first and last (B4). */
+static uint16_t const g_up_first_ms[GAME_LEVELS] = {2000u, 1500u, 1200u};
+static uint16_t const g_up_last_ms[GAME_LEVELS]  = {1200u, 800u, 500u};
+
+/** Percent. */
+#define GAME_PERCENT 100u
+
+/** Microseconds per second. */
+#define GAME_US_PER_S UINT64_C(1000000)
+
 /** Microseconds per millisecond, and the rule times in microseconds. */
 #define GAME_US_PER_MS  UINT64_C(1000)
 #define GAME_ROUND_US   (GAME_US_PER_MS * GAME_ROUND_MS)
@@ -70,9 +80,17 @@ void game_rules_init (game_t * p_game, uint32_t seed)
  * @param  p_game       Engine; must not be NULL.
  * @param  now_us       Round start, microseconds.
  * @param  active_mask  Bit n - 1 for each Node ID in the wall.
+ * @param  level        proto_level_t; out of range is taken as Hard.
  */
-void game_rules_start (game_t * p_game, uint64_t now_us, uint16_t active_mask)
+void game_rules_start (game_t * p_game, uint64_t now_us, uint16_t active_mask,
+                       uint8_t level)
 {
+    p_game->level          = (level < GAME_LEVELS) ? level : (GAME_LEVELS - 1u);
+    p_game->hits           = 0u;
+    p_game->missed         = 0u;
+    p_game->wrong          = 0u;
+    p_game->shown          = 0u;
+    p_game->reaction_us    = 0u;
     p_game->b_running      = true;
     p_game->round_start_us = now_us;
     p_game->round_end_us   = now_us + GAME_ROUND_US;
@@ -195,6 +213,7 @@ bool game_rules_poll (game_t * p_game, uint64_t now_us, game_event_t * p_event)
              * the planning and the round end below run in the same call. */
             if (game_mole_expired(p_game, now_us))
             {
+                p_game->missed++; /* C3: a timed-out mole. */
                 p_game->b_mole_up    = false;
                 p_game->next_show_us = p_game->hide_us + GAME_GAP_US;
             }
@@ -292,25 +311,99 @@ uint64_t game_rules_next_due (game_t const * p_game)
 }
 
 /**
- * @brief  Mole time for a moment of the round.
+ * @brief  Mole time for a moment of the round at a level.
+ * @param  level       proto_level_t; out of range is taken as Hard.
  * @param  elapsed_us  Time since the round started, microseconds.
- * @return Milliseconds, 500 to 1200.
+ * @return Milliseconds, 500 to 2,000.
  */
-uint16_t game_rules_up_ms (uint64_t elapsed_us)
+uint16_t game_rules_up_ms (uint8_t level, uint64_t elapsed_us)
 {
-    uint64_t elapsed_ms = elapsed_us / GAME_US_PER_MS;
-    uint64_t drop       = 0u;
+    uint8_t const  lvl        = (level < GAME_LEVELS) ? level
+                                                      : (GAME_LEVELS - 1u);
+    uint64_t const first      = g_up_first_ms[lvl];
+    uint64_t const last       = g_up_last_ms[lvl];
+    uint64_t       elapsed_ms = elapsed_us / GAME_US_PER_MS;
 
     if (elapsed_ms > GAME_ROUND_MS)
     {
         elapsed_ms = GAME_ROUND_MS;
     }
 
-    /* 700 x 30,000 fits uint64_t many times over. */
-    drop = ((uint64_t)(GAME_UP_FIRST_MS - GAME_UP_LAST_MS) * elapsed_ms) /
-           GAME_ROUND_MS;
+    /* At most 800 x 30,000: fits uint64_t many times over. */
+    uint64_t const drop = ((first - last) * elapsed_ms) / GAME_ROUND_MS;
 
-    return (uint16_t)(GAME_UP_FIRST_MS - drop); /* 500 to 1200: fits. */
+    return (uint16_t)(first - drop); /* 500 to 2,000: fits. */
+}
+
+/**
+ * @brief  Stars for the round (C6).
+ * @param  p_game  Engine; must not be NULL.
+ * @return 1 to 3.
+ */
+uint8_t game_rules_stars (game_t const * p_game)
+{
+    uint8_t stars = 1u;
+
+    if (0u != p_game->shown)
+    {
+        /* hits <= shown, both below 2^16: the product fits. */
+        uint32_t const pct = (p_game->hits * GAME_PERCENT) / p_game->shown;
+
+        if (pct >= GAME_STARS_3_PCT)
+        {
+            stars = 3u;
+        }
+        else if (pct >= GAME_STARS_2_PCT)
+        {
+            stars = 2u;
+        }
+        else
+        {
+            /* Below 50%: the one star every child gets. */
+        }
+    }
+
+    return stars;
+}
+
+/**
+ * @brief  Average show-to-tap time of this round's hits.
+ * @param  p_game  Engine; must not be NULL.
+ * @return Milliseconds, 0 with no hit.
+ */
+uint32_t game_rules_reaction_ms (game_t const * p_game)
+{
+    uint32_t avg = 0u;
+
+    if (0u != p_game->hits)
+    {
+        /* A round's hits sum to at most 30 s: the quotient fits 32 bits. */
+        avg = (uint32_t)((p_game->reaction_us / p_game->hits) /
+                         GAME_US_PER_MS);
+    }
+
+    return avg;
+}
+
+/**
+ * @brief  Whole seconds left in the running round, rounded up.
+ * @param  p_game  Engine; must not be NULL.
+ * @param  now_us  Current time, microseconds.
+ * @return Seconds, 0 when no round runs or it is over.
+ */
+uint32_t game_rules_time_left_s (game_t const * p_game, uint64_t now_us)
+{
+    uint32_t left = 0u;
+
+    if ((p_game->b_running) && (now_us < p_game->round_end_us))
+    {
+        /* At most 30 s ahead: the second count fits 32 bits. */
+        left = (uint32_t)(((p_game->round_end_us - now_us) +
+                           (GAME_US_PER_S - 1u)) /
+                          GAME_US_PER_S);
+    }
+
+    return left;
 }
 
 /**
@@ -514,11 +607,14 @@ static bool game_resolve_window (game_t * p_game, game_event_t * p_event)
         p_game->b_mole_up    = false;
         p_game->next_show_us = win.t_tap_us + GAME_GAP_US;
         p_game->score        = game_clamp(p_game->score + 1);
+        p_game->hits++;
+        p_game->reaction_us += win.t_tap_us - p_game->show_us; /* tap >= show */
         p_event->result      = PROTO_FEEDBACK_HIT;
     }
     else
     {
-        p_game->score   = game_clamp(p_game->score - 1);
+        /* C2: no penalty; the red X and the wrong count only. */
+        p_game->wrong++;
         p_event->result = PROTO_FEEDBACK_MISS;
     }
 
@@ -608,7 +704,7 @@ static bool game_plan_mole (game_t * p_game, uint64_t now_us,
         show = now_us + GAME_LEAD_US;
     }
 
-    up_ms = game_rules_up_ms(show - p_game->round_start_us);
+    up_ms = game_rules_up_ms(p_game->level, show - p_game->round_start_us);
     hide  = show + (GAME_US_PER_MS * up_ms);
     node_id = game_pick_node(p_game);
 
@@ -619,6 +715,7 @@ static bool game_plan_mole (game_t * p_game, uint64_t now_us,
     else
     {
         p_game->b_mole_up    = true;
+        p_game->shown++;
         p_game->mole_node    = node_id;
         p_game->show_us      = show;
         p_game->hide_us      = hide;

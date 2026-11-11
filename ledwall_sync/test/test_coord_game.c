@@ -1,7 +1,8 @@
 /**
  * @file    test_coord_game.c
- * @brief   Host tests of the coordinator's game (C20 to C22): the PC's mode
- *          and round commands, the acked tile messages, TAP relay and the
+ * @brief   Host tests of the coordinator's game (C20 to C27): the PC's mode
+ *          and round commands, the round phases (ARM, countdown, abort, tap
+ *          test, STATUS counts), the acked tile messages, TAP relay and the
  *          score on the wire. The simulated tiles and the PC feed encoded
  *          datagrams to the coordinator on a fake clock.
  *
@@ -63,7 +64,19 @@ static bool gt_in_state (proto_coord_state_t state);
 static void gt_rx_tile (uint8_t node_id, uint8_t const * p_buf, uint32_t len);
 static void gt_rx_pc (uint8_t const * p_buf, uint32_t len);
 static void gt_to_ready (void);
+static void gt_pc_command (uint8_t command, uint8_t level, uint8_t threshold,
+                           uint16_t seq);
 static void gt_pc_control (uint8_t command, uint16_t seq);
+static void gt_pc (uint8_t command, uint8_t level, uint8_t threshold);
+static bool gt_status (proto_status_t * p_msg);
+static uint8_t gt_round_state (void);
+static bool gt_last_cmd (uint8_t node_id, uint8_t command,
+                         proto_game_control_t * p_msg);
+static uint32_t gt_count_to (proto_type_t type, uint8_t node_id);
+static bool gt_last_target (uint8_t node_id, proto_mole_on_t * p_msg);
+static bool gt_newest_mole (proto_mole_on_t * p_msg);
+static bool gt_check_countdown (uint8_t node_id, uint64_t t_first);
+static void gt_arm (uint8_t level, uint8_t threshold);
 static void gt_tile_ack (uint8_t node_id, uint16_t acked_seq);
 static void gt_ack_type (proto_type_t type);
 static void gt_tap (uint8_t node_id, uint16_t peak, uint64_t t_tap_us,
@@ -234,17 +247,33 @@ static void gt_to_ready (void)
 }
 
 /**
- * @brief  GAME_CONTROL from the PC (node_id 0) with a given seq.
+ * @brief  GAME_CONTROL from the PC (node_id 0) with a given seq, at level
+ *         and threshold given.
+ * @param  command    proto_game_cmd_t value.
+ * @param  level      proto_level_t value.
+ * @param  threshold  Tap threshold, 20 mg steps; 0 = the tile's default.
+ * @param  seq        Header seq.
+ */
+static void gt_pc_command (uint8_t command, uint8_t level, uint8_t threshold,
+                           uint16_t seq)
+{
+    uint8_t                      buf[PROTO_GAME_CONTROL_BYTES];
+    proto_game_control_t const   msg = {
+        {PROTO_TYPE_GAME_CONTROL, GT_SESSION, seq}, 0u, command, level,
+        threshold};
+
+    gt_rx_pc(buf, proto_encode_game_control(&msg, buf, sizeof(buf)));
+}
+
+/**
+ * @brief  GAME_CONTROL from the PC (node_id 0) with a given seq, at Hard
+ *         (the v1 mole curve the round tests expect).
  * @param  command  proto_game_cmd_t value.
  * @param  seq      Header seq.
  */
 static void gt_pc_control (uint8_t command, uint16_t seq)
 {
-    uint8_t                      buf[PROTO_GAME_CONTROL_BYTES];
-    proto_game_control_t const   msg = {
-        {PROTO_TYPE_GAME_CONTROL, GT_SESSION, seq}, 0u, command, 0u, 0u};
-
-    gt_rx_pc(buf, proto_encode_game_control(&msg, buf, sizeof(buf)));
+    gt_pc_command(command, (uint8_t)PROTO_LEVEL_HARD, 0u, seq); /* Fits. */
 }
 
 /**
@@ -624,8 +653,6 @@ static uint32_t gt_score_pixels (void)
     return total;
 }
 
-/*** end of file ***/
-
 /**
  * @brief  C20: GAME_CONTROL START is refused in video mode; the mode switch
  *         is ACKed to the PC; START then starts the round (START to each
@@ -689,8 +716,6 @@ bool test_coord_game_mode_and_start (void)
 
     return b_ok;
 }
-
-/*** end of file ***/
 
 /** What the round test learns about its first mole. */
 typedef struct
@@ -867,7 +892,7 @@ static bool gt_check_hit (gt_round_t * p_round)
 
 /**
  * @brief  The round end at 30 s: END to both tiles, the score across the
- *         wall as 8 lit pixels (a 1), then READY with no score on STATUS.
+ *         wall as 8 lit pixels (a 1), then READY with the score on STATUS.
  * @param  p_round  The round.
  * @return true when every check passed.
  */
@@ -897,7 +922,8 @@ static bool gt_check_round_end (gt_round_t const * p_round)
 
     gt_advance(300u * GT_MS);
     b_ok = (test_main_check(gt_last_status(&score, &state), __LINE__)) && b_ok;
-    b_ok = (test_main_check((0 == score) && (PROTO_COORD_READY == state),
+    /* RESULTS: READY, and the final score stays on STATUS (DS-08). */
+    b_ok = (test_main_check((1 == score) && (PROTO_COORD_READY == state),
                             __LINE__)) && b_ok;
 
     return b_ok;
@@ -1021,6 +1047,464 @@ bool test_coord_game_tap_restart (void)
     b_ok = (test_main_check(1u == gt_ack_count(1u, after), __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT,
                                                after),
+                            __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  A PC command with the next PC seq, then 10 ms of passes.
+ * @param  command    proto_game_cmd_t value.
+ * @param  level      proto_level_t value.
+ * @param  threshold  Tap threshold, 20 mg steps.
+ */
+static void gt_pc (uint8_t command, uint8_t level, uint8_t threshold)
+{
+    gt_pc_command(command, level, threshold, g_pc_seq);
+    g_pc_seq++;
+    gt_advance(10u * GT_MS);
+}
+
+/**
+ * @brief  The newest STATUS the Pico sent to the PC, all fields.
+ * @param  p_msg  Receives it.
+ * @return true when one was found.
+ */
+static bool gt_status (proto_status_t * p_msg)
+{
+    bool b_found = false;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        proto_status_t                        msg;
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        if ((GT_PC_PORT == p_send->port) &&
+            (proto_decode_status(p_send->bytes, p_send->len, &msg)))
+        {
+            *p_msg  = msg;
+            b_found = true;
+        }
+    }
+
+    return b_found;
+}
+
+/**
+ * @brief  The round state on the newest STATUS, after a STATUS period.
+ * @return proto_round_state_t value, or PROTO_ROUND_STATE_COUNT when none.
+ */
+static uint8_t gt_round_state (void)
+{
+    proto_status_t msg;
+    uint8_t        state = (uint8_t)PROTO_ROUND_STATE_COUNT; /* 5: fits. */
+
+    gt_advance(300u * GT_MS);
+
+    if (gt_status(&msg))
+    {
+        state = msg.round_state;
+    }
+    else
+    {
+        /* No STATUS yet. */
+    }
+
+    return state;
+}
+
+/**
+ * @brief  The newest GAME_CONTROL with one command sent to one tile.
+ * @param  node_id  Tile, 1 to 9.
+ * @param  command  proto_game_cmd_t value.
+ * @param  p_msg    Receives it.
+ * @return true when one was found.
+ */
+static bool gt_last_cmd (uint8_t node_id, uint8_t command,
+                         proto_game_control_t * p_msg)
+{
+    bool b_found = false;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        proto_game_control_t                  msg;
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        if ((GT_TILE_SRC_PORT == p_send->port) &&
+            (proto_decode_game_control(p_send->bytes, p_send->len, &msg)) &&
+            (node_id == msg.node_id) && (command == msg.command))
+        {
+            *p_msg  = msg;
+            b_found = true;
+        }
+    }
+
+    return b_found;
+}
+
+/**
+ * @brief  Count the sends of one type to one tile (any seq, repeats too).
+ * @param  type     MOLE_ON, FEEDBACK or WALL_PICTURE.
+ * @param  node_id  Tile, 1 to 9.
+ * @return The count.
+ */
+static uint32_t gt_count_to (proto_type_t type, uint8_t node_id)
+{
+    uint32_t count = 0u;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+        uint8_t  node = 0u;
+        uint16_t seq  = 0u;
+
+        if ((GT_TILE_SRC_PORT == p_send->port) &&
+            (gt_node_seq(p_send, type, &node, &seq)) && (node_id == node))
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+/**
+ * @brief  The newest MOLE_ON sent to one tile.
+ * @param  node_id  Tile, 1 to 9.
+ * @param  p_msg    Receives it.
+ * @return true when one was found.
+ */
+static bool gt_last_target (uint8_t node_id, proto_mole_on_t * p_msg)
+{
+    bool b_found = false;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        proto_mole_on_t                       msg;
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        if ((GT_TILE_SRC_PORT == p_send->port) &&
+            (proto_decode_mole_on(p_send->bytes, p_send->len, &msg)) &&
+            (node_id == msg.node_id))
+        {
+            *p_msg  = msg;
+            b_found = true;
+        }
+    }
+
+    return b_found;
+}
+
+/**
+ * @brief  The newest MOLE_ON of kind MOLE sent to any tile.
+ * @param  p_msg  Receives it.
+ * @return true when one was found.
+ */
+static bool gt_newest_mole (proto_mole_on_t * p_msg)
+{
+    bool b_found = false;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        proto_mole_on_t                       msg;
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        if ((GT_TILE_SRC_PORT == p_send->port) &&
+            (proto_decode_mole_on(p_send->bytes, p_send->len, &msg)) &&
+            (PROTO_TARGET_MOLE == msg.kind))
+        {
+            *p_msg  = msg;
+            b_found = true;
+        }
+    }
+
+    return b_found;
+}
+
+/**
+ * @brief  The countdown on one tile: WALL_PICTURE entries 0, 1 and 2, yellow
+ *         pictures of 1 s each, shown 1 s apart from t_first.
+ * @param  node_id  Tile, 1 to 9.
+ * @param  t_first  Show time of entry 0.
+ * @return true when every check passed.
+ */
+static bool gt_check_countdown (uint8_t node_id, uint64_t t_first)
+{
+    uint32_t seen = 0u; /* Bit per entry found. */
+    bool     b_ok = true;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        proto_wall_picture_t                  msg;
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        if ((GT_TILE_SRC_PORT == p_send->port) &&
+            (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
+            (node_id == msg.node_id))
+        {
+            uint64_t const t_want = t_first + (msg.slot * (1000u * GT_MS));
+
+            seen |= (UINT32_C(1) << msg.slot); /* slot < 4. */
+            b_ok = (test_main_check((PROTO_PIC_PICTURE == msg.effect) &&
+                                        (PROTO_COLOUR_YELLOW == msg.colour) &&
+                                        (0u == msg.b_repeat) &&
+                                        (1000u == msg.dur_ms) &&
+                                        (t_want == msg.t_show) &&
+                                        (0u != msg.mask),
+                                    __LINE__)) && b_ok;
+        }
+    }
+
+    b_ok = (test_main_check(UINT32_C(0x7) == seen, __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  To READY in game mode, then ARM at a level and threshold.
+ * @param  level      proto_level_t value.
+ * @param  threshold  Tap threshold, 20 mg steps.
+ */
+static void gt_arm (uint8_t level, uint8_t threshold)
+{
+    gt_to_ready();
+    gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    gt_pc(PROTO_GAME_ARM, level, threshold);
+}
+
+/**
+ * @brief  C24: ARM (DS-08): ARM with the level and threshold to both tiles,
+ *         the start sprite (kind START, up until tapped) on the tile nearest
+ *         the centre only; a tap elsewhere does nothing; a tap on the sprite
+ *         turns it green and starts the 3 s countdown (3, 2, 1 on every
+ *         tile); then START and the moles at the armed level.
+ * @return true when every check passed.
+ */
+bool test_coord_game_arm (void)
+{
+    proto_game_control_t ctl;
+    proto_mole_on_t      target;
+    proto_status_t       status;
+    uint64_t             t_tap = 0u;
+    bool                 b_ok  = true;
+
+    (void)memset(&ctl, 0, sizeof(ctl));       /* Returns it. */
+    (void)memset(&target, 0, sizeof(target)); /* Returns it. */
+    gt_arm((uint8_t)PROTO_LEVEL_NORMAL, 15u); /* 3 levels fit uint8_t. */
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
+                            __LINE__)) && b_ok;
+
+    for (uint8_t node_id = 1u; node_id <= 2u; node_id++)
+    {
+        b_ok = (test_main_check(gt_last_cmd(node_id, PROTO_GAME_ARM, &ctl),
+                                __LINE__)) && b_ok;
+        b_ok = (test_main_check((PROTO_LEVEL_NORMAL == ctl.level) &&
+                                    (15u == ctl.threshold),
+                                __LINE__)) && b_ok;
+    }
+
+    /* A 2 x 2 wall: both tiles are as near the centre; the lower slot wins. */
+    b_ok = (test_main_check(gt_last_target(1u, &target), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_TARGET_START == target.kind) &&
+                                (0u == target.up_ms),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_MOLE_ON, 2u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(PROTO_ROUND_ARMED == gt_round_state(), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check((gt_status(&status)) &&
+                                (PROTO_LEVEL_NORMAL == status.level),
+                            __LINE__)) && b_ok;
+
+    /* A tap on the other tile: no feedback, still armed. */
+    gt_tap(2u, 900u, coordinator_port_now_us(), ++g_tap_seq);
+    b_ok = (test_main_check(PROTO_ROUND_ARMED == gt_round_state(), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 2u),
+                            __LINE__)) && b_ok;
+
+    /* The tap on the start sprite: green, then the countdown. */
+    t_tap = coordinator_port_now_us();
+    gt_tap(1u, 900u, t_tap, ++g_tap_seq);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(1u <= gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_check_countdown(1u, t_tap + (500u * GT_MS)),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_check_countdown(2u, t_tap + (500u * GT_MS)),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(PROTO_ROUND_COUNTDOWN == gt_round_state(),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == gt_count_start(1u), __LINE__)) && b_ok;
+
+    /* 3.5 s after the tap (0.5 s lead, 3 s of digits): the round plays. */
+    gt_advance((t_tap + (3510u * GT_MS)) - coordinator_port_now_us());
+    b_ok = (test_main_check((1u <= gt_count_start(1u)) &&
+                                (1u <= gt_count_start(2u)),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(PROTO_ROUND_PLAYING == gt_round_state(), __LINE__))
+           && b_ok;
+
+    /* Normal: 1500 ms at the start, so about 1493 ms 300 ms in. */
+    if ((!gt_last_target(2u, &target)) ||
+        (PROTO_TARGET_MOLE != target.kind))
+    {
+        (void)gt_last_target(1u, &target); /* The mole is on tile 1. */
+    }
+    else
+    {
+        /* The mole is on tile 2. */
+    }
+
+    b_ok = (test_main_check((PROTO_TARGET_MOLE == target.kind) &&
+                                (target.up_ms >= 1480u) &&
+                                (target.up_ms <= 1500u),
+                            __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C25: START_NOW skips the sprite; END in the countdown aborts (END
+ *         to the tiles, no round, READY); an armed sprite with no tap for
+ *         60 s returns to GAME IDLE; START_NOW outside ARMED is refused.
+ * @return true when every check passed.
+ */
+bool test_coord_game_abort (void)
+{
+    uint64_t t_arm = 0u;
+    bool     b_ok  = true;
+
+    gt_arm((uint8_t)PROTO_LEVEL_EASY, 0u); /* 3 levels fit uint8_t. */
+    gt_pc(PROTO_GAME_START_NOW, 0u, 0u);
+    b_ok = (test_main_check(PROTO_ROUND_COUNTDOWN == gt_round_state(),
+                            __LINE__)) && b_ok;
+    gt_pc(PROTO_GAME_END, 0u, 0u);
+    b_ok = (test_main_check((1u <= gt_count_cmd(1u, PROTO_GAME_END)) &&
+                                (1u <= gt_count_cmd(2u, PROTO_GAME_END)),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+    b_ok = (test_main_check(PROTO_ROUND_IDLE == gt_round_state(), __LINE__)) &&
+           b_ok;
+    gt_advance(4000u * GT_MS);
+    b_ok = (test_main_check(0u == gt_count_start(1u), __LINE__)) && b_ok;
+
+    /* START_NOW with nothing armed: refused, still READY. */
+    gt_pc(PROTO_GAME_START_NOW, 0u, 0u);
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+
+    /* Armed and never tapped: back to GAME IDLE after 60 s. */
+    gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
+    t_arm = coordinator_port_now_us() - (10u * GT_MS);
+    gt_advance((t_arm + (59900u * GT_MS)) - coordinator_port_now_us());
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
+                            __LINE__)) && b_ok;
+    gt_advance(200u * GT_MS);
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+    b_ok = (test_main_check(PROTO_ROUND_IDLE == gt_round_state(), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(0u == gt_count_start(1u), __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C26: the tap test (A11): TAP_TEST_ON goes to both tiles, and every
+ *         tap then lights its own tile green; after TAP_TEST_OFF a tap lights
+ *         nothing; the tap test is refused while a round is armed.
+ * @return true when every check passed.
+ */
+bool test_coord_game_tap_test (void)
+{
+    uint32_t sends = 0u;
+    bool     b_ok  = true;
+
+    gt_to_ready();
+    gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    gt_pc(PROTO_GAME_TAP_TEST_ON, 0u, 0u);
+    b_ok = (test_main_check((1u <= gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON)) &&
+                                (1u <= gt_count_cmd(2u,
+                                                    PROTO_GAME_TAP_TEST_ON)),
+                            __LINE__)) && b_ok;
+
+    gt_tap(2u, 900u, coordinator_port_now_us(), ++g_tap_seq);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(1u <= gt_count_to(PROTO_TYPE_FEEDBACK, 2u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+
+    gt_pc(PROTO_GAME_TAP_TEST_OFF, 0u, 0u);
+    b_ok = (test_main_check(1u <= gt_count_cmd(1u, PROTO_GAME_TAP_TEST_OFF),
+                            __LINE__)) && b_ok;
+    gt_tap(1u, 900u, coordinator_port_now_us(), ++g_tap_seq);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
+                            __LINE__)) && b_ok;
+
+    /* Armed: refused (after the earlier TAP_TEST_ON stops its resends). */
+    gt_advance(1100u * GT_MS);
+    gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
+    sends = gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON);
+    gt_pc(PROTO_GAME_TAP_TEST_ON, 0u, 0u);
+    b_ok = (test_main_check(sends == gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON),
+                            __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C27: the STATUS counts (DS-08): in a v1 round at Hard with one
+ *         wrong tap and one hit 20 ms into a mole, STATUS shows the level,
+ *         the time left, then in RESULTS: score 1, wrong 1, missed equal to
+ *         the moles shown less the hit, and the hit's reaction time.
+ * @return true when every check passed.
+ */
+bool test_coord_game_status (void)
+{
+    gt_round_t      round;
+    proto_status_t  status;
+    proto_mole_on_t mole;
+    bool            b_ok = false;
+
+    (void)memset(&mole, 0, sizeof(mole));     /* Returns it. */
+    (void)memset(&round, 0, sizeof(round));   /* Returns the round. */
+    (void)memset(&status, 0, sizeof(status)); /* Returns it. */
+    b_ok = gt_begin_round(&round);
+    b_ok = (gt_find_first_mole(&round)) && b_ok;
+
+    /* The hit, then a tap on the tile without the newest mole: wrong. */
+    b_ok = (gt_check_hit(&round)) && b_ok;
+    b_ok = (test_main_check(gt_newest_mole(&mole), __LINE__)) && b_ok;
+    /* The mole is tile 1 or 2, so the other tile fits uint8_t. */
+    gt_tap((uint8_t)(3u - mole.node_id), 1000u, coordinator_port_now_us(),
+           ++g_tap_seq);
+    gt_advance(300u * GT_MS);
+    b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_ROUND_PLAYING == status.round_state) &&
+                                (PROTO_LEVEL_HARD == status.level) &&
+                                (1u == status.wrong) &&
+                                (status.time_left_s >= 28u) &&
+                                (status.time_left_s <= 30u),
+                            __LINE__)) && b_ok;
+
+    gt_advance((round.t_round + GT_ROUND_US + (400u * GT_MS)) -
+               coordinator_port_now_us());
+    b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_ROUND_RESULTS == status.round_state) &&
+                                (PROTO_COORD_READY == status.state) &&
+                                (1 == status.score) && (1u == status.wrong) &&
+                                (status.shown > 10u) &&
+                                ((status.shown - 1u) == status.missed) &&
+                                (0u == status.time_left_s) &&
+                                (20u == status.reaction_ms),
                             __LINE__)) && b_ok;
 
     return b_ok;
