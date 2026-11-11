@@ -12,6 +12,11 @@ Branch `feature/whack-a-mole`, step 3 built in `86ffb33` to `f6a543e` (protocol 
 | Round 5 (Easy, 300 mg, DMA) | **PASS** | 29 of 30, 4 wrong, 606 ms, 3 stars; no faults. **No flicker** (operator). Tick-to-RMT lateness unchanged by DMA (about 99% under 100 us); 1 missed tick in about 23,000 on each tile. ARM set 300 mg on both tiles; after it no tap under 300 mg was seen (lowest 305 mg). A gripped tile held still sets off no taps; moving it does (operator: children do not hold the tiles). One soft tap was not detected; the operator chose to keep 300 mg. `round5_*.log` |
 | Default threshold | **300 mg** | `TAP_DETECT_THRESHOLD_MG` raised from 200 to 300 mg (tap test and tap-to-place use it too); the detector's unit tests keep their 200 mg edge cases (`TAP_DETECT_TEST_THRESHOLD_MG`); K8 checks the default. |
 
+Smaller fixes found on the bench:
+- PC live hit count: `shown - missed` counted a mole still up as a hit (round 1); it is now the score, since only hits score (`4e1fcbd`, test).
+- Bench script: with the Pico still showing round 1's RESULTS, `game_round.py` took them as the new round's end and stopped following 5 s after arming (round 2; the round still ran on the Pico). It now waits for RESULTS after PLAYING (`e7a68b9`).
+- Serial capture: the Pico's log was empty because the capture script held DTR low (TinyUSB CDC sends only with DTR high); `serial_log.py` holds it high and does not reset the boards. Tile 4's round 2 log lost lines (its USB serial dropped output), so its picture count there is not evidence; tile 5's log is complete.
+
 Not measured yet: the GPIO4 event pulses (DS-13: tap 2 ms, hit burst 6 ms, mole 10 ms) need GPIO4 and GND wired to pico_tap; NR-03 (tap to hit flash) waits on that.
 
 Known upload race: the first upload after a new session failed on tile 4 in rounds 2, 4 and 5 (0 of 57 chunks: the MANIFEST arrives before a beacon carries the new session); the second upload always passed. DS-12 A fixes it in step 4.
