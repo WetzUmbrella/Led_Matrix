@@ -93,6 +93,14 @@ settle(3)
 run("upload")
 settle(3)
 run("status")
+# A tile with a fault (a DISPLAY fault: no LED output) must not be played
+# on; the round would run on the Pico with nothing on the wall (bench
+# 12 Nov 2026, round 4).
+faulty = ["tile %d: %s" % (row.node_id, row.faults())
+          for row in sh.telemetry.tiles.values() if row.faults() != "none"]
+if faulty:
+    print("not arming, tile faults: %s" % "; ".join(faulty), flush=True)
+    sys.exit(1)
 run("mode game")
 settle(1)
 if args.tap_test > 0:

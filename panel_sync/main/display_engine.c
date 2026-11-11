@@ -76,17 +76,20 @@
 #define DE_T_SHORT 3u
 #define DE_T_LONG  9u
 
-/** RMT DMA buffer, symbols (OD-16, decided 12 Nov 2026). The driver plays
- *  it as two halves; one half (2,048) holds a whole frame (192 bytes, 1,536
- *  symbols), so no refill is due while a frame is sent. Without DMA the
+/** RMT DMA buffer, symbols (OD-16, decided 12 Nov 2026). Without DMA the
  *  channel had 64 symbols and a refill every 32 (about 38 us); in game mode
  *  the extra WiFi traffic made refills late and corrupted the rest of the
- *  frame (random pixels and colours, bench 12 Nov 2026). 16 KiB of
- *  internal DMA memory. */
-#define DE_RMT_SYMBOLS 4096u
+ *  frame (random pixels and colours, bench 12 Nov 2026). With DMA the
+ *  driver plays the buffer as two halves of 1,023 symbols: a frame (192
+ *  bytes, 1,536 symbols) needs one refill, due about 1.3 ms after the frame
+ *  starts. 2,046 is the driver's maximum (ESP-IDF 5.3 rmt_tx.c: larger
+ *  fails "mem_block_symbols can't exceed 2046", and the LEDs keep their
+ *  last image: bench 12 Nov 2026, round 4). */
+#define DE_RMT_SYMBOLS 2046u
 
-_Static_assert((DE_RMT_SYMBOLS / 2u) >= (8u * DISPLAY_FRAME_WIRE_BYTES),
-               "one DMA half must hold a whole frame");
+_Static_assert((DE_RMT_SYMBOLS <= 2046u) && (0u == (DE_RMT_SYMBOLS % 2u)) &&
+                   (DE_RMT_SYMBOLS >= (8u * DISPLAY_FRAME_WIRE_BYTES)),
+               "even, within the driver's DMA limit, and holding a frame");
 
 /** Poll period while waiting for SYNC_READY before the first tick (plan
  *  choice: 20 ms, about one beacon interval / 5). */
@@ -803,8 +806,9 @@ static gptimer_handle_t de_timer_create (void)
 /**
  * @brief  Create the RMT TX channel on GPIO14 and a bytes encoder with the
  *         WS2812B bit timing, from de_task on core 1 (T-B5-03). With DMA
- *         (OD-16, see DE_RMT_SYMBOLS): the frame is encoded into memory
- *         before it starts, so no interrupt can delay it part way.
+ *         (OD-16, see DE_RMT_SYMBOLS): the first 1,023 symbols of a frame
+ *         are encoded before it starts, and the one refill has about
+ *         1.3 ms, so late interrupts no longer cut a frame.
  * @param  p_rmt  Receives the channel and encoder.
  * @return true when the channel is enabled.
  */
