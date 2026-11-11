@@ -82,6 +82,11 @@ SESSION_MIN, SESSION_MAX = 1, 255
 SESSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             ".last_session")
 
+#: Where the last command seq is kept (gitignored): a restarted dashboard
+#: goes on above it, so the Pico takes its commands as new (step 4).
+SEQ_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        ".last_seq")
+
 #: Messages kept in memory for the website.
 MESSAGE_KEEP = 200
 
@@ -541,7 +546,7 @@ class DashboardShell(cmd.Cmd):
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
         self.model = DashboardModel()
-        self.link = pico_link.PicoLink(pico_ip)
+        self.link = pico_link.PicoLink(pico_ip, seq_file=SEQ_FILE)
         self.telemetry = telemetry.TelemetryReceiver()
         self.uploader = uploader.Uploader()
         self.session_id = session_id

@@ -11,3 +11,4 @@ __pycache__/
 **/build_bench*/
 .claude/settings.local.json
 pc/.last_session
+pc/.last_seq

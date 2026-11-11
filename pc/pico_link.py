@@ -76,6 +76,10 @@ STARS_2_PCT = 50
 GAME_TRIES = 5
 GAME_ACK_WAIT_S = 0.2
 
+#: A restarted PC starts this far past the last seq saved (room for sends
+#: whose save was lost).
+SEQ_RESTART_GAP = 64
+
 #: Most ACKed sequence numbers kept while nobody asks for them.
 ACK_KEEP = 32
 
@@ -136,6 +140,33 @@ class Status:
         return 1
 
 
+def load_seq(path: Optional[str]) -> int:
+    """The seq a new PicoLink starts from: SEQ_RESTART_GAP past the last one
+    saved, so a restarted PC's commands are newer than the old process's
+    (the Pico drops an older seq as a repeat, and still ACKs it: bench 11 Nov
+    2026). 0 with no file."""
+    if path is None:
+        return 0
+    try:
+        with open(path) as handle:
+            last = int(handle.read().strip())
+    except (OSError, ValueError):
+        return 0
+    return (last + SEQ_RESTART_GAP) & 0xFFFF
+
+
+def save_seq(path: Optional[str], seq: int) -> None:
+    """Keep the last seq sent (best effort: a failed write only loses the
+    restart guard)."""
+    if path is None:
+        return
+    try:
+        with open(path, "w") as handle:
+            handle.write("%d\n" % seq)
+    except OSError:
+        pass
+
+
 def required_mask(node_map: Sequence[int]) -> int:
     """Bit n - 1 for every Node ID n in the map (VC-11b)."""
     mask = 0
@@ -154,7 +185,8 @@ class PicoLink:
     """Commands to one Pico and the STATUS it sends back."""
 
     def __init__(self, pico_ip: str, port: int = STATUS_PORT,
-                 sock: Optional[socket.socket] = None) -> None:
+                 sock: Optional[socket.socket] = None,
+                 seq_file: Optional[str] = None) -> None:
         self.pico = (pico_ip, PICO_PORT)
         if sock is None:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -162,7 +194,9 @@ class PicoLink:
             sock.bind(("", port))
         self.sock = sock
         self.sock.setblocking(False)
-        self.seq = 0
+        #: Where the last seq is kept, so a restarted PC goes on above it.
+        self.seq_file = seq_file
+        self.seq = load_seq(seq_file)
         self.session_id = 0
         self.status: Optional[Status] = None
         #: Board numbers of TAP datagrams not yet taken (build step 4).
@@ -175,6 +209,7 @@ class PicoLink:
 
     def _next_seq(self) -> int:
         self.seq = (self.seq + 1) & 0xFFFF
+        save_seq(self.seq_file, self.seq)
         return self.seq
 
     def send_session_config(self, session_id: int, rows: int, cols: int,

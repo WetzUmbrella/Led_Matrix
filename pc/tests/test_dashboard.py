@@ -462,3 +462,20 @@ def test_layout_without_a_gif_is_sent_for_a_game() -> None:
     session, rows, cols, _node_map, frames, crcs = shell.link.configs[0]
     assert (session, rows, cols, frames) == (9, 1, 2, 1)
     assert crcs == [0] * len(crcs)
+
+
+def test_a_restarted_link_goes_on_above_the_last_seq(tmp_path) -> None:  # type: ignore
+    # A new process (new PicoLink) starts past the saved seq, so the Pico
+    # does not drop its commands as repeats; 16-bit wrap included.
+    path = str(tmp_path / "seq")
+    pico, pc, link = _udp_pair()
+    link.seq_file = path
+    for _ in range(5):
+        link._next_seq()
+    assert plink.load_seq(path) == 5 + plink.SEQ_RESTART_GAP
+    plink.save_seq(path, 0xFFF0)
+    assert plink.load_seq(path) == (0xFFF0 + plink.SEQ_RESTART_GAP) & 0xFFFF
+    assert plink.load_seq(None) == 0
+    assert plink.load_seq(str(tmp_path / "missing")) == 0
+    pico.close()
+    pc.close()
