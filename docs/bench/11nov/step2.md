@@ -14,10 +14,10 @@ Branch `feature/whack-a-mole` @ `815a185` plus the settle fix. Coordinator Pico 
 | Round 12 | Not a test | The operator did not tap (the round started before they were ready). `round12_*.log` |
 | Tap check (no game) | PASS | 3 firm taps per tile: 20.9 to 26.6 g on the tapped tile, 263 to 390 mg echo on the other: about 100 to 1 on sponge, upright against the box. `step2_tapcheck2_node*.log` (`step2_tapcheck_*` was an idle run: the operator did not tap). |
 | Round 13 (grouping fix) | **PASS: no tap counted on both tiles** | 30 moles, 25 TAPs, 12 hits, 6 misses, none paired with a verdict on the other tile. 3 misses deliberate; one a tap before the first mole showed. **Two limits found:** (a) a 16.9 g slap rebounded with 652 mg 146 ms later after a short quiet spell and counted again: fixed with a 250 ms dead time before re-arming (`TAP_DETECT_DEAD_US`; test K4 replays it); (b) a soft tap gave 555 mg on node 4 and 644 mg on node 5, so "highest peak wins" picked node 5: with soft taps the echo can match the tap. No clean software fix at this sensitivity; raise with the professor (capacitive touch removes it). `round13_*.log` |
+| **Round 14 (250 ms dead time)** | **PASS** | Score 40: 43 moles, 42 hits, 3 misses. 88 TAPs reached the Pico, about 45 of them echoes, all dropped by the grouping. No tap scored on both tiles; no slap counted twice. The 3 misses: two on node 4 near 7 s (one at a mole changeover, one while the mole was on node 5), one after the last mole. TAP arrival minus tap time median 27 ms (max 70). `round14_*.log` |
 
 Correction to step 1: the tap to flash estimate of 70 to 90 ms added the 30 ms group window to the arrival time, but the window starts at the tap. Verdict about 30 ms after the touch, about 10 ms to the tile, then the next 60 fps frame: about 45 to 55 ms. To be measured with the GPIO4 pulses (DS-13).
 
-## Still to check
+## Result
 
-- A round with the 250 ms dead time (firm slaps: one green, no second red).
-- Soft taps: attribution between tiles is unreliable when the tap is near the echo's size (limit (b) above).
+**Step 2 done 11 Nov.** Known limit carried forward: a soft tap can be matched by its echo on the next tile, so highest-peak can credit the wrong tile (round 13); to raise with the professor (capacitive touch).

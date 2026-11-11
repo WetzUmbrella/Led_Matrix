@@ -1,0 +1,74 @@
+>>> config docs/bench/9nov/numbered_1x2.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794387246.895 configuration accepted
+>>> build
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+>>> upload
+failed: node 4 (0 of 57 chunks ACKed after 20 rounds)
+1794387337.058 uploaded to 172.20.10.5: 57 of 57 chunks ACKed, resent 0, 5.20 s
+1794387337.058 node 4 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+>>> upload
+failed: none
+1794387345.263 uploaded to 172.20.10.4: 57 of 57 chunks ACKed, resent 0, 5.19 s
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794387345.515 all tiles ready
+>>> mode game
+1794387348.270 mode game
+>>> game start
+  0.0 s  READY score=0 online=0x018
+  0.3 s  COORDINATING GAME score=0 online=0x018
+  1.3 s  COORDINATING GAME score=1 online=0x018
+  2.0 s  COORDINATING GAME score=2 online=0x018
+  2.8 s  COORDINATING GAME score=3 online=0x018
+  3.5 s  COORDINATING GAME score=4 online=0x018
+  4.3 s  COORDINATING GAME score=5 online=0x018
+  5.0 s  COORDINATING GAME score=6 online=0x018
+  5.5 s  COORDINATING GAME score=7 online=0x018
+  6.3 s  COORDINATING GAME score=8 online=0x018
+  7.0 s  COORDINATING GAME score=7 online=0x018
+  7.5 s  COORDINATING GAME score=6 online=0x018
+  8.8 s  COORDINATING GAME score=7 online=0x018
+  9.5 s  COORDINATING GAME score=8 online=0x018
+ 10.0 s  COORDINATING GAME score=9 online=0x018
+ 10.8 s  COORDINATING GAME score=10 online=0x018
+ 11.5 s  COORDINATING GAME score=11 online=0x018
+ 12.3 s  COORDINATING GAME score=12 online=0x018
+ 12.8 s  COORDINATING GAME score=13 online=0x018
+ 13.5 s  COORDINATING GAME score=14 online=0x018
+ 14.3 s  COORDINATING GAME score=15 online=0x018
+ 14.8 s  COORDINATING GAME score=16 online=0x018
+ 15.5 s  COORDINATING GAME score=17 online=0x018
+ 16.0 s  COORDINATING GAME score=18 online=0x018
+ 16.8 s  COORDINATING GAME score=19 online=0x018
+ 17.3 s  COORDINATING GAME score=20 online=0x018
+ 18.0 s  COORDINATING GAME score=21 online=0x018
+ 18.5 s  COORDINATING GAME score=22 online=0x018
+ 19.3 s  COORDINATING GAME score=23 online=0x018
+ 19.8 s  COORDINATING GAME score=24 online=0x018
+ 20.3 s  COORDINATING GAME score=25 online=0x018
+ 20.8 s  COORDINATING GAME score=26 online=0x018
+ 22.0 s  COORDINATING GAME score=27 online=0x018
+ 22.3 s  COORDINATING GAME score=28 online=0x018
+ 22.8 s  COORDINATING GAME score=29 online=0x018
+ 23.3 s  COORDINATING GAME score=30 online=0x018
+ 23.8 s  COORDINATING GAME score=31 online=0x018
+ 24.8 s  COORDINATING GAME score=32 online=0x018
+ 25.3 s  COORDINATING GAME score=33 online=0x018
+ 26.0 s  COORDINATING GAME score=34 online=0x018
+ 26.6 s  COORDINATING GAME score=35 online=0x018
+ 27.3 s  COORDINATING GAME score=36 online=0x018
+ 27.6 s  COORDINATING GAME score=37 online=0x018
+ 28.3 s  COORDINATING GAME score=38 online=0x018
+ 28.8 s  COORDINATING GAME score=39 online=0x018
+ 29.6 s  COORDINATING GAME score=40 online=0x018
+ 30.1 s  READY score=0 online=0x018
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794387379.355 round over, score 40
