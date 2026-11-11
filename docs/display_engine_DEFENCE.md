@@ -25,7 +25,7 @@ Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-0
 ## 4. Unpack straight to LED values, no scaling on the tile
 
 - Source: VC-6 "each LED byte equals the nibble value 0 to 8, with no scaling and no floating point"; OD-05 option (a); CB-5.
-- Choice: nibble k of the frame is written unchanged into the wire buffer in G, R, B order. The brightness cap lives only on the PC. `grep -rn -e "dim(" -e BRIGHT panel_sync/main` returns 0 lines. Host test D1: the T-B1-01 `frame_pattern.bin` vector gives 192 of 192 bytes equal to the PC reference and every byte 0 to 8.
+- Choice: nibble k of the frame is written unchanged into the wire buffer in R, G, B order (the Waveshare panel is RGB; bench 5 Nov 2026). The brightness cap lives only on the PC. `grep -rn -e "dim(" -e BRIGHT panel_sync/main` returns 0 lines. Host test D1: the T-B1-01 `frame_pattern.bin` vector gives 192 of 192 bytes equal to the PC reference and every byte 0 to 8.
 - Examiner: "Where would double scaling show up, and which test catches it?" (T-X-01 round trip.)
 
 ## 5. Frame index by tick count
@@ -37,7 +37,7 @@ Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-0
 ## 6. Rotation remap from the stable orientation
 
 - Source: T-B5-03 "unpack and rotation remap from the 2-bit stable orientation"; IFM-5a.
-- Choice: `display_frame_source_led()` maps each physical LED to its source LED for 0, 90, 180, 270 degrees; the orientation is read from the Orientation Task's mailbox once per preparation. Host test D2: four 90 degree turns are the identity, 180 degrees is LED i to 63 - i, every orientation is a permutation. D2 passes for either direction, so host tests D4 to D6 pin it: D4 and D6 against hand-worked LED tables, D5 from gravity through `orient_filter_classify()` to the picture for all 64 LEDs. Code 90 is a tile turned anticlockwise when the IMU axes are X right and Y up. Those axes are PROVISIONAL until the T-B5-06 trials.
+- Choice: `display_frame_source_led()` maps each physical LED to its source LED for 0, 90, 180, 270 degrees; the orientation is read from the Orientation Task's mailbox once per preparation. Host test D2: four 90 degree turns are the identity, 180 degrees is LED i to 63 - i, every orientation is a permutation. D2 passes for either direction, so host tests D4 to D6 pin it: D4 and D6 against hand-worked LED tables, D5 from gravity through `orient_filter_classify()` to the picture for all 64 LEDs. Code 90 is a tile turned 90 degrees clockwise: the 5 Nov bench showed the first mapping (X right, Y up) turned a 90 degree tile upside down, and on 9 Nov the code rose with clockwise turns. D4 to D6 pin the corrected remap; the board's IMU sits a quarter turn from the LED grid, so `DISPLAY_FRAME_MOUNT_TURNS` (3, measured 5 Nov) is added before the remap. The whole chain is to be confirmed at all four angles on a tile (card F4, T-B5-06).
 - Examiner: "The tile is turned 90 degrees clockwise. Which source LED does physical LED 0 show?"
 
 ## 7. States reported and the timing log

@@ -283,8 +283,10 @@ static bool tst_scenario_hit (game_t * p_game, uint64_t * p_now,
     b_ok = (test_main_check((*p_mole == evt.node_id) &&
                                 (PROTO_FEEDBACK_HIT == evt.result) &&
                                 (1 == evt.score), __LINE__)) && b_ok;
-    b_ok = (test_main_check((*p_show + (60u * TST_MS)) == *p_now,
-                            __LINE__)) && b_ok;
+    /* The verdict comes when the 10 ms tap's dedupe window closes. */
+    uint64_t const verdict = *p_show + ((10u + GAME_DEDUPE_MS) * TST_MS);
+
+    b_ok = (test_main_check(verdict == *p_now, __LINE__)) && b_ok;
     b_ok = (test_main_check(tst_next_kind(p_game, p_now, GAME_EV_MOLE_ON,
                                           &evt), __LINE__)) && b_ok;
     b_ok = (test_main_check((*p_show + (310u * TST_MS)) == evt.t_show_us,
@@ -296,8 +298,8 @@ static bool tst_scenario_hit (game_t * p_game, uint64_t * p_now,
 
 /**
  * @brief  C18: hits (+1, the mole ends at once), wrong tiles and taps with no
- *         mole up (-1), dedupe within 50 ms (highest peak counts, later taps
- *         count separately), and a stopped round ignores taps.
+ *         mole up (-1), dedupe within GAME_DEDUPE_MS (highest peak counts,
+ *         later taps count separately), and a stopped round ignores taps.
  * @return true when every check passed.
  */
 bool test_game_rules_scoring (void)
@@ -369,7 +371,9 @@ static bool tst_scenario_dedupe (game_t * p_game, uint64_t * p_now)
     mole  = evt.node_id;
     other = (1u == mole) ? 2u : 1u;
     game_rules_tap(p_game, mole, 100u, show + (10u * TST_MS));
-    game_rules_tap(p_game, other, 900u, show + (30u * TST_MS));
+    /* Inside the first tap's window (from 10 ms, GAME_DEDUPE_MS long). */
+    game_rules_tap(p_game, other, 900u,
+                   show + ((10u + (GAME_DEDUPE_MS / 2u)) * TST_MS));
     b_ok = (test_main_check(tst_next_kind(p_game, p_now, GAME_EV_FEEDBACK,
                                           &evt), __LINE__)) && b_ok;
     b_ok = (test_main_check((other == evt.node_id) &&
@@ -381,8 +385,9 @@ static bool tst_scenario_dedupe (game_t * p_game, uint64_t * p_now)
                                 (GAME_EV_FEEDBACK != evt.kind), __LINE__)) &&
            b_ok;
 
-    /* Late duplicate: after the window closed (show + 60 ms) but inside it. */
-    game_rules_tap(p_game, other, 900u, show + (40u * TST_MS));
+    /* Late duplicate: arrives after the window closed, stamped inside it. */
+    game_rules_tap(p_game, other, 900u,
+                   show + ((10u + GAME_DEDUPE_MS - 1u) * TST_MS));
     b_ok = (test_main_check(1u == p_game->dedupe_drops, __LINE__)) && b_ok;
     b_ok = (test_main_check(0u == p_game->tap_count, __LINE__)) && b_ok;
 

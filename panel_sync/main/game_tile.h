@@ -31,7 +31,7 @@
 
 #include "proto.h"
 
-/** LEDs on one tile and wire bytes per tile (GRB, 3 per LED). */
+/** LEDs on one tile and wire bytes per tile (R, G, B, 3 per LED). */
 #define GAME_TILE_LEDS 64u
 #define GAME_TILE_WIRE_BYTES 192u
 
@@ -79,13 +79,14 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
                         int64_t now_local_us, uint16_t * p_acked_seq);
 
 /**
- * @brief  Fill the 64 LEDs of the tile for one moment, in WS2812B order (G,
- *         R, B per LED, LED 0 first), channel values 0 to 8. Priority: a flash,
- *         then the mole, then the held score; otherwise dark.
+ * @brief  Fill the 64 LEDs of the tile for one moment, in the panel's order
+ *         (R, G, B per LED, LED 0 first), channel values 0 to 8. Priority:
+ *         a flash, then the mole, then the held score; otherwise dark.
  * @param  p_state        State; must not be NULL.
  * @param  now_pico_us    Pico corrected time, microseconds (the mole clock).
  * @param  now_local_us   Tile local time, microseconds (the flash clock).
- * @param  orientation    Tile rotation, 0 to 3 (layout_table.md 5.7).
+ * @param  orientation    Rotation to draw, 0 to 3: the measured orientation
+ *                        with the mount offset (display_frame_mounted()).
  * @param  p_wire         Receives GAME_TILE_WIRE_BYTES bytes.
  */
 void game_tile_fill_wire (game_tile_state_t const * p_state,

@@ -24,7 +24,7 @@
 /** Largest message handled here, bytes (MOLE_ON is 14). */
 #define TST_BUF_BYTES 16u
 
-/** Colours as the wire carries them (GRB order, one LED). */
+/** Colours of one LED, as tst_led() reads them (R, G, B). */
 #define TST_MOLE_G 3u
 #define TST_MOLE_R 8u
 #define TST_GREEN_G 8u
@@ -38,8 +38,8 @@
  */
 static void tst_led (uint8_t const * p_wire, uint32_t led, uint8_t * p_rgb)
 {
-    p_rgb[0] = p_wire[(3u * led) + 1u]; /* R */
-    p_rgb[1] = p_wire[(3u * led) + 0u]; /* G */
+    p_rgb[0] = p_wire[(3u * led) + 0u]; /* R */
+    p_rgb[1] = p_wire[(3u * led) + 1u]; /* G */
     p_rgb[2] = p_wire[(3u * led) + 2u]; /* B */
 }
 

@@ -502,7 +502,8 @@ static void game_tile_feedback (game_tile_state_t * p_state, uint8_t result,
 }
 
 /**
- * @brief  Write one LED in WS2812B order (G, R, B).
+ * @brief  Write one LED in the panel's R, G, B order (display_frame.h: the
+ *         Waveshare panel is RGB, not WS2812B G, R, B; bench 5 Nov 2026).
  * @param  p_wire  Wire buffer, GAME_TILE_WIRE_BYTES bytes.
  * @param  led     LED 0 to 63.
  * @param  red     Red channel, 0 to 8.
@@ -512,8 +513,8 @@ static void game_tile_feedback (game_tile_state_t * p_state, uint8_t result,
 static void game_tile_set_wire (uint8_t * p_wire, uint32_t led, uint8_t red,
                                 uint8_t green, uint8_t blue)
 {
-    p_wire[(3u * led) + 0u] = green;
-    p_wire[(3u * led) + 1u] = red;
+    p_wire[(3u * led) + 0u] = red;
+    p_wire[(3u * led) + 1u] = green;
     p_wire[(3u * led) + 2u] = blue;
 }
 

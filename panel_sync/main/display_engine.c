@@ -463,7 +463,8 @@ static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
         (!((b_timeline) && (timeline.b_running))))
     {
         game_tile_fill_wire(&game, timesync_now_corrected(p_reader),
-                            esp_timer_get_time(), g_orient, g_p_back);
+                            esp_timer_get_time(),
+                            display_frame_mounted(g_orient), g_p_back);
         de_test_after_prepare(0u, false);
         return;
     }
@@ -496,12 +497,14 @@ static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
 
         if (DISPLAY_FRAME_PACKED_BYTES == frame_bytes)
         {
-            display_frame_unpack(p_frame, g_orient, g_p_back);
+            display_frame_unpack(p_frame, display_frame_mounted(g_orient),
+                                 g_p_back);
         }
         else
         {
             /* DE_PROFILE 8-bit asset (OD-15): copied, not unpacked. */
-            display_frame_copy_8bit(p_frame, g_orient, g_p_back);
+            display_frame_copy_8bit(p_frame, display_frame_mounted(g_orient),
+                                    g_p_back);
         }
     }
     else if ((b_timeline) && (b_asset) && (timeline.b_running))

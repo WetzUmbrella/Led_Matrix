@@ -28,8 +28,8 @@
 
 /** Channels per LED and wire positions (G, R, B). */
 #define D_CH     3u
-#define D_WIRE_G 0u
-#define D_WIRE_R 1u
+#define D_WIRE_R 0u /* The Waveshare panel is RGB (bench 5 Nov 2026). */
+#define D_WIRE_G 1u
 #define D_WIRE_B 2u
 
 /** One full turn in 90 degree steps. */
@@ -38,6 +38,11 @@
 /** Orientation codes. */
 #define D_ORIENT_90  1u
 #define D_ORIENT_180 2u
+#define D_ORIENT_270 3u
+
+/** Corner LEDs, numbered row by row from the top-left. */
+#define D_LED_TOP_RIGHT   7u
+#define D_LED_BOTTOM_LEFT 56u
 
 /** Accelerometer readings: 1 g and a weak 0.25 g at 4,096 LSB/g (+/-8 g). */
 #define O_ONE_G  4096
@@ -72,16 +77,17 @@ static d_gravity_t const g_gravity[D_TURNS] = {
 /** Physical corners: top left, top right, bottom left, bottom right. */
 static uint8_t const g_corner_led[D_CORNERS] = {0u, 7u, 56u, 63u};
 
-/** Source LED shown on each corner, worked out by hand per orientation. */
+/** Source LED shown on each corner, worked out by hand per orientation
+ *  (orientation r = the tile turned r x 90 degrees clockwise; bench 5 Nov). */
 static uint8_t const g_corner_src[D_TURNS][D_CORNERS] = {
     {0u, 7u, 56u, 63u},
-    {56u, 0u, 63u, 7u},
-    {63u, 56u, 7u, 0u},
     {7u, 63u, 0u, 56u},
+    {63u, 56u, 7u, 0u},
+    {56u, 0u, 63u, 7u},
 };
 
 /** Physical LED that shows source LED 0, per orientation. */
-static uint8_t const g_origin_led[D_TURNS] = {0u, 7u, 63u, 56u};
+static uint8_t const g_origin_led[D_TURNS] = {0u, 56u, 63u, 7u};
 
 static bool read_vector (char const * p_name, uint8_t * p_buf);
 
@@ -181,6 +187,29 @@ bool test_display_rotation (void)
         b_ok = (test_main_check(UINT64_MAX == seen, __LINE__)) && b_ok;
     }
 
+    /* Direction measured on the bench 5 Nov 2026: at 90 degrees the
+     * top-left LED shows source LED 7 (top-right), at 270 source LED 56. */
+    b_ok = (test_main_check(D_LED_TOP_RIGHT ==
+                                display_frame_source_led(0u, D_ORIENT_90),
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(D_LED_BOTTOM_LEFT ==
+                                display_frame_source_led(0u, D_ORIENT_270),
+                            __LINE__)) &&
+           b_ok;
+
+    /* Mounting offset measured on the bench 5 Nov 2026: a measured 0 draws
+     * the 270 remap and every orientation stays in 0 to 3. */
+    b_ok = (test_main_check(D_ORIENT_270 == display_frame_mounted(0u),
+                            __LINE__)) &&
+           b_ok;
+    for (uint8_t orient = 0u; orient < D_TURNS; orient++)
+    {
+        b_ok = (test_main_check(display_frame_mounted(orient) < D_TURNS,
+                                __LINE__)) &&
+               b_ok;
+    }
+
     return b_ok;
 }
 
@@ -236,9 +265,14 @@ bool test_display_rotation_corners (void)
 }
 
 /**
- * @brief  Test D5: gravity to picture, from the geometry of the tile. The
- *         axes are assumed X to the right and Y up with the LEDs facing the
- *         viewer (PROVISIONAL, check on a tile). Each LED is placed in the
+ * @brief  Test D5: gravity to picture, from the geometry of the tile, for
+ *         the remap alone (before DISPLAY_FRAME_MOUNT_TURNS). The model frame
+ *         has +X to the left of the picture and +Y up, which makes the code
+ *         rise with clockwise turns, as seen on the bench (9 Nov); the old
+ *         X-right model showed a 90 degree tile upside down (5 Nov). The real
+ *         board adds the measured mount offset before the remap; the whole
+ *         chain is to be confirmed at all four angles on a tile (card F4).
+ *         Each LED is placed in the
  *         tile frame, projected on the world axes that gravity gives, and the
  *         source pixel at that world position is the expected one.
  * @return true when every check passed.
@@ -267,9 +301,10 @@ bool test_display_rotation_gravity (void)
             int32_t const pos_x = (2 * col) - D_CENTRE;
             int32_t const pos_y = D_CENTRE - (2 * row);
 
-            /* World right is world up turned clockwise: (up_y, -up_x). */
-            int32_t const world_x = (pos_x * up_y) - (pos_y * up_x);
-            int32_t const world_y = (pos_x * up_x) + (pos_y * up_y);
+            /* +X is picture left in the model, so picture right is (-1, 0):
+             * world right is world up turned anticlockwise. */
+            int32_t const world_x = (pos_x * up_y) + (pos_y * up_x);
+            int32_t const world_y = (pos_y * up_y) - (pos_x * up_x);
 
             /* Both sums are even and 0 to 14, so they halve to 0 to 7. */
             int32_t const src_col = (world_x + D_CENTRE) / 2;

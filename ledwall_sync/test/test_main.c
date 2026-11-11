@@ -63,7 +63,7 @@ static test_case_t const g_cases[] = {
      test_ack_outbox_limits},
     {"C17 re-plan: 30 s round, mole 1200 to 500 ms, 300 ms gap, no repeats",
      test_game_rules_timing},
-    {"C18 re-plan: hit +1, miss -1, dedupe within 50 ms by highest peak",
+    {"C18 re-plan: hit +1, miss -1, dedupe within 30 ms by highest peak",
      test_game_rules_scoring},
     {"C18b re-plan: tap in flight at the hide still hits, tap after it misses, "
      "timeout keeps the score",

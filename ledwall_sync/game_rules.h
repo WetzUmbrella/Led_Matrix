@@ -3,7 +3,7 @@
  * @brief   Whack-a-mole rules v1 on the Pico (whack-a-mole re-plan, build
  *          step 7): one mole at a time on a random active tile, mole time
  *          shrinking over the round, hit and miss scoring, tap dedupe within
- *          50 ms. Pure C with no hardware call and no clock of its own: every
+ *          30 ms. Pure C with no hardware call and no clock of its own: every
  *          function takes the time, so the host tests run it on a fake clock
  *          with an injected RNG seed.
  *
@@ -23,7 +23,7 @@
  *   is up, scores -1. A mole that times out with no tap scores 0. A mole
  *   times out GAME_TAP_GRACE_MS after its hide time, so a tap stamped before
  *   the hide that arrives late still hits it.
- * - Taps from several tiles within GAME_DEDUPE_MS (50 ms, from the first
+ * - Taps from several tiles within GAME_DEDUPE_MS (30 ms, from the first
  *   tap of the group, by the tile's own corrected time) count once: the
  *   highest peak wins, the others are dropped (plan choice for ties: the
  *   earlier tap, then the lower Node ID).
@@ -55,8 +55,9 @@
  *  at the 50 ms retry interval fit inside it; the gap stays exact). */
 #define GAME_LEAD_MS 200u
 
-/** Tap dedupe window, milliseconds (re-plan: 50 ms). */
-#define GAME_DEDUPE_MS 50u
+/** Tap dedupe window, milliseconds (re-plan: 50 ms; 30 ms from DS-07, 11 Nov:
+ *  bench echoes came 2 to 3 ms after the tap, so the flash comes sooner). */
+#define GAME_DEDUPE_MS 30u
 
 /** Grace after a mole's hide time before it is retired, milliseconds (plan
  *  choice). A tap stamped before the hide can still be in flight: the radio
