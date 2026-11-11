@@ -45,8 +45,9 @@
  * PROVISIONAL (marker, owner Jia Jun): pulse, not toggle; rising edge at tick
  * n, high 1 ms, or 4 ms when n mod 64 == 0 (RIG.md section 4b request). The
  * falling edge is a second one-shot alarm.
- * PROVISIONAL (OD-16, owner Jia Jun): RMT without DMA; the refill interrupt
- * is IRAM-safe (CONFIG_RMT_ISR_IRAM_SAFE).
+ * OD-16 (owner Jia Jun), decided 12 Nov 2026: RMT with DMA, a buffer that
+ * holds a whole frame (DE_RMT_SYMBOLS); without DMA, late refills under
+ * game-mode WiFi traffic corrupted frames.
  * PROVISIONAL (owner Jia Jun): the tick grid origin is 0 in Pico time; the
  * playback origin (START_AT) selects the first frame's tick on that grid.
  * Open interface items with Ahsanul (timesync_DEFENCE.md): the reader

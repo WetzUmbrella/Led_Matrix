@@ -76,8 +76,17 @@
 #define DE_T_SHORT 3u
 #define DE_T_LONG  9u
 
-/** RMT memory per channel without DMA, symbols (PROVISIONAL, OD-16). */
-#define DE_RMT_SYMBOLS 64u
+/** RMT DMA buffer, symbols (OD-16, decided 12 Nov 2026). The driver plays
+ *  it as two halves; one half (2,048) holds a whole frame (192 bytes, 1,536
+ *  symbols), so no refill is due while a frame is sent. Without DMA the
+ *  channel had 64 symbols and a refill every 32 (about 38 us); in game mode
+ *  the extra WiFi traffic made refills late and corrupted the rest of the
+ *  frame (random pixels and colours, bench 12 Nov 2026). 16 KiB of
+ *  internal DMA memory. */
+#define DE_RMT_SYMBOLS 4096u
+
+_Static_assert((DE_RMT_SYMBOLS / 2u) >= (8u * DISPLAY_FRAME_WIRE_BYTES),
+               "one DMA half must hold a whole frame");
 
 /** Poll period while waiting for SYNC_READY before the first tick (plan
  *  choice: 20 ms, about one beacon interval / 5). */
@@ -793,9 +802,9 @@ static gptimer_handle_t de_timer_create (void)
 
 /**
  * @brief  Create the RMT TX channel on GPIO14 and a bytes encoder with the
- *         WS2812B bit timing, from de_task on core 1 (T-B5-03). No DMA: the
- *         RMT refill interrupt is IRAM-safe (CONFIG_RMT_ISR_IRAM_SAFE),
- *         PROVISIONAL (OD-16, owner Jia Jun).
+ *         WS2812B bit timing, from de_task on core 1 (T-B5-03). With DMA
+ *         (OD-16, see DE_RMT_SYMBOLS): the frame is encoded into memory
+ *         before it starts, so no interrupt can delay it part way.
  * @param  p_rmt  Receives the channel and encoder.
  * @return true when the channel is enabled.
  */
@@ -807,6 +816,7 @@ static bool de_start_rmt (de_rmt_t * p_rmt)
         .resolution_hz     = DE_RMT_HZ,
         .mem_block_symbols = DE_RMT_SYMBOLS,
         .trans_queue_depth = 1u,
+        .flags             = {.with_dma = 1u},
     };
     rmt_bytes_encoder_config_t const enc_cfg = {
         .bit0  = {.level0    = 1u,
