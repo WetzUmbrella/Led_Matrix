@@ -146,13 +146,13 @@
 #define TN_REC_GAME   3u
 #define TN_REC_TAP    4u /* Wake only: a tap waits (tile_net_tap_ready()). */
 
-/** Largest game datagram a record carries (MOLE_ON is the longest today). */
-#define TN_GAME_MAX_BYTES 16u
+/** Largest game datagram a record carries (WALL_PICTURE, 23 bytes). */
+#define TN_GAME_MAX_BYTES 24u
 
 _Static_assert((PROTO_MOLE_ON_BYTES <= TN_GAME_MAX_BYTES) &&
                    (PROTO_FEEDBACK_BYTES <= TN_GAME_MAX_BYTES) &&
                    (PROTO_GAME_CONTROL_BYTES <= TN_GAME_MAX_BYTES) &&
-                   (PROTO_SCORE_MASK_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_WALL_PICTURE_BYTES <= TN_GAME_MAX_BYTES) &&
                    (PROTO_ACK_BYTES <= TN_GAME_MAX_BYTES),
                "every game datagram must fit a log record");
 
@@ -692,7 +692,7 @@ static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
         else if ((PROTO_TYPE_MOLE_ON == type) ||
                  (PROTO_TYPE_FEEDBACK == type) ||
                  (PROTO_TYPE_GAME_CONTROL == type) ||
-                 (PROTO_TYPE_SCORE_MASK == type) ||
+                 (PROTO_TYPE_WALL_PICTURE == type) ||
                  (PROTO_TYPE_ACK == type))
         {
             tn_post_game(p_buf, len, t_l);
@@ -737,7 +737,7 @@ static void tn_post_game (uint8_t const * p_buf, uint32_t len, int64_t t_l)
 /**
  * @brief  A game message from the Pico on port 4210 (whack-a-mole build step
  *         7), in the Network Task: MOLE_ON, FEEDBACK, GAME_CONTROL and
- *         SCORE_MASK go to the game state and are ACKed when they are for
+ *         WALL_PICTURE go to the game state and are ACKed when they are for
  *         this tile; an ACK frees the TAP it names.
  * @param  p_buf  Datagram.
  * @param  len    Length.

@@ -151,7 +151,7 @@ static test_case_t const g_tap[] = {
      test_game_tile_mole_and_flash},
     {"Game re-plan: only this tile's messages are ACKed, repeats not applied",
      test_game_tile_acks},
-    {"Game re-plan: START, SCORE_MASK in the rotation, END keeps the score",
+    {"Game re-plan: START, WALL_PICTURE in the rotation, END keeps the score",
      test_game_tile_score},
     {"Game re-plan: TAP and ACK encodings, state publish reads back whole",
      test_game_tile_codecs},

@@ -72,7 +72,7 @@ static bool     tap_ok (proto_tap_t const * p_msg);
 static bool     mole_on_ok (proto_mole_on_t const * p_msg);
 static bool     feedback_ok (proto_feedback_msg_t const * p_msg);
 static bool     game_control_ok (proto_game_control_t const * p_msg);
-static bool     score_mask_ok (proto_score_mask_t const * p_msg);
+static bool     wall_picture_ok (proto_wall_picture_t const * p_msg);
 static bool     ack_ok (proto_ack_t const * p_msg);
 static uint32_t encode_command (proto_command_t const * p_msg,
                                 proto_type_t type, uint8_t * p_buf,
@@ -987,6 +987,13 @@ uint32_t proto_encode_status (proto_status_t const * p_msg, uint8_t * p_buf,
         put_field(&writer, PROTO_BITMAP_BITS, p_msg->online);
         put_field(&writer, PROTO_COORD_STATE_BITS, p_msg->state);
         put_signed(&writer, PROTO_SCORE_BITS, p_msg->score);
+        put_field(&writer, PROTO_ROUND_STATE_BITS, p_msg->round_state);
+        put_field(&writer, PROTO_LEVEL_BITS, p_msg->level);
+        put_field(&writer, PROTO_COUNT_BITS, p_msg->missed);
+        put_field(&writer, PROTO_COUNT_BITS, p_msg->wrong);
+        put_field(&writer, PROTO_COUNT_BITS, p_msg->shown);
+        put_field(&writer, PROTO_TIME_LEFT_BITS, p_msg->time_left_s);
+        put_field(&writer, PROTO_REACTION_BITS, p_msg->reaction_ms);
         written = PROTO_STATUS_BYTES;
     }
 
@@ -1013,7 +1020,14 @@ bool proto_decode_status (uint8_t const * p_buf, uint32_t len,
         p_msg->online    = take_u16(&reader, PROTO_BITMAP_BITS);
         p_msg->state     = take_u8(&reader, PROTO_COORD_STATE_BITS);
         p_msg->score     = take_s8(&reader, PROTO_SCORE_BITS);
-        b_ok             = status_ok(p_msg);
+        p_msg->round_state = take_u8(&reader, PROTO_ROUND_STATE_BITS);
+        p_msg->level       = take_u8(&reader, PROTO_LEVEL_BITS);
+        p_msg->missed      = take_u8(&reader, PROTO_COUNT_BITS);
+        p_msg->wrong       = take_u8(&reader, PROTO_COUNT_BITS);
+        p_msg->shown       = take_u8(&reader, PROTO_COUNT_BITS);
+        p_msg->time_left_s = take_u8(&reader, PROTO_TIME_LEFT_BITS);
+        p_msg->reaction_ms = take_u16(&reader, PROTO_REACTION_BITS);
+        b_ok               = status_ok(p_msg);
     }
 
     return b_ok;
@@ -1188,6 +1202,7 @@ uint32_t proto_encode_mole_on (proto_mole_on_t const * p_msg, uint8_t * p_buf,
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_TIME_BITS, p_msg->t_show);
         put_field(&writer, PROTO_UP_MS_BITS, p_msg->up_ms);
+        put_field(&writer, PROTO_TARGET_KIND_BITS, p_msg->kind);
         written = PROTO_MOLE_ON_BYTES;
     }
 
@@ -1213,6 +1228,7 @@ bool proto_decode_mole_on (uint8_t const * p_buf, uint32_t len,
         p_msg->node_id = take_u8(&reader, PROTO_NODE_BITS);
         p_msg->t_show  = take_u64(&reader, PROTO_TIME_BITS);
         p_msg->up_ms   = take_u16(&reader, PROTO_UP_MS_BITS);
+        p_msg->kind    = take_u8(&reader, PROTO_TARGET_KIND_BITS);
         b_ok           = mole_on_ok(p_msg);
     }
 
@@ -1287,6 +1303,8 @@ uint32_t proto_encode_game_control (proto_game_control_t const * p_msg,
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
         put_field(&writer, PROTO_GAME_CMD_BITS, p_msg->command);
+        put_field(&writer, PROTO_LEVEL_BITS, p_msg->level);
+        put_field(&writer, PROTO_THRESHOLD_BITS, p_msg->threshold);
         written = PROTO_GAME_CONTROL_BYTES;
     }
 
@@ -1310,57 +1328,72 @@ bool proto_decode_game_control (uint8_t const * p_buf, uint32_t len,
                      PROTO_TYPE_GAME_CONTROL, &p_msg->header, &reader))
     {
         p_msg->node_id = take_u8(&reader, PROTO_NODE_BITS);
-        p_msg->command = take_u8(&reader, PROTO_GAME_CMD_BITS);
-        b_ok           = game_control_ok(p_msg);
+        p_msg->command   = take_u8(&reader, PROTO_GAME_CMD_BITS);
+        p_msg->level     = take_u8(&reader, PROTO_LEVEL_BITS);
+        p_msg->threshold = take_u8(&reader, PROTO_THRESHOLD_BITS);
+        b_ok             = game_control_ok(p_msg);
     }
 
     return b_ok;
 }
 
 /**
- * @brief  Encode a SCORE_MASK.
+ * @brief  Encode a WALL_PICTURE.
  * @param  p_msg    Message.
  * @param  p_buf    Output buffer.
  * @param  buf_len  Size of p_buf, bytes.
  * @return Bytes written, or 0.
  */
-uint32_t proto_encode_score_mask (proto_score_mask_t const * p_msg,
+uint32_t proto_encode_wall_picture (proto_wall_picture_t const * p_msg,
                                   uint8_t * p_buf, uint32_t buf_len)
 {
     uint32_t written = 0u;
     writer_t writer;
 
-    if ((score_mask_ok(p_msg)) &&
-        (begin_encode(p_buf, buf_len, PROTO_SCORE_MASK_BYTES,
-                      PROTO_TYPE_SCORE_MASK, &p_msg->header, &writer)))
+    if ((wall_picture_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_WALL_PICTURE_BYTES,
+                      PROTO_TYPE_WALL_PICTURE, &p_msg->header, &writer)))
     {
         put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
+        put_field(&writer, PROTO_PIC_SLOT_BITS, p_msg->slot);
+        put_field(&writer, PROTO_PIC_EFFECT_BITS, p_msg->effect);
+        put_field(&writer, PROTO_PIC_COLOUR_BITS, p_msg->colour);
+        put_field(&writer, PROTO_PIC_REPEAT_BITS, p_msg->b_repeat);
+        put_field(&writer, PROTO_TIME_BITS, p_msg->t_show);
+        put_field(&writer, PROTO_PIC_DUR_BITS, p_msg->dur_ms);
         put_field(&writer, PROTO_MASK_BITS, p_msg->mask);
-        written = PROTO_SCORE_MASK_BYTES;
+        written = PROTO_WALL_PICTURE_BYTES;
     }
 
     return written;
 }
 
 /**
- * @brief  Decode a SCORE_MASK.
+ * @brief  Decode a WALL_PICTURE.
  * @param  p_buf  Received bytes.
  * @param  len    Received length, bytes.
  * @param  p_msg  Receives the message.
  * @return true when valid.
  */
-bool proto_decode_score_mask (uint8_t const * p_buf, uint32_t len,
-                              proto_score_mask_t * p_msg)
+bool proto_decode_wall_picture (uint8_t const * p_buf, uint32_t len,
+                              proto_wall_picture_t * p_msg)
 {
     bool     b_ok = false;
     reader_t reader;
 
-    if (begin_decode(p_buf, len, PROTO_SCORE_MASK_BYTES, PROTO_TYPE_SCORE_MASK,
+    if (begin_decode(p_buf, len, PROTO_WALL_PICTURE_BYTES,
+                     PROTO_TYPE_WALL_PICTURE,
                      &p_msg->header, &reader))
     {
-        p_msg->node_id = take_u8(&reader, PROTO_NODE_BITS);
-        p_msg->mask    = take_u64(&reader, PROTO_MASK_BITS);
-        b_ok           = score_mask_ok(p_msg);
+        p_msg->node_id  = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->slot     = take_u8(&reader, PROTO_PIC_SLOT_BITS);
+        p_msg->effect   = take_u8(&reader, PROTO_PIC_EFFECT_BITS);
+        p_msg->colour   = take_u8(&reader, PROTO_PIC_COLOUR_BITS);
+        p_msg->b_repeat = take_u8(&reader, PROTO_PIC_REPEAT_BITS);
+        p_msg->t_show   = take_u64(&reader, PROTO_TIME_BITS);
+        p_msg->dur_ms   = take_u16(&reader, PROTO_PIC_DUR_BITS);
+        p_msg->mask     = take_u64(&reader, PROTO_MASK_BITS);
+        b_ok            = wall_picture_ok(p_msg);
     }
 
     return b_ok;
@@ -1737,7 +1770,14 @@ static bool status_ok (proto_status_t const * p_msg)
     return (p_msg->readiness <= BITMAP_MASK) &&
            (p_msg->online <= BITMAP_MASK) &&
            (p_msg->state < (uint8_t)PROTO_COORD_COUNT) && /* Code < 13. */
-           (score_ok(p_msg->score));
+           (score_ok(p_msg->score)) &&
+           (p_msg->round_state < (uint8_t)PROTO_ROUND_STATE_COUNT) &&
+           (p_msg->level < (uint8_t)PROTO_LEVEL_COUNT) &&
+           (p_msg->missed <= PROTO_COUNT_MAX) &&
+           (p_msg->wrong <= PROTO_COUNT_MAX) &&
+           (p_msg->shown <= PROTO_COUNT_MAX) &&
+           (p_msg->time_left_s <= PROTO_TIME_LEFT_MAX) &&
+           (p_msg->reaction_ms <= PROTO_REACTION_MAX);
 }
 
 /**
@@ -1769,8 +1809,8 @@ static bool tap_ok (proto_tap_t const * p_msg)
  */
 static bool mole_on_ok (proto_mole_on_t const * p_msg)
 {
-    return (node_ok(p_msg->node_id)) && (p_msg->up_ms >= 1u) &&
-           (p_msg->up_ms <= PROTO_UP_MS_MAX);
+    return (node_ok(p_msg->node_id)) && (p_msg->up_ms <= PROTO_UP_MS_MAX) &&
+           (p_msg->kind < (uint8_t)PROTO_TARGET_COUNT); /* Code < 5. */
 }
 
 /**
@@ -1792,17 +1832,25 @@ static bool feedback_ok (proto_feedback_msg_t const * p_msg)
 static bool game_control_ok (proto_game_control_t const * p_msg)
 {
     return (p_msg->node_id <= PROTO_NODE_MAX) &&             /* 0 allowed */
-           (p_msg->command < (uint8_t)PROTO_GAME_CMD_COUNT); /* Code < 4. */
+           (p_msg->command < (uint8_t)PROTO_GAME_CMD_COUNT) && /* Code < 8. */
+           (p_msg->level < (uint8_t)PROTO_LEVEL_COUNT) &&      /* Code < 3. */
+           (p_msg->threshold <= PROTO_THRESHOLD_MAX);
 }
 
 /**
- * @brief  SCORE_MASK valid-range check.
+ * @brief  WALL_PICTURE valid-range check.
  * @param  p_msg  Message.
  * @return true when valid.
  */
-static bool score_mask_ok (proto_score_mask_t const * p_msg)
+static bool wall_picture_ok (proto_wall_picture_t const * p_msg)
 {
-    return node_ok(p_msg->node_id);
+    /* slot, colour and b_repeat fill their widths; dur_ms is 13 bits. */
+    return (node_ok(p_msg->node_id)) &&
+           (p_msg->slot < (UINT8_C(1) << PROTO_PIC_SLOT_BITS)) &&
+           (p_msg->effect < (uint8_t)PROTO_PIC_EFFECT_COUNT) && /* < 3. */
+           (p_msg->colour < (uint8_t)PROTO_COLOUR_COUNT) &&
+           (p_msg->b_repeat <= 1u) &&
+           (p_msg->dur_ms < (UINT16_C(1) << PROTO_PIC_DUR_BITS));
 }
 
 /**

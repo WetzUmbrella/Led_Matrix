@@ -164,7 +164,7 @@ static bool game_tile_on_control (game_tile_state_t * p_state, uint8_t node_id,
                 p_state->b_mole     = 0u;
                 p_state->b_flash    = 0u;
                 p_state->b_score    = 0u;
-                p_state->score_mask = 0u;
+                p_state->wall_picture = 0u;
             }
             else if (PROTO_GAME_END == msg.command)
             {
@@ -184,7 +184,7 @@ static bool game_tile_on_control (game_tile_state_t * p_state, uint8_t node_id,
 }
 
 /**
- * @brief  SCORE_MASK for this tile: ACKed; the mask is held when newer.
+ * @brief  WALL_PICTURE for this tile: ACKed; the mask is held when newer.
  * @param  p_state     State.
  * @param  node_id     This tile.
  * @param  p_buf       Datagram.
@@ -198,9 +198,9 @@ static bool game_tile_on_score (game_tile_state_t * p_state, uint8_t node_id,
                                 proto_header_t const * p_header,
                                 uint16_t * p_acked_seq)
 {
-    proto_score_mask_t msg;
+    proto_wall_picture_t msg;
     bool               b_mine =
-        (proto_decode_score_mask(p_buf, len, &msg)) &&
+        (proto_decode_wall_picture(p_buf, len, &msg)) &&
         (msg.node_id == node_id);
 
     if (b_mine)
@@ -211,7 +211,7 @@ static bool game_tile_on_score (game_tile_state_t * p_state, uint8_t node_id,
         {
             game_tile_accept(p_state, p_header->seq);
             p_state->b_score    = 1u;
-            p_state->score_mask = msg.mask;
+            p_state->wall_picture = msg.mask;
         }
     }
 
@@ -255,7 +255,7 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
             b_ack = game_tile_on_control(p_state, node_id, p_buf, len, &header,
                                          p_acked_seq);
         }
-        else if (PROTO_TYPE_SCORE_MASK == type)
+        else if (PROTO_TYPE_WALL_PICTURE == type)
         {
             b_ack = game_tile_on_score(p_state, node_id, p_buf, len, &header,
                                        p_acked_seq);
@@ -309,7 +309,7 @@ void game_tile_fill_wire (game_tile_state_t const * p_state,
         {
             /* The mask is before the rotation: look up the source LED. */
             uint32_t const source = display_frame_source_led(led, orientation);
-            bool const     b_lit  = (0u != ((p_state->score_mask >> source) &
+            bool const     b_lit  = (0u != ((p_state->wall_picture >> source) &
                                             UINT64_C(1)));
 
             if (b_lit)

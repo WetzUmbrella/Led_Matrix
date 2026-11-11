@@ -13,7 +13,7 @@
  * proto_put_u16_le/u32_le/u64_le and proto_get_*_le helpers, the common
  * header, and an encode/decode pair for each of the 24 message rows (18
  * from T-B2-01, 6 from the whack-a-mole re-plan step 3: TAP, MOLE_ON,
- * FEEDBACK, GAME_CONTROL, SCORE_MASK, ACK), each with a valid-range check;
+ * FEEDBACK, GAME_CONTROL, WALL_PICTURE, ACK), each with a valid-range check;
  * host tests with the T-B2-01 boundary set.
  * Not yet implemented: the OD-01 citation sentence on where poll-mode
  * callbacks run (layout_table.md section 9 records the gap).
@@ -100,11 +100,50 @@
 /** Width of a TAP peak, bits: the tap_detect peak, uint16_t mg. */
 #define PROTO_PEAK_BITS 16u
 
-/** Width of MOLE_ON up_ms, bits: 1 to 2,000 ms needs 11. */
-#define PROTO_UP_MS_BITS 11u
+/** Width of MOLE_ON up_ms, bits: 0 to 4,000 ms needs 12 (DS-10, 11 Nov
+ *  2026: room for the stretch rotate sprite, up to 3,000 ms). */
+#define PROTO_UP_MS_BITS 12u
 
-/** Longest mole, ms (v1 rules use 1,200 down to 500). */
-#define PROTO_UP_MS_MAX 2000u
+/** Longest target, ms; 0 means "up until tapped or cleared" (the start
+ *  sprite, DS-08). */
+#define PROTO_UP_MS_MAX 4000u
+
+/** Width of the MOLE_ON target kind, bits: mole, start, and 3 codes reserved
+ *  for the stretch goals (rotate, golden, decoy), 3 spare (DS-10). */
+#define PROTO_TARGET_KIND_BITS 3u
+
+/** Width of the GAME_CONTROL level, bits: Easy, Normal, Hard (DS-08). */
+#define PROTO_LEVEL_BITS 2u
+
+/** Width of the GAME_CONTROL tap threshold, bits: in 20 mg steps, 0 =
+ *  the tile's default, 1 to 250 = 20 to 5,000 mg (A12, DS-10). */
+#define PROTO_THRESHOLD_BITS 8u
+
+/** Largest tap threshold code (5,000 mg). */
+#define PROTO_THRESHOLD_MAX 250u
+
+/** mg per tap threshold step. */
+#define PROTO_THRESHOLD_STEP_MG 20u
+
+/** WALL_PICTURE fields (DS-09): list slot, effect, colour, repeat flag and
+ *  duration widths, bits. */
+#define PROTO_PIC_SLOT_BITS   2u
+#define PROTO_PIC_EFFECT_BITS 2u
+#define PROTO_PIC_COLOUR_BITS 3u
+#define PROTO_PIC_REPEAT_BITS 1u
+#define PROTO_PIC_DUR_BITS    13u
+
+/** STATUS game fields (DS-08, DS-10): round state, level, counts, time
+ *  left and the average reaction time, widths, bits. */
+#define PROTO_ROUND_STATE_BITS 3u
+#define PROTO_COUNT_BITS       7u
+#define PROTO_TIME_LEFT_BITS   6u
+#define PROTO_REACTION_BITS    11u
+
+/** Largest counts, time left (s) and reaction time (ms) on STATUS. */
+#define PROTO_COUNT_MAX     127u
+#define PROTO_TIME_LEFT_MAX 63u
+#define PROTO_REACTION_MAX  2047u
 
 /** Width of the FEEDBACK result, bits: miss, hit and a code reserved for
  *  the decoy stretch goal, 3 codes and 1 spare (decision of 6 Nov 2026,
@@ -123,7 +162,7 @@
 /** Largest game score; the smallest is -PROTO_SCORE_MAX. */
 #define PROTO_SCORE_MAX 99
 
-/** Width of a SCORE_MASK pixel mask, bits: one per pixel of a tile. */
+/** Width of a WALL_PICTURE pixel mask, bits: one per pixel of a tile. */
 #define PROTO_MASK_BITS 64u
 
 /** Largest Node ID (CL_MAX_NODES 9, T-B2-03). */
@@ -197,7 +236,9 @@
 #define PROTO_STOP_BYTES      PROTO_BYTES(PROTO_HEADER_BITS)
 #define PROTO_STATUS_BITS                                                      \
     (PROTO_HEADER_BITS + PROTO_BITMAP_BITS + PROTO_BITMAP_BITS +               \
-     PROTO_COORD_STATE_BITS + PROTO_SCORE_BITS)
+     PROTO_COORD_STATE_BITS + PROTO_SCORE_BITS + PROTO_ROUND_STATE_BITS +      \
+     PROTO_LEVEL_BITS + (3u * PROTO_COUNT_BITS) + PROTO_TIME_LEFT_BITS +       \
+     PROTO_REACTION_BITS)
 #define PROTO_STATUS_BYTES PROTO_BYTES(PROTO_STATUS_BITS)
 #define PROTO_TELEMETRY_BITS                                                   \
     (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_FAULT_BITS +                  \
@@ -209,17 +250,21 @@
     (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_PEAK_BITS + PROTO_TIME_BITS)
 #define PROTO_TAP_BYTES PROTO_BYTES(PROTO_TAP_BITS)
 #define PROTO_MOLE_ON_BITS                                                     \
-    (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_TIME_BITS + PROTO_UP_MS_BITS)
+    (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_TIME_BITS +                   \
+     PROTO_UP_MS_BITS + PROTO_TARGET_KIND_BITS)
 #define PROTO_MOLE_ON_BYTES PROTO_BYTES(PROTO_MOLE_ON_BITS)
 #define PROTO_FEEDBACK_BITS                                                    \
     (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_RESULT_BITS)
 #define PROTO_FEEDBACK_BYTES PROTO_BYTES(PROTO_FEEDBACK_BITS)
 #define PROTO_GAME_CONTROL_BITS                                                \
-    (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_GAME_CMD_BITS)
+    (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_GAME_CMD_BITS +               \
+     PROTO_LEVEL_BITS + PROTO_THRESHOLD_BITS)
 #define PROTO_GAME_CONTROL_BYTES PROTO_BYTES(PROTO_GAME_CONTROL_BITS)
-#define PROTO_SCORE_MASK_BITS                                                  \
-    (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_MASK_BITS)
-#define PROTO_SCORE_MASK_BYTES PROTO_BYTES(PROTO_SCORE_MASK_BITS)
+#define PROTO_WALL_PICTURE_BITS                                                \
+    (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_PIC_SLOT_BITS +               \
+     PROTO_PIC_EFFECT_BITS + PROTO_PIC_COLOUR_BITS + PROTO_PIC_REPEAT_BITS +   \
+     PROTO_TIME_BITS + PROTO_PIC_DUR_BITS + PROTO_MASK_BITS)
+#define PROTO_WALL_PICTURE_BYTES PROTO_BYTES(PROTO_WALL_PICTURE_BITS)
 
 /* ACK: node_id and acked_seq after the header. */
 #define PROTO_ACK_BITS  (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_SEQ_BITS)
@@ -251,7 +296,7 @@ typedef enum
     PROTO_TYPE_MOLE_ON,      /**< 19. */
     PROTO_TYPE_FEEDBACK,     /**< 20. */
     PROTO_TYPE_GAME_CONTROL, /**< 21. */
-    PROTO_TYPE_SCORE_MASK,   /**< 22. */
+    PROTO_TYPE_WALL_PICTURE,   /**< 22. */
     PROTO_TYPE_ACK,          /**< 23. */
     PROTO_TYPE_COUNT
 } proto_type_t;
@@ -266,16 +311,75 @@ typedef enum
     PROTO_FEEDBACK_COUNT
 } proto_feedback_t;
 
-/** GAME_CONTROL command. The PC sends all four to the Pico; the Pico sends
- *  START and END to each tile. */
+/** GAME_CONTROL command. The PC sends the mode switches, ARM, START_NOW,
+ *  END (abort) and the tap test to the Pico; the Pico sends START, END, ARM
+ *  (with the threshold) and the tap test to each tile (DS-08, DS-10). */
 typedef enum
 {
     PROTO_GAME_MODE_VIDEO = 0, /**< Switch to video mode (only stopped). */
     PROTO_GAME_MODE_GAME,      /**< Switch to game mode (only stopped). */
-    PROTO_GAME_START,          /**< Start a round. */
-    PROTO_GAME_END,            /**< End the round; SCORE_MASK follows. */
+    PROTO_GAME_START,          /**< To a tile: the round starts. */
+    PROTO_GAME_END,            /**< End or abort the round. */
+    PROTO_GAME_ARM,            /**< Arm a round at a level (start sprite). */
+    PROTO_GAME_START_NOW,      /**< Skip the start sprite: count down now. */
+    PROTO_GAME_TAP_TEST_ON,    /**< Tap test: every tap lights its tile. */
+    PROTO_GAME_TAP_TEST_OFF,   /**< Tap test off. */
     PROTO_GAME_CMD_COUNT
 } proto_game_cmd_t;
+
+/** Game level (DS-08, B4). */
+typedef enum
+{
+    PROTO_LEVEL_EASY = 0,
+    PROTO_LEVEL_NORMAL,
+    PROTO_LEVEL_HARD,
+    PROTO_LEVEL_COUNT
+} proto_level_t;
+
+/** MOLE_ON target kind (DS-10). */
+typedef enum
+{
+    PROTO_TARGET_MOLE = 0, /**< A mole: tap it. */
+    PROTO_TARGET_START,    /**< The start sprite: tap it to start (DS-08). */
+    PROTO_TARGET_ROTATE,   /**< Reserved: the rotate sprite (stretch). */
+    PROTO_TARGET_GOLDEN,   /**< Reserved: the golden mole (stretch). */
+    PROTO_TARGET_DECOY,    /**< Reserved: the decoy (stretch). */
+    PROTO_TARGET_COUNT
+} proto_target_kind_t;
+
+/** WALL_PICTURE effect (DS-09). */
+typedef enum
+{
+    PROTO_PIC_PICTURE = 0, /**< Show the mask in the colour. */
+    PROTO_PIC_SPARKLE,     /**< The tile's own twinkle; the mask is unused. */
+    PROTO_PIC_CLEAR,       /**< Clear the tile's picture list. */
+    PROTO_PIC_EFFECT_COUNT
+} proto_pic_effect_t;
+
+/** WALL_PICTURE colour (DS-09), each within channel values 0 to 8. */
+typedef enum
+{
+    PROTO_COLOUR_WHITE = 0,
+    PROTO_COLOUR_YELLOW,
+    PROTO_COLOUR_GREEN,
+    PROTO_COLOUR_RED,
+    PROTO_COLOUR_BLUE,
+    PROTO_COLOUR_ORANGE,
+    PROTO_COLOUR_PURPLE,
+    PROTO_COLOUR_CYAN,
+    PROTO_COLOUR_COUNT
+} proto_colour_t;
+
+/** Round state on STATUS (DS-08). */
+typedef enum
+{
+    PROTO_ROUND_IDLE = 0, /**< GAME IDLE (or not in game mode). */
+    PROTO_ROUND_ARMED,    /**< Start sprite up, waiting for the tap. */
+    PROTO_ROUND_COUNTDOWN,
+    PROTO_ROUND_PLAYING,
+    PROTO_ROUND_RESULTS,
+    PROTO_ROUND_STATE_COUNT
+} proto_round_state_t;
 
 /** Failure policy (FR18, T-B2-04). */
 typedef enum
@@ -487,6 +591,13 @@ typedef struct
     uint16_t       online;    /**< Bit n-1 = Node ID n online, 9 bits. */
     uint8_t        state;     /**< proto_coord_state_t. */
     int8_t         score;     /**< Game score, -99 to 99; 0 outside a game. */
+    uint8_t        round_state; /**< proto_round_state_t. */
+    uint8_t        level;       /**< proto_level_t. */
+    uint8_t        missed;      /**< Targets that timed out, 0 to 127. */
+    uint8_t        wrong;       /**< Wrong taps, 0 to 127. */
+    uint8_t        shown;       /**< Targets shown, 0 to 127. */
+    uint8_t        time_left_s; /**< Seconds left in the round, 0 to 63. */
+    uint16_t       reaction_ms; /**< Average hit reaction time, 0 to 2,047. */
 } proto_status_t;
 
 /** TELEMETRY {seq, fault word, orientation, display state}, tile to PC
@@ -525,8 +636,10 @@ typedef struct
     proto_header_t header;
     uint8_t        node_id; /**< 1 to 9, the addressed tile. */
     uint64_t       t_show;  /**< Show time, Pico corrected clock, us. */
-    uint16_t       up_ms;   /**< 1 to 2,000 ms; the hide time is
-                                 t_show + up_ms x 1,000 us. */
+    uint16_t       up_ms;   /**< 0 to 4,000 ms; the hide time is
+                                 t_show + up_ms x 1,000 us; 0 = up until
+                                 tapped or cleared. */
+    uint8_t        kind;    /**< proto_target_kind_t. */
 } proto_mole_on_t;
 
 /** FEEDBACK, Pico to one tile, unicast, acked: flash now. */
@@ -544,21 +657,33 @@ typedef struct
     uint8_t        node_id; /**< 0 = PC to Pico; 1 to 9 = the addressed
                                  tile. */
     uint8_t        command; /**< proto_game_cmd_t. */
+    uint8_t        level;   /**< proto_level_t; used with ARM. */
+    uint8_t        threshold; /**< Tap threshold in 20 mg steps, 0 = the
+                                   tile's default; used with ARM. */
 } proto_game_control_t;
 
-/** SCORE_MASK, Pico to one tile, unicast, acked: the tile's 8 x 8 slice of
- *  the final score the Pico drew across the wall. */
+/** WALL_PICTURE, Pico to one tile, unicast, acked (DS-09): one entry of the
+ *  tile's timed picture list, the tile's 8 x 8 piece of a picture the Pico
+ *  drew across the wall (countdown, score, stars), shown from t_show for
+ *  dur_ms on the shared clock so every tile changes together. */
 typedef struct
 {
     proto_header_t header;
     uint8_t        node_id; /**< 1 to 9, the addressed tile. */
+    uint8_t        slot;    /**< List entry, 0 to 3. */
+    uint8_t        effect;  /**< proto_pic_effect_t. */
+    uint8_t        colour;  /**< proto_colour_t. */
+    uint8_t        b_repeat; /**< 1 = after this entry, start the list again
+                                  from slot 1 (results loop). */
+    uint64_t       t_show;  /**< Show time, Pico corrected clock, us. */
+    uint16_t       dur_ms;  /**< 0 to 8,191 ms; 0 = until replaced. */
     uint64_t       mask;    /**< Bit n = pixel n lit, pixels in asset frame
                                  order (layout_table.md section 6), before
                                  the tile's rotation. */
-} proto_score_mask_t;
+} proto_wall_picture_t;
 
 /** ACK, the reply to every TAP, MOLE_ON, FEEDBACK, GAME_CONTROL and
- *  SCORE_MASK. */
+ *  WALL_PICTURE. */
 typedef struct
 {
     proto_header_t header;
@@ -739,10 +864,10 @@ uint32_t proto_encode_game_control (proto_game_control_t const * p_msg,
                                     uint8_t * p_buf, uint32_t buf_len);
 bool     proto_decode_game_control (uint8_t const * p_buf, uint32_t len,
                                     proto_game_control_t * p_msg);
-uint32_t proto_encode_score_mask (proto_score_mask_t const * p_msg,
+uint32_t proto_encode_wall_picture (proto_wall_picture_t const * p_msg,
                                   uint8_t * p_buf, uint32_t buf_len);
-bool     proto_decode_score_mask (uint8_t const * p_buf, uint32_t len,
-                                  proto_score_mask_t * p_msg);
+bool     proto_decode_wall_picture (uint8_t const * p_buf, uint32_t len,
+                                  proto_wall_picture_t * p_msg);
 uint32_t proto_encode_ack (proto_ack_t const * p_msg, uint8_t * p_buf,
                            uint32_t buf_len);
 bool     proto_decode_ack (uint8_t const * p_buf, uint32_t len,

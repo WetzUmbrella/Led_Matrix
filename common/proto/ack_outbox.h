@@ -21,13 +21,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** Entries kept at once: 9 tiles times 2 messages, plus 6 spare (plan
- *  choice; a round start sends START to 9 tiles, and a score sends END and
- *  SCORE_MASK to 9). */
-#define ACK_OUTBOX_SLOTS 24u
+/** Entries kept at once: 9 tiles times 5 messages, plus 3 spare (build
+ *  step 3, 11 Nov 2026: the countdown and the results each send a list of 3
+ *  WALL_PICTUREs to 9 tiles at once, 27, beside END or a target). */
+#define ACK_OUTBOX_SLOTS 48u
 
-/** Largest message kept, bytes (the largest acked message is MOLE_ON, 14). */
-#define ACK_OUTBOX_MSG_MAX 16u
+/** Largest message kept, bytes: WALL_PICTURE, 23, is the largest acked
+ *  message (build step 3); coordinator_loop.c checks it at compile time. */
+#define ACK_OUTBOX_MSG_MAX 24u
 
 /** One message waiting for its ACK. */
 typedef struct

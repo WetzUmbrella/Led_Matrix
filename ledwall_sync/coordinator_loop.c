@@ -60,6 +60,14 @@
 #include "lwip/udp.h"
 #if __has_include("wifi_secrets.h")
 #include "wifi_secrets.h"
+
+/* Every acked game message must fit an outbox slot (build step 3: the
+ * 23-byte WALL_PICTURE outgrew the old 16-byte slots). */
+_Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
+                   (PROTO_FEEDBACK_BYTES <= ACK_OUTBOX_MSG_MAX) &&
+                   (PROTO_GAME_CONTROL_BYTES <= ACK_OUTBOX_MSG_MAX) &&
+                   (PROTO_WALL_PICTURE_BYTES <= ACK_OUTBOX_MSG_MAX),
+               "every acked game message must fit an outbox slot");
 #endif
 #endif
 
@@ -2042,7 +2050,7 @@ static void cl_game_start (uint64_t now)
 /**
  * @brief  End of a round, by the timer or by the PC's abort: no more moles,
  *         END to every tile of the map, and the final score drawn across the
- *         wall as one SCORE_MASK per tile. Back to READY.
+ *         wall as one WALL_PICTURE per tile. Back to READY.
  * @param  now  Current time, microseconds.
  */
 static void cl_game_end (uint64_t now)
@@ -2226,7 +2234,7 @@ static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now)
 }
 
 /**
- * @brief  SCORE_MASK for one tile: its 8 x 8 slice of the final score.
+ * @brief  WALL_PICTURE for one tile: its 8 x 8 slice of the final score.
  * @param  node_id  Tile, 1 to 9, which must be in the map.
  * @param  score    The round's final score.
  * @param  now      Current time, microseconds.
@@ -2238,8 +2246,8 @@ static void cl_queue_score (uint8_t node_id, int32_t score, uint64_t now)
     if (cl_slot_of(node_id, &slot))
     {
         uint16_t const seq = cl_next_cmd_seq();
-        proto_score_mask_t const msg = {
-            .header  = {.type       = PROTO_TYPE_SCORE_MASK,
+        proto_wall_picture_t const msg = {
+            .header  = {.type       = PROTO_TYPE_WALL_PICTURE,
                         .session_id = g_session.session_id,
                         .seq        = seq},
             .node_id = node_id,
@@ -2247,10 +2255,10 @@ static void cl_queue_score (uint8_t node_id, int32_t score, uint64_t now)
                                             g_session.cols, cl_active_slots(),
                                             (uint8_t)slot), /* slot < 9. */
         };
-        uint8_t  buf[PROTO_SCORE_MASK_BYTES];
-        uint32_t const len = proto_encode_score_mask(&msg, buf, sizeof(buf));
+        uint8_t  buf[PROTO_WALL_PICTURE_BYTES];
+        uint32_t const len = proto_encode_wall_picture(&msg, buf, sizeof(buf));
 
-        cl_queue_tile(node_id, PROTO_TYPE_SCORE_MASK, seq, buf, len, now,
+        cl_queue_tile(node_id, PROTO_TYPE_WALL_PICTURE, seq, buf, len, now,
                       now + CL_CONTROL_LIFE_US);
     }
 }

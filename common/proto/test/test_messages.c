@@ -50,14 +50,14 @@
 #define LEN_START_AT       12u
 #define LEN_RESUME_AT      13u
 #define LEN_COMMAND        4u
-#define LEN_STATUS         8u
+#define LEN_STATUS         13u
 #define LEN_TELEMETRY      9u
 #define LEN_TELEMETRY_ACK  6u
 #define LEN_TAP            15u
 #define LEN_MOLE_ON        14u
 #define LEN_FEEDBACK       5u
-#define LEN_GAME_CONTROL   5u
-#define LEN_SCORE_MASK     13u
+#define LEN_GAME_CONTROL   6u
+#define LEN_WALL_PICTURE   23u
 #define LEN_ACK            7u
 
 /** The six whack-a-mole rows, and the largest value of the 4-bit node_id
@@ -67,7 +67,7 @@
 
 static proto_type_t const g_game_rows[GAME_ROWS] = {
     PROTO_TYPE_TAP,          PROTO_TYPE_MOLE_ON,    PROTO_TYPE_FEEDBACK,
-    PROTO_TYPE_GAME_CONTROL, PROTO_TYPE_SCORE_MASK, PROTO_TYPE_ACK};
+    PROTO_TYPE_GAME_CONTROL, PROTO_TYPE_WALL_PICTURE, PROTO_TYPE_ACK};
 
 static uint8_t  g_buf[BUF_BYTES];
 static uint8_t  g_payload[PROTO_CHUNK_PAYLOAD_MAX];
@@ -99,7 +99,7 @@ static void           rt_tap (uint32_t corner);
 static void           rt_mole_on (uint32_t corner);
 static void           rt_feedback (uint32_t corner);
 static void           rt_game_control (uint32_t corner);
-static void           rt_score_mask (uint32_t corner);
+static void           rt_wall_picture (uint32_t corner);
 static void           rt_ack (uint32_t corner);
 static bool           lengths_game (void);
 static bool           reject_encode (void);
@@ -141,7 +141,7 @@ bool test_messages_boundary (void)
         rt_mole_on(corner);
         rt_feedback(corner);
         rt_game_control(corner);
-        rt_score_mask(corner);
+        rt_wall_picture(corner);
         rt_ack(corner);
     }
 
@@ -175,7 +175,8 @@ bool test_messages_lengths (void)
     proto_start_at_t const       start = {hdr, 0u};
     proto_resume_at_t const      res   = {hdr, 0u, 0u};
     proto_command_t const        cmd   = {hdr};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u};
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u,
+                                          0u, 0u, 0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_telemetry_ack_t const  tack  = {hdr, 0u};
 
@@ -267,10 +268,10 @@ static bool lengths_game (void)
     bool                       b_ok = true;
     proto_header_t const       hdr  = header_at(CORNER_MIN);
     proto_tap_t const          tap  = {hdr, 1u, 0u, 0u};
-    proto_mole_on_t const      mole = {hdr, 1u, 0u, 1u};
+    proto_mole_on_t const      mole = {hdr, 1u, 0u, 1u, 0u};
     proto_feedback_msg_t const feed = {hdr, 1u, 0u};
-    proto_game_control_t const ctrl = {hdr, 0u, 0u};
-    proto_score_mask_t const   mask = {hdr, 1u, 0u};
+    proto_game_control_t const ctrl = {hdr, 0u, 0u, 0u, 0u};
+    proto_wall_picture_t const mask = {hdr, 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     proto_ack_t const          ack  = {hdr, 0u, 0u};
 
     b_ok = (test_main_check(LEN_TAP == proto_encode_tap(&tap, g_buf, BUF_BYTES),
@@ -288,7 +289,7 @@ static bool lengths_game (void)
                                                     &ctrl, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
-    b_ok = (test_main_check(LEN_SCORE_MASK == proto_encode_score_mask(
+    b_ok = (test_main_check(LEN_WALL_PICTURE == proto_encode_wall_picture(
                                                   &mask, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
@@ -323,7 +324,7 @@ bool test_messages_reject (void)
 /**
  * @brief  Decoders refuse each game row one byte short, and with node_id 10
  *         to 15 written into its bits. node_id 0 is refused where a tile is
- *         required (TAP, MOLE_ON, FEEDBACK, SCORE_MASK) and accepted where
+ *         required (TAP, MOLE_ON, FEEDBACK, WALL_PICTURE) and accepted where
  *         it means the PC-Pico link (GAME_CONTROL, ACK).
  * @return true when every refusal (and acceptance) happened.
  */
@@ -408,7 +409,7 @@ static uint32_t game_encode (proto_type_t type)
     }
     else if (PROTO_TYPE_MOLE_ON == type)
     {
-        proto_mole_on_t const msg = {hdr, 3u, 1u, 1u};
+        proto_mole_on_t const msg = {hdr, 3u, 1u, 1u, 0u};
 
         len = proto_encode_mole_on(&msg, g_buf, BUF_BYTES);
     }
@@ -420,15 +421,15 @@ static uint32_t game_encode (proto_type_t type)
     }
     else if (PROTO_TYPE_GAME_CONTROL == type)
     {
-        proto_game_control_t const msg = {hdr, 2u, 2u};
+        proto_game_control_t const msg = {hdr, 2u, 2u, 0u, 0u};
 
         len = proto_encode_game_control(&msg, g_buf, BUF_BYTES);
     }
-    else if (PROTO_TYPE_SCORE_MASK == type)
+    else if (PROTO_TYPE_WALL_PICTURE == type)
     {
-        proto_score_mask_t const msg = {hdr, 7u, 1u};
+        proto_wall_picture_t const msg = {hdr, 7u, 0u, 0u, 0u, 0u, 0u, 0u, 1u};
 
-        len = proto_encode_score_mask(&msg, g_buf, BUF_BYTES);
+        len = proto_encode_wall_picture(&msg, g_buf, BUF_BYTES);
     }
     else if (PROTO_TYPE_ACK == type)
     {
@@ -478,11 +479,11 @@ static bool game_decode (proto_type_t type, uint32_t len)
 
         b_ok = proto_decode_game_control(g_buf, len, &out);
     }
-    else if (PROTO_TYPE_SCORE_MASK == type)
+    else if (PROTO_TYPE_WALL_PICTURE == type)
     {
-        proto_score_mask_t out;
+        proto_wall_picture_t out;
 
-        b_ok = proto_decode_score_mask(g_buf, len, &out);
+        b_ok = proto_decode_wall_picture(g_buf, len, &out);
     }
     else if (PROTO_TYPE_ACK == type)
     {
@@ -508,15 +509,20 @@ static bool reject_encode (void)
     proto_header_t const   hdr   = header_at(CORNER_MIN);
     proto_heartbeat_t      beat  = {hdr, 0u};
     proto_manifest_t       man   = {hdr, 2u, 0u, 0u};
-    proto_status_t         stat  = {hdr, BITMAP_MAX + 1u, 0u, 0u, 0u};
-    proto_status_t         hi    = {hdr, 0u, 0u, 0u, SCORE_OVER};
-    proto_status_t         lo    = {hdr, 0u, 0u, 0u, SCORE_UNDER};
+    proto_status_t         stat  = {hdr, BITMAP_MAX + 1u, 0u, 0u, 0u,
+                                    0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t         hi    = {hdr, 0u, 0u, 0u, SCORE_OVER,
+                                    0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t         lo    = {hdr, 0u, 0u, 0u, SCORE_UNDER,
+                                    0u, 0u, 0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t      tel   = {hdr, 1u, 0u, 0u, PROTO_DISPLAY_COUNT};
     proto_asset_chunk_t    chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
                                     g_payload};
     proto_session_config_t cfg   = {hdr, 2u, 5u, 0u, {0u}, 1u, {0u}};
-    proto_mole_on_t        mole  = {hdr, 1u, 0u, 0u};
-    proto_game_control_t   ctrl  = {hdr, 1u, 4u};
+    proto_mole_on_t        mole  = {hdr, 1u, 0u, 0u, 0u};
+    /* Command 8 is past the last (TAP_TEST_OFF); 4 is ARM since 11 Nov. */
+    proto_game_control_t   ctrl  = {hdr, 1u, (uint8_t)PROTO_GAME_CMD_COUNT,
+                                    0u, 0u};
     proto_feedback_msg_t   feed  = {hdr, 1u, 3u}; /* 3 = FEEDBACK_COUNT. */
     proto_ack_t            ack   = {hdr, PROTO_NODE_MAX + 1u, 0u};
     proto_tap_t            tap   = {hdr, 0u, 0u, 0u};
@@ -555,10 +561,12 @@ static bool reject_encode (void)
     b_ok = (test_main_check(0u == proto_encode_status(&lo, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
-    mole.up_ms = 0u;
+    /* up_ms 0 is valid since 11 Nov (the start sprite); kind 5 is not. */
+    mole.kind = (uint8_t)PROTO_TARGET_COUNT;
     b_ok = (test_main_check(0u == proto_encode_mole_on(&mole, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
+    mole.kind  = 0u;
     mole.up_ms = PROTO_UP_MS_MAX + 1u;
     b_ok = (test_main_check(0u == proto_encode_mole_on(&mole, g_buf, BUF_BYTES),
                             __LINE__)) &&
@@ -592,11 +600,12 @@ static bool reject_decode_range (void)
     proto_header_t const         hdr   = header_at(CORNER_MIN);
     proto_heartbeat_t const      beat  = {hdr, 1u};
     proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u};
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u,
+                                          0u, 0u, 0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
     proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {0u}, 1u, {0u}};
-    proto_mole_on_t const        mole  = {hdr, 1u, 0u, 1u};
+    proto_mole_on_t const        mole  = {hdr, 1u, 0u, 1u, 0u};
     proto_heartbeat_t            beat_out;
     proto_manifest_t             man_out;
     proto_status_t               stat_out;
@@ -607,7 +616,7 @@ static bool reject_decode_range (void)
 
     /* Decoders refuse out-of-range fields written straight into the bits:
      * Node ID 0, frame_count 0, coordinator state 13, display state 7,
-     * chunk index 113, rows x cols > 9, score 100 and up_ms 0. */
+     * chunk index 113, rows x cols > 9, score 100 and target kind 5. */
     (void)proto_encode_heartbeat(&beat, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_NODE_BITS, 0u);
     b_ok = (test_main_check(
@@ -656,15 +665,17 @@ static bool reject_decode_range (void)
            b_ok;
 
     (void)proto_encode_status(&stat, g_buf, BUF_BYTES); /* Valid. */
-    proto_put_bits(g_buf, PROTO_STATUS_BITS - PROTO_SCORE_BITS,
+    proto_put_bits(g_buf,
+                   PROTO_HEADER_BITS + (2u * PROTO_BITMAP_BITS) +
+                       PROTO_COORD_STATE_BITS,
                    PROTO_SCORE_BITS, SCORE_OVER);
     b_ok = (test_main_check(!proto_decode_status(g_buf, LEN_STATUS, &stat_out),
                             __LINE__)) &&
            b_ok;
 
     (void)proto_encode_mole_on(&mole, g_buf, BUF_BYTES); /* Valid. */
-    proto_put_bits(g_buf, PROTO_MOLE_ON_BITS - PROTO_UP_MS_BITS,
-                   PROTO_UP_MS_BITS, 0u);
+    proto_put_bits(g_buf, PROTO_MOLE_ON_BITS - PROTO_TARGET_KIND_BITS,
+                   PROTO_TARGET_KIND_BITS, PROTO_TARGET_COUNT);
     b_ok =
         (test_main_check(!proto_decode_mole_on(g_buf, LEN_MOLE_ON, &mole_out),
                          __LINE__)) &&
@@ -1112,14 +1123,23 @@ static void rt_status (uint32_t corner)
     proto_status_t const msg   = {
         header_at(corner), b_max ? BITMAP_MAX : 0u, b_max ? BITMAP_MAX : 0u,
         b_max ? (uint8_t)PROTO_COORD_COORDINATING_GAME : 0u, /* Code 12. */
-        b_max ? (int8_t)PROTO_SCORE_MAX : (int8_t)-PROTO_SCORE_MAX};
+        b_max ? (int8_t)PROTO_SCORE_MAX : (int8_t)-PROTO_SCORE_MAX,
+        b_max ? (uint8_t)PROTO_ROUND_RESULTS : 0u,
+        b_max ? (uint8_t)PROTO_LEVEL_HARD : 0u,
+        b_max ? PROTO_COUNT_MAX : 0u, b_max ? PROTO_COUNT_MAX : 0u,
+        b_max ? PROTO_COUNT_MAX : 0u, b_max ? PROTO_TIME_LEFT_MAX : 0u,
+        b_max ? PROTO_REACTION_MAX : 0u};
     proto_status_t out;
     uint32_t const len = proto_encode_status(&msg, g_buf, BUF_BYTES);
 
     tally((proto_decode_status(g_buf, len, &out)) &&
           (same_header(&msg.header, &out.header)) &&
           (msg.readiness == out.readiness) && (msg.online == out.online) &&
-          (msg.state == out.state) && (msg.score == out.score));
+          (msg.state == out.state) && (msg.score == out.score) &&
+          (msg.round_state == out.round_state) && (msg.level == out.level) &&
+          (msg.missed == out.missed) && (msg.wrong == out.wrong) &&
+          (msg.shown == out.shown) && (msg.time_left_s == out.time_left_s) &&
+          (msg.reaction_ms == out.reaction_ms));
 }
 
 /**
@@ -1187,14 +1207,16 @@ static void rt_mole_on (uint32_t corner)
     bool const            b_max = (CORNER_MIN != corner);
     proto_mole_on_t const msg = {header_at(corner), b_max ? PROTO_NODE_MAX : 1u,
                                  b_max ? UINT64_MAX : 0u,
-                                 b_max ? PROTO_UP_MS_MAX : 1u};
+                                 b_max ? PROTO_UP_MS_MAX : 0u,
+                                 /* Enum code 4: fits uint8_t. */
+                                 b_max ? (uint8_t)PROTO_TARGET_DECOY : 0u};
     proto_mole_on_t       out;
     uint32_t const        len = proto_encode_mole_on(&msg, g_buf, BUF_BYTES);
 
     tally((proto_decode_mole_on(g_buf, len, &out)) &&
           (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) && (msg.t_show == out.t_show) &&
-          (msg.up_ms == out.up_ms));
+          (msg.up_ms == out.up_ms) && (msg.kind == out.kind));
 }
 
 /**
@@ -1217,38 +1239,55 @@ static void rt_feedback (uint32_t corner)
 }
 
 /**
- * @brief  GAME_CONTROL round trip: node_id 0 or 9, command 0 or 3.
+ * @brief  GAME_CONTROL round trip: node_id 0 or 9, command 0 or 7, level 0
+ *         or 2, threshold 0 or 250.
  * @param  corner  0 or 1.
  */
 static void rt_game_control (uint32_t corner)
 {
     bool const                 b_max = (CORNER_MIN != corner);
     proto_game_control_t const msg   = {
-        header_at(corner), b_max ? PROTO_NODE_MAX : 0u, b_max ? 3u : 0u};
+        header_at(corner), b_max ? PROTO_NODE_MAX : 0u,
+        /* Enum codes 7 and 2: both fit uint8_t. */
+        b_max ? (uint8_t)PROTO_GAME_TAP_TEST_OFF : 0u,
+        b_max ? (uint8_t)PROTO_LEVEL_HARD : 0u,
+        b_max ? PROTO_THRESHOLD_MAX : 0u};
     proto_game_control_t out;
     uint32_t const len = proto_encode_game_control(&msg, g_buf, BUF_BYTES);
 
     tally((proto_decode_game_control(g_buf, len, &out)) &&
           (same_header(&msg.header, &out.header)) &&
-          (msg.node_id == out.node_id) && (msg.command == out.command));
+          (msg.node_id == out.node_id) && (msg.command == out.command) &&
+          (msg.level == out.level) && (msg.threshold == out.threshold));
 }
 
 /**
- * @brief  SCORE_MASK round trip: node_id 1 or 9, mask 0 or max.
+ * @brief  WALL_PICTURE round trip: every field at its smallest or largest.
  * @param  corner  0 or 1.
  */
-static void rt_score_mask (uint32_t corner)
+static void rt_wall_picture (uint32_t corner)
 {
     bool const               b_max = (CORNER_MIN != corner);
-    proto_score_mask_t const msg   = {header_at(corner),
-                                    b_max ? PROTO_NODE_MAX : 1u,
-                                    b_max ? UINT64_MAX : 0u};
-    proto_score_mask_t       out;
-    uint32_t const len = proto_encode_score_mask(&msg, g_buf, BUF_BYTES);
+    proto_wall_picture_t const msg   = {
+        header_at(corner),
+        b_max ? PROTO_NODE_MAX : 1u,
+        b_max ? 3u : 0u,
+        /* Enum codes 2 and 7: both fit uint8_t. */
+        b_max ? (uint8_t)PROTO_PIC_CLEAR : 0u,
+        b_max ? (uint8_t)PROTO_COLOUR_CYAN : 0u,
+        b_max ? 1u : 0u,
+        b_max ? UINT64_MAX : 0u,
+        b_max ? 8191u : 0u,
+        b_max ? UINT64_MAX : 0u};
+    proto_wall_picture_t       out;
+    uint32_t const len = proto_encode_wall_picture(&msg, g_buf, BUF_BYTES);
 
-    tally((proto_decode_score_mask(g_buf, len, &out)) &&
+    tally((proto_decode_wall_picture(g_buf, len, &out)) &&
           (same_header(&msg.header, &out.header)) &&
-          (msg.node_id == out.node_id) && (msg.mask == out.mask));
+          (msg.node_id == out.node_id) && (msg.slot == out.slot) &&
+          (msg.effect == out.effect) && (msg.colour == out.colour) &&
+          (msg.b_repeat == out.b_repeat) && (msg.t_show == out.t_show) &&
+          (msg.dur_ms == out.dur_ms) && (msg.mask == out.mask));
 }
 
 /**

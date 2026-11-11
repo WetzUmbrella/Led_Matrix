@@ -92,7 +92,9 @@ def test_pico_link_sends_config_and_commands() -> None:
         msg = pl.decode(pico.recvfrom(128)[0])
         assert msg["type"] == name and msg["session_id"] == 7
     status = pl.encode_status(session_id=7, seq=1, readiness=3, online=3,
-                              state=7, score=-3)
+                              state=7, score=-3, round_state=0, level=0,
+                              missed=0, wrong=0, shown=0, time_left_s=0,
+                              reaction_ms=0)
     pico.sendto(status, pc.getsockname())
     import time
     time.sleep(0.05)

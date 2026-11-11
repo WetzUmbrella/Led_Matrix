@@ -26,7 +26,7 @@ bool test_game_tile_mole_and_flash (void);
 bool test_game_tile_acks (void);
 
 /**
- * @brief  START clears the score, SCORE_MASK is drawn in the tile's rotation,
+ * @brief  START clears the score, WALL_PICTURE is drawn in the tile's rotation,
  *         END keeps the score on the tile.
  * @return true when every check passed.
  */

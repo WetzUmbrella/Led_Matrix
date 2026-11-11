@@ -688,49 +688,70 @@
  },
  {
   "fields": {
+   "level": 1,
+   "missed": 5,
    "online": 346,
+   "reaction_ms": 431,
    "readiness": 165,
+   "round_state": 3,
    "score": -7,
    "seq": 4660,
    "session_id": 60,
-   "state": 12
+   "shown": 17,
+   "state": 12,
+   "time_left_s": 21,
+   "wrong": 2
   },
   "file": "status_typical.bin",
-  "hex": "8f8746a29456ce07",
+  "hex": "8f8746a29456ce5f0541a47a0d",
   "kind": "message",
-  "length": 8,
+  "length": 13,
   "message": "STATUS",
   "name": "status_typical"
  },
  {
   "fields": {
+   "level": 0,
+   "missed": 0,
    "online": 0,
+   "reaction_ms": 0,
    "readiness": 0,
+   "round_state": 0,
    "score": -99,
    "seq": 0,
    "session_id": 0,
-   "state": 0
+   "shown": 0,
+   "state": 0,
+   "time_left_s": 0,
+   "wrong": 0
   },
   "file": "status_min.bin",
-  "hex": "0f0000000000e804",
+  "hex": "0f0000000000e8040000000000",
   "kind": "message",
-  "length": 8,
+  "length": 13,
   "message": "STATUS",
   "name": "status_min"
  },
  {
   "fields": {
+   "level": 2,
+   "missed": 127,
    "online": 511,
+   "reaction_ms": 2047,
    "readiness": 511,
+   "round_state": 4,
    "score": 99,
    "seq": 65535,
    "session_id": 255,
-   "state": 12
+   "shown": 127,
+   "state": 12,
+   "time_left_s": 63,
+   "wrong": 127
   },
   "file": "status_max.bin",
-  "hex": "efffffffff7f1e03",
+  "hex": "efffffffff7f1ea3ffffffff3f",
   "kind": "message",
-  "length": 8,
+  "length": 13,
   "message": "STATUS",
   "name": "status_max"
  },
@@ -868,6 +889,7 @@
  },
  {
   "fields": {
+   "kind": 1,
    "node_id": 3,
    "seq": 4660,
    "session_id": 60,
@@ -875,7 +897,7 @@
    "up_ms": 1200
   },
   "file": "mole_on_typical.bin",
-  "hex": "938746629609f6e33e0200006009",
+  "hex": "938746629609f6e33e0200006029",
   "kind": "message",
   "length": 14,
   "message": "MOLE_ON",
@@ -883,14 +905,15 @@
  },
  {
   "fields": {
+   "kind": 0,
    "node_id": 1,
    "seq": 0,
    "session_id": 0,
    "t_show": 0,
-   "up_ms": 1
+   "up_ms": 0
   },
   "file": "mole_on_min.bin",
-  "hex": "1300002000000000000000000200",
+  "hex": "1300002000000000000000000000",
   "kind": "message",
   "length": 14,
   "message": "MOLE_ON",
@@ -898,14 +921,15 @@
  },
  {
   "fields": {
+   "kind": 4,
    "node_id": 9,
    "seq": 65535,
    "session_id": 255,
    "t_show": 18446744073709551615,
-   "up_ms": 2000
+   "up_ms": 4000
   },
   "file": "mole_on_max.bin",
-  "hex": "f3ffff3fffffffffffffffffa10f",
+  "hex": "f3ffff3fffffffffffffffff419f",
   "kind": "message",
   "length": 14,
   "message": "MOLE_ON",
@@ -955,87 +979,111 @@
  },
  {
   "fields": {
-   "command": 2,
+   "command": 4,
+   "level": 1,
    "node_id": 2,
    "seq": 4660,
-   "session_id": 60
+   "session_id": 60,
+   "threshold": 10
   },
   "file": "game_control_typical.bin",
-  "hex": "9587464204",
+  "hex": "958746422805",
   "kind": "message",
-  "length": 5,
+  "length": 6,
   "message": "GAME_CONTROL",
   "name": "game_control_typical"
  },
  {
   "fields": {
    "command": 0,
+   "level": 0,
    "node_id": 0,
    "seq": 0,
-   "session_id": 0
+   "session_id": 0,
+   "threshold": 0
   },
   "file": "game_control_min.bin",
-  "hex": "1500000000",
+  "hex": "150000000000",
   "kind": "message",
-  "length": 5,
+  "length": 6,
   "message": "GAME_CONTROL",
   "name": "game_control_min"
  },
  {
   "fields": {
-   "command": 3,
+   "command": 7,
+   "level": 2,
    "node_id": 9,
    "seq": 65535,
-   "session_id": 255
+   "session_id": 255,
+   "threshold": 250
   },
   "file": "game_control_max.bin",
-  "hex": "f5ffff3f07",
+  "hex": "f5ffff3f4f7d",
   "kind": "message",
-  "length": 5,
+  "length": 6,
   "message": "GAME_CONTROL",
   "name": "game_control_max"
  },
  {
   "fields": {
+   "colour": 1,
+   "dur_ms": 1000,
+   "effect": 0,
    "mask": 1746410393481133080,
    "node_id": 7,
+   "repeat": 1,
    "seq": 4660,
-   "session_id": 60
+   "session_id": 60,
+   "slot": 2,
+   "t_show": 9876543210987
   },
-  "file": "score_mask_typical.bin",
-  "hex": "968746e23078fcfefffd783000",
+  "file": "wall_picture_typical.bin",
+  "hex": "968746e224d70bb31ff7110000d007068fdfffbf1f0f06",
   "kind": "message",
-  "length": 13,
-  "message": "SCORE_MASK",
-  "name": "score_mask_typical"
+  "length": 23,
+  "message": "WALL_PICTURE",
+  "name": "wall_picture_typical"
  },
  {
   "fields": {
+   "colour": 0,
+   "dur_ms": 0,
+   "effect": 0,
    "mask": 0,
    "node_id": 1,
+   "repeat": 0,
    "seq": 0,
-   "session_id": 0
+   "session_id": 0,
+   "slot": 0,
+   "t_show": 0
   },
-  "file": "score_mask_min.bin",
-  "hex": "16000020000000000000000000",
+  "file": "wall_picture_min.bin",
+  "hex": "1600002000000000000000000000000000000000000000",
   "kind": "message",
-  "length": 13,
-  "message": "SCORE_MASK",
-  "name": "score_mask_min"
+  "length": 23,
+  "message": "WALL_PICTURE",
+  "name": "wall_picture_min"
  },
  {
   "fields": {
+   "colour": 7,
+   "dur_ms": 8191,
+   "effect": 2,
    "mask": 18446744073709551615,
    "node_id": 9,
+   "repeat": 1,
    "seq": 65535,
-   "session_id": 255
+   "session_id": 255,
+   "slot": 3,
+   "t_show": 18446744073709551615
   },
-  "file": "score_mask_max.bin",
-  "hex": "f6ffff3fffffffffffffffff01",
+  "file": "wall_picture_max.bin",
+  "hex": "f6ffff3ff7ffffffffffffffffffffffffffffffffff3f",
   "kind": "message",
-  "length": 13,
-  "message": "SCORE_MASK",
-  "name": "score_mask_max"
+  "length": 23,
+  "message": "WALL_PICTURE",
+  "name": "wall_picture_max"
  },
  {
   "fields": {

@@ -76,7 +76,7 @@ static test_case_t const g_cases[] = {
      "ACKed only",
      test_coord_game_mode_and_start},
     {"C21 re-plan: round: MOLE_ON resent until ACK, hit, STATUS score, END and "
-     "SCORE_MASK",
+     "WALL_PICTURE",
      test_coord_game_round},
     {"C22 re-plan: TAP ACKed and relayed once, SESSION_CONFIG refused in round",
      test_coord_game_taps},

@@ -2,7 +2,7 @@
  * @file    game_tile.h
  * @brief   Whack-a-mole on the tile (whack-a-mole re-plan, build step 7):
  *          the tile's game state, the handling of MOLE_ON, FEEDBACK,
- *          GAME_CONTROL, SCORE_MASK and the ACK of a TAP, the pixels it draws
+ *          GAME_CONTROL, WALL_PICTURE and the ACK of a TAP, the pixels it draws
  *          (a solid mole, a green or red flash, the final score), the TAP and
  *          ACK encoders, and a seqlock that hands the state to the Display
  *          Engine. Pure C with no ESP-IDF call except the atomics of the
@@ -17,9 +17,9 @@
  *   t_show + up_ms x 1000 us, in the Pico's corrected clock. No asset.
  * - FEEDBACK flashes the whole tile green (hit) or red (miss) for
  *   GAME_TILE_FLASH_US on the tile's own clock, and ends a mole on a hit.
- * - SCORE_MASK is the tile's 8 x 8 slice of the final score, before the
+ * - WALL_PICTURE is the tile's 8 x 8 slice of the final score, before the
  *   tile's rotation; it stays on the tile until the next round starts.
- * - Every MOLE_ON, FEEDBACK, GAME_CONTROL and SCORE_MASK addressed to this
+ * - Every MOLE_ON, FEEDBACK, GAME_CONTROL and WALL_PICTURE addressed to this
  *   tile is ACKed, a repeat too. Only a newer seq acts (the Pico shares one
  *   seq counter for these, layout_table.md section 10 item 13).
  */
@@ -47,14 +47,14 @@ typedef struct
     uint32_t b_mole;        /**< 1 when this tile has a mole window. */
     uint32_t b_flash;       /**< 1 while a FEEDBACK flash runs. */
     uint32_t flash_result;  /**< proto_feedback_t of the flash. */
-    uint32_t b_score;       /**< 1 when a SCORE_MASK is held. */
+    uint32_t b_score;       /**< 1 when a WALL_PICTURE is held. */
     uint32_t b_seq_known;   /**< 1 once a command seq was accepted. */
     uint32_t seq;           /**< Newest accepted command seq. */
     uint32_t reserved;      /**< Keeps the struct a whole number of words. */
     int64_t  show_us;       /**< Mole show time, Pico corrected clock. */
     int64_t  hide_us;       /**< Mole hide time, Pico corrected clock. */
     int64_t  flash_until_us; /**< Flash end, tile local clock. */
-    uint64_t score_mask;    /**< SCORE_MASK bits, before the rotation. */
+    uint64_t wall_picture;    /**< WALL_PICTURE bits, before the rotation. */
 } game_tile_state_t;
 
 /**
@@ -65,7 +65,7 @@ void game_tile_init (game_tile_state_t * p_state);
 
 /**
  * @brief  Handle one datagram from the Pico on port 4210: MOLE_ON, FEEDBACK,
- *         GAME_CONTROL or SCORE_MASK. Other types are not for this module.
+ *         GAME_CONTROL or WALL_PICTURE. Other types are not for this module.
  * @param  p_state     State; must not be NULL.
  * @param  node_id     This tile's Node ID, 1 to 9.
  * @param  p_buf       Datagram.

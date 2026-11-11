@@ -22,7 +22,7 @@
 #define TST_T_SHOW  INT64_C(1000000)
 
 /** Largest message handled here, bytes (MOLE_ON is 14). */
-#define TST_BUF_BYTES 16u
+#define TST_BUF_BYTES 32u
 
 /** Colours of one LED, as tst_led() reads them (R, G, B). */
 #define TST_MOLE_G 3u
@@ -81,7 +81,8 @@ static uint32_t tst_mole_on (uint8_t * p_buf, uint8_t node_id, uint16_t seq,
                              uint64_t t_show, uint16_t up_ms)
 {
     proto_mole_on_t const msg = {
-        {PROTO_TYPE_MOLE_ON, TST_SESSION, seq}, node_id, t_show, up_ms};
+        {PROTO_TYPE_MOLE_ON, TST_SESSION, seq}, node_id, t_show, up_ms,
+        (uint8_t)PROTO_TARGET_MOLE}; /* Enum code 0: fits uint8_t. */
 
     return proto_encode_mole_on(&msg, p_buf, PROTO_MOLE_ON_BYTES);
 }
@@ -220,7 +221,7 @@ bool test_game_tile_acks (void)
 }
 
 /**
- * @brief  START clears the score, SCORE_MASK is drawn in the tile's rotation,
+ * @brief  START clears the score, WALL_PICTURE is drawn in the tile's rotation,
  *         END keeps the score on the tile.
  * @return true when every check passed.
  */
@@ -237,18 +238,19 @@ bool test_game_tile_score (void)
     game_tile_init(&state);
     proto_game_control_t const start = {
         {PROTO_TYPE_GAME_CONTROL, TST_SESSION, 20u}, TST_NODE,
-        PROTO_GAME_START};
+        PROTO_GAME_START, 0u, 0u};
     len = proto_encode_game_control(&start, buf, PROTO_GAME_CONTROL_BYTES);
     b_ok = (test_main_check(game_tile_on_pico(&state, TST_NODE, buf, len, 0,
                                               &ack), __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == state.b_game, __LINE__)) && b_ok;
 
-    /* SCORE_MASK: only LED 0 of the asset frame (pixel 0). With rotation 0 the
-     * lit LED is LED 0; under each rotation exactly one LED lights, the one
+    /* WALL_PICTURE: only LED 0 of the asset frame (pixel 0). With rotation 0
+     * the lit LED is LED 0; under each rotation exactly one LED lights, the one
      * that display_frame_source_led() maps to source 0. */
-    proto_score_mask_t const mask = {
-        {PROTO_TYPE_SCORE_MASK, TST_SESSION, 21u}, TST_NODE, UINT64_C(1)};
-    len = proto_encode_score_mask(&mask, buf, PROTO_SCORE_MASK_BYTES);
+    proto_wall_picture_t const mask = {
+        {PROTO_TYPE_WALL_PICTURE, TST_SESSION, 21u}, TST_NODE, 0u, 0u, 0u, 0u,
+        0u, 0u, UINT64_C(1)};
+    len = proto_encode_wall_picture(&mask, buf, PROTO_WALL_PICTURE_BYTES);
     b_ok = (test_main_check(game_tile_on_pico(&state, TST_NODE, buf, len, 0,
                                               &ack), __LINE__)) && b_ok;
     for (uint8_t orientation = 0u; orientation < 4u; orientation++)
@@ -277,7 +279,7 @@ bool test_game_tile_score (void)
     /* END: the mole and the flash go; the score stays until the next START. */
     proto_game_control_t const end = {
         {PROTO_TYPE_GAME_CONTROL, TST_SESSION, 22u}, TST_NODE,
-        PROTO_GAME_END};
+        PROTO_GAME_END, 0u, 0u};
     len = proto_encode_game_control(&end, buf, PROTO_GAME_CONTROL_BYTES);
     b_ok = (test_main_check(game_tile_on_pico(&state, TST_NODE, buf, len, 0,
                                               &ack), __LINE__)) && b_ok;
@@ -331,10 +333,10 @@ bool test_game_tile_codecs (void)
     game_tile_read(&back);
     b_ok = (test_main_check(0 == memcmp(&state, &back, sizeof(state)),
                             __LINE__)) && b_ok;
-    state.score_mask = UINT64_C(0x8000000000000001);
+    state.wall_picture = UINT64_C(0x8000000000000001);
     game_tile_publish(&state);
     game_tile_read(&back);
-    b_ok = (test_main_check(UINT64_C(0x8000000000000001) == back.score_mask,
+    b_ok = (test_main_check(UINT64_C(0x8000000000000001) == back.wall_picture,
                             __LINE__)) && b_ok;
 
     return b_ok;

@@ -289,6 +289,8 @@ Step 1 runs v1 with no wire change. Before step 3, one batch changes `protocol/l
 | TAP, FEEDBACK, ACK | Unchanged (DS-07). | |
 | MOTION | Not now: reserved for E3 (DS-04 to DS-06). | |
 
+**As built (11 Nov 2026, step 3):** MOLE_ON keeps its name in the code (the table calls it the target row); the tap threshold travels in GAME_CONTROL ARM (20 mg steps) instead of SESSION_CONFIG, so the layout message is unchanged in step 3; the sparse-grid positions (DS-15) move to step 4 with the website and `asset_builder`. The Pico's acked outbox grew to 48 slots of 24 bytes (WALL_PICTURE is 23 bytes, and the countdown sends 27 at once), with a compile-time size check.
+
 Tap test (A11): in GAME IDLE with tap test on, the Pico answers every TAP with FEEDBACK hit (the tile lights) and forwards the peak to the PC over the path that tap-to-place already uses. Exact widths are fixed when the batch is written, by the table's width rule.
 
 ### DS-11 Visuals (decided 11 Nov)

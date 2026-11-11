@@ -173,6 +173,13 @@ Header only. Accepted in PLAYING and PAUSED (W6D-2e).
 | online | 38 | 9 | 0 to 0x1FF | bit n - 1 = Node ID n online | T-B2-04 |
 | state | 47 | 4 | 0 to 12 | coordinator state (section 5.6) | T-B2-04, W6 statechart 2 |
 | score | 51 | 8 | -99 to 99 | live game score, two's complement; 0 outside a game | whack-a-mole re-plan, step 3 (live score on the website); width rule, 199 values |
+| round_state | 59 | 3 | 0 to 4 | round state (section 5.15) | DS-08 (build step 3, 11 Nov 2026); width rule, 5 states |
+| level | 62 | 2 | 0 to 2 | level of the armed or running round (section 5.11) | DS-08, B4; width rule, 3 levels |
+| missed | 64 | 7 | 0 to 127 | targets that timed out this round | C3, A7; width rule (at most about 60 targets in 30 s) |
+| wrong | 71 | 7 | 0 to 127 | wrong taps this round | C2, A7 |
+| shown | 78 | 7 | 0 to 127 | targets shown this round (stars and accuracy, C6, A9) | C6, A9 |
+| time_left_s | 85 | 6 | 0 to 63 | seconds left in the round | A7; width rule, 31 values for a 30 s round, 6 bits for room |
+| reaction_ms | 91 | 11 | 0 to 2,047 | average reaction time of this round's hits, ms (show to tap) | A9; width rule, 2,048 values |
 
 ### TELEMETRY (type 16, T to C)
 
@@ -207,9 +214,10 @@ The TAP seq is the header seq.
 |---|---|---|---|---|---|
 | node_id | 29 | 4 | 1 to 9 | addressed tile | re-plan, step 3 |
 | t_show | 33 | 64 | 0 to 2^64 - 1 | show time, Pico corrected clock, us | re-plan ("show and hide times"); J1 |
-| up_ms | 97 | 11 | 1 to 2,000 | how long the mole stays up, ms; hide time = t_show + up_ms x 1,000 us | re-plan (1,200 ms shrinking to 500 ms); width rule, 2,000 values |
+| up_ms | 97 | 12 | 0 to 4,000 | how long the target stays up, ms; hide time = t_show + up_ms x 1,000 us; 0 = up until tapped or cleared (the start sprite) | re-plan; widened from 11 bits on 11 Nov 2026 (DS-10) for the stretch rotate sprite (up to 3,000 ms) |
+| kind | 109 | 3 | 0 to 4 | target kind (section 5.12) | DS-10; width rule, 5 codes (3 reserved for stretch goals) |
 
-The tile draws the mole itself as a solid fill in the mole colour; no asset is uploaded.
+The row keeps its name, MOLE_ON, but carries any target (DS-10 calls it TARGET). The tile draws the target itself; no asset is uploaded.
 
 ### FEEDBACK (type 20, P to one tile, unicast, acked)
 
@@ -223,23 +231,31 @@ The tile draws the mole itself as a solid fill in the mole colour; no asset is u
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
 | node_id | 29 | 4 | 0 to 9 | 0 = PC to Pico; 1 to 9 = addressed tile | re-plan, step 3 |
-| command | 33 | 4 | 0 to 3 | game command (section 5.10); 4 to 15 are spare and refused | re-plan (mode switch, game start); 4 bits by decision of 6 Nov 2026, room for later commands |
+| command | 33 | 4 | 0 to 7 | game command (section 5.10); 8 to 15 are spare and refused | re-plan (mode switch, game start); 4 bits by decision of 6 Nov 2026, room for later commands; codes 4 to 7 added 11 Nov 2026 (DS-08, DS-10) |
+| level | 37 | 2 | 0 to 2 | level for ARM (section 5.11); 0 otherwise | DS-08; width rule |
+| threshold | 39 | 8 | 0 to 250 | tap threshold for ARM in 20 mg steps (20 to 5,000 mg); 0 = the tile's default (200 mg) | A12; carried in ARM rather than SESSION_CONFIG (11 Nov 2026), so no layout message change; 8 bits for 251 values |
 
-### SCORE_MASK (type 22, P to one tile, unicast, acked)
+### WALL_PICTURE (type 22, P to one tile, unicast, acked)
 
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
 | node_id | 29 | 4 | 1 to 9 | addressed tile | re-plan, step 3 |
-| mask | 33 | 64 | 0 to 2^64 - 1 | bit n = pixel n lit, pixels in asset frame order (section 6), before the tile's rotation | re-plan ("final score drawn across the wall"); one bit per pixel |
+| slot | 33 | 2 | 0 to 3 | entry of the tile's picture list | DS-09 (11 Nov 2026); a list of 4 |
+| effect | 35 | 2 | 0 to 2 | 0 picture (the mask), 1 sparkle (the tile's own twinkle), 2 clear the list (section 5.13) | DS-09; 3 is spare and refused |
+| colour | 37 | 3 | 0 to 7 | colour of the lit pixels (section 5.14) | DS-09; 8 colours |
+| repeat | 40 | 1 | 0 to 1 | 1 = after this entry, start again from slot 1 (the results loop) | DS-09 |
+| t_show | 41 | 64 | 0 to 2^64 - 1 | show time, Pico corrected clock, us | DS-09: every tile changes together, whatever the delivery delay |
+| dur_ms | 105 | 13 | 0 to 8,191 | how long the entry shows, ms; 0 = until replaced | DS-09 |
+| mask | 118 | 64 | 0 to 2^64 - 1 | bit n = pixel n lit, pixels in asset frame order (section 6), before the tile's rotation | re-plan ("final score drawn across the wall"); one bit per pixel |
 
-The Pico draws the final score across the whole wall and sends each tile its 8 x 8 slice after GAME_CONTROL END, so tiles need no font and no layout.
+Replaces SCORE_MASK (same type code 22, renamed 11 Nov 2026, DS-09). The Pico draws each picture (countdown, score, stars) across the whole wall and sends each tile its 8 x 8 piece as a timed list entry, about 0.5 s ahead, so tiles need no font and no layout.
 
 ### ACK (type 23, any direction, unicast)
 
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
 | node_id | 29 | 4 | 0 to 9 | 0 = between PC and Pico; 1 to 9 = the tile that sends it or is sent it | re-plan, step 3 |
-| acked_seq | 33 | 16 | 0 to 65,535 | header seq of the TAP, MOLE_ON, FEEDBACK, GAME_CONTROL or SCORE_MASK acknowledged | re-plan ("seq and an ack"); all acked messages from one sender share one seq counter (section 10 item 13), so seq alone names the message |
+| acked_seq | 33 | 16 | 0 to 65,535 | header seq of the TAP, MOLE_ON, FEEDBACK, GAME_CONTROL or WALL_PICTURE acknowledged | re-plan ("seq and an ack"); all acked messages from one sender share one seq counter (section 10 item 13), so seq alone names the message |
 
 ## 4. Encoded lengths, before and after
 
@@ -262,14 +278,14 @@ The Pico draws the final score across the whole wall and sends each tile its 8 x
 | RESUME_AT | 103 | 13 | 21 | derived |
 | PAUSE | 29 | 4 | 9 | derived |
 | STOP | 29 | 4 | 9 | derived |
-| STATUS | 59 | 8 | 28 | derived |
+| STATUS | 102 | 13 | 28 | derived |
 | TELEMETRY | 70 | 9 | 15 | derived |
 | TELEMETRY_ACK | 45 | 6 | 13 | derived |
 | TAP | 113 | 15 | none | new row, no before |
-| MOLE_ON | 108 | 14 | none | new row, no before |
+| MOLE_ON | 112 | 14 | none | new row, no before |
 | FEEDBACK | 35 | 5 | none | new row, no before |
-| GAME_CONTROL | 37 | 5 | none | new row, no before |
-| SCORE_MASK | 97 | 13 | none | new row, no before |
+| GAME_CONTROL | 47 | 6 | none | new row, no before |
+| WALL_PICTURE | 182 | 23 | none | new row, no before |
 | ACK | 49 | 7 | none | new row, no before |
 
 The "after" sizes include the node_id, ref_seq and acked_seq fields that the before rows do not count (section 10, items 4 and 5).
@@ -284,7 +300,7 @@ The "after" sizes include the node_id, ref_seq and acked_seq fields that the bef
 | 1 | HEARTBEAT | 7 | BUSY | 13 | PAUSE | 19 | MOLE_ON |
 | 2 | SESSION_CONFIG | 8 | ASSET_READY | 14 | STOP | 20 | FEEDBACK |
 | 3 | MANIFEST | 9 | SYNC_READY | 15 | STATUS | 21 | GAME_CONTROL |
-| 4 | ASSET_CHUNK | 10 | BEACON | 16 | TELEMETRY | 22 | SCORE_MASK |
+| 4 | ASSET_CHUNK | 10 | BEACON | 16 | TELEMETRY | 22 | WALL_PICTURE |
 | 5 | CHUNK_ACK | 11 | START_AT | 17 | TELEMETRY_ACK | 23 | ACK |
 
 Codes 0 to 17 follow the order of the T-B2-01 message rows **(plan choice)**; 18 to 23 are appended for the whack-a-mole re-plan, so no existing code moves.
@@ -321,9 +337,29 @@ rows and cols are each 1 to 9 and rows x cols is at most 9: 1x1 to 1x9 strips, 9
 
 0 = miss (red flash: a tap on a tile with no mole up), 1 = hit (green flash), 2 = reserved for the decoy stretch goal (no tile acts on it yet). Code 3 is spare and both codecs refuse it. **Width (decision of 6 Nov 2026):** 2 bits, the width rule for these 3 codes, so adding the decoy result later needs no layout change; FEEDBACK stays 5 bytes (35 bits).
 
-### 5.10 GAME_CONTROL command (4 bits, 4 codes, 12 spare)
+### 5.10 GAME_CONTROL command (4 bits, 8 codes, 8 spare)
 
-0 = MODE_VIDEO, 1 = MODE_GAME (switch mode; the Pico accepts these only while stopped), 2 = START (start a round), 3 = END (end the round; the tiles then get SCORE_MASK). The PC sends all four to the Pico (node_id 0); the Pico sends START and END to each tile. Codes 4 to 15 are spare and both codecs refuse them. **Width (decision of 6 Nov 2026):** 4 bits, two more than the width rule gives for 4 values, so later commands need no layout change; GAME_CONTROL stays 5 bytes (37 bits).
+0 = MODE_VIDEO, 1 = MODE_GAME (switch mode; the Pico accepts these only while stopped), 2 = START (Pico to a tile: the round starts), 3 = END (end or abort the round), 4 = ARM (arm a round at a level, with the tap threshold: the Pico shows the start sprite, DS-08), 5 = START_NOW (skip the start sprite and count down), 6 = TAP_TEST_ON, 7 = TAP_TEST_OFF (every tap lights its tile, A11). The PC sends MODE_VIDEO, MODE_GAME, ARM, START_NOW, END and the tap test to the Pico (node_id 0); the Pico sends START, END, ARM and the tap test to each tile. Codes 8 to 15 are spare and both codecs refuse them. **Width (decision of 6 Nov 2026):** 4 bits, so later commands need no layout change; codes 4 to 7 added 11 Nov 2026.
+
+### 5.11 Level (2 bits, 3 codes)
+
+0 = Easy, 1 = Normal, 2 = Hard (DS-08, B4).
+
+### 5.12 Target kind (3 bits, 5 codes, 3 spare)
+
+0 = mole (tap it), 1 = start sprite (tap it to start, DS-08), 2 = rotate sprite, 3 = golden mole, 4 = decoy (2 to 4 reserved for the stretch goals; no tile acts on them yet). Codes 5 to 7 are refused.
+
+### 5.13 WALL_PICTURE effect (2 bits, 3 codes, 1 spare)
+
+0 = picture (the mask in the colour), 1 = sparkle (the tile's own twinkle), 2 = clear the list. Code 3 is refused.
+
+### 5.14 Colour (3 bits, 8 codes)
+
+0 white, 1 yellow, 2 green, 3 red, 4 blue, 5 orange, 6 purple, 7 cyan, each within channel values 0 to 8 (VC-6).
+
+### 5.15 Round state (3 bits, 5 codes, 3 spare)
+
+0 GAME IDLE (or not in game mode), 1 ARMED, 2 COUNTDOWN, 3 PLAYING, 4 RESULTS (DS-08).
 
 ## 6. Packed asset frame (OD-05)
 
@@ -362,7 +398,7 @@ Every field and every shared packed word, with its valid range, bits before (the
 | game score | STATUS | -99 to 99 | 8 (`int8_t`, rule) | 8, two's complement | shifts and masks | 199 values, ceil(log2 199) = 8; the Pico clamps the score |
 | FEEDBACK result | FEEDBACK | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 codes (miss, hit, reserved decoy); 2 bits by decision of 6 Nov 2026 |
 | game command | GAME_CONTROL | 0 to 3 | 8 (enum, rule) | 4 | shifts and masks | 4 commands, 12 spare; 4 bits by decision of 6 Nov 2026 |
-| score mask | SCORE_MASK | 64 bits | 64 | 64 | shifts and masks | one bit per pixel of an 8 x 8 tile |
+| score mask | WALL_PICTURE | 64 bits | 64 | 64 | shifts and masks | one bit per pixel of an 8 x 8 tile |
 | failure policy | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 policies |
 | readiness bitmap | STATUS; Pico RAM | 9 bits | 72 (9 x `uint8_t` flag, rule) | 9 on the wire, one `uint16_t` in RAM | shifts and masks; single writer in poll context | VC-11b |
 | online bitmap | STATUS; Pico RAM | 9 bits | 72 (rule) | 9 on the wire, one `uint16_t` in RAM | as above | as readiness |
@@ -413,11 +449,11 @@ The receiver checks session_id against its session and seq against the last acce
 10. OD-14 (rejoin message) and OD-20 (two-way exchange) may add rows; 14 type codes are spare. **PROVISIONAL, implemented:** OD-14 option (a), with no new row: the Pico sends the rejoining tile a RESUME_AT (unicast) whose t_resume is a tick deadline at least 600 ms ahead and whose frame_index is the frame the wall shows at that tick.
 11. **PC commands to the Pico (PROVISIONAL, implemented).** The plan lists Start, Pause, Resume and Stop as dashboard commands (T-B1-05 `pico_link.py`) but no row carries them from the PC. They reuse the START_AT, PAUSE, RESUME_AT and STOP rows in the direction C to P, with t_start, t_resume and frame_index sent as 0 and ignored: the Pico chooses those values itself (T-B2-05). No type code is added.
 12. **Transport (PROVISIONAL, implemented):** the ports and addressing of section 11.
-13. **seq scope (item 2, PROVISIONAL):** **ACK rule: all acked messages from one sender share one seq counter**, so an ACK's acked_seq names exactly one message. A sender may keep other counters for messages that are not acked. On the Pico the acked messages are on the command counter (`g_cmd_seq`), which carries MOLE_ON, FEEDBACK, GAME_CONTROL and SCORE_MASK (from build step 7, alongside START_AT, RESUME_AT, PAUSE and STOP today). BEACON (`g_beacon_seq`) and STATUS (`g_status_seq`) are not acked and keep their own counters. A receiver compares seq only within one counter of one sender. A REGISTER (tile) or a SESSION_CONFIG with a new session_id (PC) restarts the receiver's baseline for that sender, because a sender that reboots starts its counters again.
-14. **Whack-a-mole rows (PROVISIONAL, re-plan build step 3, 6 Nov 2026):** SESSION_CONFIG's 2-bit layout became rows and cols (4 bits each) with the map row-major over rows x cols; STATUS gained score (8 bits); coordinator state 12 COORDINATING GAME; new rows TAP, MOLE_ON, FEEDBACK, GAME_CONTROL, SCORE_MASK and ACK (types 18 to 23). All six are unicast with an ACK, never broadcast (about 2.8% broadcast loss on the router). The sender resends an unacknowledged message with the same seq; the retry timing belongs to build step 7. These rows must be in the OD-07 freeze.
+13. **seq scope (item 2, PROVISIONAL):** **ACK rule: all acked messages from one sender share one seq counter**, so an ACK's acked_seq names exactly one message. A sender may keep other counters for messages that are not acked. On the Pico the acked messages are on the command counter (`g_cmd_seq`), which carries MOLE_ON, FEEDBACK, GAME_CONTROL and WALL_PICTURE (from build step 7, alongside START_AT, RESUME_AT, PAUSE and STOP today). BEACON (`g_beacon_seq`) and STATUS (`g_status_seq`) are not acked and keep their own counters. A receiver compares seq only within one counter of one sender. A REGISTER (tile) or a SESSION_CONFIG with a new session_id (PC) restarts the receiver's baseline for that sender, because a sender that reboots starts its counters again.
+14. **Whack-a-mole rows (PROVISIONAL, re-plan build step 3, 6 Nov 2026):** SESSION_CONFIG's 2-bit layout became rows and cols (4 bits each) with the map row-major over rows x cols; STATUS gained score (8 bits); coordinator state 12 COORDINATING GAME; new rows TAP, MOLE_ON, FEEDBACK, GAME_CONTROL, WALL_PICTURE and ACK (types 18 to 23). All six are unicast with an ACK, never broadcast (about 2.8% broadcast loss on the router). The sender resends an unacknowledged message with the same seq; the retry timing belongs to build step 7. These rows must be in the OD-07 freeze.
 15. **Deviations from the re-plan, accepted by Ahsanul on 6 Nov 2026 (PROVISIONAL until the OD-07 freeze):**
     - **MOLE_ON carries t_show and up_ms, not a show and a hide time.** The hide time is t_show + up_ms x 1,000 us, so it is fully determined, and an 11-bit duration (1 to 2,000 ms) replaces a second 64-bit time: 53 bits less per mole, and a hide before the show cannot be encoded.
-    - **SCORE_MASK (type 22) is a new row the plan does not list.** The plan asks for the final score drawn across the wall. The Pico renders it once over the whole wall and sends each tile its 8 x 8 slice as a 64-bit mask, so tiles need no font, no wall layout and no knowledge of their position.
+    - **WALL_PICTURE (type 22) is a new row the plan does not list.** The plan asks for the final score drawn across the wall. The Pico renders it once over the whole wall and sends each tile its 8 x 8 slice as a 64-bit mask, so tiles need no font, no wall layout and no knowledge of their position.
     - **ACK has no acknowledged-type field.** All acked messages from one sender share one seq counter (the ACK rule, item 13; on the Pico the command counter), so acked_seq alone names the message. A type field would only repeat what seq already says.
 16. **Widths widened on purpose, decided by Ahsanul on 6 Nov 2026:** FEEDBACK result is 2 bits (3 codes, the decoy code reserved) and GAME_CONTROL command is 4 bits (4 codes, 12 spare), so the decoy stretch goal and later commands need no layout change. Neither changes a byte count: FEEDBACK is 35 bits and GAME_CONTROL 37 bits, both 5 bytes.
 
@@ -427,7 +463,7 @@ All messages are single UDP datagrams on the dedicated router's subnet. Port num
 
 | Port | Listener | Messages received | How the sender addresses it |
 |---|---|---|---|
-| 4210 | every tile (`tile_net`) | BEACON, START_AT, RESUME_AT, PAUSE, STOP from the Pico; MOLE_ON, FEEDBACK, GAME_CONTROL, SCORE_MASK and ACK (of a TAP) from the Pico | subnet broadcast; a rejoin RESUME_AT is unicast to the one tile (section 10 item 10); the game rows are always unicast to the tile's REGISTER source address |
+| 4210 | every tile (`tile_net`) | BEACON, START_AT, RESUME_AT, PAUSE, STOP from the Pico; MOLE_ON, FEEDBACK, GAME_CONTROL, WALL_PICTURE and ACK (of a TAP) from the Pico | subnet broadcast; a rejoin RESUME_AT is unicast to the one tile (section 10 item 10); the game rows are always unicast to the tile's REGISTER source address |
 | 4211 | Pico (`coordinator_loop`) | REGISTER, HEARTBEAT, ASSET_READY, SYNC_READY, NACK (reason 2), TAP and ACK from tiles | unicast to the Pico, whose address the tile takes from the source address of the beacons |
 | 4212 | Pico (`coordinator_loop`) | SESSION_CONFIG, the C to P commands of section 10 item 11 and GAME_CONTROL | unicast from the PC to the Pico's address (shown on the Pico's USB log and in the router's client list as `PICO-Main`) |
 | 4213 | PC (`pc/pico_link.py`) | STATUS and ACK (of a GAME_CONTROL) from the Pico | the Pico replies to the address and port of the last valid datagram from the PC |

@@ -55,7 +55,7 @@ static uint16_t g_tap_seq        = 0u;
 static uint64_t g_last_beat[CL_MAX_NODES + 1u];
 static uint16_t g_live           = 0u;
 static uint32_t g_ack_scan       = 0u; /* Sends already answered by ACK. */
-static uint32_t g_score_tiles    = 0u; /* Tiles given a SCORE_MASK. */
+static uint32_t g_score_tiles    = 0u; /* Tiles given a WALL_PICTURE. */
 
 static void gt_reset (void);
 static void gt_advance (uint64_t duration_us);
@@ -242,7 +242,7 @@ static void gt_pc_control (uint8_t command, uint16_t seq)
 {
     uint8_t                      buf[PROTO_GAME_CONTROL_BYTES];
     proto_game_control_t const   msg = {
-        {PROTO_TYPE_GAME_CONTROL, GT_SESSION, seq}, 0u, command};
+        {PROTO_TYPE_GAME_CONTROL, GT_SESSION, seq}, 0u, command, 0u, 0u};
 
     gt_rx_pc(buf, proto_encode_game_control(&msg, buf, sizeof(buf)));
 }
@@ -264,7 +264,7 @@ static void gt_tile_ack (uint8_t node_id, uint16_t acked_seq)
 
 /**
  * @brief  ACK every new message of one type the Pico sent to a tile, once.
- * @param  type  Type code (GAME_CONTROL, MOLE_ON, FEEDBACK or SCORE_MASK).
+ * @param  type  Type code (GAME_CONTROL, MOLE_ON, FEEDBACK or WALL_PICTURE).
  */
 static void gt_ack_type (proto_type_t type)
 {
@@ -526,8 +526,8 @@ static bool gt_node_seq (coordinator_port_send_t const * p_send,
         }
         else
         {
-            proto_score_mask_t msg;
-            b_ok = proto_decode_score_mask(p_send->bytes, p_send->len, &msg);
+            proto_wall_picture_t msg;
+            b_ok = proto_decode_wall_picture(p_send->bytes, p_send->len, &msg);
             *p_node = msg.node_id;
         }
     }
@@ -585,7 +585,7 @@ static uint32_t gt_popcount (uint64_t value)
 
 /**
  * @brief  Lit pixels of the score drawn across the wall: the first
- *         SCORE_MASK of each tile (retries repeat it, so only the first
+ *         WALL_PICTURE of each tile (retries repeat it, so only the first
  *         counts), summed.
  * @return Total lit pixels, and the number of tiles that got one in
  *         g_score_tiles.
@@ -602,12 +602,12 @@ static uint32_t gt_score_pixels (void)
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_score_mask_t msg;
+        proto_wall_picture_t msg;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
         if ((GT_TILE_SRC_PORT == p_send->port) &&
-            (proto_decode_score_mask(p_send->bytes, p_send->len, &msg)) &&
+            (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
             (!b_seen[msg.node_id]))
         {
             b_seen[msg.node_id]      = true;

@@ -23,9 +23,9 @@ import proto_layout as pl  # noqa: E402
 LENGTHS = {"REGISTER": 10, "HEARTBEAT": 5, "SESSION_CONFIG": 47,
            "MANIFEST": 10, "CHUNK_ACK": 5, "NACK": 7, "BUSY": 7,
            "ASSET_READY": 9, "SYNC_READY": 5, "BEACON": 12, "START_AT": 12,
-           "RESUME_AT": 13, "PAUSE": 4, "STOP": 4, "STATUS": 8,
+           "RESUME_AT": 13, "PAUSE": 4, "STOP": 4, "STATUS": 13,
            "TELEMETRY": 9, "TELEMETRY_ACK": 6, "TAP": 15, "MOLE_ON": 14,
-           "FEEDBACK": 5, "GAME_CONTROL": 5, "SCORE_MASK": 13, "ACK": 7}
+           "FEEDBACK": 5, "GAME_CONTROL": 6, "WALL_PICTURE": 23, "ACK": 7}
 
 
 def _expected(full: dict) -> dict:
@@ -61,7 +61,8 @@ def test_boundary_values_named_in_the_plan() -> None:
         assert pl.decode_telemetry(data)["fault_word"] == word
     for bitmap in (0, 0x1FF):
         data = pl.encode_status(session_id=1, seq=1, readiness=bitmap,
-                                online=bitmap, state=0, score=0)
+                                online=bitmap, state=0, score=0,
+                                **_STATUS_GAME)
         decoded = pl.decode_status(data)
         assert decoded["readiness"] == bitmap == decoded["online"]
 
@@ -109,22 +110,45 @@ def test_payload_115200_does_not_match_a_600_frame_manifest() -> None:
     assert vector[0]["expected_length"] == 57_600
 
 
+#: STATUS game fields at their idle values (build step 3).
+_STATUS_GAME = {"round_state": 0, "level": 0, "missed": 0, "wrong": 0,
+                "shown": 0, "time_left_s": 0, "reaction_ms": 0}
+#: WALL_PICTURE fields other than node_id, at valid values.
+_PIC = {"slot": 0, "effect": 0, "colour": 0, "repeat": 0, "t_show": 0,
+        "dur_ms": 0, "mask": 0}
+
+
 @pytest.mark.parametrize("name,fields", [
     ("HEARTBEAT", {"node_id": 0}),
     ("HEARTBEAT", {"node_id": 10}),
     ("MANIFEST", {"format_version": 2, "frame_count": 0, "crc32": 0}),
     ("MANIFEST", {"format_version": 2, "frame_count": 1024, "crc32": 0}),
-    ("STATUS", {"readiness": 0x200, "online": 0, "state": 0, "score": 0}),
-    ("STATUS", {"readiness": 0, "online": 0, "state": 13, "score": 0}),
-    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": 100}),
-    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": -100}),
+    ("STATUS", {"readiness": 0x200, "online": 0, "state": 0, "score": 0,
+                **_STATUS_GAME}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 13, "score": 0,
+                **_STATUS_GAME}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": 100,
+                **_STATUS_GAME}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": -100,
+                **_STATUS_GAME}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": 0,
+                **dict(_STATUS_GAME, round_state=5)}),
+    ("STATUS", {"readiness": 0, "online": 0, "state": 0, "score": 0,
+                **dict(_STATUS_GAME, level=3)}),
     ("TAP", {"node_id": 0, "peak": 0, "t_tap": 0}),
-    ("MOLE_ON", {"node_id": 1, "t_show": 0, "up_ms": 0}),
-    ("MOLE_ON", {"node_id": 1, "t_show": 0, "up_ms": 2001}),
+    ("MOLE_ON", {"node_id": 1, "t_show": 0, "up_ms": 0, "kind": 5}),
+    ("MOLE_ON", {"node_id": 1, "t_show": 0, "up_ms": 4001, "kind": 0}),
     ("FEEDBACK", {"node_id": 1, "result": 3}),
-    ("GAME_CONTROL", {"node_id": 10, "command": 0}),
-    ("GAME_CONTROL", {"node_id": 0, "command": 4}),
-    ("SCORE_MASK", {"node_id": 0, "mask": 0}),
+    ("GAME_CONTROL", {"node_id": 10, "command": 0, "level": 0,
+                      "threshold": 0}),
+    ("GAME_CONTROL", {"node_id": 0, "command": 8, "level": 0,
+                      "threshold": 0}),
+    ("GAME_CONTROL", {"node_id": 0, "command": 4, "level": 3,
+                      "threshold": 0}),
+    ("GAME_CONTROL", {"node_id": 0, "command": 4, "level": 0,
+                      "threshold": 251}),
+    ("WALL_PICTURE", {"node_id": 0, **_PIC}),
+    ("WALL_PICTURE", {"node_id": 1, **dict(_PIC, effect=3)}),
     ("ACK", {"node_id": 10, "acked_seq": 0}),
     ("TELEMETRY", {"node_id": 1, "fault_word": 0, "orientation": 0,
                    "display_state": 7}),
@@ -171,10 +195,10 @@ def test_score_is_twos_complement() -> None:
     """STATUS score -99 to 99: -1 is all ones in its 8 bits (bits 51-58)."""
     for score in (-99, -1, 0, 99):
         data = pl.encode_status(session_id=1, seq=1, readiness=0, online=0,
-                                state=12, score=score)
+                                state=12, score=score, **_STATUS_GAME)
         assert pl.decode_status(data)["score"] == score
     data = pl.encode_status(session_id=0, seq=0, readiness=0, online=0,
-                            state=0, score=-1)
+                            state=0, score=-1, **_STATUS_GAME)
     assert (int.from_bytes(data, "little") >> 51) & 0xFF == 0xFF
 
 
@@ -192,10 +216,10 @@ def test_decoder_rejects_more_than_nine_tiles() -> None:
 
 
 #: The six whack-a-mole rows (re-plan build step 3).
-GAME_ROWS = ["TAP", "MOLE_ON", "FEEDBACK", "GAME_CONTROL", "SCORE_MASK",
+GAME_ROWS = ["TAP", "MOLE_ON", "FEEDBACK", "GAME_CONTROL", "WALL_PICTURE",
              "ACK"]
 #: Rows whose node_id names a tile (1 to 9); the others allow 0 (PC-Pico).
-TILE_ONLY = ["TAP", "MOLE_ON", "FEEDBACK", "SCORE_MASK"]
+TILE_ONLY = ["TAP", "MOLE_ON", "FEEDBACK", "WALL_PICTURE"]
 #: node_id sits at bit 29 in every game row, 4 bits wide.
 NODE_BIT = 29
 
@@ -239,8 +263,9 @@ def test_decoder_rejects_rows_or_cols_of_zero(bit: int) -> None:
         pl.decode(data)
 
 
-def test_decoder_rejects_up_ms_of_zero() -> None:
-    """MOLE_ON up_ms at bit 97, 11 bits; 0 is refused."""
-    data = _with_bits(_typical("MOLE_ON"), 97, 11, 0)
+def test_decoder_takes_up_ms_of_zero_and_rejects_kind_5() -> None:
+    """MOLE_ON up_ms at bit 97, 12 bits: 0 is valid since 11 Nov 2026 (the
+    start sprite, up until tapped). kind at bit 109, 3 bits: 5 is refused."""
+    assert pl.decode(_with_bits(_typical("MOLE_ON"), 97, 12, 0))["up_ms"] == 0
     with pytest.raises(pl.LayoutError):
-        pl.decode(data)
+        pl.decode(_with_bits(_typical("MOLE_ON"), 109, 3, 5))

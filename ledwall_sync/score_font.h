@@ -3,7 +3,7 @@
  * @brief   Final game score drawn across the whole wall (whack-a-mole
  *          re-plan: "the Pico draws the final score across the wall"). A
  *          3 x 5 digit font, centred on the wall, cut into one 64-bit mask per
- *          tile for SCORE_MASK. Pure C with no hardware call.
+ *          tile for WALL_PICTURE. Pure C with no hardware call.
  *
  * Owner: Benjamin (Buddy 2). Written for build step 7.
  *

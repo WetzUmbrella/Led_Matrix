@@ -149,19 +149,22 @@ class PicoLink:
         MODE_GAME. Use send_game_control() to wait for the ACK."""
         data = pl.encode("GAME_CONTROL", {
             "session_id": self.session_id, "seq": self._next_seq(),
-            "node_id": 0, "command": command})
+            "node_id": 0, "command": command, "level": 0, "threshold": 0})
         self._send(data)
         return data
 
-    def send_game_control(self, command: int) -> bool:
+    def send_game_control(self, command: int, level: int = 0,
+                          threshold: int = 0) -> bool:
         """GAME_CONTROL to the Pico, resent with the same seq until the Pico
         ACKs it (GAME_TRIES tries of GAME_ACK_WAIT_S each). Returns True when
         acknowledged; a repeat with the same seq is ACKed again by the Pico
-        and changes nothing."""
+        and changes nothing. level and threshold (20 mg steps, 0 = the
+        tiles' default) go with ARM (build step 3)."""
         seq = self._next_seq()
         data = pl.encode("GAME_CONTROL", {
             "session_id": self.session_id, "seq": seq,
-            "node_id": 0, "command": command})
+            "node_id": 0, "command": command, "level": level,
+            "threshold": threshold})
         for _ in range(GAME_TRIES):
             self._send(data)
             if self._wait_ack(seq, GAME_ACK_WAIT_S):

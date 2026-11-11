@@ -40,11 +40,24 @@ CHUNK_PAYLOAD_MAX = 1024
 CHUNK_INDEX_MAX = 112
 CHUNK_HEAD_BYTES = 5
 GRID_MAX = 9
-UP_MS_MAX = 2000
+UP_MS_MAX = 4000
 SCORE_MAX = 99
 
 #: GAME_CONTROL commands (layout_table.md section 5.10).
-GAME_MODE_VIDEO, GAME_MODE_GAME, GAME_START, GAME_END = range(4)
+(GAME_MODE_VIDEO, GAME_MODE_GAME, GAME_START, GAME_END, GAME_ARM,
+ GAME_START_NOW, GAME_TAP_TEST_ON, GAME_TAP_TEST_OFF) = range(8)
+
+#: Levels, target kinds, WALL_PICTURE effects and colours, round states
+#: (layout_table.md sections 5.11 to 5.15, build step 3).
+LEVEL_EASY, LEVEL_NORMAL, LEVEL_HARD = range(3)
+TARGET_MOLE, TARGET_START, TARGET_ROTATE, TARGET_GOLDEN, TARGET_DECOY = range(5)
+PIC_PICTURE, PIC_SPARKLE, PIC_CLEAR = range(3)
+COLOURS = ("white", "yellow", "green", "red", "blue", "orange", "purple",
+           "cyan")
+ROUND_STATES = ("IDLE", "ARMED", "COUNTDOWN", "PLAYING", "RESULTS")
+#: Tap threshold step on GAME_CONTROL, mg (code 0 = the tile's default).
+THRESHOLD_STEP_MG = 20
+THRESHOLD_MAX = 250
 
 #: One field: (name, width in bits, smallest valid value, largest valid
 #: value). Order is the order on the wire.
@@ -88,7 +101,11 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     "STOP": (14, []),
     "STATUS": (15, [("readiness", 9, 0, 0x1FF), ("online", 9, 0, 0x1FF),
                     ("state", 4, 0, 12),
-                    ("score", 8, -SCORE_MAX, SCORE_MAX)]),
+                    ("score", 8, -SCORE_MAX, SCORE_MAX),
+                    ("round_state", 3, 0, 4), ("level", 2, 0, 2),
+                    ("missed", 7, 0, 127), ("wrong", 7, 0, 127),
+                    ("shown", 7, 0, 127), ("time_left_s", 6, 0, 63),
+                    ("reaction_ms", 11, 0, 2047)]),
     "TELEMETRY": (16, [_NODE, ("fault_word", 32, 0, _U32),
                        ("orientation", 2, 0, 3),
                        ("display_state", 3, 0, 6)]),
@@ -96,10 +113,15 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     # Whack-a-mole re-plan, build step 3 (layout_table.md, PROVISIONAL).
     "TAP": (18, [_NODE, ("peak", 16, 0, _U16), ("t_tap", 64, 0, _U64)]),
     "MOLE_ON": (19, [_NODE, ("t_show", 64, 0, _U64),
-                     ("up_ms", 11, 1, UP_MS_MAX)]),
+                     ("up_ms", 12, 0, UP_MS_MAX), ("kind", 3, 0, 4)]),
     "FEEDBACK": (20, [_NODE, ("result", 2, 0, 2)]),
-    "GAME_CONTROL": (21, [_NODE_OR_PC, ("command", 4, 0, 3)]),
-    "SCORE_MASK": (22, [_NODE, ("mask", 64, 0, _U64)]),
+    "GAME_CONTROL": (21, [_NODE_OR_PC, ("command", 4, 0, 7),
+                          ("level", 2, 0, 2),
+                          ("threshold", 8, 0, THRESHOLD_MAX)]),
+    "WALL_PICTURE": (22, [_NODE, ("slot", 2, 0, 3), ("effect", 2, 0, 2),
+                          ("colour", 3, 0, 7), ("repeat", 1, 0, 1),
+                          ("t_show", 64, 0, _U64), ("dur_ms", 13, 0, 8191),
+                          ("mask", 64, 0, _U64)]),
     "ACK": (23, [_NODE_OR_PC, ("acked_seq", 16, 0, _U16)]),
 }
 
@@ -312,8 +334,8 @@ encode_feedback = _named_encoder("FEEDBACK")
 decode_feedback = _named_decoder("FEEDBACK")
 encode_game_control = _named_encoder("GAME_CONTROL")
 decode_game_control = _named_decoder("GAME_CONTROL")
-encode_score_mask = _named_encoder("SCORE_MASK")
-decode_score_mask = _named_decoder("SCORE_MASK")
+encode_wall_picture = _named_encoder("WALL_PICTURE")
+decode_wall_picture = _named_decoder("WALL_PICTURE")
 encode_ack = _named_encoder("ACK")
 decode_ack = _named_decoder("ACK")
 

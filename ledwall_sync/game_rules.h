@@ -83,7 +83,7 @@ typedef enum
     GAME_EV_NONE = 0,  /**< Nothing to send. */
     GAME_EV_MOLE_ON,   /**< Send MOLE_ON to node_id: t_show_us, up_ms. */
     GAME_EV_FEEDBACK,  /**< Send FEEDBACK to node_id: result. */
-    GAME_EV_ROUND_END  /**< The round is over: send END, then SCORE_MASK. */
+    GAME_EV_ROUND_END  /**< The round is over: send END, then WALL_PICTURE. */
 } game_event_kind_t;
 
 /** One output event. */
