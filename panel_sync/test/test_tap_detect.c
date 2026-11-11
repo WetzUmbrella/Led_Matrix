@@ -216,6 +216,7 @@ bool test_tap_detect_reseed (void)
 
     /* Seed from a 16 g X reading, then still gravity on Z for 1.5 s. */
     tap_detect_init(&run.detect);
+    tap_detect_set_threshold(&run.detect, TAP_DETECT_TEST_THRESHOLD_MG);
     run.t_us   = TST_T0;
     run.taps   = 0u;
     tst_feed(&run, 1u, INT16_MAX, 0, 0);
@@ -252,6 +253,7 @@ bool test_tap_detect_gravity (void)
         tst_run_t run;
 
         tap_detect_init(&run.detect);
+        tap_detect_set_threshold(&run.detect, TAP_DETECT_TEST_THRESHOLD_MG);
         run.t_us = TST_T0;
         run.taps = 0u;
         tst_feed(&run, 1000u, dirs[dir][0], dirs[dir][1], dirs[dir][2]);
@@ -264,13 +266,18 @@ bool test_tap_detect_gravity (void)
 }
 
 /**
- * @brief  Test K8: the threshold setting.
+ * @brief  Test K8: the default threshold (300 mg) and the setting.
  * @return true when every check passed.
  */
 bool test_tap_detect_set_threshold (void)
 {
     tst_run_t run;
     bool      b_ok = true;
+
+    /* The default (12 Nov 2026): 300 mg. */
+    tap_detect_init(&run.detect);
+    b_ok = (test_main_check(300u == run.detect.threshold_mg, __LINE__)) &&
+           b_ok;
 
     tst_start(&run);
     tap_detect_set_threshold(&run.detect, 10u);
@@ -301,6 +308,7 @@ bool test_tap_detect_set_threshold (void)
 static void tst_start (tst_run_t * p_run)
 {
     tap_detect_init(&p_run->detect);
+    tap_detect_set_threshold(&p_run->detect, TAP_DETECT_TEST_THRESHOLD_MG);
     p_run->t_us = TST_T0;
     p_run->taps = 0u;
     tst_feed(p_run, TST_SETTLE, 0, 0, TST_G);

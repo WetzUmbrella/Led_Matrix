@@ -145,7 +145,7 @@ static test_case_t const g_tap[] = {
     {"Test K6: a bad first sample is reseeded away", test_tap_detect_reseed},
     {"Test K7: still gravity in six directions gives no tap",
      test_tap_detect_gravity},
-    {"Test K8: threshold clamped to 50 to 5,000 mg and acts",
+    {"Test K8: default 300 mg, clamped to 50 to 5,000 mg, acts",
      test_tap_detect_set_threshold},
     {"G1 step 3: mole rises and sinks, hit squash and burst, red X on a miss",
      test_game_tile_mole_and_flash},

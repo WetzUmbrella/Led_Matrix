@@ -35,9 +35,16 @@
 /** Accelerometer scale at +/-16 g, LSB per g. */
 #define TAP_DETECT_LSB_PER_G 2048
 
-/** Default threshold, mg (DS-02; F-05: 17 to 20 of 20 soft taps at 150 to
- *  300 mg). Set from the website later (A12). */
-#define TAP_DETECT_THRESHOLD_MG 200u
+/** Default threshold, mg. 200 mg from DS-02 (F-05: 17 to 20 of 20 soft taps
+ *  at 150 to 300 mg) until 12 Nov 2026; raised to 300 mg on the wall (step 3,
+ *  round 5): moving a held tile gave peaks of 200 to 300 mg, real taps a
+ *  median of 561 mg, and one soft tap of 30 went unseen. ARM can set
+ *  another value (A12). */
+#define TAP_DETECT_THRESHOLD_MG 300u
+
+/** The threshold the detector's unit tests are written for, mg (their
+ *  edge cases sit at 199 and 200 mg). */
+#define TAP_DETECT_TEST_THRESHOLD_MG 200u
 
 /** Threshold limits, mg. */
 #define TAP_DETECT_THRESHOLD_MIN_MG 50u
