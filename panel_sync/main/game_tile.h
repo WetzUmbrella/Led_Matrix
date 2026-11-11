@@ -99,7 +99,7 @@ void game_tile_fill_wire (game_tile_state_t const * p_state,
  * @param  session_id Session on the header.
  * @param  seq        Header seq (the tile's TAP counter).
  * @param  node_id    This tile, 1 to 9.
- * @param  peak       tap_detect peak, LSB.
+ * @param  peak       tap_detect peak, mg.
  * @param  t_tap_us  Tap time, Pico corrected clock, microseconds.
  * @return Bytes written, or 0 when the fields are out of range.
  */

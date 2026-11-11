@@ -97,7 +97,7 @@
 /** Width of the display state, bits (VB-5c). */
 #define PROTO_DISPLAY_STATE_BITS 3u
 
-/** Width of a TAP peak, bits: the tap_detect peak, uint16_t LSB. */
+/** Width of a TAP peak, bits: the tap_detect peak, uint16_t mg. */
 #define PROTO_PEAK_BITS 16u
 
 /** Width of MOLE_ON up_ms, bits: 1 to 2,000 ms needs 11. */
@@ -513,7 +513,7 @@ typedef struct
 {
     proto_header_t header;
     uint8_t        node_id; /**< 1 to 9, the tile's board number. */
-    uint16_t       peak;    /**< tap_detect peak, LSB; dedupe keeps the
+    uint16_t       peak;    /**< tap_detect peak, mg; dedupe keeps the
                                  highest within 50 ms. */
     uint64_t       t_tap;   /**< Tap time in the Pico's corrected clock, us. */
 } proto_tap_t;

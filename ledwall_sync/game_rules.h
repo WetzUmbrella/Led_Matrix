@@ -95,7 +95,7 @@ typedef struct
 typedef struct
 {
     uint8_t  node_id; /**< Tapped tile, 1 to 9. */
-    uint16_t peak;    /**< tap_detect peak, LSB. */
+    uint16_t peak;    /**< tap_detect peak, mg. */
     uint64_t t_tap_us; /**< Tap time, Pico corrected clock. */
 } game_tap_t;
 

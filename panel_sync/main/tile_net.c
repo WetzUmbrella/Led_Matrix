@@ -144,6 +144,7 @@
 #define TN_REC_BEACON 1u
 #define TN_REC_NACK   2u
 #define TN_REC_GAME   3u
+#define TN_REC_TAP    4u /* Wake only: a tap waits (tile_net_tap_ready()). */
 
 /** Largest game datagram a record carries (MOLE_ON is the longest today). */
 #define TN_GAME_MAX_BYTES 16u
@@ -158,7 +159,7 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= TN_GAME_MAX_BYTES) &&
 /** One record from the receive context to the Network Task. */
 typedef struct
 {
-    uint8_t  kind;       /**< TN_REC_BEACON, TN_REC_NACK or TN_REC_GAME. */
+    uint8_t  kind;       /**< TN_REC_BEACON, NACK, GAME or TAP. */
     uint8_t  session_id; /**< Beacon: its session; NACK: the command's. */
     uint16_t seq;        /**< Beacon seq, or the rejected command's seq. */
     uint32_t src_addr;   /**< Sender address (the Pico). */
@@ -1049,6 +1050,22 @@ static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
 }
 
 /**
+ * @brief  A tap is waiting: wake the Network Task (see tile_net.h). The
+ *         record carries nothing; the housekeeping pass after it sends the
+ *         TAP.
+ */
+void tile_net_tap_ready (void)
+{
+    if (NULL != g_p_q_log)
+    {
+        tn_record_t const record = {.kind = TN_REC_TAP};
+
+        /* Full: the task is busy and sends the TAP on its next pass. */
+        (void)xQueueSend(g_p_q_log, &record, 0);
+    }
+}
+
+/**
  * @brief  Network Task: wait up to wait for one record and handle it.
  * @param  wait  Ticks to wait.
  */
@@ -1168,7 +1185,8 @@ static void tn_handle_record (tn_record_t const * p_record)
     }
     else
     {
-        /* No other kind is produced. */
+        /* TN_REC_TAP only wakes the task: the housekeeping pass that follows
+         * every record sends the TAP. No other kind is produced. */
     }
 }
 

@@ -43,14 +43,14 @@ Owner: Jia Jun (Buddy 5). Written for Jia Jun in Jia Jun's session (29 to 30 Oct
 ## 7. Tap detection (whack-a-mole re-plan, build step 2)
 
 - Source: `docs/plan/whack_a_mole_replan.md` "A press is a QMI8658 IMU tap"; TAP carries a peak, and dedupe keeps the highest peak.
-- Choice: the IMU tap engine raises INT1 (or INT2, see `OR_TAP_INT_LINE`), and the interrupt only records the time; the task does all I2C. The pure module `tap_detect` validates the status, a 150 ms refractory period and a minimum peak. Host tests K1 to K6.
-- Sampling changed: the task reads at 100 Hz, the fastest whole-tick period at `CONFIG_FREERTOS_HZ=100`, because 50 Hz can miss a tap peak. Every second sample goes to `orient_filter`, so sections 2 and 3 still hold at 50 Hz. The 20 ms I2C timeout stays: one stuck read costs at most one orientation sample, and a 10 ms timeout would be one tick, which can expire almost at once.
-- Range changed: +/-8 g, not +/-2 g, because a tap clipped at 2 g gives every tile the same peak. 1 g is now 4,096 LSB, so the 0.5 g threshold is 2,048.
-- The interrupt is installed from `app_main` on core 0, so it cannot delay the Display Engine tick on core 1.
-- Limit: 100 Hz samples can still miss the true peak of a short tap. If dedupe picks the wrong tile on the board, read the IMU FIFO at the interrupt instead.
-- Examiner: "Why does the interrupt not read the IMU?"
+- Choice (rewritten 11 Nov 2026, build step 2, DS-02 in `docs/plan/game_plan_v2.md`): taps are detected in software from the accelerometer samples; the QMI8658 tap engine and its interrupt pin are no longer used. On the 9 Nov bench (`docs/bench/9nov/feasibility.md`, F-05) the tap engine at 100 Hz caught about 70% of taps, and its 150 ms refractory let a slap that rings for up to 600 ms count twice.
+- Sampling: a 1 ms `esp_timer` wakes the Orientation Task, because the FreeRTOS tick is 100 Hz and cannot time 1 kHz. Every sample goes to `tap_detect`; every 20th goes to `orient_filter`, so sections 2 and 3 still hold at 50 Hz. The task (priority 5) stays below the Display Engine (20) on core 1, so a read never delays a frame.
+- Detector (`tap_detect`, pure C, host tests K1 to K8): a per-axis baseline (500 ms average) stands for gravity and is held during a tap; the deviation from it, in mg, must reach the threshold (200 mg by default, F-05: 17 to 20 of 20 soft taps); the peak is the largest deviation in the 10 ms after that; the detector re-arms only after 30 ms under half the threshold, or 600 ms at most, so a ringing slap counts once. A bad first sample, or a tile turned to a new orientation, is reseeded after 1 s of held baseline.
+- Range: +/-16 g (2,048 LSB per g; the 0.5 g orientation threshold is 1,024). Slaps reached 15 to 28 g on the bench; at +/-8 g a slap and its echo on the next tile would both clip and tie under "highest peak wins". The TAP peak is sent in mg.
+- Limit: the detector cannot tell a tap from the jolt of turning a tile (F-06); the gyroscope check for that (F-09) is parked until whole-wall rotation (DS-04).
+- Examiner: "Why not use the IMU's own tap engine?" (It missed about 30% of taps on the bench, at 100 Hz it saw too little of a tap's peak, and its refractory let a ringing slap count twice; software at 1 kHz fixes all three and is host-tested.)
 
-**Tuning on the board.** Each interrupt prints `TAP result=<0 accept, 1 status, 2 refractory, 3 weak> t_us= peak= status1= tap=`. Tap each tile, then tap its neighbours and knock the board, and compare the peaks. Thresholds: `TAP_DETECT_MIN_PEAK_LSB` and `TAP_DETECT_REFRACTORY_US` in `tap_detect.h`, and the tap pages in `tap_detect.c`.
+**Tuning on the board.** Each tap prints `TAP t_us= peak_mg= count=`. Tap each tile, then tap its neighbours and knock the board, and compare the peaks. The threshold is `TAP_DETECT_THRESHOLD_MG` in `tap_detect.h` (to be set from the website, A12); the windows are `TAP_DETECT_PEAK_WINDOW_US`, `TAP_DETECT_QUIET_US` and `TAP_DETECT_REARM_MAX_US`.
 
 ## PROVISIONAL list for Jia Jun to confirm
 

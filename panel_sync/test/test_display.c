@@ -44,9 +44,10 @@
 #define D_LED_TOP_RIGHT   7u
 #define D_LED_BOTTOM_LEFT 56u
 
-/** Accelerometer readings: 1 g and a weak 0.25 g at 4,096 LSB/g (+/-8 g). */
-#define O_ONE_G  4096
-#define O_WEAK_G 1024
+/** Accelerometer readings: 1 g and a weak 0.25 g at 2,048 LSB/g (+/-16 g,
+ *  from 11 Nov 2026). */
+#define O_ONE_G  2048
+#define O_WEAK_G 512
 
 /** Failures injected in O2 (plan choice: 2 s at 50 Hz). */
 #define O_INJECT 100u

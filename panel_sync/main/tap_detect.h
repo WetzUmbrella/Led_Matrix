@@ -1,10 +1,29 @@
 /**
  * @file    tap_detect.h
- * @brief   QMI8658 tap detection: turns the tap interrupt into a validated
- *          event with a peak size, for the hardest-hit tile TAP message.
- *          Pure C (no ESP-IDF includes), host-testable on a PC.
+ * @brief   Software tap detection from the accelerometer samples (DS-02,
+ *          build step 2): a spike over the threshold starts a tap, its peak
+ *          is taken over a short window, and the detector re-arms only once
+ *          the tile is quiet again, so a ringing slap counts once. Pure C
+ *          (no ESP-IDF includes), host-testable on a PC.
  *
- * Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun.
+ * Owner: Jia Jun (Buddy 5). Rewritten 11 Nov 2026 from the bench data of
+ * docs/bench/9nov (F-05, F-10): the QMI8658 tap engine at 100 Hz caught about
+ * 70% of taps, and its 150 ms refractory let a slap that rings up to 600 ms
+ * count twice.
+ *
+ * - Samples: about 1 kHz, QMI8658 at +/-16 g (2,048 LSB per g): slaps reach
+ *   15 to 28 g, and at +/-8 g a slap and its echo would both clip and tie
+ *   under "highest peak wins" (DS-03).
+ * - Deviation: |a - baseline| over the three axes, in mg. The baseline is a
+ *   per-axis average (500 ms time constant) that stands for gravity; it is
+ *   held while a tap or a loud sample is under way, and reseeded from the
+ *   sample after TAP_DETECT_HOLD_MAX_SAMPLES held samples (a bad first sample,
+ *   or a tile turned to a new orientation).
+ * - A tap: the first sample at or over the threshold; its peak is the
+ *   largest deviation in the TAP_DETECT_PEAK_WINDOW_US after it; its time is
+ *   that first sample's. The event is reported when the window ends.
+ * - Re-arm: after TAP_DETECT_QUIET_US under half the threshold, or at most
+ *   TAP_DETECT_REARM_MAX_US after the tap.
  */
 #ifndef TAP_DETECT_H
 #define TAP_DETECT_H
@@ -12,106 +31,103 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** Samples in the detection window (200 ms at the 100 Hz sample rate). */
-#define TAP_DETECT_WINDOW_SAMPLES 20u
+/** Accelerometer scale at +/-16 g, LSB per g. */
+#define TAP_DETECT_LSB_PER_G 2048
 
-/** Minimum accepted peak, LSB (0.5 g at 4,096 LSB/g, +/- 8 g range).
- *  PROVISIONAL: tune on the board. */
-#define TAP_DETECT_MIN_PEAK_LSB 2048u
+/** Default threshold, mg (DS-02; F-05: 17 to 20 of 20 soft taps at 150 to
+ *  300 mg). Set from the website later (A12). */
+#define TAP_DETECT_THRESHOLD_MG 200u
 
-/** Refractory period after an accepted tap, microseconds.
- *  PROVISIONAL: tune on the board. */
-#define TAP_DETECT_REFRACTORY_US INT64_C(150000)
+/** Threshold limits, mg. */
+#define TAP_DETECT_THRESHOLD_MIN_MG 50u
+#define TAP_DETECT_THRESHOLD_MAX_MG 5000u
 
-/** Bytes in each QMI8658 CTRL_CMD_CONFIGURE_TAP page. */
-#define TAP_DETECT_CONFIG_BYTES 8u
+/** Peak window after the first sample over the threshold, microseconds. */
+#define TAP_DETECT_PEAK_WINDOW_US INT64_C(10000)
 
-/** No axis (invalid). */
-#define TAP_DETECT_AXIS_NONE 0u
-/** X axis. */
-#define TAP_DETECT_AXIS_X 1u
-/** Y axis. */
-#define TAP_DETECT_AXIS_Y 2u
-/** Z axis. */
-#define TAP_DETECT_AXIS_Z 3u
+/** Quiet time under half the threshold that re-arms the detector, us. */
+#define TAP_DETECT_QUIET_US INT64_C(30000)
 
-/** Result of an interrupt or a status decode. */
-typedef enum
-{
-    TAP_DETECT_ACCEPT = 0,        /**< Tap accepted as a new event. */
-    TAP_DETECT_REJECT_STATUS,     /**< Invalid tap count or axis. */
-    TAP_DETECT_REJECT_REFRACTORY, /**< Within the refractory period. */
-    TAP_DETECT_REJECT_WEAK        /**< Peak below the minimum. */
-} tap_detect_result_t;
+/** Longest time after a tap before the detector re-arms anyway, us (F-05:
+ *  slaps stay over 150 mg for up to 610 ms). */
+#define TAP_DETECT_REARM_MAX_US INT64_C(600000)
 
-/** One validated tap event. */
+/** Deviation over which the baseline is held, mg. */
+#define TAP_DETECT_HOLD_MG 100u
+
+/** Held samples after which the baseline is reseeded (1 s at 1 kHz: longer
+ *  than any tap, so a ringing slap never reseeds it). */
+#define TAP_DETECT_HOLD_MAX_SAMPLES 1000u
+
+/** Baseline time constant in samples (500 ms at 1 kHz). */
+#define TAP_DETECT_EMA_SAMPLES 500
+
+/** One tap. */
 typedef struct
 {
-    int64_t  t_us;       /**< Interrupt time. */
-    uint32_t count;      /**< Accepted taps so far, including this one. */
-    uint16_t peak;       /**< Peak window value, LSB. */
-    uint8_t  axis;       /**< TAP_DETECT_AXIS_*. */
-    bool     b_positive; /**< Polarity: true = positive. */
+    int64_t  t_us;  /**< First sample at or over the threshold. */
+    uint32_t count; /**< Taps so far, this one included. */
+    uint16_t peak;  /**< Largest deviation in the peak window, mg. */
 } tap_detect_event_t;
 
-/** Detector state: sliding window, slow baselines, accepted/rejected counts. */
+/** Detector phase. */
+typedef enum
+{
+    TAP_DETECT_ARMED = 0, /**< Waiting for a sample over the threshold. */
+    TAP_DETECT_PEAK,      /**< In the peak window of a tap. */
+    TAP_DETECT_SETTLING   /**< Tap reported; waiting for quiet to re-arm. */
+} tap_detect_phase_t;
+
+/** Detector state. Zero it with tap_detect_init(). */
 typedef struct
 {
-    uint16_t window[TAP_DETECT_WINDOW_SAMPLES]; /**< Deviation per sample. */
-    uint32_t next;                              /**< Next window slot. */
-    int32_t  base_x;                            /**< 16x slow average, X. */
-    int32_t  base_y;                            /**< 16x slow average, Y. */
-    int32_t  base_z;                            /**< 16x slow average, Z. */
-    bool     b_seeded;                          /**< True after first sample. */
-    bool     b_has_last;                        /**< True after a tap. */
-    int64_t  last_us;                           /**< Last accepted tap time. */
-    uint32_t accepted;                          /**< Accepted taps so far. */
-    uint32_t rejected;                          /**< Rejected interrupts. */
+    int64_t            base_q[3];    /**< Per-axis baseline, LSB x 65,536. */
+    bool               b_seeded;     /**< A baseline exists. */
+    uint32_t           held;         /**< Consecutive held samples. */
+    uint32_t           threshold_mg; /**< Tap threshold, mg. */
+    tap_detect_phase_t phase;        /**< Current phase. */
+    int64_t            t_first_us;   /**< First sample of the current tap. */
+    uint32_t           peak_mg;      /**< Peak so far in the window, mg. */
+    bool               b_quiet;      /**< Quiet run under way (settling). */
+    int64_t            t_quiet_us;   /**< Start of the quiet run. */
+    uint32_t           last_mg;      /**< Deviation of the last sample, mg. */
+    uint32_t           count;        /**< Taps reported so far. */
 } tap_detect_t;
 
 /**
- * @brief  Zero the detector state.
- * @param  p_detect  The detector.
+ * @brief  Reset the detector: no baseline, armed, default threshold.
+ * @param  p_detect  The detector; must not be NULL.
  */
 void tap_detect_init (tap_detect_t * p_detect);
 
 /**
- * @brief  One 100 Hz accelerometer sample: update the baselines and the
- *         sliding window.
- * @param  p_detect  The detector.
- * @param  accel_x   Raw X, 16-bit.
- * @param  accel_y   Raw Y, 16-bit.
- * @param  accel_z   Raw Z, 16-bit.
+ * @brief  Set the threshold, clamped to TAP_DETECT_THRESHOLD_MIN_MG to
+ *         TAP_DETECT_THRESHOLD_MAX_MG.
+ * @param  p_detect      The detector; must not be NULL.
+ * @param  threshold_mg  Threshold, mg.
  */
-void tap_detect_sample (tap_detect_t * p_detect, int16_t accel_x,
-                        int16_t accel_y, int16_t accel_z);
+void tap_detect_set_threshold (tap_detect_t * p_detect, uint32_t threshold_mg);
 
 /**
- * @brief  Largest value in the sliding window.
- * @param  p_detect  The detector.
- * @return 0 to 65,535.
+ * @brief  One accelerometer sample (raw, +/-16 g).
+ * @param  p_detect  The detector; must not be NULL.
+ * @param  t_us      Sample time, microseconds.
+ * @param  accel_x   Raw X.
+ * @param  accel_y   Raw Y.
+ * @param  accel_z   Raw Z.
+ * @param  p_event   Receives the tap when the return is true.
+ * @return true when a tap's peak window ended with this sample.
  */
-uint16_t tap_detect_peak (tap_detect_t const * p_detect);
+bool tap_detect_sample (tap_detect_t * p_detect, int64_t t_us, int16_t accel_x,
+                        int16_t accel_y, int16_t accel_z,
+                        tap_detect_event_t * p_event);
 
 /**
- * @brief  Handle a tap interrupt: validate status, refractory and peak.
- * @param  p_detect   The detector.
- * @param  t_us       Interrupt time, microseconds.
- * @param  tap_status QMI8658 tap status byte.
- * @param  p_event    Filled only on TAP_DETECT_ACCEPT.
- * @return TAP_DETECT_ACCEPT or a TAP_DETECT_REJECT_* reason.
+ * @brief  Deviation of the last sample, mg (for logging).
+ * @param  p_detect  The detector; must not be NULL.
+ * @return mg.
  */
-tap_detect_result_t tap_detect_on_irq (tap_detect_t * p_detect, int64_t t_us,
-                                       uint8_t              tap_status,
-                                       tap_detect_event_t * p_event);
-
-/**
- * @brief  Write the two QMI8658 tap-config pages (register order,
- *         little-endian 16-bit fields).
- * @param  p_first   Buffer of TAP_DETECT_CONFIG_BYTES (page 1).
- * @param  p_second  Buffer of TAP_DETECT_CONFIG_BYTES (page 2).
- */
-void tap_detect_encode_config (uint8_t * p_first, uint8_t * p_second);
+uint32_t tap_detect_last_mg (tap_detect_t const * p_detect);
 
 #endif /* TAP_DETECT_H */
 

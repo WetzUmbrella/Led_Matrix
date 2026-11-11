@@ -1,17 +1,21 @@
 /**
  * @file    orientation.c
- * @brief   Orientation Task (T-B5-05). See orientation.h.
+ * @brief   Orientation Task (T-B5-05) and tap sampling (build step 2). See
+ *          orientation.h.
  *
  * Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun, task
- * T-B5-05.
+ * T-B5-05; the 1 kHz sampling and software taps added 11 Nov 2026 (DS-02).
  *
- * Contexts: the Orientation Task owns the I2C bus, the device handle and
- * the filter, and is the only writer of the mailbox; any task may peek the
- * mailbox (orientation_current()).
+ * Contexts: the Orientation Task owns the I2C bus, the device handle, the
+ * filter and the detector, and is the only writer of the mailbox and the tap
+ * queue; any task may peek the mailbox (orientation_current()); one consumer
+ * takes taps (orientation_tap_take()). The esp_timer callback only notifies
+ * the task.
  *
  * DEVIATION D-2 (module-wide): ESP-IDF and FreeRTOS names and types
  * (i2c_master_bus_handle_t, i2c_master_dev_handle_t, QueueHandle_t,
- * TickType_t, esp_err_t, the int timeout of i2c_master_*).
+ * TaskHandle_t, esp_timer_handle_t, esp_err_t, the int timeout of
+ * i2c_master_*).
  */
 #include "orientation.h"
 
@@ -22,36 +26,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "esp_timer.h"
 
 #include "orient_filter.h"
 #include "tap_detect.h"
+#include "tile_net.h"
 #include "tile_tasks.h"
 
 /** I2C pins (PostTri pin row, Waveshare ESP32-S3-Matrix). */
 #define OR_SDA_GPIO 11
 #define OR_SCL_GPIO 12
-
-/** QMI8658 interrupt line for taps: the one constant to change.
- *  1 = INT1 on GPIO10 (default). 2 = INT2 on GPIO13 (ESPHome's board page
- *  notes IRQ1 works less well than IRQ2). It sets the GPIO, the CTRL1 INT
- *  enable bit and the CTRL8 event routing together. PROVISIONAL, owner Jia
- *  Jun: confirm both pins against the board schematic, see orientation.h. */
-#define OR_TAP_INT_LINE 1u
-
-#if (1u == OR_TAP_INT_LINE)
-#define OR_TAP_INT_GPIO  GPIO_NUM_10
-#define OR_CTRL1_INT_BIT 0x08u /* CTRL1 bit 3: INT1 enable. */
-#define OR_CTRL8_ACT_SEL 0x40u /* CTRL8 bit 6: motion events on INT1. */
-#elif (2u == OR_TAP_INT_LINE)
-#define OR_TAP_INT_GPIO  GPIO_NUM_13
-#define OR_CTRL1_INT_BIT 0x10u /* CTRL1 bit 4: INT2 enable. */
-#define OR_CTRL8_ACT_SEL 0x00u /* CTRL8 bit 6 clear: motion events on INT2. */
-#else
-#error "OR_TAP_INT_LINE must be 1 (INT1, GPIO10) or 2 (INT2, GPIO13)"
-#endif
 
 /** I2C clock, 400 kHz fast mode (plan choice). */
 #define OR_I2C_HZ 400000u
@@ -60,49 +45,29 @@
 #define OR_ADDR_FIRST 0x6Au
 #define OR_ADDR_LAST  0x6Bu
 
-/** Sample period 10 ms = 100 Hz, the fastest whole-tick period at
- *  CONFIG_FREERTOS_HZ=100; the tap peak needs more than 50 Hz. */
-#define OR_PERIOD_MS 10u
+/** Sample period, microseconds: 1 kHz from an esp_timer (DS-02). */
+#define OR_PERIOD_US 1000u
 
-/** Every second sample goes to orient_filter, keeping the T-B5-05 50 Hz. */
-#define OR_ORIENT_DIVIDER 2u
+/** Every 20th sample goes to orient_filter, keeping the T-B5-05 50 Hz. */
+#define OR_ORIENT_DIVIDER 20u
 
 /** I2C timeout: no longer than one 50 Hz orientation period (T-B5-05). */
 #define OR_I2C_TIMEOUT_MS 20
 
-/** Re-initialise the IMU every 100 failed samples (1 s) while it fails. */
-#define OR_REINIT_EVERY 100u
+/** Re-initialise the IMU every 1,000 failed samples (1 s) while it fails. */
+#define OR_REINIT_EVERY 1000u
 
-/** QMI8658 registers and values (PROVISIONAL, see orientation.h). */
-#define OR_REG_WHO_AM_I  0x00u
-#define OR_REG_CTRL1     0x02u
-#define OR_REG_CTRL2     0x03u
-#define OR_REG_CTRL7     0x08u
-#define OR_REG_CTRL8     0x09u
-#define OR_REG_CTRL9     0x0Au
-#define OR_REG_CAL1_L    0x0Bu
-#define OR_REG_STATUSINT 0x2Du
-#define OR_REG_STATUS1   0x2Fu
-#define OR_REG_AX_L      0x35u
-#define OR_REG_TAP       0x59u
-#define OR_WHO_AM_I      0x05u
-#define OR_CTRL1_AI      0x40u /* CTRL1 bit 6: address auto-increment. */
-#define OR_CTRL1_VALUE   (OR_CTRL1_AI | OR_CTRL1_INT_BIT) /* Little-endian. */
-#define OR_CTRL2_VALUE   0x24u                            /* +/-8 g, 500 Hz. */
-#define OR_CTRL7_OFF     0x00u
-#define OR_CTRL7_VALUE   0x01u
-#define OR_CTRL8_HSHAKE  0x80u /* CTRL8 bit 7: CTRL9 done in STATUSINT. */
-#define OR_CTRL8_TAP_EN  0x01u /* CTRL8 bit 0: tap engine on. */
-#define OR_CTRL8_VALUE   (OR_CTRL8_HSHAKE | OR_CTRL8_ACT_SEL)
-#define OR_CTRL8_TAP     (OR_CTRL8_VALUE | OR_CTRL8_TAP_EN)
-#define OR_CMD_ACK       0x00u
-#define OR_CMD_TAP       0x0Cu /* CTRL_CMD_CONFIGURE_TAP. */
-#define OR_CMD_DONE_BIT  0x80u /* STATUSINT: CTRL9 command done. */
-#define OR_STATUS1_TAP   0x02u /* STATUS1: tap flagged, cleared by reading. */
-
-/** CTRL9 completion: 10 polls of one tick each, 100 ms at 100 Hz. */
-#define OR_CMD_POLLS      10u
-#define OR_CMD_POLL_TICKS 1u
+/** QMI8658 registers and values (see orientation.h). */
+#define OR_REG_WHO_AM_I 0x00u
+#define OR_REG_CTRL1    0x02u
+#define OR_REG_CTRL2    0x03u
+#define OR_REG_CTRL7    0x08u
+#define OR_REG_AX_L     0x35u
+#define OR_WHO_AM_I     0x05u
+#define OR_CTRL1_VALUE  0x40u /* Address auto-increment, little-endian. */
+#define OR_CTRL2_VALUE  0x33u /* +/-16 g, 1,000 Hz. */
+#define OR_CTRL7_OFF    0x00u
+#define OR_CTRL7_VALUE  0x01u /* Accelerometer on. */
 
 /** Accelerometer bytes read: X, Y and Z, low byte first. */
 #define OR_ACCEL_BYTES 6u
@@ -118,33 +83,25 @@
 #define OR_TAP_QUEUE_LEN 4u
 
 static QueueHandle_t g_p_mailbox   = NULL; /* Length 1, overwrite only. */
-static QueueHandle_t g_p_tap_irq   = NULL; /* Length 1: interrupt time. */
 static QueueHandle_t g_p_tap_queue = NULL; /* Accepted tap events. */
+static TaskHandle_t  g_p_task      = NULL; /* Woken by the sample timer. */
 
 /* Orientation Task only. */
 static i2c_master_bus_handle_t g_p_bus = NULL;
 static i2c_master_dev_handle_t g_p_dev = NULL;
 
 static void    orientation_task (void * p_arg);
-static void    or_tap_isr (void * p_arg);
-static bool    or_tap_pin_init (void);
-static void    or_tap_service (tap_detect_t * p_detect);
+static void    or_tick (void * p_arg);
 static void    or_tap_publish (tap_detect_event_t const * p_event);
 static bool    or_imu_init (void);
-static bool    or_tap_config (void);
-static bool    or_ctrl9_cmd (uint8_t cmd);
-static bool    or_ctrl9_wait (bool b_done);
 static bool    or_write_reg (uint8_t reg, uint8_t value);
-static bool    or_write_cal (uint8_t const * p_page);
 static bool    or_read_reg (uint8_t reg, uint8_t * p_value);
 static bool    qmi_read_accel (int16_t * p_x, int16_t * p_y, int16_t * p_z);
 static int16_t or_join (uint8_t const * p_raw);
 
 /**
- * @brief  Create the queues, the tap interrupt and the Orientation Task. A
- *         tap interrupt failure is logged and leaves orientation running.
- *         Called from app_main, so the interrupt lands on core 0, away from
- *         the Display Engine tick on core 1.
+ * @brief  Create the queues and the Orientation Task; the task starts its
+ *         own 1 kHz sample timer.
  * @return true when the queues and the task were created.
  */
 bool orientation_start (void)
@@ -152,21 +109,14 @@ bool orientation_start (void)
     bool b_ok = false;
 
     g_p_mailbox   = xQueueCreate(1u, sizeof(uint8_t));
-    g_p_tap_irq   = xQueueCreate(1u, sizeof(int64_t));
     g_p_tap_queue = xQueueCreate(OR_TAP_QUEUE_LEN, sizeof(tap_detect_event_t));
 
-    if ((NULL != g_p_mailbox) && (NULL != g_p_tap_irq) &&
-        (NULL != g_p_tap_queue))
+    if ((NULL != g_p_mailbox) && (NULL != g_p_tap_queue))
     {
-        if (!or_tap_pin_init())
-        {
-            printf("TAP interrupt not available\n");
-        }
-
         b_ok = (pdPASS == xTaskCreatePinnedToCore(
                               orientation_task, TILE_ORIENT_NAME,
-                              TILE_ORIENT_STACK, NULL, TILE_ORIENT_PRIO, NULL,
-                              TILE_ORIENT_CORE));
+                              TILE_ORIENT_STACK, NULL, TILE_ORIENT_PRIO,
+                              &g_p_task, TILE_ORIENT_CORE));
     }
 
     return b_ok;
@@ -207,43 +157,61 @@ uint8_t orientation_current (void)
 }
 
 /**
- * @brief  Orientation Task: 100 Hz samples for the tap peak, every second one
- *         through the orientation filter; a change is written to the mailbox
- *         and logged. A pending tap interrupt is handled after the sample,
- *         so the peak includes it.
+ * @brief  Orientation Task: one sample per 1 ms timer tick through the tap
+ *         detector; every 20th through the orientation filter; a change is
+ *         written to the mailbox and logged. Ticks missed while a sample was
+ *         read are not caught up (the next tick reads the newest sample).
  * @param  p_arg  Unused.
  */
 static void orientation_task (void * p_arg)
 {
-    orient_filter_t filter;
-    tap_detect_t    detect;
-    uint32_t        failures = 0u;
-    uint32_t        samples  = 0u;
+    orient_filter_t    filter;
+    tap_detect_t       detect;
+    esp_timer_handle_t timer    = NULL;
+    uint32_t           failures = 0u;
+    uint32_t           samples  = 0u;
 
     (void)p_arg; /* The task takes no parameter. */
 
     orient_filter_init(&filter);
     tap_detect_init(&detect);
 
-    bool       b_imu = or_imu_init();
-    TickType_t wake  = xTaskGetTickCount();
+    bool b_imu = or_imu_init();
 
     printf("ORIENT imu %s\n", b_imu ? "ready" : "not found");
 
+    esp_timer_create_args_t const args = {.callback = or_tick,
+                                          .name     = "or_tick"};
+
+    if ((ESP_OK != esp_timer_create(&args, &timer)) ||
+        (ESP_OK != esp_timer_start_periodic(timer, OR_PERIOD_US)))
+    {
+        printf("ORIENT sample timer failed\n");
+    }
+
     for (;;)
     {
-        int16_t accel_x = 0;
-        int16_t accel_y = 0;
-        int16_t accel_z = 0;
+        int16_t            accel_x = 0;
+        int16_t            accel_y = 0;
+        int16_t            accel_z = 0;
+        tap_detect_event_t event;
 
-        vTaskDelayUntil(&wake, pdMS_TO_TICKS(OR_PERIOD_MS));
+        /* Woken by or_tick(); the count is cleared, so a late pass does not
+         * run twice. The returned count is not needed. */
+        (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        bool const b_read =
+        int64_t const t_us = esp_timer_get_time();
+        bool const    b_read =
             (b_imu) && (qmi_read_accel(&accel_x, &accel_y, &accel_z));
 
-        if (b_read)
+        if ((b_read) && (tap_detect_sample(&detect, t_us, accel_x, accel_y,
+                                           accel_z, &event)))
         {
-            tap_detect_sample(&detect, accel_x, accel_y, accel_z);
+            or_tap_publish(&event);
+            tile_net_tap_ready();
+            printf("TAP t_us=%" PRId64 " peak_mg=%" PRIu16 " count=%" PRIu32
+                   "\n",
+                   event.t_us, event.peak, event.count);
         }
 
         samples++;
@@ -255,8 +223,6 @@ static void orientation_task (void * p_arg)
             printf("ORIENT changed %" PRIu8 "\n", filter.stable);
         }
 
-        or_tap_service(&detect);
-
         failures = b_read ? 0u : (failures + 1u);
 
         if ((0u != failures) && (0u == (failures % OR_REINIT_EVERY)))
@@ -267,87 +233,16 @@ static void orientation_task (void * p_arg)
 }
 
 /**
- * @brief  Tap interrupt: record the time for the Orientation Task. No I2C
- *         here; a later interrupt overwrites an unread time.
+ * @brief  Sample timer (esp_timer task context): wake the Orientation Task.
  * @param  p_arg  Unused.
  */
-static void or_tap_isr (void * p_arg)
+static void or_tick (void * p_arg)
 {
-    int64_t const t_us = esp_timer_get_time();
+    (void)p_arg; /* The callback takes no parameter. */
 
-    (void)p_arg; /* The handler takes no parameter. */
-
-    /* Nothing blocks on this queue, so no task is woken: no yield needed. */
-    (void)xQueueOverwriteFromISR(g_p_tap_irq, &t_us, NULL);
-}
-
-/**
- * @brief  Set up the tap INT pin (OR_TAP_INT_LINE): input, pulled low,
- *         interrupt on the rising edge. An ISR service already installed by
- *         another module is fine.
- * @return true when the handler is attached.
- */
-static bool or_tap_pin_init (void)
-{
-    gpio_config_t const pin_cfg = {
-        .pin_bit_mask = (UINT64_C(1) << OR_TAP_INT_GPIO),
-        .mode         = GPIO_MODE_INPUT,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_ENABLE,
-        .intr_type    = GPIO_INTR_POSEDGE,
-    };
-
-    bool b_ok = (ESP_OK == gpio_config(&pin_cfg));
-
-    if (b_ok)
+    if (NULL != g_p_task)
     {
-        esp_err_t const err = gpio_install_isr_service(0);
-
-        b_ok = (ESP_OK == err) || (ESP_ERR_INVALID_STATE == err);
-    }
-
-    return (b_ok) &&
-           (ESP_OK == gpio_isr_handler_add(OR_TAP_INT_GPIO, or_tap_isr, NULL));
-}
-
-/**
- * @brief  Handle a pending tap interrupt: read the IMU status over I2C, run
- *         the detector, and log the result (the log is the tuning data).
- * @param  p_detect  The detector.
- */
-static void or_tap_service (tap_detect_t * p_detect)
-{
-    int64_t t_us = 0;
-
-    if (pdTRUE == xQueueReceive(g_p_tap_irq, &t_us, 0))
-    {
-        uint8_t status1 = 0u;
-        uint8_t tap     = 0u; /* 0 is refused by tap_detect_on_irq(). */
-
-        /* Reading STATUS1 releases the interrupt line. No device handle
-         * means the IMU never answered, and the zeros are refused below. */
-        if ((NULL != g_p_dev) && (or_read_reg(OR_REG_STATUS1, &status1)) &&
-            (0u != (status1 & OR_STATUS1_TAP)))
-        {
-            /* A failed read leaves 0, which is refused. */
-            (void)or_read_reg(OR_REG_TAP, &tap);
-        }
-
-        uint16_t const     peak = tap_detect_peak(p_detect);
-        tap_detect_event_t event;
-
-        tap_detect_result_t const result =
-            tap_detect_on_irq(p_detect, t_us, tap, &event);
-
-        if (TAP_DETECT_ACCEPT == result)
-        {
-            or_tap_publish(&event);
-        }
-
-        /* The enum has four values, so it fits uint32_t. */
-        printf("TAP result=%" PRIu32 " t_us=%" PRId64 " peak=%" PRIu16
-               " status1=0x%02" PRIX8 " tap=0x%02" PRIX8 "\n",
-               (uint32_t)result, t_us, peak, status1, tap);
+        xTaskNotifyGive(g_p_task);
     }
 }
 
@@ -371,9 +266,7 @@ static void or_tap_publish (tap_detect_event_t const * p_event)
 
 /**
  * @brief  Create the I2C bus once, probe 0x6A then 0x6B, check WHO_AM_I and
- *         configure the accelerometer and the tap engine, sensors off while
- *         configuring. A tap engine failure is logged and leaves orientation
- *         running.
+ *         configure the accelerometer, sensors off while configuring.
  * @return true when the IMU answered and was configured.
  */
 static bool or_imu_init (void)
@@ -422,74 +315,11 @@ static bool or_imu_init (void)
         b_ok = (or_read_reg(OR_REG_WHO_AM_I, &who)) && (OR_WHO_AM_I == who) &&
                (or_write_reg(OR_REG_CTRL7, OR_CTRL7_OFF)) &&
                (or_write_reg(OR_REG_CTRL1, OR_CTRL1_VALUE)) &&
-               (or_write_reg(OR_REG_CTRL2, OR_CTRL2_VALUE));
-
-        if ((b_ok) && (!or_tap_config()))
-        {
-            printf("TAP engine not configured\n");
-        }
-
-        b_ok = (b_ok) && (or_write_reg(OR_REG_CTRL7, OR_CTRL7_VALUE));
+               (or_write_reg(OR_REG_CTRL2, OR_CTRL2_VALUE)) &&
+               (or_write_reg(OR_REG_CTRL7, OR_CTRL7_VALUE));
     }
 
     return b_ok;
-}
-
-/**
- * @brief  Load both tap pages into the IMU and turn the tap engine on.
- *         Sensors must be off.
- * @return true on success.
- */
-static bool or_tap_config (void)
-{
-    uint8_t first[TAP_DETECT_CONFIG_BYTES];
-    uint8_t second[TAP_DETECT_CONFIG_BYTES];
-
-    tap_detect_encode_config(first, second);
-
-    return (or_write_reg(OR_REG_CTRL8, OR_CTRL8_VALUE)) &&
-           (or_write_cal(first)) && (or_ctrl9_cmd(OR_CMD_TAP)) &&
-           (or_write_cal(second)) && (or_ctrl9_cmd(OR_CMD_TAP)) &&
-           (or_write_reg(OR_REG_CTRL8, OR_CTRL8_TAP));
-}
-
-/**
- * @brief  Run one CTRL9 command: send, wait for done, acknowledge, wait for
- *         done to clear.
- * @param  cmd  The command.
- * @return true on success.
- */
-static bool or_ctrl9_cmd (uint8_t cmd)
-{
-    return (or_write_reg(OR_REG_CTRL9, cmd)) && (or_ctrl9_wait(true)) &&
-           (or_write_reg(OR_REG_CTRL9, OR_CMD_ACK)) && (or_ctrl9_wait(false));
-}
-
-/**
- * @brief  Poll the CTRL9 done bit in STATUSINT.
- * @param  b_done  The bit state to wait for.
- * @return true when the bit reached that state in time.
- */
-static bool or_ctrl9_wait (bool b_done)
-{
-    bool b_reached = false;
-
-    for (uint32_t poll = 0u; (!b_reached) && (poll < OR_CMD_POLLS); poll++)
-    {
-        uint8_t status = 0u;
-
-        if (or_read_reg(OR_REG_STATUSINT, &status))
-        {
-            b_reached = (b_done == (0u != (status & OR_CMD_DONE_BIT)));
-        }
-
-        if (!b_reached)
-        {
-            vTaskDelay(OR_CMD_POLL_TICKS);
-        }
-    }
-
-    return b_reached;
 }
 
 /**
@@ -501,26 +331,6 @@ static bool or_ctrl9_wait (bool b_done)
 static bool or_write_reg (uint8_t reg, uint8_t value)
 {
     uint8_t const bytes[2] = {reg, value};
-
-    return (ESP_OK == i2c_master_transmit(g_p_dev, bytes, sizeof(bytes),
-                                          OR_I2C_TIMEOUT_MS));
-}
-
-/**
- * @brief  Write one tap page to CAL1_L onwards (auto-increment is on).
- * @param  p_page  TAP_DETECT_CONFIG_BYTES bytes.
- * @return true on success.
- */
-static bool or_write_cal (uint8_t const * p_page)
-{
-    uint8_t bytes[TAP_DETECT_CONFIG_BYTES + 1u];
-
-    bytes[0] = OR_REG_CAL1_L;
-
-    for (uint32_t idx = 0u; idx < TAP_DETECT_CONFIG_BYTES; idx++)
-    {
-        bytes[idx + 1u] = p_page[idx];
-    }
 
     return (ESP_OK == i2c_master_transmit(g_p_dev, bytes, sizeof(bytes),
                                           OR_I2C_TIMEOUT_MS));

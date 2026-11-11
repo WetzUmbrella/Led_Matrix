@@ -196,7 +196,7 @@ The telemetry seq of VC-4 is the header seq.
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
 | node_id | 29 | 4 | 1 to 9 | board number of the tapped tile | whack-a-mole re-plan, step 3 |
-| peak | 33 | 16 | 0 to 65,535 | tap_detect peak, LSB (4,096 LSB/g at +/- 8 g); the Pico keeps only the highest peak among taps within 50 ms | re-plan (tap dedupe); width of the tile's `uint16_t` peak |
+| peak | 33 | 16 | 0 to 65,535 | tap_detect peak, mg (from 11 Nov 2026, build step 2; before: LSB at +/-8 g); the Pico keeps only the highest peak among taps within 50 ms | re-plan (tap dedupe); width of the tile's `uint16_t` peak |
 | t_tap | 49 | 64 | 0 to 2^64 - 1 | tap time in the Pico's corrected clock, us | re-plan; J1 |
 
 The TAP seq is the header seq.

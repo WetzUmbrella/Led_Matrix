@@ -1,269 +1,326 @@
 /**
  * @file    tap_detect.c
- * @brief   QMI8658 tap detection: turns the tap interrupt into a validated
- *          event with a peak size. Pure C, host-testable.
+ * @brief   Software tap detection (see tap_detect.h for the rules).
  *
- * Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun.
+ * Owner: Jia Jun (Buddy 5). Rewritten 11 Nov 2026 (build step 2, DS-02).
  *
- * No ESP-IDF includes: this module is host-testable.
+ * No ESP-IDF includes: this module is host-testable. Integer arithmetic
+ * only; the baseline is kept in LSB x 65,536 so the slow average does not
+ * lose its fraction.
  */
 #include "tap_detect.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
-/** 16x the slow running average (shift constant for the baseline). */
-#define TD_BASE_SCALE 16
+/** Axes in a sample. */
+#define TD_AXES 3u
 
-/** Tap status: bits 1..0 hold the tap count. */
-#define TAP_STATUS_COUNT_MASK 0x03u
-/** Tap status: bits 5..4 hold the axis. */
-#define TAP_STATUS_AXIS_MASK 0x03u
-/** Tap status: bit 7 holds the polarity (0 positive, 1 negative). */
-#define TAP_STATUS_POLARITY_MASK 0x01u
-/** Tap status: axis field shift. */
-#define TAP_STATUS_AXIS_SHIFT 4u
-/** Tap status: polarity field shift. */
-#define TAP_STATUS_POLARITY_SHIFT 7u
+/** The baseline's fixed-point scale: 16 fraction bits. */
+#define TD_Q_SHIFT 16
 
-/* --- Page 1 (CAL4_H = 1): peak window, priority, tap window, double-tap --- */
+/** mg per g. */
+#define TD_MG_PER_G 1000
 
-/** Page 1 CAL1_L: peak window, 10 samples = 20 ms at 500 Hz. PROVISIONAL. */
-#define TAP_P1_CAL1_L 10u
-/** Page 1 CAL1_H: priority 0. PROVISIONAL. */
-#define TAP_P1_CAL1_H 0u
-/** Page 1 CAL2_L: tap window, 15 samples. PROVISIONAL. */
-#define TAP_P1_CAL2_L 15u
-/** Page 1 CAL2_H: tap window high byte, 0. PROVISIONAL. */
-#define TAP_P1_CAL2_H 0u
-/** Page 1 CAL3_L: double-tap window, 10 samples. PROVISIONAL. */
-#define TAP_P1_CAL3_L 10u
-/** Page 1 CAL3_H: double-tap window high byte, 0. PROVISIONAL. */
-#define TAP_P1_CAL3_H 0u
-/** Page 1 CAL4_L: 0. PROVISIONAL. */
-#define TAP_P1_CAL4_L 0u
-/** Page 1 CAL4_H: page select 1. PROVISIONAL. */
-#define TAP_P1_CAL4_H 1u
-
-/* --- Page 2 (CAL4_H = 2): alpha, gamma, thresholds --- */
-
-/** Page 2 CAL1_L: alpha 8 = 0.0625 in u0.7. PROVISIONAL. */
-#define TAP_P2_CAL1_L 8u
-/** Page 2 CAL1_H: gamma 32 = 0.25 in u0.7. PROVISIONAL. */
-#define TAP_P2_CAL1_H 32u
-/** Page 2 CAL2_L: peak magnitude threshold low byte (1638 = 0x0666).
- *  PROVISIONAL. */
-#define TAP_P2_CAL2_L 0x66u
-/** Page 2 CAL2_H: peak magnitude threshold high byte. PROVISIONAL. */
-#define TAP_P2_CAL2_H 0x06u
-/** Page 2 CAL3_L: under-damped threshold low byte (819 = 0x0333).
- *  PROVISIONAL. */
-#define TAP_P2_CAL3_L 0x33u
-/** Page 2 CAL3_H: under-damped threshold high byte. PROVISIONAL. */
-#define TAP_P2_CAL3_H 0x03u
-/** Page 2 CAL4_L: 0. PROVISIONAL. */
-#define TAP_P2_CAL4_L 0u
-/** Page 2 CAL4_H: page select 2. PROVISIONAL. */
-#define TAP_P2_CAL4_H 2u
-
-static int32_t tap_detect_base_step (int32_t * p_base, int16_t sample);
+static uint32_t td_deviation_mg (tap_detect_t const * p_detect,
+                                 int16_t const * p_raw);
+static bool     td_baseline (tap_detect_t * p_detect, int16_t const * p_raw,
+                             uint32_t dev_mg);
+static bool     td_phase (tap_detect_t * p_detect, int64_t t_us,
+                          uint32_t dev_mg, tap_detect_event_t * p_event);
+static uint32_t td_isqrt (uint64_t value);
+static int64_t  td_q (int16_t raw);
 
 /**
- * @brief  One axis of the slow baseline: deviation from the average, then
- *         update the baseline.
- * @param  p_base  The baseline, holds 16x the average.
- * @param  sample  The raw 16-bit sample.
- * @return  |sample - (base / TD_BASE_SCALE)|.
- */
-static int32_t tap_detect_base_step (int32_t * p_base, int16_t sample)
-{
-    int32_t const avg  = *p_base / TD_BASE_SCALE; /* Rounded toward zero. */
-    int32_t const diff = sample - avg;            /* At most 65,535 in size. */
-
-    *p_base += diff; /* Slow-moving average. */
-
-    return (diff < 0) ? (-diff) : diff;
-}
-
-/**
- * @brief  Zero the detector state.
+ * @brief  Reset the detector: no baseline, armed, default threshold.
  * @param  p_detect  The detector.
  */
 void tap_detect_init (tap_detect_t * p_detect)
 {
-    for (uint32_t idx = 0u; idx < TAP_DETECT_WINDOW_SAMPLES; idx++)
+    for (uint32_t axis = 0u; axis < TD_AXES; axis++)
     {
-        p_detect->window[idx] = 0u;
+        p_detect->base_q[axis] = 0;
     }
 
-    p_detect->next       = 0u;
-    p_detect->base_x     = 0;
-    p_detect->base_y     = 0;
-    p_detect->base_z     = 0;
-    p_detect->b_seeded   = false;
-    p_detect->b_has_last = false;
-    p_detect->last_us    = 0;
-    p_detect->accepted   = 0u;
-    p_detect->rejected   = 0u;
+    p_detect->b_seeded     = false;
+    p_detect->held         = 0u;
+    p_detect->threshold_mg = TAP_DETECT_THRESHOLD_MG;
+    p_detect->phase        = TAP_DETECT_ARMED;
+    p_detect->t_first_us   = 0;
+    p_detect->peak_mg      = 0u;
+    p_detect->b_quiet      = false;
+    p_detect->t_quiet_us   = 0;
+    p_detect->last_mg      = 0u;
+    p_detect->count        = 0u;
 }
 
 /**
- * @brief  One 100 Hz accelerometer sample: update the baselines and the
- *         sliding window.
- * @param  p_detect  The detector.
- * @param  accel_x   Raw X, 16-bit.
- * @param  accel_y   Raw Y, 16-bit.
- * @param  accel_z   Raw Z, 16-bit.
+ * @brief  Set the threshold, clamped to its limits.
+ * @param  p_detect      The detector.
+ * @param  threshold_mg  Threshold, mg.
  */
-void tap_detect_sample (tap_detect_t * p_detect, int16_t accel_x,
-                        int16_t accel_y, int16_t accel_z)
+void tap_detect_set_threshold (tap_detect_t * p_detect, uint32_t threshold_mg)
 {
-    int32_t dev_x   = 0;
-    int32_t dev_y   = 0;
-    int32_t dev_z   = 0;
-    int32_t largest = 0;
+    uint32_t value = threshold_mg;
+
+    if (value < TAP_DETECT_THRESHOLD_MIN_MG)
+    {
+        value = TAP_DETECT_THRESHOLD_MIN_MG;
+    }
+    else if (value > TAP_DETECT_THRESHOLD_MAX_MG)
+    {
+        value = TAP_DETECT_THRESHOLD_MAX_MG;
+    }
+    else
+    {
+        /* Inside the limits: unchanged. */
+    }
+
+    p_detect->threshold_mg = value;
+}
+
+/**
+ * @brief  One accelerometer sample.
+ * @param  p_detect  The detector.
+ * @param  t_us      Sample time, microseconds.
+ * @param  accel_x   Raw X.
+ * @param  accel_y   Raw Y.
+ * @param  accel_z   Raw Z.
+ * @param  p_event   Receives the tap when the return is true.
+ * @return true when a tap's peak window ended with this sample.
+ */
+bool tap_detect_sample (tap_detect_t * p_detect, int64_t t_us, int16_t accel_x,
+                        int16_t accel_y, int16_t accel_z,
+                        tap_detect_event_t * p_event)
+{
+    int16_t const raw[TD_AXES] = {accel_x, accel_y, accel_z};
+    uint32_t      dev_mg       = 0u;
+    bool          b_tap        = false;
 
     if (!p_detect->b_seeded)
     {
-        p_detect->base_x   = accel_x * TD_BASE_SCALE; /* 16x the average. */
-        p_detect->base_y   = accel_y * TD_BASE_SCALE;
-        p_detect->base_z   = accel_z * TD_BASE_SCALE;
+        /* The first sample is the baseline: deviation 0. */
+        for (uint32_t axis = 0u; axis < TD_AXES; axis++)
+        {
+            p_detect->base_q[axis] = td_q(raw[axis]);
+        }
+
         p_detect->b_seeded = true;
-        /* First sample: its deviation is 0. */
     }
     else
     {
-        dev_x = tap_detect_base_step(&p_detect->base_x, accel_x);
-        dev_y = tap_detect_base_step(&p_detect->base_y, accel_y);
-        dev_z = tap_detect_base_step(&p_detect->base_z, accel_z);
+        dev_mg = td_deviation_mg(p_detect, raw);
+
+        /* A reseed makes this sample the baseline: deviation 0. */
+        if (td_baseline(p_detect, raw, dev_mg))
+        {
+            dev_mg = 0u;
+        }
+
+        b_tap = td_phase(p_detect, t_us, dev_mg, p_event);
     }
 
-    largest = dev_x;
+    p_detect->last_mg = dev_mg;
 
-    if (dev_y > largest)
-    {
-        largest = dev_y;
-    }
-
-    if (dev_z > largest)
-    {
-        largest = dev_z;
-    }
-
-    /* Fits uint16_t: max deviation is 65,535. */
-    p_detect->window[p_detect->next] = (uint16_t)largest;
-    p_detect->next = (p_detect->next + 1u) % TAP_DETECT_WINDOW_SAMPLES;
+    return b_tap;
 }
 
 /**
- * @brief  Largest value in the sliding window.
+ * @brief  Deviation of the last sample, mg.
  * @param  p_detect  The detector.
- * @return 0 to 65,535.
+ * @return mg.
  */
-uint16_t tap_detect_peak (tap_detect_t const * p_detect)
+uint32_t tap_detect_last_mg (tap_detect_t const * p_detect)
 {
-    uint16_t peak = 0u;
+    return p_detect->last_mg;
+}
 
-    for (uint32_t idx = 0u; idx < TAP_DETECT_WINDOW_SAMPLES; idx++)
+/**
+ * @brief  |sample - baseline| over the three axes, mg.
+ * @param  p_detect  The detector (seeded).
+ * @param  p_raw     X, Y and Z.
+ * @return mg.
+ */
+static uint32_t td_deviation_mg (tap_detect_t const * p_detect,
+                                 int16_t const * p_raw)
+{
+    uint64_t sum_sq = 0u;
+
+    for (uint32_t axis = 0u; axis < TD_AXES; axis++)
     {
-        if (p_detect->window[idx] > peak)
+        /* Q16 difference back to LSB; |diff| is below 2^17, so its square
+         * fits. */
+        int64_t const diff = (td_q(p_raw[axis]) - p_detect->base_q[axis]) /
+                             (INT64_C(1) << TD_Q_SHIFT);
+
+        sum_sq += (uint64_t)(diff * diff); /* A square: non-negative. */
+    }
+
+    /* At most sqrt(3) x 65,536 LSB, so the mg value fits uint32_t. */
+    return (td_isqrt(sum_sq) * (uint32_t)TD_MG_PER_G) /
+           (uint32_t)TAP_DETECT_LSB_PER_G;
+}
+
+/**
+ * @brief  Update the baseline: held during a tap or a loud sample, reseeded
+ *         after TAP_DETECT_HOLD_MAX_SAMPLES held samples, otherwise a slow
+ *         average.
+ * @param  p_detect  The detector.
+ * @param  p_raw     X, Y and Z.
+ * @param  dev_mg    This sample's deviation.
+ * @return true when the baseline was reseeded from this sample.
+ */
+static bool td_baseline (tap_detect_t * p_detect, int16_t const * p_raw,
+                         uint32_t dev_mg)
+{
+    bool const b_hold = (TAP_DETECT_ARMED != p_detect->phase) ||
+                        (dev_mg > TAP_DETECT_HOLD_MG);
+    bool       b_reseed = false;
+
+    if (b_hold)
+    {
+        p_detect->held++;
+
+        if (p_detect->held >= TAP_DETECT_HOLD_MAX_SAMPLES)
         {
-            peak = p_detect->window[idx];
+            for (uint32_t axis = 0u; axis < TD_AXES; axis++)
+            {
+                p_detect->base_q[axis] = td_q(p_raw[axis]);
+            }
+
+            p_detect->held = 0u;
+            b_reseed       = true;
         }
     }
+    else
+    {
+        for (uint32_t axis = 0u; axis < TD_AXES; axis++)
+        {
+            int64_t const x_q = td_q(p_raw[axis]);
 
-    return peak;
+            p_detect->base_q[axis] +=
+                (x_q - p_detect->base_q[axis]) / TAP_DETECT_EMA_SAMPLES;
+        }
+
+        p_detect->held = 0u; /* Not held: a later reseed counts from here. */
+    }
+
+    return b_reseed;
 }
 
 /**
- * @brief  Handle a tap interrupt: validate status, refractory and peak.
- * @param  p_detect   The detector.
- * @param  t_us       Interrupt time, microseconds.
- * @param  tap_status QMI8658 tap status byte.
- * @param  p_event    Filled only on TAP_DETECT_ACCEPT.
- * @return TAP_DETECT_ACCEPT or a TAP_DETECT_REJECT_* reason.
+ * @brief  Advance the phase with one sample's deviation.
+ * @param  p_detect  The detector.
+ * @param  t_us      Sample time.
+ * @param  dev_mg    Deviation, mg.
+ * @param  p_event   Receives the tap when the return is true.
+ * @return true when a tap's peak window ended.
  */
-tap_detect_result_t tap_detect_on_irq (tap_detect_t * p_detect, int64_t t_us,
-                                       uint8_t              tap_status,
-                                       tap_detect_event_t * p_event)
+static bool td_phase (tap_detect_t * p_detect, int64_t t_us, uint32_t dev_mg,
+                      tap_detect_event_t * p_event)
 {
-    tap_detect_result_t result = TAP_DETECT_ACCEPT;
+    bool b_tap = false;
 
-    /* Masked to two bits, so it fits uint8_t. */
-    uint8_t const count = (uint8_t)(tap_status & TAP_STATUS_COUNT_MASK);
-
-    /* Masked to two bits, so it fits uint8_t. */
-    uint8_t const axis =
-        (uint8_t)((tap_status >> TAP_STATUS_AXIS_SHIFT) & TAP_STATUS_AXIS_MASK);
-
-    /* Masked to one bit, so it fits uint8_t. */
-    uint8_t const polarity =
-        (uint8_t)((tap_status >> TAP_STATUS_POLARITY_SHIFT) &
-                  TAP_STATUS_POLARITY_MASK);
-
-    if ((0u == count) || (0u == axis))
+    if (TAP_DETECT_ARMED == p_detect->phase)
     {
-        result = TAP_DETECT_REJECT_STATUS;
-        p_detect->rejected++;
+        if (dev_mg >= p_detect->threshold_mg)
+        {
+            p_detect->phase      = TAP_DETECT_PEAK;
+            p_detect->t_first_us = t_us;
+            p_detect->peak_mg    = dev_mg;
+        }
     }
-    else if ((p_detect->b_has_last) &&
-             ((t_us - p_detect->last_us) < TAP_DETECT_REFRACTORY_US))
+    else if (TAP_DETECT_PEAK == p_detect->phase)
     {
-        result = TAP_DETECT_REJECT_REFRACTORY;
-        p_detect->rejected++;
+        if (dev_mg > p_detect->peak_mg)
+        {
+            p_detect->peak_mg = dev_mg;
+        }
+
+        if ((t_us - p_detect->t_first_us) >= TAP_DETECT_PEAK_WINDOW_US)
+        {
+            p_detect->count++;
+            p_event->t_us  = p_detect->t_first_us;
+            p_event->count = p_detect->count;
+            /* The TAP peak field is 16 bits: clamp (65 g is never reached). */
+            p_event->peak  = (p_detect->peak_mg > UINT16_MAX)
+                                 ? UINT16_MAX
+                                 : (uint16_t)p_detect->peak_mg;
+            p_detect->phase   = TAP_DETECT_SETTLING;
+            p_detect->b_quiet = false;
+            b_tap             = true;
+        }
     }
     else
     {
-        uint16_t const peak = tap_detect_peak(p_detect);
+        bool const b_low = (dev_mg < (p_detect->threshold_mg / 2u));
 
-        if (peak < TAP_DETECT_MIN_PEAK_LSB)
+        if (!b_low)
         {
-            result = TAP_DETECT_REJECT_WEAK;
-            p_detect->rejected++;
+            p_detect->b_quiet = false;
+        }
+        else if (!p_detect->b_quiet)
+        {
+            p_detect->b_quiet    = true;
+            p_detect->t_quiet_us = t_us;
         }
         else
         {
-            p_detect->accepted++;
-            p_detect->b_has_last = true;
-            p_detect->last_us    = t_us;
-            p_event->t_us        = t_us;
-            p_event->count       = p_detect->accepted;
-            p_event->peak        = peak;
-            p_event->axis        = axis;
-            p_event->b_positive  = (0u == polarity);
+            /* The quiet run continues. */
+        }
 
-            /* Zero the window so the same spike cannot count twice. */
-            for (uint32_t idx = 0u; idx < TAP_DETECT_WINDOW_SAMPLES; idx++)
-            {
-                p_detect->window[idx] = 0u;
-            }
-
-            result = TAP_DETECT_ACCEPT;
+        if (((p_detect->b_quiet) &&
+             ((t_us - p_detect->t_quiet_us) >= TAP_DETECT_QUIET_US)) ||
+            ((t_us - p_detect->t_first_us) >= TAP_DETECT_REARM_MAX_US))
+        {
+            p_detect->phase = TAP_DETECT_ARMED;
         }
     }
 
-    return result;
+    return b_tap;
 }
 
 /**
- * @brief  Write the two QMI8658 tap-config pages (register order,
- *         little-endian 16-bit fields).
- * @param  p_first   Buffer of TAP_DETECT_CONFIG_BYTES (page 1).
- * @param  p_second  Buffer of TAP_DETECT_CONFIG_BYTES (page 2).
+ * @brief  Integer square root, rounded down.
+ * @param  value  0 to 2^63.
+ * @return floor(sqrt(value)).
  */
-void tap_detect_encode_config (uint8_t * p_first, uint8_t * p_second)
+static uint32_t td_isqrt (uint64_t value)
 {
-    uint8_t const page1[TAP_DETECT_CONFIG_BYTES] = {
-        TAP_P1_CAL1_L, TAP_P1_CAL1_H, TAP_P1_CAL2_L, TAP_P1_CAL2_H,
-        TAP_P1_CAL3_L, TAP_P1_CAL3_H, TAP_P1_CAL4_L, TAP_P1_CAL4_H};
-    uint8_t const page2[TAP_DETECT_CONFIG_BYTES] = {
-        TAP_P2_CAL1_L, TAP_P2_CAL1_H, TAP_P2_CAL2_L, TAP_P2_CAL2_H,
-        TAP_P2_CAL3_L, TAP_P2_CAL3_H, TAP_P2_CAL4_L, TAP_P2_CAL4_H};
+    uint64_t root = 0u;
+    uint64_t bit  = UINT64_C(1) << 62;
 
-    for (uint32_t idx = 0u; idx < TAP_DETECT_CONFIG_BYTES; idx++)
+    while (bit > value)
     {
-        p_first[idx]  = page1[idx];
-        p_second[idx] = page2[idx];
+        bit >>= 2;
     }
+
+    while (0u != bit)
+    {
+        if (value >= (root + bit))
+        {
+            value -= root + bit;
+            root = (root >> 1) + bit;
+        }
+        else
+        {
+            root >>= 1;
+        }
+
+        bit >>= 2;
+    }
+
+    return (uint32_t)root; /* sqrt of a value below 2^64 fits 32 bits. */
+}
+
+/**
+ * @brief  A raw reading in the baseline's fixed point (LSB x 65,536).
+ * @param  raw  Raw reading.
+ * @return raw x 65,536.
+ */
+static int64_t td_q (int16_t raw)
+{
+    return (int64_t)raw * (INT64_C(1) << TD_Q_SHIFT); /* Widened first. */
 }
 
 /*** end of file ***/
