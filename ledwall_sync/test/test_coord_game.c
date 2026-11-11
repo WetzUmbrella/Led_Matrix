@@ -1366,8 +1366,14 @@ bool test_coord_game_arm (void)
                             __LINE__)) && b_ok;
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_MOLE_ON, 2u),
                             __LINE__)) && b_ok;
+
+    /* A tap on the sprite's tile within 400 ms of its show time (a tap
+     * left over from the tap test, bench 12 Nov round 2): ignored. */
+    gt_tap(1u, 900u, target.t_show + (390u * GT_MS), ++g_tap_seq);
     b_ok = (test_main_check(PROTO_ROUND_ARMED == gt_round_state(), __LINE__)) &&
            b_ok;
+    b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
+                            __LINE__)) && b_ok;
     b_ok = (test_main_check((gt_status(&status)) &&
                                 (PROTO_LEVEL_NORMAL == status.level),
                             __LINE__)) && b_ok;
@@ -1558,6 +1564,17 @@ bool test_coord_game_status (void)
                             __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_check_results(1u), __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_check_results(2u), __LINE__)) && b_ok;
+
+    /* The next ARM clears the counts: STATUS shows none of this round. */
+    gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
+    gt_advance(300u * GT_MS);
+    b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_ROUND_ARMED == status.round_state) &&
+                                (0 == status.score) && (0u == status.wrong) &&
+                                (0u == status.shown) &&
+                                (0u == status.missed) &&
+                                (0u == status.reaction_ms),
+                            __LINE__)) && b_ok;
 
     return b_ok;
 }

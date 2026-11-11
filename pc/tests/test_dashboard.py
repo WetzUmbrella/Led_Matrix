@@ -333,6 +333,14 @@ def test_last_score_is_replaced_by_the_next_round() -> None:
     assert model.snapshot()["last_score"] == 4
 
 
+def test_old_results_at_start_are_not_a_new_round() -> None:
+    model = db.DashboardModel()
+    model.on_status(_ready_status(7, score=38, round_state=RESULTS))
+    model.on_status(_ready_status(7, score=38, round_state=RESULTS))
+    assert model.snapshot()["last_score"] is None
+    assert not any("round over" in line for line in model.messages)
+
+
 def test_an_aborted_arm_is_not_a_round() -> None:
     model = db.DashboardModel()
     model.on_status(_ready_status(12, round_state=ARMED))

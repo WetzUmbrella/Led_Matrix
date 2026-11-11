@@ -59,8 +59,10 @@ def settle(seconds):
 
 def follow(seconds, until=None):
     """Print each change of the Pico's state, round state and counts; stop
-    after seconds, or a few seconds after the round state named until."""
-    start, last, done_at = time.time(), None, None
+    after seconds, or a few seconds after the round state named until, once
+    the round was seen playing (the Pico may still show an old round's
+    RESULTS when the round is armed; bench 12 Nov 2026, round 2)."""
+    start, last, done_at, played = time.time(), None, None, False
     while time.time() - start < seconds:
         sh._flush()
         s = sh.model.status
@@ -74,8 +76,9 @@ def follow(seconds, until=None):
                 print("%6.1f s  %s" % (time.time() - start, line),
                       flush=True)
                 last = line
+            played = played or (s.round_name() == "PLAYING")
             if (until is not None) and (s.round_name() == until) and \
-                    (done_at is None):
+                    played and (done_at is None):
                 done_at = time.time()
         if (done_at is not None) and (time.time() - done_at > 5.0):
             return
@@ -97,7 +100,8 @@ if args.tap_test > 0:
     print("tap test: tap the tiles for %.0f s" % args.tap_test, flush=True)
     follow(args.tap_test)
     run("tap off")
-    settle(1)
+    print("tap test over: stop tapping; arming in 3 s", flush=True)
+    settle(3)
 if args.legacy:
     run("game start")
     follow(40.0, until="RESULTS")

@@ -170,6 +170,13 @@ void game_rules_start (game_t * p_game, uint64_t now_us, uint16_t active_mask,
 void game_rules_stop (game_t * p_game);
 
 /**
+ * @brief  Stop and clear the round's score and counts (ARM: STATUS must not
+ *         show the last round's counts while the next one is armed).
+ * @param  p_game  Engine; must not be NULL.
+ */
+void game_rules_clear (game_t * p_game);
+
+/**
  * @brief  Set the tiles that moles and taps count for (a tile was lost or
  *         came back during the round).
  * @param  p_game       Engine; must not be NULL.

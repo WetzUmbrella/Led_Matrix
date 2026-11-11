@@ -449,9 +449,12 @@ class DashboardModel:
         for node in pico_link.nodes_in(lost):
             self._say("tile %d lost (Pico STATUS online bit cleared)" % node)
         prev = self.status
-        if status.round_name() == "RESULTS" and (
-                prev is None or prev.round_name() != "RESULTS"):
+        if (status.round_name() == "RESULTS") and (prev is not None) and \
+                (prev.round_name() == "PLAYING"):
             # The round ended: RESULTS carries the final counts (DS-08).
+            # Only a round seen playing counts: a fresh dashboard that finds
+            # the Pico still showing an old round's results reports nothing
+            # (bench 12 Nov 2026, round 2).
             self.last_score = status.score
             self.last_result = {
                 "score": status.score, "hits": status.hits(),

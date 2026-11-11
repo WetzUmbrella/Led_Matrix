@@ -116,6 +116,21 @@ void game_rules_stop (game_t * p_game)
 }
 
 /**
+ * @brief  Stop and clear the score and counts (see game_rules.h).
+ * @param  p_game  Engine; must not be NULL.
+ */
+void game_rules_clear (game_t * p_game)
+{
+    game_rules_stop(p_game);
+    p_game->score       = 0;
+    p_game->hits        = 0u;
+    p_game->missed      = 0u;
+    p_game->wrong       = 0u;
+    p_game->shown       = 0u;
+    p_game->reaction_us = 0u;
+}
+
+/**
  * @brief  Set the tiles that moles and taps count for.
  * @param  p_game       Engine; must not be NULL.
  * @param  active_mask  Bit n - 1 for each Node ID that counts.

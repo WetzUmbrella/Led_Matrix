@@ -308,9 +308,17 @@ void game_tile_fill_wire (game_tile_state_t const * p_state,
         game_tile_showing(p_state, now_pico_us);
     int64_t const since = now_local_us - p_state->flash_start_us;
 
+    /* The start sprite stands alone: the hole is for empty tiles and
+     * moles (DS-11; bench 12 Nov 2026, the triangle over the hole read as
+     * clutter). */
+    bool const b_start = (0u != p_state->b_mole) &&
+                         (GAME_TILE_KIND_START == p_state->kind) &&
+                         (now_pico_us >= p_state->show_us);
+
     game_sprites_clear(&canvas);
 
-    if ((0u != p_state->b_round) || (0u != p_state->b_tap_test))
+    if (((0u != p_state->b_round) || (0u != p_state->b_tap_test)) &&
+        (!b_start))
     {
         game_sprites_hole(&canvas);
     }

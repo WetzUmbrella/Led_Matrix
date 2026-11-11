@@ -136,8 +136,9 @@ bool game_tile_active (game_tile_state_t const * p_state,
 /**
  * @brief  Fill the 64 LEDs of the tile for one moment, in the panel's order
  *         (R, G, B per LED, LED 0 first), channel values 0 to 8. Layers,
- *         bottom up: the hole (round or tap test), the target, the picture
- *         showing (it covers the tile), then the hit burst or the red X.
+ *         bottom up: the hole (round or tap test; not under the start
+ *         sprite), the target, the picture showing (it covers the tile),
+ *         then the hit burst or the red X.
  * @param  p_state        State; must not be NULL.
  * @param  now_pico_us    Pico corrected time, microseconds (targets and
  *                        pictures).

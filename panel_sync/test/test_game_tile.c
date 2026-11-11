@@ -500,6 +500,8 @@ bool test_game_tile_round (void)
                                 (tst_px(wire, 0u, 3u, g_dark)),
                             __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW + (500 * TST_MS), 0, 0u, wire);
+    /* No hole under the start sprite. */
+    b_ok = (test_main_check(tst_px(wire, 7u, 0u, g_dark), __LINE__)) && b_ok;
     b_ok = (test_main_check(tst_px(wire, 4u, 5u, g_green), __LINE__)) && b_ok;
     game_tile_fill_wire(&state, TST_T_SHOW + (100000 * TST_MS), 0, 0u, wire);
     b_ok = (test_main_check(!tst_px(wire, 0u, 2u, g_dark), __LINE__)) && b_ok;

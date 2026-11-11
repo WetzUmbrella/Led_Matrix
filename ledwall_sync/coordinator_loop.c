@@ -143,6 +143,12 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
 #define CL_COUNTDOWN_US    (CL_COUNTDOWN_STEPS * CL_STEP_US)
 #define CL_PIC_LEAD_US     500000u
 
+/** The start sprite counts a tap only from this long after it shows: no
+ *  child reacts faster, and a tap left over from the tap test or from
+ *  handling the board does not start the round (bench 12 Nov 2026, round 2:
+ *  a tap 0.4 s after the sprite showed started it unseen). */
+#define CL_START_MIN_US    400000u
+
 /** Results (DS-09): the sparkle, then the score and the stars in turn. */
 #define CL_SPARKLE_MS 1500u
 #define CL_RESULT_MS  2500u
@@ -310,6 +316,7 @@ static proto_round_state_t g_round      = PROTO_ROUND_IDLE;
 static uint8_t             g_level      = (uint8_t)PROTO_LEVEL_EASY; /* 3. */
 static uint8_t             g_threshold  = 0u; /* 20 mg steps; 0 default. */
 static uint8_t             g_start_node = 0u; /* Tile of the start sprite. */
+static uint64_t            g_start_show_us = 0u; /* Its show time. */
 static uint64_t            g_arm_deadline_us = 0u;
 static uint64_t            g_play_at_us      = 0u;
 static uint16_t            g_round_mask      = 0u; /* Tiles of the round. */
@@ -1944,7 +1951,8 @@ static void cl_on_tap (cl_rx_entry_t const * p_entry,
             }
 
             if ((PROTO_ROUND_ARMED == g_round) &&
-                (msg.node_id == g_start_node))
+                (msg.node_id == g_start_node) &&
+                (msg.t_tap >= (g_start_show_us + CL_START_MIN_US)))
             {
                 /* The child tapped the start sprite (DS-08). */
                 cl_queue_feedback(msg.node_id, (uint8_t)PROTO_FEEDBACK_HIT,
@@ -2204,13 +2212,15 @@ static void cl_round_arm (uint64_t now)
     {
         g_round_mask      = mask;
         g_start_node      = start;
+        g_start_show_us   = now + (UINT64_C(1000) * GAME_LEAD_MS);
         g_round           = PROTO_ROUND_ARMED;
+        game_rules_clear(&g_game); /* STATUS: no counts of the last round. */
         g_arm_deadline_us = now + CL_ARM_TIMEOUT_US;
         g_b_tap_test      = false;
         ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE); /* Results. */
         cl_set_state(PROTO_COORD_COORDINATING_GAME);
         cl_round_to_tiles(PROTO_GAME_ARM, now);
-        cl_queue_target(start, now + (UINT64_C(1000) * GAME_LEAD_MS), 0u,
+        cl_queue_target(start, g_start_show_us, 0u,
                         (uint8_t)PROTO_TARGET_START, now, /* 5 kinds fit. */
                         now + CL_CONTROL_LIFE_US);
     }
