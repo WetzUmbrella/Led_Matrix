@@ -15,6 +15,7 @@ Branch `feature/whack-a-mole` @ `c5cf2af` (5 Nov display fixes, 30 ms tap group)
 | Rounds 5 and 6 (new Pico build) | **OPEN: Pico froze** about 0.2 s after the round started | After the first GAME_MOLE line: no STATUS, no beacons, no ping, no CL_STATS; picotool could still reboot it over USB (main loop stuck, chip alive). Round 4 ran 30 s on the previous Pico build. Either this board (`…3B6838`, five hangs since 9 Nov, its WiFi driver the common factor) or the new Pico build. A/B test pending: the previous build (59cac5b) is on the Pico now. |
 | Round 7 (previous Pico build) | Not run: the Pico dropped the PC's commands as stale (`stale` 3, then 6) | The PC-restart bug below, despite the seq workaround. `game_round.py` now does the upload and the round in one process, so the seq never restarts. |
 | Round 8 | Not run (stopped before the round) | `round8_*` logs are idle wall logs on the previous Pico build; no game messages. |
+| **Round 9 (second Pico `…E6613008E344BF33`, pushed build e0c4a8e)** | **PASS: full round, no freeze** | Score 32. Pico event log: 38 moles (19 per tile, never the same tile twice in a row), 32 TAPs reached the Pico (16 per tile), 32 hits, 0 misses, 6 moles timed out; no echo or double count reached the Pico (tiles on sponge, the v1 detector). Show to verdict on hits: median 390 ms (322 to 689; the operator's reaction). TAP arrival minus tap time: median 30 ms (15 to 68), mostly the tile's 20 ms housekeeping pass before the TAP is sent, plus WiFi. **The rounds 5 and 6 freeze was the `…3B6838` board, not the code** (same build, no freeze here). Estimated tap to flash about 70 to 90 ms: inside NR-03 but tight; send the TAP at once in step 2, and measure with the GPIO4 pulses (DS-13). |
 
 ## Other findings
 
@@ -22,7 +23,8 @@ Branch `feature/whack-a-mole` @ `c5cf2af` (5 Nov display fixes, 30 ms tap group)
 - Upload: both tiles first time (fresh Pico, session 0: no race).
 
 
-## Next (when a second Pico is available)
+## Result and next
 
-1. Flash it with the current build and run `game_round.py`: a full round means the freeze is the `…3B6838` board; a freeze means the new Pico code (only the REGISTER TAP reset and three log calls changed), to bisect.
-2. A careful scoring round: round 4's -7 suggests one slap counted twice (150 ms re-arm), which step 2's detector addresses.
+**Step 1 done 11 Nov:** the v1 game runs end to end on the wall with the 5 Nov display fixes; two bugs found and fixed on the way (the lwIP deadlock, stale TAPs after a restart). Pico `…3B6838` is retired from coordinator duty (freezes); it becomes the pico_tap recorder (DS-13).
+
+Next: a wrong-tap check (tap the empty tile: expect a red flash and -1), then step 2 (software tap detector, TAP sent at once).
