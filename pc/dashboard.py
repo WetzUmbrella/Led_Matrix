@@ -174,7 +174,16 @@ class DashboardModel:
         #: Final score of the last round, None before any round. STATUS
         #: reports 0 outside a round, so it is kept when the round ends.
         self.last_score: Optional[int] = None
+        #: The last round's counts (score, hits, missed, wrong, shown,
+        #: reaction_ms, stars), None before any round.
+        self.last_result: Optional[Dict[str, int]] = None
         self.mode = "video"
+        #: The next round's level (DS-08) and tap threshold in mg (0: the
+        #: tiles' default, A12).
+        self.level = "easy"
+        self.threshold_mg = 0
+        #: The tap test (A11) as last asked of the Pico.
+        self.tap_test = False
         #: Tap-to-place: (slot, deadline) while the website waits for a TAP.
         self.armed: Optional[Tuple[int, float]] = None
         #: Board number taken off each slot, put back by set_slot(on).
@@ -377,9 +386,62 @@ class DashboardModel:
                           "(now %s)" % self.pico_state())
 
     def abort_game(self) -> None:
-        """Abort: only while the Pico runs a round."""
+        """Abort: only while the Pico runs a round (armed, counting down or
+        playing: all COORDINATING GAME)."""
         if self.pico_state() != GAME_STATE:
             raise Refused("no round is running")
+
+    def round_state(self) -> str:
+        """The Pico's round state (DS-08), GAME IDLE before any STATUS."""
+        return self.status.round_name() if self.status else "GAME IDLE"
+
+    def arm_game(self) -> None:
+        """Arm a round (DS-08): as start_game(); the start sprite appears and
+        the child's tap on it starts the countdown."""
+        self.start_game()
+
+    def start_now(self) -> None:
+        """Skip the start sprite: only while armed."""
+        if self.round_state() != "ARMED":
+            raise Refused("no round is armed (now %s)" % self.round_state())
+
+    def set_tap_test(self, on: bool) -> None:
+        """The tap test (A11): game mode, and the wall READY with no round
+        armed or playing."""
+        if self.mode != "game":
+            raise Refused("switch to game mode before the tap test")
+        if self.pico_state() != "READY":
+            raise Refused("the tap test needs the wall READY "
+                          "(now %s)" % self.pico_state())
+
+    def set_level(self, level: str) -> None:
+        """The next round's level: easy, normal or hard."""
+        if level not in pico_link.LEVELS:
+            raise ab.AssetError("level must be easy, normal or hard")
+        self.level = level
+        self._say("level %s" % level)
+
+    def set_threshold(self, threshold_mg: int) -> None:
+        """The tap threshold for the next ARM, mg: 0 (the tiles' default) or
+        a multiple of 20 from 60 to 5,000 (A12)."""
+        step = pico_link.THRESHOLD_STEP_MG
+        if threshold_mg != 0 and not (
+                60 <= threshold_mg <= pico_link.THRESHOLD_MAX_MG and
+                threshold_mg % step == 0):
+            raise ab.AssetError("threshold must be 0 or a multiple of %d "
+                                "from 60 to %d mg" % (
+                                    step, pico_link.THRESHOLD_MAX_MG))
+        self.threshold_mg = threshold_mg
+        self._say("tap threshold %s" % (
+            "default" if threshold_mg == 0 else "%d mg" % threshold_mg))
+
+    def level_code(self) -> int:
+        """The next round's level on the wire."""
+        return pico_link.LEVELS.index(self.level)
+
+    def threshold_code(self) -> int:
+        """The tap threshold on the wire, 20 mg steps."""
+        return self.threshold_mg // pico_link.THRESHOLD_STEP_MG
 
     def on_status(self, status: pico_link.Status) -> None:
         """New Pico STATUS: readiness, online losses, READY or not."""
@@ -387,11 +449,24 @@ class DashboardModel:
         for node in pico_link.nodes_in(lost):
             self._say("tile %d lost (Pico STATUS online bit cleared)" % node)
         prev = self.status
-        if (prev is not None) and (prev.state_name() == GAME_STATE) and \
-                (status.state_name() != GAME_STATE):
-            # The round ended: keep the last score the Pico reported in it.
-            self.last_score = prev.score
-            self._say("round over, score %d" % prev.score)
+        if status.round_name() == "RESULTS" and (
+                prev is None or prev.round_name() != "RESULTS"):
+            # The round ended: RESULTS carries the final counts (DS-08).
+            self.last_score = status.score
+            self.last_result = {
+                "score": status.score, "hits": status.hits(),
+                "missed": status.missed, "wrong": status.wrong,
+                "shown": status.shown, "reaction_ms": status.reaction_ms,
+                "stars": status.stars()}
+            self._say("round over, score %d, %d of %d moles, %d wrong, "
+                      "%d stars" % (status.score, status.hits(),
+                                    status.shown, status.wrong,
+                                    status.stars()))
+        elif (prev is not None) and (prev.round_name() in
+                                     ("ARMED", "COUNTDOWN")) and \
+                (status.round_name() == "GAME IDLE"):
+            self._say("round not started (aborted or the start sprite "
+                      "timed out)")
         self.status = status
         self.online = status.online
         self.readiness = status.readiness
@@ -430,6 +505,16 @@ class DashboardModel:
             "readiness": self.readiness, "online": self.online,
             "score": status.score if status else 0,
             "last_score": self.last_score,
+            "last_result": self.last_result,
+            "round_state": self.round_state(),
+            "level": self.level, "threshold_mg": self.threshold_mg,
+            "tap_test": self.tap_test,
+            "round": ({
+                "level": status.level_name(), "hits": status.hits(),
+                "missed": status.missed, "wrong": status.wrong,
+                "shown": status.shown, "time_left_s": status.time_left_s,
+                "reaction_ms": status.reaction_ms} if status else None),
+            "start_now_enabled": self.round_state() == "ARMED",
             "mode": self.mode, "stopped": self.stopped(),
             "game_running": self.pico_state() == GAME_STATE,
             "game_start_enabled": (self.mode == "game" and
@@ -582,8 +667,47 @@ class DashboardShell(cmd.Cmd):
             raise OSError("the Pico did not acknowledge the round start")
         return self.snapshot()
 
+    def arm_game(self) -> Dict[str, object]:
+        """Arm a round at the model's level and tap threshold (DS-08)."""
+        self._flush()
+        self.model.arm_game()
+        if not self.link.send_game_control(
+                pico_link.GAME_ARM, level=self.model.level_code(),
+                threshold=self.model.threshold_code()):
+            raise OSError("the Pico did not acknowledge the arm")
+        self.model.tap_test = False
+        return self.snapshot()
+
+    def start_now(self) -> Dict[str, object]:
+        """Skip the start sprite: the countdown starts now."""
+        self._flush()
+        self.model.start_now()
+        if not self.link.send_game_control(pico_link.GAME_START_NOW):
+            raise OSError("the Pico did not acknowledge start now")
+        return self.snapshot()
+
+    def set_tap_test(self, on: bool) -> Dict[str, object]:
+        """The tap test on or off (A11)."""
+        self._flush()
+        self.model.set_tap_test(on)
+        code = pico_link.GAME_TAP_TEST_ON if on else \
+            pico_link.GAME_TAP_TEST_OFF
+        if not self.link.send_game_control(code):
+            raise OSError("the Pico did not acknowledge the tap test")
+        self.model.tap_test = on
+        return self.snapshot()
+
+    def set_level(self, level: str) -> Dict[str, object]:
+        self.model.set_level(level)
+        return self.snapshot()
+
+    def set_threshold(self, threshold_mg: int) -> Dict[str, object]:
+        self.model.set_threshold(threshold_mg)
+        return self.snapshot()
+
     def abort_game(self) -> Dict[str, object]:
-        """Abort the round now (the Pico ends it as at the time limit)."""
+        """Abort the round now: an armed or counting round clears, a playing
+        one ends as at the time limit."""
         self._flush()
         self.model.abort_game()
         if not self.link.send_game_control(pico_link.GAME_END):
@@ -680,6 +804,11 @@ class DashboardShell(cmd.Cmd):
             print("pico %s readiness=0x%03x online=0x%03x score=%d" % (
                 status.state_name(), status.readiness, status.online,
                 status.score))
+            print("round %s level=%s hits=%d missed=%d wrong=%d shown=%d "
+                  "left=%d s reaction=%d ms" % (
+                      status.round_name(), status.level_name(),
+                      status.hits(), status.missed, status.wrong,
+                      status.shown, status.time_left_s, status.reaction_ms))
         else:
             print("pico: no STATUS yet")
         print("pc %s; start %s; missing %s" % (
@@ -693,16 +822,45 @@ class DashboardShell(cmd.Cmd):
                 row.display_state))
 
     def do_game(self, arg: str) -> None:
-        """game start|abort   (game mode, and the wall READY, to start)"""
+        """game arm [easy|normal|hard] | now | abort | start
+        arm: the start sprite waits for the child's tap (DS-08); now: skip
+        it; abort: clear or end the round; start: a v1 round at once."""
+        words = arg.split()
         try:
-            if arg.strip() == "start":
-                self.start_game()
-            elif arg.strip() == "abort":
+            if words[:1] == ["arm"]:
+                if len(words) > 1:
+                    self.model.set_level(words[1])
+                self.arm_game()
+            elif words == ["now"]:
+                self.start_now()
+            elif words == ["abort"]:
                 self.abort_game()
+            elif words == ["start"]:
+                self.start_game()
             else:
-                print("usage: game start|abort")
-        except (Refused, OSError) as err:
+                print("usage: game arm [easy|normal|hard] | now | abort | "
+                      "start")
+        except (ab.AssetError, Refused, OSError) as err:
             print("game refused: %s" % err)
+        self._print_messages()
+
+    def do_tap(self, arg: str) -> None:
+        """tap on|off   the tap test: every tap lights its tile (A11)"""
+        try:
+            if arg.strip() not in ("on", "off"):
+                print("usage: tap on|off")
+                return
+            self.set_tap_test(arg.strip() == "on")
+        except (Refused, OSError) as err:
+            print("tap test refused: %s" % err)
+
+    def do_threshold(self, arg: str) -> None:
+        """threshold MG   tap threshold for the next arm; 0 = default"""
+        try:
+            self.set_threshold(int(arg))
+        except (ValueError, ab.AssetError) as err:
+            print("threshold refused: %s" % err)
+        self._print_messages()
 
     def do_mode(self, arg: str) -> None:
         """mode video|game   (only while stopped)"""

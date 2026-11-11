@@ -1,19 +1,47 @@
 #!/usr/bin/env python3
-"""One process for the whole step 1 round (11 Nov 2026): configure, build,
-upload (twice, for the session race), game mode, start, then follow STATUS.
+"""One process for a whole bench round (11 Nov 2026): configure, build,
+upload (twice, for the session race), game mode, then the round, then follow
+STATUS until RESULTS.
+
+Step 3 (default): ARM at a level; the start sprite waits on the tile nearest
+the centre for the child's tap (or --start-now skips it); the countdown, the
+round and the results follow. --legacy runs the step 1 round instead (START
+at once, no sprite or countdown). --tap-test turns the tap test on for a
+number of seconds before arming (every tap lights its tile).
 
 A single process keeps one command seq and one session, so the Pico never
 sees a restarted PC (the stale-command bug found 11 Nov). Usage:
-    .venv/bin/python docs/bench/11nov/game_round.py <pico ip> <session> <gif> <map>
+    .venv/bin/python docs/bench/11nov/game_round.py <pico ip> <session> \\
+        <gif> <map> [--level easy|normal|hard] [--threshold MG] \\
+        [--tap-test S] [--start-now] [--legacy] [--layout 1x2]
 """
+import argparse
 import sys
 import time
 
 sys.path.insert(0, "pc")
 import dashboard as db  # noqa: E402
 
-pico, session, gif, nmap = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
-sh = db.DashboardShell(pico, session)
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument("pico")
+parser.add_argument("session", type=int)
+parser.add_argument("gif")
+parser.add_argument("map")
+parser.add_argument("--layout", default="1x2")
+parser.add_argument("--level", default="easy",
+                    choices=("easy", "normal", "hard"))
+parser.add_argument("--threshold", type=int, default=0,
+                    help="tap threshold, mg; 0 = the tiles' default")
+parser.add_argument("--tap-test", type=float, default=0.0,
+                    help="seconds of tap test before the round")
+parser.add_argument("--start-now", action="store_true",
+                    help="skip the start sprite")
+parser.add_argument("--legacy", action="store_true",
+                    help="the step 1 round: START at once")
+parser.add_argument("--wait", type=float, default=120.0,
+                    help="give up after this many seconds without RESULTS")
+args = parser.parse_args()
+sh = db.DashboardShell(args.pico, args.session)
 
 
 def run(line):
@@ -29,8 +57,33 @@ def settle(seconds):
         time.sleep(0.25)
 
 
+def follow(seconds, until=None):
+    """Print each change of the Pico's state, round state and counts; stop
+    after seconds, or a few seconds after the round state named until."""
+    start, last, done_at = time.time(), None, None
+    while time.time() - start < seconds:
+        sh._flush()
+        s = sh.model.status
+        if s is not None:
+            line = ("%s / %s score=%d hits=%d missed=%d wrong=%d shown=%d "
+                    "left=%d reaction=%d online=0x%03x" % (
+                        s.state_name(), s.round_name(), s.score, s.hits(),
+                        s.missed, s.wrong, s.shown, s.time_left_s,
+                        s.reaction_ms, s.online))
+            if line != last:
+                print("%6.1f s  %s" % (time.time() - start, line),
+                      flush=True)
+                last = line
+            if (until is not None) and (s.round_name() == until) and \
+                    (done_at is None):
+                done_at = time.time()
+        if (done_at is not None) and (time.time() - done_at > 5.0):
+            return
+        time.sleep(0.25)
+
+
 settle(3)
-run("config %s 1x2 %s pause 8" % (gif, nmap))
+run("config %s %s %s pause 8" % (args.gif, args.layout, args.map))
 run("build")
 run("upload")
 settle(3)
@@ -39,15 +92,22 @@ settle(3)
 run("status")
 run("mode game")
 settle(1)
-run("game start")
-start, last = time.time(), None
-while time.time() - start < 40:
-    sh._flush()
-    s = sh.model.status
-    if s is not None:
-        line = "%s score=%d online=0x%03x" % (s.state_name(), s.score, s.online)
-        if line != last:
-            print("%5.1f s  %s" % (time.time() - start, line), flush=True)
-            last = line
-    time.sleep(0.25)
+if args.tap_test > 0:
+    run("tap on")
+    print("tap test: tap the tiles for %.0f s" % args.tap_test, flush=True)
+    follow(args.tap_test)
+    run("tap off")
+    settle(1)
+if args.legacy:
+    run("game start")
+    follow(40.0, until="RESULTS")
+else:
+    run("threshold %d" % args.threshold)
+    run("game arm %s" % args.level)
+    if args.start_now:
+        settle(1)
+        run("game now")
+    else:
+        print("armed: tap the start sprite (60 s)", flush=True)
+    follow(args.wait, until="RESULTS")
 run("status")

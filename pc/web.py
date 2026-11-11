@@ -18,6 +18,13 @@ JSON API (every answer is JSON; errors are {"error": text}):
                                   409 when refused, 500 without the Pico's ACK
   POST /api/game/abort            end the round now; 409 unless one runs,
                                   500 without the Pico's ACK
+  POST /api/game/arm  {level?}    arm a round (start sprite, DS-08) at the
+                                  level (easy, normal, hard); as start
+  POST /api/game/now              skip the start sprite; 409 unless armed
+  POST /api/game/tap_test {on}    the tap test (A11); 409 unless READY in
+                                  game mode
+  POST /api/game/threshold {mg}   tap threshold for the next arm (A12); 0
+                                  is the tiles' default; 400 when invalid
 
 Status codes: 400 bad input, 404 unknown path, 405 wrong method, 409 refused
 because the wall is playing or not ready, 501 a feature not built, 500
@@ -83,7 +90,20 @@ def post_routes(shell) -> Dict[str, Route]:  # type: ignore[no-untyped-def]
         "/api/mode": lambda b: shell.set_mode(_field(b, "mode", str)),
         "/api/game/start": lambda _b: shell.start_game(),
         "/api/game/abort": lambda _b: shell.abort_game(),
+        "/api/game/arm": lambda b: _arm(shell, b),
+        "/api/game/now": lambda _b: shell.start_now(),
+        "/api/game/tap_test": lambda b: shell.set_tap_test(
+            _field(b, "on", bool)),
+        "/api/game/threshold": lambda b: shell.set_threshold(
+            _field(b, "mg", int)),
     }
+
+
+def _arm(shell, body: Dict[str, object]):  # type: ignore[no-untyped-def]
+    """Arm a round, at the body's level when it gives one."""
+    if "level" in body:
+        shell.set_level(_field(body, "level", str))
+    return shell.arm_game()
 
 
 def dispatch(shell, method: str, path: str,  # type: ignore[no-untyped-def]

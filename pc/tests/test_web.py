@@ -71,6 +71,32 @@ class FakeShell:
         self.calls.append(("abort_game",))
         return dict(self.snap)
 
+    def set_level(self, level):  # type: ignore[no-untyped-def]
+        if level not in ("easy", "normal", "hard"):
+            raise ab.AssetError("level must be easy, normal or hard")
+        self.calls.append(("set_level", level))
+        return dict(self.snap)
+
+    def arm_game(self):  # type: ignore[no-untyped-def]
+        self.calls.append(("arm_game",))
+        return dict(self.snap)
+
+    def start_now(self):  # type: ignore[no-untyped-def]
+        self.calls.append(("start_now",))
+        if self.playing:
+            raise db.Refused("no round is armed")
+        return dict(self.snap)
+
+    def set_tap_test(self, on):  # type: ignore[no-untyped-def]
+        self.calls.append(("set_tap_test", on))
+        return dict(self.snap)
+
+    def set_threshold(self, mg):  # type: ignore[no-untyped-def]
+        if mg < 0:
+            raise ab.AssetError("threshold must be 0 or 60 to 5000 mg")
+        self.calls.append(("set_threshold", mg))
+        return dict(self.snap)
+
 
 @pytest.fixture
 def served():  # type: ignore[no-untyped-def]
@@ -239,3 +265,24 @@ def test_dispatch_maps_os_errors_to_500() -> None:
     status, reply = web.dispatch(Broken(), "POST", "/api/slot",
                                  {"slot": 1, "on": True})
     assert status == 500 and reply == {"error": "disk gone"}
+
+
+def test_round_commands_reach_the_shell(served) -> None:  # type: ignore
+    shell, base = served
+    assert call(base, "POST", "/api/game/arm", {"level": "hard"})[0] == 200
+    assert call(base, "POST", "/api/game/arm")[0] == 200
+    assert call(base, "POST", "/api/game/now")[0] == 200
+    assert call(base, "POST", "/api/game/tap_test", {"on": True})[0] == 200
+    assert call(base, "POST", "/api/game/threshold", {"mg": 300})[0] == 200
+    assert shell.calls == [("set_level", "hard"), ("arm_game",),
+                           ("arm_game",), ("start_now",),
+                           ("set_tap_test", True), ("set_threshold", 300)]
+
+
+def test_round_command_errors(served) -> None:  # type: ignore
+    shell, base = served
+    assert call(base, "POST", "/api/game/arm", {"level": "expert"})[0] == 400
+    assert call(base, "POST", "/api/game/threshold", {"mg": -1})[0] == 400
+    assert call(base, "POST", "/api/game/tap_test", {})[0] == 400
+    shell.playing = True
+    assert call(base, "POST", "/api/game/now")[0] == 409

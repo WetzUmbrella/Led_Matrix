@@ -1,5 +1,6 @@
 """PC to Pico link: SESSION_CONFIG, Start, Pause, Resume, Stop, STATUS and the
-game's mode, start and end (T-B1-05, whack-a-mole build step 7).
+game's mode, start and end (T-B1-05, whack-a-mole build step 7), and the
+round commands of build step 3 (arm, start now, tap test).
 
 Owner: Jolyn (Buddy 1), task T-B1-05. Implemented by Ahsanul (B4) for
 Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session.
@@ -42,11 +43,33 @@ POLICY_CONTINUE = 0
 POLICY_PAUSE = 1
 
 #: GAME_CONTROL command codes (layout_table.md section 5.10): the mode
-#: switch, then a round's start and its end (the PC's abort).
+#: switch, a round's start at once (v1) and its end (the PC's abort); then
+#: (build step 3, DS-08) arm a round at a level with the start sprite, skip
+#: the sprite and count down now, and the tap test on and off (A11).
 MODE_VIDEO = 0
 MODE_GAME = 1
 GAME_START = 2
 GAME_END = 3
+GAME_ARM = 4
+GAME_START_NOW = 5
+GAME_TAP_TEST_ON = 6
+GAME_TAP_TEST_OFF = 7
+
+#: Levels (section 5.11), by wire code.
+LEVELS = ("easy", "normal", "hard")
+
+#: Round states on STATUS (section 5.15), by wire code.
+ROUND_STATES = ("GAME IDLE", "ARMED", "COUNTDOWN", "PLAYING", "RESULTS")
+
+#: The tap threshold on the wire: 20 mg steps, 0 = the tiles' default; the
+#: tiles clamp to 50 to 5,000 mg (tap_detect.h).
+THRESHOLD_STEP_MG = 20
+THRESHOLD_MAX_MG = 5000
+
+#: Stars from the share of moles hit (DS-07, game_rules.h): 80% or more 3,
+#: 50% or more 2, otherwise 1.
+STARS_3_PCT = 80
+STARS_2_PCT = 50
 
 #: A GAME_CONTROL is sent again until the Pico's ACK: this many tries, each
 #: waiting this long for the ACK (plan choice; the Pico ACKs within a pass).
@@ -69,12 +92,46 @@ class Status:
     state: int
     received: float
     score: int = 0
+    round_state: int = 0
+    level: int = 0
+    missed: int = 0
+    wrong: int = 0
+    shown: int = 0
+    time_left_s: int = 0
+    reaction_ms: int = 0
 
     def state_name(self) -> str:
         """Coordinator state name."""
         if 0 <= self.state < len(COORD_STATES):
             return COORD_STATES[self.state]
         return "UNKNOWN %d" % self.state
+
+    def round_name(self) -> str:
+        """Round state name (DS-08)."""
+        if 0 <= self.round_state < len(ROUND_STATES):
+            return ROUND_STATES[self.round_state]
+        return "UNKNOWN %d" % self.round_state
+
+    def level_name(self) -> str:
+        """Level name."""
+        if 0 <= self.level < len(LEVELS):
+            return LEVELS[self.level]
+        return "unknown %d" % self.level
+
+    def hits(self) -> int:
+        """Moles hit: every mole shown is hit or missed (no penalty, C2)."""
+        return max(self.shown - self.missed, 0)
+
+    def stars(self) -> int:
+        """Stars as the Pico draws them (game_rules_stars())."""
+        if self.shown == 0:
+            return 1
+        pct = (self.hits() * 100) // self.shown
+        if pct >= STARS_3_PCT:
+            return 3
+        if pct >= STARS_2_PCT:
+            return 2
+        return 1
 
 
 def required_mask(node_map: Sequence[int]) -> int:
@@ -223,11 +280,17 @@ class PicoLink:
                 continue
             if msg["type"] != "STATUS":
                 continue
-            self.status = Status(int(msg["readiness"]),  # type: ignore
-                                 int(msg["online"]),  # type: ignore
-                                 int(msg["state"]),  # type: ignore
-                                 time.monotonic(),
-                                 int(msg["score"]))  # type: ignore
+            self.status = Status(
+                int(msg["readiness"]), int(msg["online"]),  # type: ignore
+                int(msg["state"]), time.monotonic(),  # type: ignore
+                int(msg["score"]),  # type: ignore
+                round_state=int(msg["round_state"]),  # type: ignore
+                level=int(msg["level"]),  # type: ignore
+                missed=int(msg["missed"]),  # type: ignore
+                wrong=int(msg["wrong"]),  # type: ignore
+                shown=int(msg["shown"]),  # type: ignore
+                time_left_s=int(msg["time_left_s"]),  # type: ignore
+                reaction_ms=int(msg["reaction_ms"]))  # type: ignore
 
     def next_tap(self, timeout_s: float) -> Optional[int]:
         """Wait up to ``timeout_s`` for the next TAP; returns its board

@@ -12,6 +12,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import asset_builder as ab  # noqa: E402
 import dashboard as db  # noqa: E402
 import pico_link as plink  # noqa: E402
 import proto_layout as pl  # noqa: E402
@@ -144,9 +145,11 @@ def test_send_mode_is_a_game_control_to_the_pico() -> None:
     pc.close()
 
 
-def _ready_status(state: int, score: int = 0) -> plink.Status:
+def _ready_status(state: int, score: int = 0,
+                  round_state: int = 0, **counts: int) -> plink.Status:
     """A status with both tiles ready, in the given coordinator state."""
-    return plink.Status(0b11, 0b11, state, 0.0, score)
+    return plink.Status(0b11, 0b11, state, 0.0, score,
+                        round_state=round_state, **counts)
 
 
 class _FakeLink:
@@ -155,13 +158,16 @@ class _FakeLink:
     def __init__(self, ack: bool) -> None:
         self.ack = ack
         self.sent = []  # type: list
+        self.args = []  # type: list
         self.taps = []  # type: list
 
     def poll_status(self):  # type: ignore[no-untyped-def]
         return None
 
-    def send_game_control(self, command: int) -> bool:
+    def send_game_control(self, command: int, level: int = 0,
+                          threshold: int = 0) -> bool:
         self.sent.append(command)
+        self.args.append((level, threshold))
         return self.ack
 
 
@@ -294,34 +300,124 @@ def test_last_score_is_none_before_any_round() -> None:
     assert model.snapshot()["last_score"] is None
 
 
+PLAYING, RESULTS, ARMED, IDLE = 3, 4, 1, 0
+
+
 def test_last_score_keeps_the_final_score_after_the_round_ends() -> None:
     model = db.DashboardModel()
     model.on_status(_ready_status(7))
-    model.on_status(_ready_status(12, score=3))
-    model.on_status(_ready_status(12, score=5))
+    model.on_status(_ready_status(12, score=3, round_state=PLAYING))
+    model.on_status(_ready_status(12, score=5, round_state=PLAYING))
     assert model.snapshot()["last_score"] is None  # Still in the round.
-    model.on_status(_ready_status(7, score=0))  # STATUS reports 0 after it.
+    # RESULTS: READY, and the Pico keeps the final score on STATUS.
+    model.on_status(_ready_status(7, score=5, round_state=RESULTS,
+                                  shown=10, missed=2, wrong=1,
+                                  reaction_ms=420))
     snap = model.snapshot()
     assert snap["last_score"] == 5
-    assert snap["score"] == 0
     assert snap["game_running"] is False
+    assert snap["round_state"] == "RESULTS"
+    assert snap["last_result"] == {
+        "score": 5, "hits": 8, "missed": 2, "wrong": 1, "shown": 10,
+        "reaction_ms": 420, "stars": 3}
 
 
 def test_last_score_is_replaced_by_the_next_round() -> None:
     model = db.DashboardModel()
-    model.on_status(_ready_status(12, score=-2))
-    model.on_status(_ready_status(7))
-    assert model.snapshot()["last_score"] == -2
-    model.on_status(_ready_status(12, score=4))
-    model.on_status(_ready_status(7))
+    model.on_status(_ready_status(12, score=2, round_state=PLAYING))
+    model.on_status(_ready_status(7, score=2, round_state=RESULTS))
+    assert model.snapshot()["last_score"] == 2
+    model.on_status(_ready_status(12, round_state=ARMED))
+    model.on_status(_ready_status(12, score=4, round_state=PLAYING))
+    model.on_status(_ready_status(7, score=4, round_state=RESULTS))
     assert model.snapshot()["last_score"] == 4
+
+
+def test_an_aborted_arm_is_not_a_round() -> None:
+    model = db.DashboardModel()
+    model.on_status(_ready_status(12, round_state=ARMED))
+    model.on_status(_ready_status(7, round_state=IDLE))
+    assert model.snapshot()["last_score"] is None
+    assert any("not started" in line for line in model.messages)
 
 
 def test_last_score_is_in_the_json_state() -> None:
     import json
 
     model = db.DashboardModel()
-    model.on_status(_ready_status(12, score=1))
-    model.on_status(_ready_status(7))
+    model.on_status(_ready_status(12, score=1, round_state=PLAYING))
+    model.on_status(_ready_status(7, score=1, round_state=RESULTS))
     body = json.loads(json.dumps(model.snapshot()))
-    assert body["last_score"] == 1 and body["score"] == 0
+    assert body["last_score"] == 1 and body["score"] == 1
+
+
+def test_stars_follow_the_pico_rule() -> None:
+    # 80% or more 3, 50% or more 2, otherwise 1; no moles: 1.
+    assert _ready_status(7, shown=10, missed=2).stars() == 3
+    assert _ready_status(7, shown=10, missed=3).stars() == 2
+    assert _ready_status(7, shown=10, missed=5).stars() == 2
+    assert _ready_status(7, shown=10, missed=6).stars() == 1
+    assert _ready_status(7).stars() == 1
+
+
+def test_arm_sends_the_level_and_threshold() -> None:
+    shell = _shell(state=7, mode="game")
+    shell.set_level("normal")
+    shell.set_threshold(300)
+    shell.arm_game()
+    assert shell.link.sent == [plink.GAME_ARM]
+    assert shell.link.args == [(1, 15)]
+    with pytest.raises(ab.AssetError):
+        shell.set_level("expert")
+    for bad in (-20, 40, 310, 5020):
+        with pytest.raises(ab.AssetError):
+            shell.set_threshold(bad)
+    shell.set_threshold(0)
+    assert shell.model.threshold_code() == 0
+
+
+def test_arm_needs_game_mode_and_ready() -> None:
+    shell = _shell(state=7, mode="video")
+    with pytest.raises(db.Refused):
+        shell.arm_game()
+    shell.model.mode = "game"
+    shell.model.status = _ready_status(12, round_state=PLAYING)
+    with pytest.raises(db.Refused):
+        shell.arm_game()
+    # RESULTS is READY: the next round can be armed.
+    shell.model.status = _ready_status(7, round_state=RESULTS)
+    shell.arm_game()
+    assert shell.link.sent == [plink.GAME_ARM]
+
+
+def test_start_now_only_while_armed() -> None:
+    shell = _shell(state=12, mode="game")
+    shell.model.status = _ready_status(12, round_state=PLAYING)
+    with pytest.raises(db.Refused):
+        shell.start_now()
+    shell.model.status = _ready_status(12, round_state=ARMED)
+    snap = shell.start_now()
+    assert shell.link.sent == [plink.GAME_START_NOW]
+    assert snap["start_now_enabled"] is True
+
+
+def test_tap_test_needs_ready_game_mode() -> None:
+    shell = _shell(state=7, mode="video")
+    with pytest.raises(db.Refused):
+        shell.set_tap_test(True)
+    shell.model.mode = "game"
+    shell.model.status = _ready_status(12, round_state=ARMED)
+    with pytest.raises(db.Refused):
+        shell.set_tap_test(True)
+    shell.model.status = _ready_status(7)
+    assert shell.set_tap_test(True)["tap_test"] is True
+    assert shell.set_tap_test(False)["tap_test"] is False
+    assert shell.link.sent == [plink.GAME_TAP_TEST_ON,
+                               plink.GAME_TAP_TEST_OFF]
+
+
+def test_tap_test_not_acknowledged_keeps_the_old_state() -> None:
+    shell = _shell(ack=False, state=7, mode="game")
+    with pytest.raises(OSError):
+        shell.set_tap_test(True)
+    assert shell.model.tap_test is False
