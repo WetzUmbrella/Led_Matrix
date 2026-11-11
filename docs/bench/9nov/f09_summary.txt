@@ -1,0 +1,22 @@
+soft tap  own n=20 | gz within 40 ms of the spike: median   28 max  179 dps | peak gz: median   77 max  580 | angle: median   0.3 max   5.7 deg
+soft tap  nbr n= 9 | gz within 40 ms of the spike: median   45 max   54 dps | peak gz: median   45 max   54 | angle: median   0.2 max   0.3 deg
+palm slap own n=20 | gz within 40 ms of the spike: median   25 max   72 dps | peak gz: median  335 max  731 | angle: median   1.6 max   3.1 deg
+palm slap nbr n=18 | gz within 40 ms of the spike: median   17 max   96 dps | peak gz: median   20 max   96 | angle: median   0.1 max   0.2 deg
+turn      own n=20 | gz within 40 ms of the spike: median  250 max  412 dps | peak gz: median  445 max  670 | angle: median  85.1 max  93.2 deg
+turn      nbr n= 2 | gz within 40 ms of the spike: median   15 max   25 dps | peak gz: median   15 max   25 | angle: median   0.2 max   0.2 deg
+
+rule 'tap only if gz < 20 dps within 40 ms': taps+slaps kept 25/67, turns rejected 19/20
+rule 'tap only if gz < 30 dps within 40 ms': taps+slaps kept 38/67, turns rejected 19/20
+rule 'tap only if gz < 50 dps within 40 ms': taps+slaps kept 52/67, turns rejected 19/20
+rule 'tap only if gz < 80 dps within 40 ms': taps+slaps kept 63/67, turns rejected 19/20
+angle turned from the spike to N ms after it (|sum gz dt|):
+   30 ms: taps+slaps max   1.1 deg (p95   1.1) | turns min   0.1 median   4.1 deg
+   50 ms: taps+slaps max   2.4 deg (p95   1.4) | turns min   0.2 median   9.4 deg
+   80 ms: taps+slaps max   3.9 deg (p95   1.8) | turns min   0.2 median  19.5 deg
+  120 ms: taps+slaps max   6.0 deg (p95   4.5) | turns min   0.1 median  35.3 deg
+  200 ms: taps+slaps max   6.1 deg (p95   5.4) | turns min   0.7 median  61.8 deg
+rule 'tap if under 8 deg turned by N ms after the spike':
+   50 ms: taps+slaps kept 40/40, turns rejected 13/20
+   80 ms: taps+slaps kept 40/40, turns rejected 19/20
+  120 ms: taps+slaps kept 40/40, turns rejected 19/20
+turns: ms from the first 200 mg spike to 8 deg turned: [10, 10, 10, 20, 20, 21, 30, 31, 41, 41, 41, 41, 41, 41, 50, 51, 51, 51, 51, 336]

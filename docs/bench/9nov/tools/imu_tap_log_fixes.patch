@@ -1,5 +1,5 @@
 diff --git i/tools/imu_tap_log/main/imu_tap_log.c w/tools/imu_tap_log/main/imu_tap_log.c
-index 8a4e7ec..ea31f24 100644
+index 8a4e7ec..b0f34fa 100644
 --- i/tools/imu_tap_log/main/imu_tap_log.c
 +++ w/tools/imu_tap_log/main/imu_tap_log.c
 @@ -62,7 +62,7 @@
@@ -11,7 +11,29 @@ index 8a4e7ec..ea31f24 100644
  #endif
  
  /* I2C bus (QMI8658 on the Waveshare ESP32-S3-Matrix). */
-@@ -122,6 +122,9 @@
+@@ -83,7 +83,11 @@
+ #define ITL_CTRL2_VALUE    0x33u /* aFS 011 = +/-16 g, aODR 0011 = 1000 Hz. */
+ #define ITL_REG_CTRL7      0x08u
+ #define ITL_CTRL7_OFF      0x00u
+-#define ITL_CTRL7_ACC_ON   0x01u
++#define ITL_CTRL7_ACC_ON   0x03u /* F-09: accelerometer and gyroscope on. */
++#define ITL_REG_CTRL3      0x04u
++#define ITL_CTRL3_VALUE    0x63u /* gFS 110 = +/-1024 dps, gODR 0011. */
++#define ITL_LSB_PER_DPS    32.0f /* At +/-1024 dps. */
++#define ITL_GYRO_HZ        896.8f /* 6DOF output rate for ODR code 0011. */
+ #define ITL_REG_CTRL8      0x09u
+ #define ITL_CTRL8_VALUE    0x80u /* CTRL9 done flag in STATUSINT bit 7. */
+ #define ITL_REG_CTRL9      0x0Au
+@@ -108,7 +112,7 @@
+ #define ITL_ACCEL_BYTES    6u
+ #define ITL_TS_BYTES       3u
+ #define ITL_TEMP_BYTES     2u
+-#define ITL_POLL_BYTES     (ITL_TS_BYTES + ITL_TEMP_BYTES + ITL_ACCEL_BYTES)
++#define ITL_POLL_BYTES     (ITL_TS_BYTES + ITL_TEMP_BYTES + ITL_ACCEL_BYTES + ITL_ACCEL_BYTES)
+ #define ITL_FIFO_SAMPLES   64u
+ #define ITL_FIFO_MAX_BYTES (ITL_FIFO_SAMPLES * ITL_ACCEL_BYTES)
+ #define ITL_FIFO_UNIT      2u /* The count is in 2-byte units. */
+@@ -122,6 +126,9 @@
  #define ITL_EMA_DIV   500   /* tau 500 ms x 1000 samples/s. */
  #define ITL_Q_ONE     65536 /* 1 LSB in the Q16 baseline. */
  #define ITL_HOLD_MG   100
@@ -21,15 +43,37 @@ index 8a4e7ec..ea31f24 100644
  #define ITL_TAU_MS    500u
  
  /* Timing. */
-@@ -161,6 +164,7 @@ static char                    g_board[ITL_ID_SIZE];
+@@ -161,8 +168,12 @@ static char                    g_board[ITL_ID_SIZE];
  /* Sampling state: only the sampling task touches it. */
  static int64_t  g_base_q[ITL_AXES]; /* Baseline per axis, Q16 LSB. */
  static bool     g_b_seeded  = false;
 +static uint32_t g_hold_samples = 0u; /* Consecutive held samples. */
  static int32_t  g_win_peak  = 0;  /* Peak deviation this window, mg. */
- static int32_t  g_prev_peak = 0;  /* Peak deviation last window, mg. */
+-static int32_t  g_prev_peak = 0;  /* Peak deviation last window, mg. */
++static int32_t  g_prev_peak = 0;
++static float    g_win_gz    = 0.0f; /* F-09: peak |gz| this window, dps. */
++static float    g_win_gxy   = 0.0f; /* Peak max(|gx|, |gy|), dps. */
++static float    g_win_angle = 0.0f; /* Sum of gz x dt this window, deg. */  /* Peak deviation last window, mg. */
  static uint32_t g_samples   = 0u; /* Samples since the last S line. */
-@@ -395,16 +399,20 @@ static void itl_poll (uint64_t now_us)
+ static uint32_t g_overruns  = 0u; /* Overruns since the last S line. */
+ static uint64_t g_stats_us  = 0u; /* Time of the last S line. */
+@@ -172,6 +183,7 @@ static bool    itl_read (uint8_t reg, uint8_t * p_buf, size_t len);
+ static bool    itl_imu_init (void);
+ static void    itl_board_identity (void);
+ static void    itl_sample (uint8_t const * p_raw);
++static void    itl_gyro (uint8_t const * p_raw);
+ static int16_t itl_s16 (uint8_t const * p_raw);
+ static void    itl_window_end (uint64_t now_us);
+ static void    itl_stats (uint64_t now_us);
+@@ -378,6 +390,7 @@ static void itl_poll (uint64_t now_us)
+         last_ts   = stamp;
+         b_have_ts = true;
+         itl_sample(&raw[ITL_TS_BYTES + ITL_TEMP_BYTES]);
++        itl_gyro(&raw[ITL_TS_BYTES + ITL_TEMP_BYTES + ITL_ACCEL_BYTES]);
+     }
+ 
+     if ((now_us - win_start) >= ITL_WINDOW_US)
+@@ -395,16 +408,20 @@ static void itl_poll (uint64_t now_us)
   */
  static void itl_sample (uint8_t const * p_raw)
  {
@@ -52,3 +96,44 @@ index 8a4e7ec..ea31f24 100644
          {
              g_base_q[axis] = x_q;
          }
+@@ -436,6 +453,22 @@ static void itl_sample (uint8_t const * p_raw)
+     }
+ }
+ 
++/**
++ * @brief  F-09: one gyroscope sample (GX, GY, GZ, little-endian int16).
++ * @param  p_raw  6 bytes.
++ */
++static void itl_gyro (uint8_t const * p_raw)
++{
++    float const gx = (float)itl_s16(&p_raw[0]) / ITL_LSB_PER_DPS;
++    float const gy = (float)itl_s16(&p_raw[2]) / ITL_LSB_PER_DPS;
++    float const gz = (float)itl_s16(&p_raw[4]) / ITL_LSB_PER_DPS;
++    float const gxy = fmaxf(fabsf(gx), fabsf(gy));
++
++    g_win_gz    = fmaxf(g_win_gz, fabsf(gz));
++    g_win_gxy   = fmaxf(g_win_gxy, gxy);
++    g_win_angle += gz / ITL_GYRO_HZ;
++}
++
+ /**
+  * @brief  Print the window's T line and start the next window.
+  * @param  now_us  End of the window.
+@@ -445,6 +478,9 @@ static void itl_window_end (uint64_t now_us)
+     uint64_t const start_ms = (now_us - ITL_WINDOW_US) / ITL_US_PER_MS;
+ 
+     printf("T,%" PRIu64 ",%" PRId32 "\n", start_ms, g_win_peak);
++    printf("G,%" PRIu64 ",%d,%d,%d\n", start_ms, (int)(g_win_gz + 0.5f),
++           (int)(g_win_gxy + 0.5f), (int)(g_win_angle * 100.0f));
++    g_win_gz = 0.0f; g_win_gxy = 0.0f; g_win_angle = 0.0f;
+     g_prev_peak = g_win_peak;
+     g_win_peak  = 0;
+ }
+@@ -561,6 +597,7 @@ static bool itl_imu_init (void)
+            (itl_write_reg(ITL_REG_CTRL7, ITL_CTRL7_OFF)) &&
+            (itl_write_reg(ITL_REG_CTRL1, ITL_CTRL1_VALUE)) &&
+            (itl_write_reg(ITL_REG_CTRL2, ITL_CTRL2_VALUE)) &&
++           (itl_write_reg(ITL_REG_CTRL3, ITL_CTRL3_VALUE)) &&
+            (itl_write_reg(ITL_REG_CTRL8, ITL_CTRL8_VALUE));
+ #if ITL_SOURCE_FIFO
+     b_ok = (b_ok) && (itl_write_reg(ITL_REG_FIFO_WTM, ITL_FIFO_WTM_VALUE)) &&

@@ -34,8 +34,8 @@ for tt in sorted(tiles):
     for kind, name in (("c", "soft"), ("e", "palm")):
         v = sorted(res[(tt, kind, "nbr")])
         print("  when the OTHER tile got %-4s: median %5d  max %5d mg" % (name, st.median(v), v[-1]))
-    v = sorted(res[(tt, "k", "knock")])
-    print("  knocks on the surface      : median %5d  max %5d mg" % (st.median(v), v[-1]))
+    v = sorted(res.get((tt, "k", "knock"), []))
+    if v: print("  knocks on the surface      : median %5d  max %5d mg" % (st.median(v), v[-1]))
     print("  quiet 27 s                 : p99 %5d  max %5d mg (n=%d windows)" % (q[int(len(q) * 0.99)], q[-1], len(q)))
     print("  soft taps per threshold    : " + "  ".join("%d mg:%d/20" % (th, sum(x >= th for x in res[(tt, "c", "self")])) for th in (100, 150, 200, 300, 500)))
 

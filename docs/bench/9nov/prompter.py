@@ -93,8 +93,37 @@ def turns(csv):
         wait(PAUSE_S, "pause, hands off")
 
 
+def gyro(csv):
+    """F-09: taps, slaps and turns on each tile, for the gyroscope check."""
+    for tile in TILES:
+        for kind, count, text in (("c", 10, "SOFT fingertip tap"), ("e", 10, "OPEN-PALM slap")):
+            countdown("TILE %d: %s, %d times, on each prompt" % (tile, text, count))
+            for n in range(1, count + 1):
+                csv.row(tile, kind)
+                say("TAP tile %d  (%d of %d)" % (tile, n, count))
+                time.sleep(BEAT_S)
+            wait(PAUSE_S, "pause, hands off")
+        countdown("TILE %d: turn 90 deg clockwise, hold, turn back, hold (5 times)" % tile)
+        for n in range(1, 6):
+            csv.row(tile, "b")
+            say("TURN tile %d 90 deg CLOCKWISE  (%d of 5)" % (tile, n))
+            time.sleep(HOLD_S)
+            csv.row(tile, "b")
+            say("TURN tile %d BACK  (%d of 5)" % (tile, n))
+            time.sleep(HOLD_S)
+        wait(PAUSE_S, "pause, hands off")
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    if mode == "iso":
+        taps(Csv("docs/bench/9nov/f10_taps.csv", "F-10 tiles on sponge: c = soft tap, e = palm slap, k = knock"))
+        say("DONE. Tell Claude.")
+        return 0
+    if mode == "gyro":
+        gyro(Csv("docs/bench/9nov/f09_taps.csv", "F-09: c = soft tap, e = palm slap, b = a 90 deg turn"))
+        say("DONE. Tell Claude.")
+        return 0
     if mode == "taps":
         csv = Csv("docs/bench/9nov/f05_taps.csv", "c = soft tap, e = palm slap, k = knock")
         taps(csv)
