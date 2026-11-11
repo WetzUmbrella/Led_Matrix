@@ -77,6 +77,7 @@ static bool gt_last_target (uint8_t node_id, proto_mole_on_t * p_msg);
 static bool gt_newest_mole (proto_mole_on_t * p_msg);
 static bool gt_check_countdown (uint8_t node_id, uint64_t t_first);
 static void gt_arm (uint8_t level, uint8_t threshold);
+static bool gt_check_results (uint8_t node_id);
 static void gt_tile_ack (uint8_t node_id, uint16_t acked_seq);
 static void gt_ack_type (proto_type_t type);
 static void gt_tap (uint8_t node_id, uint16_t peak, uint64_t t_tap_us,
@@ -613,9 +614,9 @@ static uint32_t gt_popcount (uint64_t value)
 }
 
 /**
- * @brief  Lit pixels of the score drawn across the wall: the first
- *         WALL_PICTURE of each tile (retries repeat it, so only the first
- *         counts), summed.
+ * @brief  Lit pixels of the score drawn across the wall: the first score
+ *         entry (list slot 1) of each tile's results (retries repeat it, so
+ *         only the first counts), summed.
  * @return Total lit pixels, and the number of tiles that got one in
  *         g_score_tiles.
  */
@@ -637,7 +638,7 @@ static uint32_t gt_score_pixels (void)
 
         if ((GT_TILE_SRC_PORT == p_send->port) &&
             (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
-            (!b_seen[msg.node_id]))
+            (1u == msg.slot) && (!b_seen[msg.node_id]))
         {
             b_seen[msg.node_id]      = true;
             seen_mask[msg.node_id] = msg.mask;
@@ -1267,6 +1268,55 @@ static bool gt_check_countdown (uint8_t node_id, uint64_t t_first)
 }
 
 /**
+ * @brief  The results list on one tile (DS-09): a sparkle (entry 0), the
+ *         white score (1) and the yellow stars (2, looping back to 1), the
+ *         score 1.5 s and the stars 4 s after the sparkle.
+ * @param  node_id  Tile, 1 to 9.
+ * @return true when every check passed.
+ */
+static bool gt_check_results (uint8_t node_id)
+{
+    uint64_t t_show[3] = {0u, 0u, 0u};
+    uint32_t seen      = 0u; /* Bit per entry found. */
+    bool     b_ok      = true;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        proto_wall_picture_t                  msg;
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        if ((GT_TILE_SRC_PORT == p_send->port) &&
+            (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
+            (node_id == msg.node_id) && (msg.slot < 3u))
+        {
+            bool const b_good =
+                (0u == msg.slot)
+                    ? ((PROTO_PIC_SPARKLE == msg.effect) &&
+                       (0u == msg.b_repeat))
+                : (1u == msg.slot)
+                    ? ((PROTO_PIC_PICTURE == msg.effect) &&
+                       (PROTO_COLOUR_WHITE == msg.colour) &&
+                       (0u == msg.b_repeat) && (0u != msg.mask))
+                    : ((PROTO_PIC_PICTURE == msg.effect) &&
+                       (PROTO_COLOUR_YELLOW == msg.colour) &&
+                       (1u == msg.b_repeat) && (0u != msg.mask));
+
+            seen |= (UINT32_C(1) << msg.slot); /* slot < 3. */
+            t_show[msg.slot] = msg.t_show;
+            b_ok = (test_main_check(b_good, __LINE__)) && b_ok;
+        }
+    }
+
+    b_ok = (test_main_check(UINT32_C(0x7) == seen, __LINE__)) && b_ok;
+    b_ok = (test_main_check(((t_show[0] + (1500u * GT_MS)) == t_show[1]) &&
+                                ((t_show[1] + (2500u * GT_MS)) == t_show[2]),
+                            __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
  * @brief  To READY in game mode, then ARM at a level and threshold.
  * @param  level      proto_level_t value.
  * @param  threshold  Tap threshold, 20 mg steps.
@@ -1506,6 +1556,8 @@ bool test_coord_game_status (void)
                                 (0u == status.time_left_s) &&
                                 (20u == status.reaction_ms),
                             __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_check_results(1u), __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_check_results(2u), __LINE__)) && b_ok;
 
     return b_ok;
 }

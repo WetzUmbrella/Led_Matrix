@@ -18,6 +18,12 @@
  */
 bool test_score_font_slices (void);
 
+/**
+ * @brief  C19b: wall pictures scaled to every shape, sparse fallback.
+ * @return true when every check passed.
+ */
+bool test_score_font_pictures (void);
+
 #endif /* TEST_SCORE_FONT_H */
 
 /*** end of file ***/

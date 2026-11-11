@@ -143,6 +143,10 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
 #define CL_COUNTDOWN_US    (CL_COUNTDOWN_STEPS * CL_STEP_US)
 #define CL_PIC_LEAD_US     500000u
 
+/** Results (DS-09): the sparkle, then the score and the stars in turn. */
+#define CL_SPARKLE_MS 1500u
+#define CL_RESULT_MS  2500u
+
 /** Logged events waiting for a log slot (plan choice). */
 #define CL_EVENT_LEN 16u
 
@@ -368,7 +372,6 @@ static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
                               uint64_t life_us);
 static void cl_queue_mole (game_event_t const * p_event, uint64_t now);
 static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now);
-static void cl_queue_score (uint8_t node_id, int32_t score, uint64_t now);
 static void cl_game_sync_active (void);
 static bool cl_stopped (void);
 static int8_t cl_status_score (void);
@@ -2131,6 +2134,7 @@ static void cl_game_start (uint64_t now)
         uint16_t const mask = (uint16_t)(g_session.required & cl_online_bits());
 
         game_rules_start(&g_game, now, mask, g_level);
+        ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE); /* Results. */
         g_round      = PROTO_ROUND_PLAYING;
         g_round_mask = mask;
         cl_set_state(PROTO_COORD_COORDINATING_GAME);
@@ -2161,8 +2165,6 @@ static void cl_game_start (uint64_t now)
  */
 static void cl_game_end (uint64_t now)
 {
-    int32_t const score = game_rules_score(&g_game);
-
     game_rules_stop(&g_game);
     ack_outbox_cancel(&g_outbox, PROTO_TYPE_MOLE_ON);
 
@@ -2174,7 +2176,6 @@ static void cl_game_end (uint64_t now)
         if (0u != (g_session.required & cl_node_bit(node_id)))
         {
             cl_queue_control(node_id, PROTO_GAME_END, now, CL_CONTROL_LIFE_US);
-            cl_queue_score(node_id, score, now);
         }
     }
 
@@ -2206,6 +2207,7 @@ static void cl_round_arm (uint64_t now)
         g_round           = PROTO_ROUND_ARMED;
         g_arm_deadline_us = now + CL_ARM_TIMEOUT_US;
         g_b_tap_test      = false;
+        ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE); /* Results. */
         cl_set_state(PROTO_COORD_COORDINATING_GAME);
         cl_round_to_tiles(PROTO_GAME_ARM, now);
         cl_queue_target(start, now + (UINT64_C(1000) * GAME_LEAD_MS), 0u,
@@ -2413,9 +2415,9 @@ static void cl_send_countdown (uint64_t t_first)
             {
                 /* 3, 2, 1: step < 3, so the digit and the slot fit. */
                 int32_t const  digit = (int32_t)(CL_COUNTDOWN_STEPS - step);
-                uint64_t const mask  = score_font_tile_mask(
-                    digit, g_session.rows, g_session.cols, cl_active_slots(),
-                    (uint8_t)slot); /* slot < 9. */
+                uint64_t const mask  = score_font_picture_mask(
+                    SCORE_PIC_NUMBER, digit, g_session.rows, g_session.cols,
+                    cl_active_slots(), (uint8_t)slot); /* slot < 9. */
 
                 cl_queue_picture(node_id, (uint8_t)step, /* step < 3. */
                                  (uint8_t)PROTO_PIC_PICTURE,   /* 3 fit. */
@@ -2428,14 +2430,48 @@ static void cl_send_countdown (uint64_t t_first)
 }
 
 /**
- * @brief  The results (DS-09): the end of round pictures. Filled in by the
- *         wall pictures work (task 8); until then the v1 score picture of
- *         cl_game_end() shows.
- * @param  t_first  Show time of the first entry, Pico clock, microseconds.
+ * @brief  The results (DS-09): a sparkle (the tile's own end animation),
+ *         then the score in white and the stars in yellow in turn, looping
+ *         until the next round or mode change, as a timed list on every tile
+ *         of the map.
+ * @param  t_first  Show time of the sparkle, Pico clock, microseconds.
  */
 static void cl_send_results (uint64_t t_first)
 {
-    (void)t_first; /* The results list comes with the wall pictures. */
+    int32_t const  score = game_rules_score(&g_game);
+    /* 1 to 3 stars: fits int32_t. */
+    int32_t const  stars = (int32_t)game_rules_stars(&g_game);
+    uint64_t const t_score = t_first + (UINT64_C(1000) * CL_SPARKLE_MS);
+    uint64_t const t_stars = t_score + (UINT64_C(1000) * CL_RESULT_MS);
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+        uint32_t      slot    = 0u;
+
+        if ((0u != (g_session.required & cl_node_bit(node_id))) &&
+            (cl_slot_of(node_id, &slot)))
+        {
+            /* slot < 9: fits uint8_t. */
+            uint8_t const  pos       = (uint8_t)slot;
+            uint64_t const score_pic = score_font_picture_mask(
+                SCORE_PIC_NUMBER, score, g_session.rows, g_session.cols,
+                cl_active_slots(), pos);
+            uint64_t const stars_pic = score_font_picture_mask(
+                SCORE_PIC_STARS, stars, g_session.rows, g_session.cols,
+                cl_active_slots(), pos);
+
+            cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_SPARKLE, /* 3. */
+                             (uint8_t)PROTO_COLOUR_YELLOW, /* 8 fit. */
+                             0u, t_first, CL_SPARKLE_MS, 0u);
+            cl_queue_picture(node_id, 1u, (uint8_t)PROTO_PIC_PICTURE, /* 3. */
+                             (uint8_t)PROTO_COLOUR_WHITE, /* 8 fit. */
+                             0u, t_score, CL_RESULT_MS, score_pic);
+            cl_queue_picture(node_id, 2u, (uint8_t)PROTO_PIC_PICTURE, /* 3. */
+                             (uint8_t)PROTO_COLOUR_YELLOW, /* 8 fit. */
+                             1u, t_stars, CL_RESULT_MS, stars_pic);
+        }
+    }
 }
 
 /**
@@ -2648,36 +2684,6 @@ static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now)
 
     cl_queue_tile(node_id, PROTO_TYPE_FEEDBACK, seq, buf, len, now,
                   now + CL_FEEDBACK_LIFE_US);
-}
-
-/**
- * @brief  WALL_PICTURE for one tile: its 8 x 8 slice of the final score.
- * @param  node_id  Tile, 1 to 9, which must be in the map.
- * @param  score    The round's final score.
- * @param  now      Current time, microseconds.
- */
-static void cl_queue_score (uint8_t node_id, int32_t score, uint64_t now)
-{
-    uint32_t slot = 0u;
-
-    if (cl_slot_of(node_id, &slot))
-    {
-        uint16_t const seq = cl_next_cmd_seq();
-        proto_wall_picture_t const msg = {
-            .header  = {.type       = PROTO_TYPE_WALL_PICTURE,
-                        .session_id = g_session.session_id,
-                        .seq        = seq},
-            .node_id = node_id,
-            .mask    = score_font_tile_mask(score, g_session.rows,
-                                            g_session.cols, cl_active_slots(),
-                                            (uint8_t)slot), /* slot < 9. */
-        };
-        uint8_t  buf[PROTO_WALL_PICTURE_BYTES];
-        uint32_t const len = proto_encode_wall_picture(&msg, buf, sizeof(buf));
-
-        cl_queue_tile(node_id, PROTO_TYPE_WALL_PICTURE, seq, buf, len, now,
-                      now + CL_CONTROL_LIFE_US);
-    }
 }
 
 /**

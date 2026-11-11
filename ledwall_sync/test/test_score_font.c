@@ -8,7 +8,9 @@
  */
 #include "test_score_font.h"
 
+#include <inttypes.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "score_font.h"
 #include "test_main.h"
@@ -24,6 +26,43 @@ static uint32_t tst_popcount (uint64_t value)
         {
             count++;
         }
+    }
+
+    return count;
+}
+
+/** Lit pixels of the whole wall, row by row, for a picture and a layout. */
+static uint32_t tst_pic_count (score_pic_t pic, int32_t value, uint8_t rows,
+                               uint8_t cols, uint16_t active)
+{
+    uint32_t count = 0u;
+
+    for (uint32_t pixel_y = 0u; pixel_y < (rows * 8u); pixel_y++)
+    {
+        for (uint32_t pixel_x = 0u; pixel_x < (cols * 8u); pixel_x++)
+        {
+            if (score_font_picture_lit(pic, value, rows, cols, active, pixel_x,
+                                       pixel_y))
+            {
+                count++;
+            }
+        }
+    }
+
+    return count;
+}
+
+/** Lit pixels of all the tile slices of a picture, summed. */
+static uint32_t tst_slice_count (score_pic_t pic, int32_t value, uint8_t rows,
+                                 uint8_t cols, uint16_t active)
+{
+    uint32_t count = 0u;
+
+    for (uint32_t slot = 0u; slot < (rows * cols); slot++)
+    {
+        /* slot < 9: fits uint8_t. */
+        count += tst_popcount(score_font_picture_mask(pic, value, rows, cols,
+                                                      active, (uint8_t)slot));
     }
 
     return count;
@@ -68,8 +107,9 @@ bool test_score_font_slices (void)
     b_ok = (test_main_check(11u == tst_wall_count(-1, 1, 1, 0x1u), __LINE__)) &&
            b_ok;
 
-    /* Two digits: 10 is 1 then 0, 8 + 12 = 20 lit on a full 2 x 2 wall. */
-    b_ok = (test_main_check(20u == tst_wall_count(10, 2, 2, 0x000Fu),
+    /* Two digits: 10 is 1 then 0, 8 + 12 = 20 pixels, at 2 x on a full
+     * 2 x 2 wall (7 x 5 into 16 x 16): 80 lit. */
+    b_ok = (test_main_check(80u == tst_wall_count(10, 2, 2, 0x000Fu),
                             __LINE__)) && b_ok;
 
     /* One tile centred on the 8 x 8 tile: 0 starts at column 2, row 1. */
@@ -105,6 +145,101 @@ bool test_score_font_slices (void)
     /* Scores past 99 are clamped to 99. */
     b_ok = (test_main_check(score_font_tile_mask(150, 1, 1, 0x1u, 0u) ==
                                 score_font_tile_mask(99, 1, 1, 0x1u, 0u),
+                            __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/** One A15 case: a picture on a wall shape and the lit pixels expected. */
+typedef struct
+{
+    score_pic_t pic;
+    int32_t     value;
+    uint8_t     rows;
+    uint8_t     cols;
+    uint16_t    active;
+    uint32_t    lit;
+} tst_pic_case_t;
+
+/**
+ * @brief  C19b (A15, DS-09): every wall picture is drawn at the largest
+ *         scale that fits each shape (1 x 1 to 3 x 3, strips, a sparse
+ *         diagonal), the tile slices add up to the whole drawing, and the
+ *         sparse wall shows the whole small picture on each tile.
+ *         Digit 3 has 11 pixels, 10 has 20, a big star 14, a small star 5.
+ * @return true when every check passed.
+ */
+bool test_score_font_pictures (void)
+{
+    static tst_pic_case_t const cases[] = {
+        /* Countdown digit: 1 x on 1 x 1 and strips, 3 x on 2 x 2 and 2 x 3,
+         * 4 x on 3 x 3; the 3 x 3 diagonal is sparse: 3 small copies. */
+        {SCORE_PIC_NUMBER, 3, 1u, 1u, 0x001u, 11u},
+        {SCORE_PIC_NUMBER, 3, 1u, 2u, 0x003u, 11u},
+        {SCORE_PIC_NUMBER, 3, 2u, 2u, 0x00Fu, 99u},
+        {SCORE_PIC_NUMBER, 3, 2u, 3u, 0x03Fu, 99u},
+        {SCORE_PIC_NUMBER, 3, 3u, 3u, 0x1FFu, 176u},
+        {SCORE_PIC_NUMBER, 3, 1u, 5u, 0x01Fu, 11u},
+        {SCORE_PIC_NUMBER, 3, 1u, 9u, 0x1FFu, 11u},
+        {SCORE_PIC_NUMBER, 3, 3u, 3u, 0x111u, 33u},
+        /* Score 10: 7 x 5, so 1 x on 1 x 1, 2 x on 2 x 2, 3 x on 3 x 3. */
+        {SCORE_PIC_NUMBER, 10, 1u, 1u, 0x001u, 20u},
+        {SCORE_PIC_NUMBER, 10, 3u, 3u, 0x1FFu, 180u},
+        /* 3 stars: small pyramid on 1 x 1 and 1 x 2, big pyramid on 2 x 2
+         * (2 x on 3 x 3), a big row on 1 x 3 and 1 x 9. */
+        {SCORE_PIC_STARS, 3, 1u, 1u, 0x001u, 15u},
+        {SCORE_PIC_STARS, 3, 1u, 2u, 0x003u, 15u},
+        {SCORE_PIC_STARS, 3, 2u, 2u, 0x00Fu, 42u},
+        {SCORE_PIC_STARS, 3, 3u, 3u, 0x1FFu, 168u},
+        {SCORE_PIC_STARS, 3, 1u, 3u, 0x007u, 42u},
+        {SCORE_PIC_STARS, 3, 1u, 9u, 0x1FFu, 42u},
+        /* 1 and 2 stars, and 0 drawn as 1. */
+        {SCORE_PIC_STARS, 1, 1u, 1u, 0x001u, 14u},
+        {SCORE_PIC_STARS, 2, 1u, 1u, 0x001u, 10u},
+        {SCORE_PIC_STARS, 2, 2u, 2u, 0x00Fu, 28u},
+        {SCORE_PIC_STARS, 0, 1u, 1u, 0x001u, 14u},
+    };
+    bool b_ok = true;
+
+    for (uint32_t index = 0u; index < (sizeof(cases) / sizeof(cases[0]));
+         index++)
+    {
+        tst_pic_case_t const * const p_case = &cases[index];
+        uint32_t const wall  = tst_pic_count(p_case->pic, p_case->value,
+                                             p_case->rows, p_case->cols,
+                                             p_case->active);
+        uint32_t const slice = tst_slice_count(p_case->pic, p_case->value,
+                                               p_case->rows, p_case->cols,
+                                               p_case->active);
+
+        if ((wall != p_case->lit) || (slice != p_case->lit))
+        {
+            printf("    case %" PRIu32 ": wall %" PRIu32 " slices %" PRIu32
+                   " expected %" PRIu32 "\n",
+                   index, wall, slice, p_case->lit);
+            b_ok = (test_main_check(false, __LINE__)) && b_ok;
+        }
+        else
+        {
+            /* As expected. */
+        }
+    }
+
+    /* Sparse rule: 1 of 4 is sparse; 2 of 4 is not; 4 of 9 is sparse. */
+    b_ok = (test_main_check(score_font_sparse(2u, 2u, 0x001u), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(!score_font_sparse(2u, 2u, 0x003u), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(score_font_sparse(3u, 3u, 0x00Fu), __LINE__)) &&
+           b_ok;
+
+    /* The 3 x 3 countdown digit is centred: 12 x 20 in 24 x 24 starts at
+     * column 6, row 2 (the top bar of the 3). */
+    b_ok = (test_main_check(score_font_picture_lit(SCORE_PIC_NUMBER, 3, 3u,
+                                                   3u, 0x1FFu, 6u, 2u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(!score_font_picture_lit(SCORE_PIC_NUMBER, 3, 3u,
+                                                    3u, 0x1FFu, 5u, 2u),
                             __LINE__)) && b_ok;
 
     return b_ok;

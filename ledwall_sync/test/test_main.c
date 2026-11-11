@@ -72,6 +72,8 @@ static test_case_t const g_cases[] = {
      test_game_rules_late_echo},
     {"C19 re-plan: score font pixel counts, centring and tile slices",
      test_score_font_slices},
+    {"C19b step 3: wall pictures at the largest scale per shape, sparse",
+     test_score_font_pictures},
     {"C20 re-plan: START refused in video mode, mode and START ACKed, repeat "
      "ACKed only",
      test_coord_game_mode_and_start},
