@@ -94,6 +94,8 @@ static test_case_t const g_cases[] = {
      test_coord_game_status},
     {"C28 step 4: game mode READY without a video, video START refused",
      test_coord_game_no_video},
+    {"C29 step 4: a new session ends the tap test (bench 12 Nov 2026)",
+     test_coord_game_new_session},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

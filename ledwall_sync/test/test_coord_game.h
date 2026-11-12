@@ -75,6 +75,12 @@ bool test_coord_game_status (void);
  */
 bool test_coord_game_no_video (void);
 
+/**
+ * @brief  C29: a new SESSION_CONFIG ends the tap test.
+ * @return true when every check passed.
+ */
+bool test_coord_game_new_session (void);
+
 #endif /* TEST_COORD_GAME_H */
 
 /*** end of file ***/

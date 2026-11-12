@@ -364,6 +364,7 @@ static void cl_send_results (uint64_t t_first);
 static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
                               uint8_t colour, uint8_t b_repeat, uint64_t t_show,
                               uint16_t dur_ms, uint64_t mask);
+static void cl_results_end (uint64_t now);
 static uint8_t  cl_count7 (uint32_t count);
 static uint16_t cl_reaction11 (uint32_t reaction_ms);
 static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
@@ -1178,7 +1179,10 @@ static void cl_from_pc (cl_rx_entry_t const *  p_entry,
  * @brief  SESSION_CONFIG: VALIDATING SESSION. A new session_id is accepted
  *         only while stopped (W6 statechart 2: "New session or layout while
  *         stopped"); it clears readiness and restarts the PC's seq baseline.
- *         The same session_id again is a repeat and is ignored.
+ *         The same session_id again is a repeat and is ignored. A new
+ *         session also ends the tap test (bench 12 Nov 2026: a tap test
+ *         left on by an interrupted PC run flashed taps during the next
+ *         run's upload).
  *         "Stopped" is an explicit allow-list, WAITING FOR SESSION through
  *         READY, so a state added later (as COORDINATING GAME was) refuses
  *         SESSION_CONFIG until it is listed here (decision of 6 Nov 2026).
@@ -1235,6 +1239,13 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
         g_b_return_to_pause = false;
         g_b_pc_seq_known    = true;
         g_pc_seq            = cfg.header.seq;
+
+        if (g_b_tap_test)
+        {
+            g_b_tap_test = false;
+            cl_round_to_tiles(PROTO_GAME_TAP_TEST_OFF, p_entry->t_rx_us);
+        }
+
         cl_evaluate();
     }
 }
@@ -2077,11 +2088,8 @@ static void cl_game_command (proto_game_control_t const * p_msg)
         if (cl_stopped())
         {
             g_b_game_mode = (PROTO_GAME_MODE_GAME == command);
-            g_round       = PROTO_ROUND_IDLE;
             g_b_tap_test  = false;
-            /* GAME IDLE shows no counts of the last round (bench 12 Nov
-             * 2026, round 7: wrong and shown stayed, the score did not). */
-            game_rules_clear(&g_game);
+            cl_results_end(now);
             cl_evaluate(); /* Readiness depends on the mode (A14). */
         }
         else
@@ -2133,6 +2141,12 @@ static void cl_game_command (proto_game_control_t const * p_msg)
         if ((PROTO_COORD_READY == g_state) && (!b_round))
         {
             g_b_tap_test = (PROTO_GAME_TAP_TEST_ON == command);
+
+            if (g_b_tap_test)
+            {
+                cl_results_end(now); /* Taps light a blank wall. */
+            }
+
             cl_round_to_tiles(command, now);
         }
         else
@@ -2498,6 +2512,35 @@ static void cl_send_results (uint64_t t_first)
             cl_queue_picture(node_id, 2u, (uint8_t)PROTO_PIC_PICTURE, /* 3. */
                              (uint8_t)PROTO_COLOUR_YELLOW, /* 8 fit. */
                              1u, t_stars, CL_RESULT_MS, stars_pic);
+        }
+    }
+}
+
+/**
+ * @brief  The results leave the wall and STATUS (a mode command or the tap
+ *         test, decided 12 Nov 2026 after bench round 7: the tap test lit
+ *         tiles on top of the looping score): GAME IDLE with no counts of
+ *         the last round, and every tile of the map clears its picture
+ *         list. Sent whatever the round state, since a restarted Pico does
+ *         not know what the tiles still show.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_results_end (uint64_t now)
+{
+    g_round = PROTO_ROUND_IDLE;
+    game_rules_clear(&g_game);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE);
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+
+        if (0u != (g_session.required & cl_node_bit(node_id)))
+        {
+            /* Resent until ACKed or the control life ends. */
+            cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_CLEAR, /* 3. */
+                             (uint8_t)PROTO_COLOUR_WHITE, /* 8 fit. */
+                             0u, now + CL_CONTROL_LIFE_US, 0u, 0u);
         }
     }
 }

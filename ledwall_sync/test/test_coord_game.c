@@ -80,6 +80,7 @@ static bool gt_newest_mole (proto_mole_on_t * p_msg);
 static bool gt_check_countdown (uint8_t node_id, uint64_t t_first);
 static void gt_arm (uint8_t level, uint8_t threshold);
 static bool gt_check_results (uint8_t node_id);
+static uint32_t gt_count_clear (uint8_t node_id);
 static void gt_tile_ack (uint8_t node_id, uint16_t acked_seq);
 static void gt_ack_type (proto_type_t type);
 static void gt_tap (uint8_t node_id, uint16_t peak, uint64_t t_tap_us,
@@ -1264,7 +1265,7 @@ static bool gt_check_countdown (uint8_t node_id, uint64_t t_first)
 
         if ((GT_TILE_SRC_PORT == p_send->port) &&
             (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
-            (node_id == msg.node_id))
+            (node_id == msg.node_id) && (PROTO_PIC_CLEAR != msg.effect))
         {
             uint64_t const t_want = t_first + (msg.slot * (1000u * GT_MS));
 
@@ -1305,7 +1306,8 @@ static bool gt_check_results (uint8_t node_id)
 
         if ((GT_TILE_SRC_PORT == p_send->port) &&
             (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
-            (node_id == msg.node_id) && (msg.slot < 3u))
+            (node_id == msg.node_id) && (msg.slot < 3u) &&
+            (PROTO_PIC_CLEAR != msg.effect))
         {
             bool const b_good =
                 (0u == msg.slot)
@@ -1331,6 +1333,32 @@ static bool gt_check_results (uint8_t node_id)
                             __LINE__)) && b_ok;
 
     return b_ok;
+}
+
+/**
+ * @brief  Count the WALL_PICTURE clears sent to one tile (resends count).
+ * @param  node_id  Tile, 1 to 9.
+ * @return The number sent so far.
+ */
+static uint32_t gt_count_clear (uint8_t node_id)
+{
+    uint32_t count = 0u;
+
+    for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+    {
+        proto_wall_picture_t                  msg;
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        if ((GT_TILE_SRC_PORT == p_send->port) &&
+            (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
+            (node_id == msg.node_id) && (PROTO_PIC_CLEAR == msg.effect))
+        {
+            count++;
+        }
+    }
+
+    return count;
 }
 
 /**
@@ -1490,17 +1518,23 @@ bool test_coord_game_abort (void)
 /**
  * @brief  C26: the tap test (A11): TAP_TEST_ON goes to both tiles, and every
  *         tap then lights its own tile green; after TAP_TEST_OFF a tap lights
- *         nothing; the tap test is refused while a round is armed.
+ *         nothing; the tap test is refused while a round is armed. TAP_TEST_ON
+ *         also clears the tiles' pictures (the last round's results).
  * @return true when every check passed.
  */
 bool test_coord_game_tap_test (void)
 {
-    uint32_t sends = 0u;
-    bool     b_ok  = true;
+    uint32_t sends  = 0u;
+    uint32_t clears = 0u;
+    bool     b_ok   = true;
 
     gt_to_ready();
     gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    gt_advance(1100u * GT_MS); /* The mode command's clears stop. */
+    clears = gt_count_clear(2u);
     gt_pc(PROTO_GAME_TAP_TEST_ON, 0u, 0u);
+    /* The tap test starts on a blank wall: the pictures are cleared. */
+    b_ok = (test_main_check(clears < gt_count_clear(2u), __LINE__)) && b_ok;
     b_ok = (test_main_check((1u <= gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON)) &&
                                 (1u <= gt_count_cmd(2u,
                                                     PROTO_GAME_TAP_TEST_ON)),
@@ -1545,7 +1579,8 @@ bool test_coord_game_status (void)
     gt_round_t      round;
     proto_status_t  status;
     proto_mole_on_t mole;
-    bool            b_ok = false;
+    uint32_t        clears[2] = {0u, 0u};
+    bool            b_ok      = false;
 
     (void)memset(&mole, 0, sizeof(mole));     /* Returns it. */
     (void)memset(&round, 0, sizeof(round));   /* Returns the round. */
@@ -1582,8 +1617,10 @@ bool test_coord_game_status (void)
     b_ok = (test_main_check(gt_check_results(1u), __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_check_results(2u), __LINE__)) && b_ok;
 
-    /* A mode command ends RESULTS: GAME IDLE shows none of this round
-     * (bench 12 Nov 2026, round 7). */
+    /* A mode command ends RESULTS: GAME IDLE shows none of this round and
+     * both tiles clear their pictures (bench 12 Nov 2026, round 7). */
+    clears[0] = gt_count_clear(1u);
+    clears[1] = gt_count_clear(2u);
     gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
     gt_advance(300u * GT_MS);
     b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
@@ -1592,6 +1629,9 @@ bool test_coord_game_status (void)
                                 (0u == status.shown) &&
                                 (0u == status.missed) &&
                                 (0u == status.reaction_ms),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check((clears[0] < gt_count_clear(1u)) &&
+                                (clears[1] < gt_count_clear(2u)),
                             __LINE__)) && b_ok;
 
     /* The next ARM clears the counts: STATUS shows none of this round. */
@@ -1657,6 +1697,44 @@ bool test_coord_game_no_video (void)
     b_ok = (test_main_check(
                 gt_in_state(PROTO_COORD_WAITING_FOR_TILE_READINESS),
                 __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C29: a new SESSION_CONFIG ends the tap test (bench 12 Nov 2026,
+ *         round 8: a tap test left on by an interrupted PC run): both tiles
+ *         get TAP_TEST_OFF and a tap lights nothing.
+ * @return true when every check passed.
+ */
+bool test_coord_game_new_session (void)
+{
+    uint32_t offs[2] = {0u, 0u};
+    bool     b_ok    = true;
+
+    gt_to_ready();
+    gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    gt_pc(PROTO_GAME_TAP_TEST_ON, 0u, 0u);
+    gt_tap(1u, 900u, coordinator_port_now_us(), ++g_tap_seq);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(1u <= gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
+                            __LINE__)) && b_ok;
+
+    offs[0] = gt_count_cmd(1u, PROTO_GAME_TAP_TEST_OFF);
+    offs[1] = gt_count_cmd(2u, PROTO_GAME_TAP_TEST_OFF);
+    gt_session_config(9u);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check((offs[0] < gt_count_cmd(1u,
+                                                    PROTO_GAME_TAP_TEST_OFF)) &&
+                                (offs[1] < gt_count_cmd(
+                                               2u, PROTO_GAME_TAP_TEST_OFF)),
+                            __LINE__)) && b_ok;
+
+    /* The tap test is off: a tap on tile 2 gets no FEEDBACK. */
+    gt_tap(2u, 900u, coordinator_port_now_us(), ++g_tap_seq);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 2u),
+                            __LINE__)) && b_ok;
 
     return b_ok;
 }
