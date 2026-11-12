@@ -99,6 +99,8 @@ static test_case_t const g_asset[] = {
     {"Test A4: complete after all 57 chunks in any order",
      test_asset_rx_complete},
     {"Test A5: zlib CRC32 0xCBF43926 and continuation", test_asset_rx_crc32},
+    {"Test A6: a held upload ACKs every chunk, never complete",
+     test_asset_rx_held},
 };
 
 static test_case_t const g_coord[] = {

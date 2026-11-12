@@ -107,6 +107,29 @@ void asset_rx_open (asset_rx_t * p_rx, uint8_t session_id,
 }
 
 /**
+ * @brief  Open a held upload: the published asset, every chunk held.
+ * @param  p_rx            The upload state.
+ * @param  session_id      Manifest header session_id.
+ * @param  format_version  1 or 2.
+ * @param  frame_count     1 to 1023.
+ * @param  crc32           Manifest CRC32.
+ */
+void asset_rx_open_held (asset_rx_t * p_rx, uint8_t session_id,
+                         uint8_t format_version, uint16_t frame_count,
+                         uint32_t crc32)
+{
+    asset_rx_open(p_rx, session_id, format_version, frame_count, crc32);
+    p_rx->b_held = true;
+
+    for (uint32_t index = 0u; index < p_rx->chunk_count; index++)
+    {
+        p_rx->map[index / AR_MAP_BITS] |= UINT32_C(1) << (index % AR_MAP_BITS);
+    }
+
+    p_rx->received_count = p_rx->chunk_count;
+}
+
+/**
  * @brief  Classify one chunk and, when new, record it as held.
  * @param  p_rx         The upload state.
  * @param  session_id   Chunk header session_id.
@@ -151,11 +174,11 @@ asset_rx_chunk_result_t asset_rx_chunk (asset_rx_t * p_rx, uint8_t session_id,
 /**
  * @brief  Whether every chunk is held.
  * @param  p_rx  The upload state.
- * @return true when the upload is open and complete.
+ * @return true when the upload is open, not held and complete.
  */
 bool asset_rx_complete (asset_rx_t const * p_rx)
 {
-    return ((p_rx->b_open) && (p_rx->chunk_count > 0u) &&
+    return ((p_rx->b_open) && (!p_rx->b_held) && (p_rx->chunk_count > 0u) &&
             (p_rx->received_count == p_rx->chunk_count));
 }
 

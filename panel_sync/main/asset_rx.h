@@ -19,6 +19,10 @@
  * - a chunk whose session_id differs from the manifest's is ignored.
  * - each chunk is recorded once; a repeat is acknowledged again but not
  *   written again.
+ * - a manifest for the asset already published opens a held upload (DS-12
+ *   B, 12 Nov 2026): every chunk counts as held, so each one the PC sends
+ *   is acknowledged as a repeat and never written, and the upload is never
+ *   complete (nothing to verify).
  */
 #ifndef ASSET_RX_H
 #define ASSET_RX_H
@@ -62,6 +66,7 @@ typedef enum
 typedef struct
 {
     bool     b_open;                  /**< A manifest was accepted. */
+    bool     b_held;                  /**< Open for the published asset. */
     uint8_t  session_id;              /**< Manifest header session_id. */
     uint8_t  format_version;          /**< 1 or 2. */
     uint16_t frame_count;             /**< 1 to 1023. */
@@ -103,6 +108,20 @@ void asset_rx_open (asset_rx_t * p_rx, uint8_t session_id,
                     uint32_t crc32);
 
 /**
+ * @brief  Open a held upload for a manifest that names the asset already
+ *         published (DS-12 B): every chunk is held, so asset_rx_chunk()
+ *         answers ASSET_RX_CHUNK_REPEAT and asset_rx_complete() stays false.
+ * @param  p_rx            The upload state.
+ * @param  session_id      Manifest header session_id.
+ * @param  format_version  1 or 2.
+ * @param  frame_count     1 to 1023.
+ * @param  crc32           Manifest CRC32.
+ */
+void asset_rx_open_held (asset_rx_t * p_rx, uint8_t session_id,
+                         uint8_t format_version, uint16_t frame_count,
+                         uint32_t crc32);
+
+/**
  * @brief  Classify one chunk and, when new, record it as held.
  * @param  p_rx         The upload state.
  * @param  session_id   Chunk header session_id.
@@ -116,7 +135,8 @@ asset_rx_chunk_result_t asset_rx_chunk (asset_rx_t * p_rx, uint8_t session_id,
 /**
  * @brief  Whether every chunk of the open upload is held.
  * @param  p_rx  The upload state.
- * @return true when the upload is open and complete.
+ * @return true when the upload is open and complete; never for a held
+ *         upload (asset_rx_open_held()).
  */
 bool asset_rx_complete (asset_rx_t const * p_rx);
 

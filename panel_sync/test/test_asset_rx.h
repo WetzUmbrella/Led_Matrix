@@ -40,6 +40,13 @@ bool test_asset_rx_chunk_classes (void);
 bool test_asset_rx_complete (void);
 
 /**
+ * @brief  Test A6: a held upload (the asset is already published, DS-12 B):
+ *         every chunk is a repeat, and it is never complete.
+ * @return true when every check passed.
+ */
+bool test_asset_rx_held (void);
+
+/**
  * @brief  Test A5: zlib CRC32 check value 0xCBF43926 for "123456789", and a
  *         CRC continued over two parts equals the CRC of the whole.
  * @return true when every check passed.

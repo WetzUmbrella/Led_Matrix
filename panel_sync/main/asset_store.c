@@ -373,10 +373,11 @@ static void as_handle (asset_store_upload_t const * p_item)
 }
 
 /**
- * @brief  MANIFEST: check format and length; a repeat of the open upload or
- *         of the published asset changes nothing (the published one is
- *         announced again); otherwise unpublish, erase, write the header and
- *         open the upload.
+ * @brief  MANIFEST: check format and length; a repeat of the open upload
+ *         changes nothing; one for the published asset writes nothing: the
+ *         asset is announced again to the Pico and a held upload is opened,
+ *         so the PC's chunks are ACKed (DS-12 B); otherwise unpublish, erase,
+ *         write the header and open the upload.
  * @param  p_item  The MANIFEST.
  */
 static void as_on_manifest (asset_store_upload_t const * p_item)
@@ -398,7 +399,8 @@ static void as_on_manifest (asset_store_upload_t const * p_item)
         fault_word_set(FAULT_BIT_ASSET_FORMAT);
         printf("ASSET manifest refused reason=%" PRIu8 "\n", reason);
     }
-    else if ((g_rx.b_open) && (p_item->session_id == g_rx.session_id) &&
+    else if ((g_rx.b_open) && (!g_rx.b_held) &&
+             (p_item->session_id == g_rx.session_id) &&
              (p_item->crc32 == g_rx.crc32))
     {
         /* The PC repeated the manifest of the upload in progress. */
@@ -414,6 +416,14 @@ static void as_on_manifest (asset_store_upload_t const * p_item)
         };
 
         as_reply(&ready);
+        /* The PC hears nothing of ASSET_READY (it goes to the Pico) and
+         * waited about 70 s for CHUNK_ACKs (bench 5 Nov 2026): every chunk
+         * it now sends is ACKed as a repeat, with no flash write. */
+        asset_rx_open_held(&g_rx, p_item->session_id, p_item->format_version,
+                           p_item->frame_count, p_item->crc32);
+        printf("ASSET manifest session=%" PRIu8 " crc=0x%08" PRIx32
+               " already held\n",
+               p_item->session_id, p_item->crc32);
     }
     else
     {

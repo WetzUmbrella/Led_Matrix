@@ -192,6 +192,64 @@ bool test_asset_rx_complete (void)
 }
 
 /**
+ * @brief  Test A6: a held upload (DS-12 B) answers every chunk as a repeat,
+ *         refuses a wrong length or another session as before, and is never
+ *         complete.
+ * @return true when every check passed.
+ */
+bool test_asset_rx_held (void)
+{
+    bool       b_ok = true;
+    asset_rx_t upload;
+
+    asset_rx_open_held(&upload, A_SESSION, A_FMT_PACKED, A_FRAMES, 0u);
+    b_ok = (test_main_check((upload.b_open) && (upload.b_held) &&
+                                (A_CHUNKS == upload.chunk_count) &&
+                                (A_CHUNKS == upload.received_count),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(!asset_rx_complete(&upload), __LINE__)) && b_ok;
+
+    for (uint32_t step = 0u; step < A_CHUNKS; step++)
+    {
+        uint8_t const index = (uint8_t)step; /* Below 57: fits uint8_t. */
+
+        b_ok = (test_main_check(
+                   ASSET_RX_CHUNK_REPEAT ==
+                       asset_rx_chunk(&upload, A_SESSION, index,
+                                      asset_rx_chunk_len(&upload, index)),
+                   __LINE__)) && b_ok;
+    }
+
+    b_ok = (test_main_check(!asset_rx_complete(&upload), __LINE__)) && b_ok;
+    b_ok = (test_main_check(A_CHUNKS == upload.received_count, __LINE__)) &&
+           b_ok;
+    /* Chunk 57 does not exist; another session is not this upload. */
+    uint8_t const past  = (uint8_t)A_CHUNKS;          /* 57 fits. */
+    uint8_t const other = (uint8_t)(A_SESSION + 1u);  /* 8 fits. */
+
+    b_ok = (test_main_check(
+               ASSET_RX_CHUNK_BAD_LENGTH ==
+                   asset_rx_chunk(&upload, A_SESSION, past,
+                                  ASSET_RX_CHUNK_BYTES),
+               __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               ASSET_RX_CHUNK_IGNORED ==
+                   asset_rx_chunk(&upload, other, 0u, ASSET_RX_CHUNK_BYTES),
+               __LINE__)) && b_ok;
+
+    /* A real manifest afterwards opens a normal upload: nothing held. */
+    asset_rx_open(&upload, A_SESSION, A_FMT_PACKED, A_FRAMES, 1u);
+    b_ok = (test_main_check((!upload.b_held) && (0u == upload.received_count),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               ASSET_RX_CHUNK_NEW == asset_rx_chunk(&upload, A_SESSION, 0u,
+                                                    ASSET_RX_CHUNK_BYTES),
+               __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
  * @brief  Test A5: CRC32 check value and continuation.
  * @return true when every check passed.
  */
