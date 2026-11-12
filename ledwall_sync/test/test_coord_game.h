@@ -81,6 +81,12 @@ bool test_coord_game_no_video (void);
  */
 bool test_coord_game_new_session (void);
 
+/**
+ * @brief  C30: a sparse layout (3 x 3 corners) plays, small pictures.
+ * @return true when every check passed.
+ */
+bool test_coord_game_sparse (void);
+
 #endif /* TEST_COORD_GAME_H */
 
 /*** end of file ***/

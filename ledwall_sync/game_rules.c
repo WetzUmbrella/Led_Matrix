@@ -447,7 +447,7 @@ static uint16_t game_bit (uint8_t node_id)
 {
     uint16_t bit = 0u;
 
-    if ((node_id >= 1u) && (node_id <= PROTO_MAP_SLOTS))
+    if ((node_id >= 1u) && (node_id <= PROTO_NODE_MAX))
     {
         bit = (uint16_t)(UINT16_C(1) << (node_id - 1u)); /* Below 0x200. */
     }
@@ -480,7 +480,7 @@ static uint8_t game_pick_node (game_t * p_game)
         }
     }
 
-    for (uint8_t node = 1u; node <= PROTO_MAP_SLOTS; node++)
+    for (uint8_t node = 1u; node <= PROTO_NODE_MAX; node++)
     {
         if (0u != (candidates & game_bit(node)))
         {
@@ -492,7 +492,7 @@ static uint8_t game_pick_node (game_t * p_game)
     {
         pick = game_next_rand(p_game) % count;
 
-        for (uint8_t node = 1u; (0u == node_id) && (node <= PROTO_MAP_SLOTS);
+        for (uint8_t node = 1u; (0u == node_id) && (node <= PROTO_NODE_MAX);
              node++)
         {
             if (0u != (candidates & game_bit(node)))

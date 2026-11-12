@@ -24,6 +24,12 @@ bool test_score_font_slices (void);
  */
 bool test_score_font_pictures (void);
 
+/**
+ * @brief  C19c (step 4d): grids of more than 9 cells, sparse and dense.
+ * @return true when every check passed.
+ */
+bool test_score_font_cells (void);
+
 #endif /* TEST_SCORE_FONT_H */
 
 /*** end of file ***/

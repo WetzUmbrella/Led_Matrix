@@ -28,9 +28,6 @@
 /** Largest score magnitude (STATUS score, -99 to 99). */
 #define SCORE_FONT_LIMIT ((int32_t)PROTO_SCORE_MAX)
 
-/** Tiles on a wall at most (layout_table.md section 5.2). */
-#define SCORE_FONT_MAX_TILES PROTO_MAP_SLOTS
-
 /** LEDs on one tile. */
 #define SCORE_FONT_TILE_LEDS 64u
 
@@ -63,7 +60,7 @@ typedef struct
     uint32_t count;
 } score_text_t;
 
-/** The bounding box of the active positions, in tiles. */
+/** The bounding box of the active cells, in tiles. */
 typedef struct
 {
     uint32_t min_row;
@@ -75,16 +72,16 @@ typedef struct
 /** Where a picture lands on the wall. */
 typedef struct
 {
-    bool        b_valid;  /**< The wall's shape and active tiles are good. */
-    bool        b_sparse; /**< Each tile shows the whole small picture. */
-    uint8_t     rows;
-    uint8_t     cols;
-    uint16_t    active;
-    score_box_t box;      /**< Active tiles (dense walls). */
-    score_src_t src;      /**< The picture drawn small. */
-    uint32_t    scale;    /**< Each source pixel is scale x scale LEDs. */
-    uint32_t    left;     /**< First wall column (tile column if sparse). */
-    uint32_t    top;      /**< First wall row (tile row if sparse). */
+    bool          b_valid;  /**< The grid and its active tiles are good. */
+    bool          b_sparse; /**< Each tile shows the whole small picture. */
+    uint8_t       rows;
+    uint8_t       cols;
+    score_cells_t cells;    /**< The cells that hold a tile. */
+    score_box_t   box;      /**< Active tiles (dense grids). */
+    score_src_t   src;      /**< The picture drawn small. */
+    uint32_t      scale;    /**< Each source pixel is scale x scale LEDs. */
+    uint32_t      left;     /**< First wall column (tile column if sparse). */
+    uint32_t      top;      /**< First wall row (tile row if sparse). */
 } score_layout_t;
 
 /** The font: 11 glyphs of 5 rows of 3 pixels. */
@@ -118,8 +115,10 @@ static uint8_t const g_star_small[SCORE_STAR_SMALL] = {
 
 static void     score_font_text (int32_t score, score_text_t * p_text);
 static uint32_t score_font_width (uint32_t count);
-static bool     score_font_box (uint16_t active, uint8_t cols,
-                                uint32_t rows_used, score_box_t * p_box);
+static bool     score_font_box (score_cells_t const * p_cells, uint8_t rows,
+                                uint8_t cols, score_box_t * p_box);
+static bool     score_cell_on (score_cells_t const * p_cells, uint32_t row,
+                               uint32_t col);
 static void     score_src_clear (score_src_t * p_src, uint32_t width,
                                  uint32_t height);
 static void     score_src_stamp (score_src_t * p_src, uint8_t const * p_rows,
@@ -134,7 +133,8 @@ static void     score_src_choose (score_pic_t pic, int32_t value,
                                   uint32_t box_w, uint32_t box_h,
                                   score_src_t * p_src, uint32_t * p_scale);
 static void     score_layout_make (score_pic_t pic, int32_t value,
-                                   uint8_t rows, uint8_t cols, uint16_t active,
+                                   uint8_t rows, uint8_t cols,
+                                   score_cells_t const * p_cells,
                                    score_layout_t * p_layout);
 static bool     score_layout_lit (score_layout_t const * p_layout,
                                   uint32_t pixel_x, uint32_t pixel_y);
@@ -146,18 +146,18 @@ static uint32_t score_popcount (uint16_t bits);
  * @param  value    The number, or the star count.
  * @param  rows     Rows of the wall, 1 to 9.
  * @param  cols     Columns of the wall, 1 to 9.
- * @param  active   Bit p set when map position p holds a tile.
+ * @param  p_cells  The cells that hold a tile.
  * @param  pixel_x  Column of the pixel on the wall.
  * @param  pixel_y  Row of the pixel on the wall.
  * @return true when the pixel is lit.
  */
 bool score_font_picture_lit (score_pic_t pic, int32_t value, uint8_t rows,
-                             uint8_t cols, uint16_t active, uint32_t pixel_x,
-                             uint32_t pixel_y)
+                             uint8_t cols, score_cells_t const * p_cells,
+                             uint32_t pixel_x, uint32_t pixel_y)
 {
     score_layout_t layout;
 
-    score_layout_make(pic, value, rows, cols, active, &layout);
+    score_layout_make(pic, value, rows, cols, p_cells, &layout);
 
     return score_layout_lit(&layout, pixel_x, pixel_y);
 }
@@ -165,27 +165,32 @@ bool score_font_picture_lit (score_pic_t pic, int32_t value, uint8_t rows,
 /**
  * @brief  The 8 x 8 slice of a wall picture for one tile. The layout is
  *         worked out once for the 64 LEDs.
- * @param  pic     What to draw.
- * @param  value   The number, or the star count.
- * @param  rows    Rows of the wall, 1 to 9.
- * @param  cols    Columns of the wall, 1 to 9.
- * @param  active  Bit p set when map position p holds a tile.
- * @param  slot    Map position of the tile.
- * @return Bit n set when LED n of the tile is lit; 0 when slot is blank.
+ * @param  pic      What to draw.
+ * @param  value    The number, or the star count.
+ * @param  rows     Rows of the wall, 1 to 9.
+ * @param  cols     Columns of the wall, 1 to 9.
+ * @param  p_cells  The cells that hold a tile.
+ * @param  row      The tile's row.
+ * @param  col      The tile's column.
+ * @return Bit n set when LED n of the tile is lit; 0 when the cell holds no
+ *         tile.
  */
 uint64_t score_font_picture_mask (score_pic_t pic, int32_t value, uint8_t rows,
-                                  uint8_t cols, uint16_t active, uint8_t slot)
+                                  uint8_t cols, score_cells_t const * p_cells,
+                                  uint8_t row, uint8_t col)
 {
     score_layout_t layout;
     uint64_t       mask = 0u;
 
-    score_layout_make(pic, value, rows, cols, active, &layout);
+    score_layout_make(pic, value, rows, cols, p_cells, &layout);
 
-    if ((layout.b_valid) && (slot < (rows * cols)) &&
-        (0u != (active & (UINT16_C(1) << slot))))
+    if ((layout.b_valid) && (row < rows) && (col < cols) &&
+        (score_cell_on(p_cells, row, col)))
     {
-        uint32_t const origin_x = (slot % cols) * SCORE_FONT_TILE_SIDE;
-        uint32_t const origin_y = (slot / cols) * SCORE_FONT_TILE_SIDE;
+        /* Widened: the tile's first wall pixel, below 72. */
+        uint32_t const origin_x = (uint32_t)col * SCORE_FONT_TILE_SIDE;
+        /* As above. */
+        uint32_t const origin_y = (uint32_t)row * SCORE_FONT_TILE_SIDE;
 
         for (uint32_t led = 0u; led < SCORE_FONT_TILE_LEDS; led++)
         {
@@ -205,23 +210,30 @@ uint64_t score_font_picture_mask (score_pic_t pic, int32_t value, uint8_t rows,
 }
 
 /**
- * @brief  Whether the wall is sparse (fewer than half its positions hold an
+ * @brief  Whether the grid is sparse (fewer than half its cells hold an
  *         active tile).
- * @param  rows    Rows of the wall, 1 to 9.
- * @param  cols    Columns of the wall, 1 to 9.
- * @param  active  Bit p set when map position p holds a tile.
+ * @param  rows     Rows of the wall, 1 to 9.
+ * @param  cols     Columns of the wall, 1 to 9.
+ * @param  p_cells  The cells that hold a tile.
  * @return true when sparse.
  */
-bool score_font_sparse (uint8_t rows, uint8_t cols, uint16_t active)
+bool score_font_sparse (uint8_t rows, uint8_t cols,
+                        score_cells_t const * p_cells)
 {
     uint32_t const cells = (uint32_t)rows * cols; /* At most 81. */
-    /* Only the wall's own positions count; cells < 16 here or none. */
-    uint16_t const own = (cells < 16u)
-                             ? (uint16_t)(active & ((UINT16_C(1) << cells) -
-                                                    1u))
-                             : active;
+    uint32_t       held  = 0u;
 
-    return ((2u * score_popcount(own)) < cells);
+    /* Only the grid's own cells count: cols < 10, so the mask fits. */
+    uint16_t const own = (uint16_t)((UINT16_C(1) << cols) - 1u);
+
+    for (uint32_t row = 0u; (row < rows) && (row < SCORE_FONT_GRID_MAX);
+         row++)
+    {
+        /* Both operands are uint16_t: the narrowing keeps the value. */
+        held += score_popcount((uint16_t)(p_cells->row_bits[row] & own));
+    }
+
+    return ((2u * held) < cells);
 }
 
 /**
@@ -229,33 +241,36 @@ bool score_font_sparse (uint8_t rows, uint8_t cols, uint16_t active)
  * @param  score    Score, -99 to 99.
  * @param  rows     Rows of the wall, 1 to 9.
  * @param  cols     Columns of the wall, 1 to 9.
- * @param  active   Bit p set when map position p holds a tile.
+ * @param  p_cells  The cells that hold a tile.
  * @param  pixel_x  Column of the pixel on the wall.
  * @param  pixel_y  Row of the pixel on the wall.
  * @return true when the pixel is lit.
  */
 bool score_font_wall_lit (int32_t score, uint8_t rows, uint8_t cols,
-                          uint16_t active, uint32_t pixel_x,
+                          score_cells_t const * p_cells, uint32_t pixel_x,
                           uint32_t pixel_y)
 {
-    return score_font_picture_lit(SCORE_PIC_NUMBER, score, rows, cols, active,
+    return score_font_picture_lit(SCORE_PIC_NUMBER, score, rows, cols, p_cells,
                                   pixel_x, pixel_y);
 }
 
 /**
  * @brief  The 8 x 8 slice of the wall's score drawing for one tile.
- * @param  score   Score, -99 to 99.
- * @param  rows    Rows of the wall, 1 to 9.
- * @param  cols    Columns of the wall, 1 to 9.
- * @param  active  Bit p set when map position p holds a tile.
- * @param  slot    Map position of the tile.
- * @return Bit n set when LED n of the tile is lit; 0 when slot is blank.
+ * @param  score    Score, -99 to 99.
+ * @param  rows     Rows of the wall, 1 to 9.
+ * @param  cols     Columns of the wall, 1 to 9.
+ * @param  p_cells  The cells that hold a tile.
+ * @param  row      The tile's row.
+ * @param  col      The tile's column.
+ * @return Bit n set when LED n of the tile is lit; 0 when the cell holds no
+ *         tile.
  */
 uint64_t score_font_tile_mask (int32_t score, uint8_t rows, uint8_t cols,
-                               uint16_t active, uint8_t slot)
+                               score_cells_t const * p_cells, uint8_t row,
+                               uint8_t col)
 {
-    return score_font_picture_mask(SCORE_PIC_NUMBER, score, rows, cols, active,
-                                   slot);
+    return score_font_picture_mask(SCORE_PIC_NUMBER, score, rows, cols, p_cells,
+                                   row, col);
 }
 
 /**
@@ -266,19 +281,19 @@ uint64_t score_font_tile_mask (int32_t score, uint8_t rows, uint8_t cols,
  * @param  value     The number, or the star count.
  * @param  rows      Rows of the wall.
  * @param  cols      Columns of the wall.
- * @param  active    Bit p set when map position p holds a tile.
+ * @param  p_cells   The cells that hold a tile.
  * @param  p_layout  Receives the layout; b_valid false on a bad wall.
  */
 static void score_layout_make (score_pic_t pic, int32_t value, uint8_t rows,
-                               uint8_t cols, uint16_t active,
+                               uint8_t cols, score_cells_t const * p_cells,
                                score_layout_t * p_layout)
 {
-    p_layout->b_valid = (rows >= 1u) && (cols >= 1u) &&
-                        ((rows * cols) <= SCORE_FONT_MAX_TILES) &&
-                        (score_font_box(active, cols, rows, &p_layout->box));
+    p_layout->b_valid = (rows >= 1u) && (rows <= SCORE_FONT_GRID_MAX) &&
+                        (cols >= 1u) && (cols <= SCORE_FONT_GRID_MAX) &&
+                        (score_font_box(p_cells, rows, cols, &p_layout->box));
     p_layout->rows   = rows;
     p_layout->cols   = cols;
-    p_layout->active = active;
+    p_layout->cells  = *p_cells;
     p_layout->scale  = 1u;
     p_layout->left   = 0u;
     p_layout->top    = 0u;
@@ -291,7 +306,7 @@ static void score_layout_make (score_pic_t pic, int32_t value, uint8_t rows,
         uint32_t box_w    = SCORE_FONT_TILE_SIDE;
         uint32_t box_h    = SCORE_FONT_TILE_SIDE;
 
-        p_layout->b_sparse = score_font_sparse(rows, cols, active);
+        p_layout->b_sparse = score_font_sparse(rows, cols, p_cells);
 
         if (!p_layout->b_sparse)
         {
@@ -342,8 +357,7 @@ static bool score_layout_lit (score_layout_t const * p_layout,
 
     if ((p_layout->b_valid) && (tile_x < p_layout->cols) &&
         (tile_y < p_layout->rows) &&
-        (0u != (p_layout->active &
-                (UINT16_C(1) << ((tile_y * p_layout->cols) + tile_x)))))
+        (score_cell_on(&p_layout->cells, tile_y, tile_x)))
     {
         uint32_t pos_x = pixel_x;
         uint32_t pos_y = pixel_y;
@@ -614,24 +628,40 @@ static uint32_t score_font_width (uint32_t count)
 }
 
 /**
- * @brief  Bounding box, in tiles, of the active positions of a wall.
- * @param  active      Bit p set when map position p holds a tile.
- * @param  cols        Columns of the wall.
- * @param  rows_used   Rows of the wall.
- * @param  p_box       Receives the box.
- * @return false when no position is active.
+ * @brief  Whether a cell holds an active tile.
+ * @param  p_cells  The cells that hold a tile.
+ * @param  row      Row, below SCORE_FONT_GRID_MAX to count.
+ * @param  col      Column, below SCORE_FONT_GRID_MAX to count.
+ * @return true when the cell's bit is set.
  */
-static bool score_font_box (uint16_t active, uint8_t cols, uint32_t rows_used,
-                            score_box_t * p_box)
+static bool score_cell_on (score_cells_t const * p_cells, uint32_t row,
+                           uint32_t col)
+{
+    return (row < SCORE_FONT_GRID_MAX) && (col < SCORE_FONT_GRID_MAX) &&
+           (0u != (p_cells->row_bits[row] & (UINT16_C(1) << col)));
+}
+
+/**
+ * @brief  Bounding box, in tiles, of the active cells of a grid.
+ * @param  p_cells  The cells that hold a tile.
+ * @param  rows     Rows of the grid.
+ * @param  cols     Columns of the grid.
+ * @param  p_box    Receives the box.
+ * @return false when no cell inside the grid is active.
+ */
+static bool score_font_box (score_cells_t const * p_cells, uint8_t rows,
+                            uint8_t cols, score_box_t * p_box)
 {
     bool b_any = false;
 
-    for (uint32_t pos = 0u; pos < (rows_used * cols); pos++)
+    /* Widened: rows x cols is at most 81. */
+    for (uint32_t pos = 0u; pos < ((uint32_t)rows * cols); pos++)
     {
-        if (0u != (active & (UINT16_C(1) << pos)))
+        uint32_t const row = pos / cols;
+        uint32_t const col = pos % cols;
+
+        if (score_cell_on(p_cells, row, col))
         {
-            uint32_t const row = pos / cols;
-            uint32_t const col = pos % cols;
 
             if (!b_any)
             {

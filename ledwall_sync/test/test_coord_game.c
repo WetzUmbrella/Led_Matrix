@@ -63,6 +63,20 @@ static void gt_advance (uint64_t duration_us);
 static bool gt_in_state (proto_coord_state_t state);
 static void gt_rx_tile (uint8_t node_id, uint8_t const * p_buf, uint32_t len);
 static void gt_rx_pc (uint8_t const * p_buf, uint32_t len);
+/** The grid gt_to_layout() sends: its shape and the cells of nodes 1 and
+ *  2 (step 4d). */
+typedef struct
+{
+    uint8_t      rows;
+    uint8_t      cols;
+    proto_cell_t cell[2];
+} gt_grid_t;
+
+/** The 2 x 2 wall most tests use: node 1 at (0, 0), node 2 at (0, 1). */
+static gt_grid_t const g_grid_2x2 = {2u, 2u, {{1u, 0u, 0u}, {1u, 0u, 1u}}};
+
+static gt_grid_t g_grid = {2u, 2u, {{1u, 0u, 0u}, {1u, 0u, 1u}}};
+
 static void gt_to_ready (void);
 static void gt_to_layout (bool b_assets);
 static void gt_pc_start (void);
@@ -202,22 +216,15 @@ static void gt_to_ready (void)
  */
 static void gt_to_layout (bool b_assets)
 {
-    uint8_t const map[PROTO_MAP_SLOTS] = {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
-    uint8_t       buf[PROTO_SESSION_CONFIG_BYTES];
+    /* Node 1 and node 2 in the cells of g_grid (step 4d). */
+    uint8_t                buf[PROTO_SESSION_CONFIG_BYTES];
     proto_session_config_t msg = {
         {PROTO_TYPE_SESSION_CONFIG, GT_SESSION, 0u},
-        2u, 2u, PROTO_POLICY_PAUSE, {0u}, GT_FRAMES, {0u}};
+        g_grid.rows, g_grid.cols, PROTO_POLICY_PAUSE,
+        {g_grid.cell[0], g_grid.cell[1]}, GT_FRAMES, {GT_CRC_1, GT_CRC_2}};
 
     gt_reset();
     msg.header.seq = g_pc_seq; /* After the reset, which zeroes it. */
-
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
-    {
-        msg.node_map[slot] = map[slot];
-        msg.crc32[slot]    = (1u == map[slot]) ? GT_CRC_1
-                             : (2u == map[slot]) ? GT_CRC_2
-                                                 : 0u;
-    }
 
     g_pc_seq++;
     gt_rx_pc(buf, proto_encode_session_config(&msg, buf, sizeof(buf)));
@@ -501,8 +508,8 @@ static void gt_session_config (uint8_t session)
     uint8_t                buf[PROTO_SESSION_CONFIG_BYTES];
     proto_session_config_t msg = {
         {PROTO_TYPE_SESSION_CONFIG, session, g_pc_seq},
-        2u, 2u, PROTO_POLICY_PAUSE, {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u},
-        GT_FRAMES, {GT_CRC_1, GT_CRC_2, 0u, 0u, 0u, 0u, 0u, 0u, 0u}};
+        2u, 2u, PROTO_POLICY_PAUSE,
+        {{1u, 0u, 0u}, {1u, 0u, 1u}}, GT_FRAMES, {GT_CRC_1, GT_CRC_2}};
 
     g_pc_seq++;
     gt_rx_pc(buf, proto_encode_session_config(&msg, buf, sizeof(buf)));
@@ -1735,6 +1742,67 @@ bool test_coord_game_new_session (void)
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 2u),
                             __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C30 (step 4d, DS-15): a sparse layout plays. Nodes 1 and 2 on the
+ *         corners (0, 0) and (2, 2) of a 3 x 3 grid, game mode, no video:
+ *         READY; ARM puts the start sprite on node 1 (both corners are as
+ *         near the centre; the first cell wins); the countdown is the small
+ *         picture on each tile (2 of 9 cells is sparse): the 3 is 11 LEDs.
+ * @return true when every check passed.
+ */
+bool test_coord_game_sparse (void)
+{
+    gt_grid_t const corners = {3u, 3u, {{1u, 0u, 0u}, {1u, 2u, 2u}}};
+    proto_mole_on_t target;
+    uint64_t        t_tap = 0u;
+    bool            b_ok  = true;
+
+    (void)memset(&target, 0, sizeof(target)); /* Returns it. */
+    g_grid = corners;
+    gt_to_layout(false);
+    gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
+
+    gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
+    b_ok = (test_main_check(gt_last_target(1u, &target), __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_MOLE_ON, 2u),
+                            __LINE__)) && b_ok;
+
+    t_tap = target.t_show + (500u * GT_MS);
+    coordinator_port_set_now(t_tap);
+    gt_tap(1u, 900u, t_tap, ++g_tap_seq);
+    gt_advance(10u * GT_MS);
+    b_ok = (test_main_check(PROTO_ROUND_COUNTDOWN == gt_round_state(),
+                            __LINE__)) && b_ok;
+
+    for (uint8_t node_id = 1u; node_id <= 2u; node_id++)
+    {
+        uint32_t lit = 0u;
+
+        for (uint32_t index = 0u; index < coordinator_port_count(); index++)
+        {
+            proto_wall_picture_t                  msg;
+            coordinator_port_send_t const * const p_send =
+                coordinator_port_get(index);
+
+            if ((GT_TILE_SRC_PORT == p_send->port) &&
+                (proto_decode_wall_picture(p_send->bytes, p_send->len,
+                                           &msg)) &&
+                (node_id == msg.node_id) && (0u == msg.slot) &&
+                (PROTO_PIC_PICTURE == msg.effect))
+            {
+                lit = gt_popcount(msg.mask);
+            }
+        }
+
+        b_ok = (test_main_check(11u == lit, __LINE__)) && b_ok;
+    }
+
+    g_grid = g_grid_2x2;
 
     return b_ok;
 }

@@ -12,9 +12,9 @@
  * - Pixel n of a tile is LED n = 8 x row + column, the asset frame order of
  *   layout_table.md section 6, so bit n of the mask is that LED before the
  *   tile's rotation.
- * - The wall is rows x cols tiles, row-major over the map (layout_table.md
- *   section 3, SESSION_CONFIG). A tile at position p is row p / cols and
- *   column p % cols. Positions that hold no Node ID (blank) draw nothing.
+ * - The grid is rows x cols cells, each 1 to 9 (layout_table.md section 3,
+ *   SESSION_CONFIG cells, step 4d). score_cells_t marks the cells that
+ *   hold a tile; empty cells draw nothing.
  * - The picture is centred on the box that holds the active tiles, at the
  *   largest whole-number scale that fits the box; only lit pixels on active
  *   tiles are drawn. Numbers use a 3 x 5 font (1 x 1: 3 x 5, two digits 7
@@ -22,9 +22,9 @@
  * - Stars: 1 to 3 (a value below 1 draws 1 star), 5 x 5 stars in a row or
  *   in a pyramid (1 on top, 2 below), whichever is drawn larger; when
  *   neither fits (1 x 1, 1 x 2) 3 x 3 stars in the same two arrangements.
- * - Sparse wall (A15, DS-15): when the active tiles cover less than half of
- *   the wall's positions, each active tile shows the whole picture as drawn
- *   for one tile (1 x 1), so every tile is readable on its own.
+ * - Sparse grid (A15, DS-15): when the active tiles cover less than half of
+ *   the grid's cells, each active tile shows the whole picture as drawn for
+ *   one tile (1 x 1), so every tile is readable on its own.
  * - Text wider than the box is clipped on the right; the sign is kept first.
  */
 #ifndef SCORE_FONT_H
@@ -44,6 +44,16 @@
 /** Stars at most (3 stars, DS-07). */
 #define SCORE_FONT_STARS_MAX 3u
 
+/** Largest rows and cols of a grid (PROTO_GRID_MAX). */
+#define SCORE_FONT_GRID_MAX 9u
+
+/** The cells of a grid that hold a tile (step 4d): bit c of row_bits[r] is
+ *  set when cell (r, c) holds an active tile. */
+typedef struct
+{
+    uint16_t row_bits[SCORE_FONT_GRID_MAX];
+} score_cells_t;
+
 /** What a wall picture shows. */
 typedef enum
 {
@@ -58,63 +68,70 @@ typedef enum
  * @param  value    The number, or the star count.
  * @param  rows     Rows of the wall, 1 to 9.
  * @param  cols     Columns of the wall, 1 to 9.
- * @param  active   Bit p set when map position p holds a tile.
+ * @param  p_cells  The cells that hold a tile.
  * @param  pixel_x  Column of the pixel on the wall, 0 to cols x 8 - 1.
  * @param  pixel_y  Row of the pixel on the wall, 0 to rows x 8 - 1.
  * @return true when the pixel is lit.
  */
 bool score_font_picture_lit (score_pic_t pic, int32_t value, uint8_t rows,
-                             uint8_t cols, uint16_t active, uint32_t pixel_x,
-                             uint32_t pixel_y);
+                             uint8_t cols, score_cells_t const * p_cells,
+                             uint32_t pixel_x, uint32_t pixel_y);
 
 /**
  * @brief  The 8 x 8 slice of a wall picture for one tile.
- * @param  pic     What to draw.
- * @param  value   The number, or the star count.
- * @param  rows    Rows of the wall, 1 to 9.
- * @param  cols    Columns of the wall, 1 to 9.
- * @param  active  Bit p set when map position p holds a tile.
- * @param  slot    Map position of the tile, 0 to rows x cols - 1.
- * @return Bit n set when LED n of the tile is lit; 0 when slot is blank.
+ * @param  pic      What to draw.
+ * @param  value    The number, or the star count.
+ * @param  rows     Rows of the wall, 1 to 9.
+ * @param  cols     Columns of the wall, 1 to 9.
+ * @param  p_cells  The cells that hold a tile.
+ * @param  row      The tile's row, 0 to rows - 1.
+ * @param  col      The tile's column, 0 to cols - 1.
+ * @return Bit n set when LED n of the tile is lit; 0 when the cell holds no
+ *         tile.
  */
 uint64_t score_font_picture_mask (score_pic_t pic, int32_t value, uint8_t rows,
-                                  uint8_t cols, uint16_t active, uint8_t slot);
+                                  uint8_t cols, score_cells_t const * p_cells,
+                                  uint8_t row, uint8_t col);
 
 /**
- * @brief  Whether the wall is sparse: its active tiles cover less than half
- *         of its positions, so each tile shows the whole small picture.
- * @param  rows    Rows of the wall, 1 to 9.
- * @param  cols    Columns of the wall, 1 to 9.
- * @param  active  Bit p set when map position p holds a tile.
+ * @brief  Whether the grid is sparse: its active tiles cover less than half
+ *         of its cells, so each tile shows the whole small picture.
+ * @param  rows     Rows of the wall, 1 to 9.
+ * @param  cols     Columns of the wall, 1 to 9.
+ * @param  p_cells  The cells that hold a tile.
  * @return true when sparse.
  */
-bool score_font_sparse (uint8_t rows, uint8_t cols, uint16_t active);
+bool score_font_sparse (uint8_t rows, uint8_t cols,
+                        score_cells_t const * p_cells);
 
 /**
  * @brief  Whether wall pixel (x, y) is lit by the score (a number picture).
- * @param  score   Score, -99 to 99.
- * @param  rows    Rows of the wall, 1 to 9.
- * @param  cols    Columns of the wall, 1 to 9.
- * @param  active  Bit p set when map position p holds a tile.
- * @param  x       Column of the pixel on the wall, 0 to cols x 8 - 1.
- * @param  y       Row of the pixel on the wall, 0 to rows x 8 - 1.
+ * @param  score    Score, -99 to 99.
+ * @param  rows     Rows of the wall, 1 to 9.
+ * @param  cols     Columns of the wall, 1 to 9.
+ * @param  p_cells  The cells that hold a tile.
+ * @param  x        Column of the pixel on the wall, 0 to cols x 8 - 1.
+ * @param  y        Row of the pixel on the wall, 0 to rows x 8 - 1.
  * @return true when the pixel is lit.
  */
 bool score_font_wall_lit (int32_t score, uint8_t rows, uint8_t cols,
-                          uint16_t active, uint32_t pixel_x,
+                          score_cells_t const * p_cells, uint32_t pixel_x,
                           uint32_t pixel_y);
 
 /**
  * @brief  The 8 x 8 slice of the wall's score drawing for one tile.
- * @param  score   Score, -99 to 99.
- * @param  rows    Rows of the wall, 1 to 9.
- * @param  cols    Columns of the wall, 1 to 9.
- * @param  active  Bit p set when map position p holds a tile.
- * @param  slot    Map position of the tile, 0 to rows x cols - 1.
- * @return Bit n set when LED n of the tile is lit; 0 when slot is blank.
+ * @param  score    Score, -99 to 99.
+ * @param  rows     Rows of the wall, 1 to 9.
+ * @param  cols     Columns of the wall, 1 to 9.
+ * @param  p_cells  The cells that hold a tile.
+ * @param  row      The tile's row, 0 to rows - 1.
+ * @param  col      The tile's column, 0 to cols - 1.
+ * @return Bit n set when LED n of the tile is lit; 0 when the cell holds no
+ *         tile.
  */
 uint64_t score_font_tile_mask (int32_t score, uint8_t rows, uint8_t cols,
-                               uint16_t active, uint8_t slot);
+                               score_cells_t const * p_cells, uint8_t row,
+                               uint8_t col);
 
 #endif /* SCORE_FONT_H */
 

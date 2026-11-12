@@ -74,6 +74,8 @@ static test_case_t const g_cases[] = {
      test_score_font_slices},
     {"C19b step 3: wall pictures at the largest scale per shape, sparse",
      test_score_font_pictures},
+    {"C19c step 4d: grids of more than 9 cells, sparse and dense",
+     test_score_font_cells},
     {"C20 re-plan: START refused in video mode, mode and START ACKed, repeat "
      "ACKed only",
      test_coord_game_mode_and_start},
@@ -96,6 +98,8 @@ static test_case_t const g_cases[] = {
      test_coord_game_no_video},
     {"C29 step 4: a new session ends the tap test (bench 12 Nov 2026)",
      test_coord_game_new_session},
+    {"C30 step 4d: a sparse layout plays, small pictures on each tile",
+     test_coord_game_sparse},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

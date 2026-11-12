@@ -43,6 +43,10 @@
 #define TST_CRC_1   UINT32_C(0x11111111)
 #define TST_CRC_2   UINT32_C(0x22222222)
 
+/** Positions of the row-major maps the tests are written with (step 4d
+ *  turns each into cells). */
+#define TST_MAP_SLOTS 9u
+
 /** A 2x2 wall: map positions 0 to 3, row-major (re-plan step 3). */
 #define TST_ROWS_2X2 2u
 #define TST_COLS_2X2 2u
@@ -397,21 +401,23 @@ bool test_coord_crc_mismatch (void)
 
 /**
  * @brief  C9 (T-B2-04, W6 statechart 2 VALIDATING SESSION): session_id 0,
- *         a Node ID outside the layout and a repeated Node ID are rejected;
- *         a valid map with its tiles missing waits for nodes.
+ *         a Node ID outside the layout and a layout with no tile placed are
+ *         rejected; a valid map with its tiles missing waits for nodes.
+ *         Since step 4d a Node ID cannot appear twice (one cell per Node
+ *         ID), and the codec refuses a cell outside the grid.
  * @return true when every check passed.
  */
 bool test_coord_session_validation (void)
 {
     bool          b_ok       = true;
     uint8_t const outside[9] = {1u, 0u, 0u, 0u, 2u, 0u, 0u, 0u, 0u};
-    uint8_t const twice[9]   = {1u, 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    uint8_t const empty[9]   = {0u};
     uint8_t const good[9]    = {1u, 0u, 0u, 2u, 0u, 0u, 0u, 0u, 0u};
 
     tst_reset();
     tst_session(0u, TST_ROWS_2X2, TST_COLS_2X2, 0u, good);
     tst_session(3u, TST_ROWS_2X2, TST_COLS_2X2, 0u, outside);
-    tst_session(4u, TST_ROWS_2X2, TST_COLS_2X2, 0u, twice);
+    tst_session(4u, TST_ROWS_2X2, TST_COLS_2X2, 0u, empty);
     tst_advance(UINT64_C(100000));
     b_ok = (test_main_check(PROTO_COORD_WAITING_FOR_SESSION ==
                                 coordinator_loop_test_state(),
@@ -896,16 +902,27 @@ static void tst_session (uint8_t session, uint8_t rows, uint8_t cols,
         rows,
         cols,
         policy,
-        {0u},
+        {{0u, 0u, 0u}},
         TST_FRAMES,
         {0u}};
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    /* The map is row-major; since step 4d each Node ID carries its cell,
+     * row slot / cols and column slot % cols (cols is 1 to 9). */
+    for (uint32_t slot = 0u; slot < TST_MAP_SLOTS; slot++)
     {
-        msg.node_map[slot] = p_map[slot];
-        msg.crc32[slot]    = (1u == p_map[slot])   ? TST_CRC_1
-                             : (2u == p_map[slot]) ? TST_CRC_2
-                                                   : 0u;
+        uint8_t const node_id = p_map[slot];
+
+        if ((node_id >= 1u) && (node_id <= PROTO_NODE_MAX) && (0u != cols))
+        {
+            proto_cell_t * const p_cell = &msg.cell[node_id - 1u];
+
+            p_cell->b_placed = 1u;
+            p_cell->row      = (uint8_t)(slot / cols); /* < 9: fits. */
+            p_cell->col      = (uint8_t)(slot % cols); /* < 9: fits. */
+            msg.crc32[node_id - 1u] = (1u == node_id)   ? TST_CRC_1
+                                      : (2u == node_id) ? TST_CRC_2
+                                                        : 0u;
+        }
     }
 
     g_pc_seq++;

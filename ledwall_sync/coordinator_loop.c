@@ -197,13 +197,14 @@ typedef struct
 {
     bool           b_active;
     uint8_t        session_id;
-    uint8_t        rows;        /**< Wall rows, 1 to 9. */
-    uint8_t        cols;        /**< Wall columns, 1 to 9. */
+    uint8_t        rows;        /**< Grid rows, 1 to 9. */
+    uint8_t        cols;        /**< Grid columns, 1 to 9. */
     proto_policy_t policy;
-    uint16_t       required;    /**< Node IDs in the map, bit n - 1. */
+    uint16_t       required;    /**< Node IDs placed, bit n - 1. */
     uint16_t       frame_count; /**< 1 to 1023. */
-    uint8_t        node_map[PROTO_MAP_SLOTS];
-    uint32_t       crc32[PROTO_MAP_SLOTS];
+    proto_cell_t   cell[PROTO_NODE_MAX];  /**< Node ID n at cell[n - 1]
+                                               (step 4d, DS-15). */
+    uint32_t       crc32[PROTO_NODE_MAX]; /**< Node ID n at crc32[n - 1]. */
 } cl_session_t;
 
 /** One timed command being sent 3 times. */
@@ -384,7 +385,7 @@ static void cl_game_sync_active (void);
 static bool cl_stopped (void);
 static int8_t cl_status_score (void);
 static uint16_t cl_next_cmd_seq (void);
-static uint16_t cl_active_slots (void);
+static void cl_active_cells (score_cells_t * p_cells);
 static void cl_scan_heartbeats (uint64_t now);
 static void cl_scan_one (uint32_t index, uint64_t now);
 static void cl_send_due_copy (uint64_t now);
@@ -418,7 +419,8 @@ static void cl_set_state (proto_coord_state_t state);
 static void cl_maybe_rejoin (uint8_t node_id);
 static bool cl_seq_newer (uint16_t seq, uint16_t last);
 static bool cl_tile_seq_ok (uint8_t node_id, uint16_t seq);
-static bool cl_slot_of (uint8_t node_id, uint32_t * p_slot);
+static bool cl_cell_of (uint8_t node_id, uint8_t * p_row, uint8_t * p_col);
+static bool cl_placed (uint8_t node_id);
 static uint16_t     cl_online_bits (void);
 static uint16_t     cl_node_bit (uint8_t node_id);
 static uint32_t     cl_state_code (void);
@@ -993,7 +995,6 @@ static void cl_from_tile (cl_rx_entry_t const *  p_entry,
 static void cl_on_register (cl_rx_entry_t const * p_entry)
 {
     proto_register_t msg;
-    uint32_t         slot = 0u;
 
     if (!proto_decode_register(p_entry->bytes, p_entry->len, &msg))
     {
@@ -1023,8 +1024,8 @@ static void cl_on_register (cl_rx_entry_t const * p_entry)
 
         if ((g_session.b_active) &&
             (msg.cached_session_id == g_session.session_id) &&
-            (cl_slot_of(msg.node_id, &slot)) &&
-            (msg.cached_crc32 == g_session.crc32[slot]))
+            (cl_placed(msg.node_id)) &&
+            (msg.cached_crc32 == g_session.crc32[msg.node_id - 1u]))
         {
             g_readiness |= bit;
         }
@@ -1046,7 +1047,6 @@ static void cl_on_register (cl_rx_entry_t const * p_entry)
 static void cl_on_asset_ready (cl_rx_entry_t const * p_entry)
 {
     proto_asset_ready_t msg;
-    uint32_t            slot = 0u;
 
     if (!proto_decode_asset_ready(p_entry->bytes, p_entry->len, &msg))
     {
@@ -1056,8 +1056,8 @@ static void cl_on_asset_ready (cl_rx_entry_t const * p_entry)
     {
         g_stats.stale++;
     }
-    else if ((cl_slot_of(msg.node_id, &slot)) &&
-             (msg.crc32 == g_session.crc32[slot]))
+    else if ((cl_placed(msg.node_id)) &&
+             (msg.crc32 == g_session.crc32[msg.node_id - 1u]))
     {
         g_readiness |= cl_node_bit(msg.node_id);
         cl_node_seen(msg.node_id, p_entry->src_addr, p_entry->t_rx_us);
@@ -1226,11 +1226,16 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
         g_session.cols        = cfg.cols;
         g_session.required    = 0u;
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            g_session.node_map[slot] = cfg.node_map[slot];
-            g_session.crc32[slot]    = cfg.crc32[slot];
-            g_session.required |= cl_node_bit(cfg.node_map[slot]);
+            g_session.cell[node]  = cfg.cell[node];
+            g_session.crc32[node] = cfg.crc32[node];
+
+            if (0u != cfg.cell[node].b_placed)
+            {
+                /* node < 9: Node ID node + 1 fits uint8_t. */
+                g_session.required |= cl_node_bit((uint8_t)(node + 1u));
+            }
         }
 
         g_readiness         = 0u;
@@ -1251,36 +1256,23 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
 }
 
 /**
- * @brief  Check a SESSION_CONFIG beyond the codec's ranges: session_id 0 is
- *         reserved for "no session", positions from rows x cols on are
- *         blank, at least one tile is required and no Node ID appears twice.
- *         Blank positions inside the wall are allowed (OD-21).
- * @param  p_cfg  The decoded message; the decoder checked rows x cols <= 9.
+ * @brief  Check a SESSION_CONFIG beyond the codec's rules: session_id 0 is
+ *         reserved for "no session" and at least one tile is placed. The
+ *         codec already refused a cell outside the grid and two tiles in
+ *         one cell (step 4d, DS-15); empty cells are allowed (OD-21).
+ * @param  p_cfg  The decoded message.
  * @return true when valid.
  */
 static bool cl_session_valid (proto_session_config_t const * p_cfg)
 {
-    /* The map is row-major over rows x cols (layout_table.md, re-plan
-     * step 3), so positions 0 to rows x cols - 1 are in the wall. */
-    uint32_t const used = (uint32_t)p_cfg->rows * p_cfg->cols;
-    uint16_t       seen = 0u;
-    bool           b_ok = (0u != p_cfg->header.session_id);
+    bool b_any = false;
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
     {
-        uint8_t const  node_id = p_cfg->node_map[slot];
-        uint16_t const bit     = cl_node_bit(node_id);
-        bool const     b_in    = (slot < used);
-
-        if ((0u != node_id) && ((!b_in) || (0u != (seen & bit))))
-        {
-            b_ok = false;
-        }
-
-        seen |= bit;
+        b_any = b_any || (0u != p_cfg->cell[node].b_placed);
     }
 
-    return (b_ok) && (0u != seen);
+    return (0u != p_cfg->header.session_id) && (b_any);
 }
 
 /**
@@ -1603,26 +1595,35 @@ static bool cl_tile_seq_ok (uint8_t node_id, uint16_t seq)
 }
 
 /**
- * @brief  Map position of a Node ID in the active session.
- * @param  node_id  1 to 9.
- * @param  p_slot   Receives the position when found.
- * @return true when the Node ID is in the map.
+ * @brief  Whether a Node ID is placed in the active session.
+ * @param  node_id  Any value; only 1 to 9 can be placed.
+ * @return true when placed.
  */
-static bool cl_slot_of (uint8_t node_id, uint32_t * p_slot)
+static bool cl_placed (uint8_t node_id)
 {
-    bool b_found = false;
+    return (g_session.b_active) && (node_id >= 1u) &&
+           (node_id <= PROTO_NODE_MAX) &&
+           (0u != g_session.cell[node_id - 1u].b_placed);
+}
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+/**
+ * @brief  The cell of a Node ID in the active session (step 4d).
+ * @param  node_id  1 to 9.
+ * @param  p_row    Receives the row when placed.
+ * @param  p_col    Receives the column when placed.
+ * @return true when the Node ID is placed.
+ */
+static bool cl_cell_of (uint8_t node_id, uint8_t * p_row, uint8_t * p_col)
+{
+    bool const b_placed = cl_placed(node_id);
+
+    if (b_placed)
     {
-        if ((!b_found) && (g_session.b_active) &&
-            (node_id == g_session.node_map[slot]))
-        {
-            *p_slot = slot;
-            b_found = true;
-        }
+        *p_row = g_session.cell[node_id - 1u].row;
+        *p_col = g_session.cell[node_id - 1u].col;
     }
 
-    return b_found;
+    return b_placed;
 }
 
 /**
@@ -2337,7 +2338,8 @@ static void cl_round_to_tiles (uint8_t command, uint64_t now)
 
 /**
  * @brief  The tile nearest the centre of the wall among the given tiles
- *         (the start sprite's tile, B7); ties go to the lower map position.
+ *         (the start sprite's tile, B7); ties go to the cell first in
+ *         row-major order.
  * @param  mask  Node IDs, bit n - 1.
  * @return Node ID, or 0 when no tile of the mask is in the map.
  */
@@ -2345,28 +2347,34 @@ static uint8_t cl_centre_node (uint16_t mask)
 {
     uint8_t  best      = 0u;
     uint32_t best_dist = UINT32_MAX;
+    uint32_t best_pos  = UINT32_MAX;
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
     {
-        uint8_t const node_id = g_session.node_map[slot];
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+        uint8_t       cell_r  = 0u;
+        uint8_t       cell_c  = 0u;
 
-        if ((0u != node_id) && (0u != (mask & cl_node_bit(node_id))) &&
-            (0u != g_session.cols))
+        if ((0u != (mask & cl_node_bit(node_id))) &&
+            (cl_cell_of(node_id, &cell_r, &cell_c)))
         {
-            /* Doubled coordinates, so the centre is a whole number; slot,
-             * rows and cols are below 10. */
-            int32_t const row  = (int32_t)(slot / g_session.cols); /* < 9. */
-            int32_t const col  = (int32_t)(slot % g_session.cols); /* < 9. */
-            int32_t const rows = (int32_t)g_session.rows; /* 1 to 9. */
-            int32_t const cols = (int32_t)g_session.cols; /* 1 to 9. */
-            int32_t const d_r  = (2 * row) - (rows - 1);
-            int32_t const d_c  = (2 * col) - (cols - 1);
+            /* Doubled coordinates, so the centre is a whole number; row,
+             * col, rows and cols are below 10. */
+            int32_t const  row  = (int32_t)cell_r; /* 0 to 8. */
+            int32_t const  col  = (int32_t)cell_c; /* 0 to 8. */
+            int32_t const  rows = (int32_t)g_session.rows; /* 1 to 9. */
+            int32_t const  cols = (int32_t)g_session.cols; /* 1 to 9. */
+            int32_t const  d_r  = (2 * row) - (rows - 1);
+            int32_t const  d_c  = (2 * col) - (cols - 1);
             /* A sum of squares: non-negative and below 400. */
             uint32_t const dist = (uint32_t)((d_r * d_r) + (d_c * d_c));
+            /* Widened: row-major position, below 81. */
+            uint32_t const pos  = ((uint32_t)cell_r * g_session.cols) + cell_c;
 
-            if (dist < best_dist)
+            if ((dist < best_dist) || ((dist == best_dist) && (pos < best_pos)))
             {
                 best_dist = dist;
+                best_pos  = pos;
                 best      = node_id;
             }
         }
@@ -2445,21 +2453,26 @@ static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
  */
 static void cl_send_countdown (uint64_t t_first)
 {
+    score_cells_t cells;
+
+    cl_active_cells(&cells);
+
     for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
     {
         uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
-        uint32_t      slot    = 0u;
+        uint8_t       row     = 0u;
+        uint8_t       col     = 0u;
 
         if ((0u != (g_round_mask & cl_node_bit(node_id))) &&
-            (cl_slot_of(node_id, &slot)))
+            (cl_cell_of(node_id, &row, &col)))
         {
             for (uint32_t step = 0u; step < CL_COUNTDOWN_STEPS; step++)
             {
-                /* 3, 2, 1: step < 3, so the digit and the slot fit. */
+                /* 3, 2, 1: step < 3, so the digit fits. */
                 int32_t const  digit = (int32_t)(CL_COUNTDOWN_STEPS - step);
                 uint64_t const mask  = score_font_picture_mask(
                     SCORE_PIC_NUMBER, digit, g_session.rows, g_session.cols,
-                    cl_active_slots(), (uint8_t)slot); /* slot < 9. */
+                    &cells, row, col);
 
                 cl_queue_picture(node_id, (uint8_t)step, /* step < 3. */
                                  (uint8_t)PROTO_PIC_PICTURE,   /* 3 fit. */
@@ -2480,28 +2493,30 @@ static void cl_send_countdown (uint64_t t_first)
  */
 static void cl_send_results (uint64_t t_first)
 {
+    score_cells_t  cells;
     int32_t const  score = game_rules_score(&g_game);
     /* 1 to 3 stars: fits int32_t. */
     int32_t const  stars = (int32_t)game_rules_stars(&g_game);
     uint64_t const t_score = t_first + (UINT64_C(1000) * CL_SPARKLE_MS);
     uint64_t const t_stars = t_score + (UINT64_C(1000) * CL_RESULT_MS);
 
+    cl_active_cells(&cells);
+
     for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
     {
         uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
-        uint32_t      slot    = 0u;
+        uint8_t       row     = 0u;
+        uint8_t       col     = 0u;
 
         if ((0u != (g_session.required & cl_node_bit(node_id))) &&
-            (cl_slot_of(node_id, &slot)))
+            (cl_cell_of(node_id, &row, &col)))
         {
-            /* slot < 9: fits uint8_t. */
-            uint8_t const  pos       = (uint8_t)slot;
             uint64_t const score_pic = score_font_picture_mask(
                 SCORE_PIC_NUMBER, score, g_session.rows, g_session.cols,
-                cl_active_slots(), pos);
+                &cells, row, col);
             uint64_t const stars_pic = score_font_picture_mask(
                 SCORE_PIC_STARS, stars, g_session.rows, g_session.cols,
-                cl_active_slots(), pos);
+                &cells, row, col);
 
             cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_SPARKLE, /* 3. */
                              (uint8_t)PROTO_COLOUR_YELLOW, /* 8 fit. */
@@ -2804,22 +2819,27 @@ static int8_t cl_status_score (void)
 }
 
 /**
- * @brief  Map positions that hold a Node ID, bit p for position p.
- * @return The bitmap.
+ * @brief  The cells that hold a placed tile, for the wall pictures.
+ * @param  p_cells  Receives them.
  */
-static uint16_t cl_active_slots (void)
+static void cl_active_cells (score_cells_t * p_cells)
 {
-    uint16_t bits = 0u;
-
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t row = 0u; row < SCORE_FONT_GRID_MAX; row++)
     {
-        if (0u != g_session.node_map[slot])
-        {
-            bits |= (uint16_t)(UINT16_C(1) << slot); /* slot < 9. */
-        }
+        p_cells->row_bits[row] = 0u;
     }
 
-    return bits;
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
+    {
+        proto_cell_t const * const p_cell = &g_session.cell[node];
+
+        if ((0u != p_cell->b_placed) && (p_cell->row < SCORE_FONT_GRID_MAX) &&
+            (p_cell->col < SCORE_FONT_GRID_MAX))
+        {
+            /* col < 9: the shift fits uint16_t. */
+            p_cells->row_bits[p_cell->row] |= (uint16_t)(1u << p_cell->col);
+        }
+    }
 }
 
 /**

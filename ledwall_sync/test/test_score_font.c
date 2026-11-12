@@ -31,6 +31,78 @@ static uint32_t tst_popcount (uint64_t value)
     return count;
 }
 
+/**
+ * @brief  The cells of a grid of up to 9 cells given as a position bitmap
+ *         (bit p = cell (p / cols, p % cols)), the form these cases were
+ *         written in before step 4d.
+ * @param  cols    Columns, 1 to 9.
+ * @param  active  Position bitmap.
+ * @return The cells.
+ */
+static score_cells_t tst_cells (uint8_t cols, uint16_t active)
+{
+    score_cells_t cells = {{0u}};
+
+    for (uint32_t pos = 0u; (0u != cols) && (pos < 16u); pos++)
+    {
+        if ((0u != (active & (UINT16_C(1) << pos))) &&
+            ((pos / cols) < SCORE_FONT_GRID_MAX))
+        {
+            /* pos % cols < 9: the shift fits. */
+            cells.row_bits[pos / cols] |= (uint16_t)(1u << (pos % cols));
+        }
+    }
+
+    return cells;
+}
+
+/** score_font_picture_lit() over a position bitmap. */
+static bool tst_lit (score_pic_t pic, int32_t value, uint8_t rows,
+                     uint8_t cols, uint16_t active, uint32_t pixel_x,
+                     uint32_t pixel_y)
+{
+    score_cells_t const cells = tst_cells(cols, active);
+
+    return score_font_picture_lit(pic, value, rows, cols, &cells, pixel_x,
+                                  pixel_y);
+}
+
+/** score_font_picture_mask() of the tile at a position. */
+static uint64_t tst_mask (score_pic_t pic, int32_t value, uint8_t rows,
+                          uint8_t cols, uint16_t active, uint8_t slot)
+{
+    score_cells_t const cells = tst_cells(cols, active);
+    /* cols is 1 to 9 where it is used, and slot below 16: both fit. */
+    uint8_t const row = (0u != cols) ? (uint8_t)(slot / cols) : 0u;
+    /* As above. */
+    uint8_t const col = (0u != cols) ? (uint8_t)(slot % cols) : 0u;
+
+    return score_font_picture_mask(pic, value, rows, cols, &cells, row, col);
+}
+
+/** score_font_wall_lit() over a position bitmap. */
+static bool tst_wall_lit (int32_t score, uint8_t rows, uint8_t cols,
+                          uint16_t active, uint32_t pixel_x, uint32_t pixel_y)
+{
+    return tst_lit(SCORE_PIC_NUMBER, score, rows, cols, active, pixel_x,
+                   pixel_y);
+}
+
+/** score_font_tile_mask() of the tile at a position. */
+static uint64_t tst_tile_mask (int32_t score, uint8_t rows, uint8_t cols,
+                               uint16_t active, uint8_t slot)
+{
+    return tst_mask(SCORE_PIC_NUMBER, score, rows, cols, active, slot);
+}
+
+/** score_font_sparse() over a position bitmap. */
+static bool tst_sparse (uint8_t rows, uint8_t cols, uint16_t active)
+{
+    score_cells_t const cells = tst_cells(cols, active);
+
+    return score_font_sparse(rows, cols, &cells);
+}
+
 /** Lit pixels of the whole wall, row by row, for a picture and a layout. */
 static uint32_t tst_pic_count (score_pic_t pic, int32_t value, uint8_t rows,
                                uint8_t cols, uint16_t active)
@@ -41,8 +113,7 @@ static uint32_t tst_pic_count (score_pic_t pic, int32_t value, uint8_t rows,
     {
         for (uint32_t pixel_x = 0u; pixel_x < (cols * 8u); pixel_x++)
         {
-            if (score_font_picture_lit(pic, value, rows, cols, active, pixel_x,
-                                       pixel_y))
+            if (tst_lit(pic, value, rows, cols, active, pixel_x, pixel_y))
             {
                 count++;
             }
@@ -61,8 +132,8 @@ static uint32_t tst_slice_count (score_pic_t pic, int32_t value, uint8_t rows,
     for (uint32_t slot = 0u; slot < (rows * cols); slot++)
     {
         /* slot < 9: fits uint8_t. */
-        count += tst_popcount(score_font_picture_mask(pic, value, rows, cols,
-                                                      active, (uint8_t)slot));
+        count += tst_popcount(
+            tst_mask(pic, value, rows, cols, active, (uint8_t)slot));
     }
 
     return count;
@@ -78,8 +149,7 @@ static uint32_t tst_wall_count (int32_t score, uint8_t rows, uint8_t cols,
     {
         for (uint32_t pixel_x = 0u; pixel_x < (cols * 8u); pixel_x++)
         {
-            if (score_font_wall_lit(score, rows, cols, active, pixel_x,
-                                    pixel_y))
+            if (tst_wall_lit(score, rows, cols, active, pixel_x, pixel_y))
             {
                 count++;
             }
@@ -113,39 +183,46 @@ bool test_score_font_slices (void)
                             __LINE__)) && b_ok;
 
     /* One tile centred on the 8 x 8 tile: 0 starts at column 2, row 1. */
-    b_ok = (test_main_check(score_font_wall_lit(0, 1, 1, 0x1u, 2u, 1u),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(!score_font_wall_lit(0, 1, 1, 0x1u, 3u, 2u),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(tst_wall_lit(0, 1, 1, 0x1u, 2u, 1u), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(!tst_wall_lit(0, 1, 1, 0x1u, 3u, 2u), __LINE__)) &&
+           b_ok;
 
     /* The text is centred on the active tiles, not the whole wall: with
      * only the top-left tile of a 2 x 2 active, a 1 is drawn inside it. */
     b_ok = (test_main_check(8u == tst_wall_count(1, 2, 2, 0x1u), __LINE__)) &&
            b_ok;
-    b_ok = (test_main_check(!score_font_wall_lit(1, 2, 2, 0x1u, 0u, 9u),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(!tst_wall_lit(1, 2, 2, 0x1u, 0u, 9u), __LINE__)) &&
+           b_ok;
 
     /* Slices of a 1 x 2 wall add up to the whole drawing, each on its tile. */
-    uint64_t const left  = score_font_tile_mask(10, 1, 2, 0x3u, 0u);
-    uint64_t const right = score_font_tile_mask(10, 1, 2, 0x3u, 1u);
+    uint64_t const left  = tst_tile_mask(10, 1, 2, 0x3u, 0u);
+    uint64_t const right = tst_tile_mask(10, 1, 2, 0x3u, 1u);
     b_ok = (test_main_check(0u == (left & right), __LINE__)) && b_ok;
     b_ok = (test_main_check(20u == (tst_popcount(left) + tst_popcount(right)),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* Blank positions and bad positions draw nothing. */
-    b_ok = (test_main_check(0u == score_font_tile_mask(10, 1, 2, 0x1u, 1u),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(0u == score_font_tile_mask(0, 1, 1, 0x1u, 1u),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(0u == score_font_tile_mask(0, 0, 1, 0x1u, 0u),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(0u == score_font_tile_mask(0, 3, 4, 0x1u, 0u),
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(0u == tst_tile_mask(10, 1, 2, 0x1u, 1u), __LINE__)) &&
+        b_ok;
+    b_ok =
+        (test_main_check(0u == tst_tile_mask(0, 1, 1, 0x1u, 1u), __LINE__)) &&
+        b_ok;
+    b_ok =
+        (test_main_check(0u == tst_tile_mask(0, 0, 1, 0x1u, 0u), __LINE__)) &&
+        b_ok;
+    /* Since step 4d a 3 x 4 grid is valid; 10 rows is not. */
+    b_ok =
+        (test_main_check(0u == tst_tile_mask(0, 10, 1, 0x1u, 0u), __LINE__)) &&
+        b_ok;
 
     /* Scores past 99 are clamped to 99. */
-    b_ok = (test_main_check(score_font_tile_mask(150, 1, 1, 0x1u, 0u) ==
-                                score_font_tile_mask(99, 1, 1, 0x1u, 0u),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(tst_tile_mask(150, 1, 1, 0x1u, 0u) ==
+                                tst_tile_mask(99, 1, 1, 0x1u, 0u),
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -226,21 +303,114 @@ bool test_score_font_pictures (void)
     }
 
     /* Sparse rule: 1 of 4 is sparse; 2 of 4 is not; 4 of 9 is sparse. */
-    b_ok = (test_main_check(score_font_sparse(2u, 2u, 0x001u), __LINE__)) &&
-           b_ok;
-    b_ok = (test_main_check(!score_font_sparse(2u, 2u, 0x003u), __LINE__)) &&
-           b_ok;
-    b_ok = (test_main_check(score_font_sparse(3u, 3u, 0x00Fu), __LINE__)) &&
-           b_ok;
+    b_ok = (test_main_check(tst_sparse(2u, 2u, 0x001u), __LINE__)) && b_ok;
+    b_ok = (test_main_check(!tst_sparse(2u, 2u, 0x003u), __LINE__)) && b_ok;
+    b_ok = (test_main_check(tst_sparse(3u, 3u, 0x00Fu), __LINE__)) && b_ok;
 
     /* The 3 x 3 countdown digit is centred: 12 x 20 in 24 x 24 starts at
      * column 6, row 2 (the top bar of the 3). */
-    b_ok = (test_main_check(score_font_picture_lit(SCORE_PIC_NUMBER, 3, 3u,
-                                                   3u, 0x1FFu, 6u, 2u),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(!score_font_picture_lit(SCORE_PIC_NUMBER, 3, 3u,
-                                                    3u, 0x1FFu, 5u, 2u),
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(tst_lit(SCORE_PIC_NUMBER, 3, 3u, 3u, 0x1FFu, 6u, 2u),
+                         __LINE__)) &&
+        b_ok;
+    b_ok =
+        (test_main_check(!tst_lit(SCORE_PIC_NUMBER, 3, 3u, 3u, 0x1FFu, 5u, 2u),
+                         __LINE__)) &&
+        b_ok;
+
+    return b_ok;
+}
+
+/** Lit pixels of the whole grid and of the summed tile slices, for cells. */
+static void tst_cells_count (score_pic_t pic, int32_t value, uint8_t rows,
+                             uint8_t cols, score_cells_t const * p_cells,
+                             uint32_t * p_wall, uint32_t * p_slices)
+{
+    *p_wall   = 0u;
+    *p_slices = 0u;
+
+    for (uint32_t pixel_y = 0u; pixel_y < (rows * 8u); pixel_y++)
+    {
+        for (uint32_t pixel_x = 0u; pixel_x < (cols * 8u); pixel_x++)
+        {
+            if (score_font_picture_lit(pic, value, rows, cols, p_cells,
+                                       pixel_x, pixel_y))
+            {
+                (*p_wall)++;
+            }
+        }
+    }
+
+    for (uint8_t row = 0u; row < rows; row++)
+    {
+        for (uint8_t col = 0u; col < cols; col++)
+        {
+            *p_slices += tst_popcount(score_font_picture_mask(
+                pic, value, rows, cols, p_cells, row, col));
+        }
+    }
+}
+
+/**
+ * @brief  C19c (step 4d, DS-15): grids of more than 9 cells. A 5 x 5 and a
+ *         9 x 9 diagonal are sparse, so each tile shows the small 3 (11
+ *         pixels); 9 tiles in one corner of 9 x 9 are sparse too; 9 of the
+ *         10 cells of 2 x 5 are dense, so the 3 is drawn big across the
+ *         grid and the empty cell gets nothing; a cell bit outside the grid
+ *         draws nothing.
+ * @return true when every check passed.
+ */
+bool test_score_font_cells (void)
+{
+    score_cells_t diag5  = {{0u}};
+    score_cells_t diag9  = {{0u}};
+    score_cells_t corner = {{0u}};
+    score_cells_t dense  = {{0x1Fu, 0x0Fu}}; /* (1, 4) empty. */
+    score_cells_t stray  = {{0x01u | 0x20u}}; /* (0, 0) and (0, 5). */
+    uint32_t      wall   = 0u;
+    uint32_t      slices = 0u;
+    bool          b_ok   = true;
+
+    for (uint32_t index = 0u; index < SCORE_FONT_GRID_MAX; index++)
+    {
+        /* index < 9: the shifts fit uint16_t. */
+        diag9.row_bits[index] = (uint16_t)(1u << index);
+        /* As above. */
+        diag5.row_bits[index] = (index < 5u) ? (uint16_t)(1u << index) : 0u;
+        /* Columns 6 to 8: 0x1C0 fits uint16_t. */
+        corner.row_bits[index] = (index >= 6u) ? (uint16_t)0x1C0u : 0u;
+    }
+
+    b_ok = (test_main_check(score_font_sparse(5u, 5u, &diag5), __LINE__)) &&
+           b_ok;
+    tst_cells_count(SCORE_PIC_NUMBER, 3, 5u, 5u, &diag5, &wall, &slices);
+    b_ok = (test_main_check((55u == wall) && (55u == slices), __LINE__)) &&
+           b_ok;
+    tst_cells_count(SCORE_PIC_NUMBER, 3, 9u, 9u, &diag9, &wall, &slices);
+    b_ok = (test_main_check((99u == wall) && (99u == slices), __LINE__)) &&
+           b_ok;
+    tst_cells_count(SCORE_PIC_NUMBER, 3, 9u, 9u, &corner, &wall, &slices);
+    b_ok = (test_main_check((99u == wall) && (99u == slices), __LINE__)) &&
+           b_ok;
+
+    /* Dense: one big 3, more pixels than one small copy, none on (1, 4). */
+    b_ok = (test_main_check(!score_font_sparse(2u, 5u, &dense), __LINE__)) &&
+           b_ok;
+    tst_cells_count(SCORE_PIC_NUMBER, 3, 2u, 5u, &dense, &wall, &slices);
+    b_ok = (test_main_check((wall == slices) && (wall > 11u), __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(0u == score_font_picture_mask(SCORE_PIC_NUMBER, 3,
+                                                          2u, 5u, &dense, 1u,
+                                                          4u),
+                            __LINE__)) &&
+           b_ok;
+
+    /* (0, 5) is outside a 3 x 3 grid: only (0, 0) counts and draws. */
+    b_ok = (test_main_check(score_font_sparse(3u, 3u, &stray), __LINE__)) &&
+           b_ok;
+    tst_cells_count(SCORE_PIC_NUMBER, 3, 3u, 3u, &stray, &wall, &slices);
+    b_ok = (test_main_check((11u == wall) && (11u == slices), __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
