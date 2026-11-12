@@ -50,6 +50,9 @@ class TileRow:
     fault_word: int
     orientation: int
     display_state: int
+    #: The session in the TELEMETRY header: the one the tile works in
+    #: (DS-12 A1: an upload waits until it is the PC's).
+    session_id: int = 0
 
     def faults(self) -> str:
         """Names of the set fault bits, or ``none``."""
@@ -76,7 +79,8 @@ def parse(data: bytes, address: str,
                   address=address, last_seen=now, seq=seq,
                   fault_word=int(msg["fault_word"]),  # type: ignore
                   orientation=int(msg["orientation"]),  # type: ignore
-                  display_state=int(msg["display_state"]))  # type: ignore
+                  display_state=int(msg["display_state"]),  # type: ignore
+                  session_id=int(msg["session_id"]))  # type: ignore
     return row, make_ack(int(msg["session_id"]), seq)  # type: ignore
 
 
@@ -112,6 +116,11 @@ class TelemetryReceiver:
         """Last address the tile sent TELEMETRY from, or None."""
         row = self.tiles.get(node_id)
         return row.address if row else None
+
+    def session_of(self, node_id: int) -> Optional[int]:
+        """The session of the tile's last TELEMETRY, or None."""
+        row = self.tiles.get(node_id)
+        return row.session_id if row else None
 
     def close(self) -> None:
         """Release the port."""

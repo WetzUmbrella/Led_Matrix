@@ -25,7 +25,9 @@ import uploader as up  # noqa: E402
 class FakeTile(threading.Thread):
     """Minimal tile on 127.0.0.1:<port>."""
 
-    def __init__(self, busy: bool = False, nack_every: int = 0) -> None:
+    def __init__(self, busy: bool = False, nack_every: int = 0,
+                 deaf_manifests: int = 0, drop_after: int = 0,
+                 mute: bool = False) -> None:
         super().__init__(daemon=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", 0))
@@ -33,6 +35,13 @@ class FakeTile(threading.Thread):
         self.port = self.sock.getsockname()[1]
         self.busy = busy
         self.nack_every = nack_every
+        #: MANIFESTs to ignore first (the tile is in another session).
+        self.deaf_manifests = deaf_manifests
+        #: Drop the open upload once after this many chunks (flash error).
+        self.drop_after = drop_after
+        #: Take everything, ACK nothing (the CHUNK_ACKs are lost).
+        self.mute = mute
+        self.manifests = 0
         self.chunks: Dict[int, bytes] = {}
         self.manifest: Optional[dict] = None
         self.received = 0
@@ -51,10 +60,25 @@ class FakeTile(threading.Thread):
                     ref_seq=msg["seq"]), addr)
                 continue
             if msg["type"] == "MANIFEST":
+                self.manifests += 1
+                if self.deaf_manifests > 0:
+                    self.deaf_manifests -= 1
+                    continue
+                if (self.manifest is None) or \
+                        (msg["crc32"] != self.manifest["crc32"]):
+                    self.chunks = {}  # A repeat changes nothing.
                 self.manifest = msg
+                continue
+            if self.manifest is None:
+                continue  # No upload open: ignored, no ACK.
+            self.received += 1
+            if self.drop_after and self.received == self.drop_after:
+                self.manifest = None
                 self.chunks = {}
                 continue
-            self.received += 1
+            if self.mute:
+                self.chunks[int(msg["chunk_index"])] = msg["payload"]
+                continue
             if self.nack_every and self.received % self.nack_every == 0:
                 self.sock.sendto(pl.encode_nack(
                     session_id=msg["session_id"], seq=1, node_id=4, reason=3,
@@ -129,6 +153,54 @@ def test_busy_stops_the_upload(asset: bytes) -> None:
     with pytest.raises(up.UploadError, match="BUSY"):
         _upload(tile, asset)
     tile.stop()
+
+
+def test_a_fast_tile_does_not_wait_out_the_ack_timeout(asset: bytes) -> None:
+    # 15 windows: waiting each one's full 1 s timeout would take 15 s.
+    tile = FakeTile()
+    tile.start()
+    up.TILE_PORT = tile.port
+    uploader = up.Uploader(rate=0, settle_s=0.01, ack_timeout_s=1.0)
+    stats = uploader.upload_asset("127.0.0.1", 5, asset)
+    uploader.sock.close()
+    tile.stop()
+    assert len(stats.acked) == 57
+    assert stats.seconds < 3.0
+
+
+def test_manifest_dropped_once_is_sent_again(asset: bytes) -> None:
+    # DS-12 A2: the tile was in another session when the MANIFEST came.
+    tile = FakeTile(deaf_manifests=1)
+    tile.start()
+    stats = _upload(tile, asset)
+    tile.stop()
+    assert len(stats.acked) == 57
+    assert (stats.manifests, tile.manifests) == (2, 2)
+    # Only the first window went to the deaf tile, not the whole asset.
+    assert stats.sent == 57 + up.WINDOW
+    assert zlib.crc32(tile.payload()) == zlib.crc32(asset)
+
+
+def test_tile_that_drops_the_upload_gets_it_all_again(asset: bytes) -> None:
+    # The tile drops its open upload (a flash write failed): what it ACKed
+    # before no longer counts, so the whole asset is sent again.
+    tile = FakeTile(drop_after=20)
+    tile.start()
+    stats = _upload(tile, asset)
+    tile.stop()
+    assert len(stats.acked) == 57 and stats.manifests == 2
+    assert zlib.crc32(tile.payload()) == zlib.crc32(asset)
+
+
+def test_silent_tile_ends_as_incomplete(asset: bytes,
+                                        monkeypatch) -> None:  # type: ignore
+    monkeypatch.setattr(up, "MAX_ROUNDS", 3)
+    tile = FakeTile(mute=True)
+    tile.start()
+    with pytest.raises(up.UploadIncomplete, match="0 of 57 chunks"):
+        _upload(tile, asset)
+    tile.stop()
+    assert tile.manifests == 4  # The first, then one after each round.
 
 
 def test_count_busy_57_of_57(asset: bytes) -> None:

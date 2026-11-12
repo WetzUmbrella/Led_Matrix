@@ -233,6 +233,55 @@ def test_upload_reports_a_tile_with_no_address() -> None:
     assert failed == {2: "no TELEMETRY yet, address unknown"}
 
 
+def test_upload_waits_for_the_session_before_each_tile() -> None:
+    # DS-12 A1: the wait comes before the send; a tile whose session never
+    # shows is uploaded all the same, with a message.
+    model = _model()
+    _uploadable(model)
+    order = []
+
+    def wait(node):  # type: ignore[no-untyped-def]
+        order.append(("wait", node))
+        return node != 2
+
+    def send(address, session_id, payload):  # type: ignore[no-untyped-def]
+        order.append(("send", payload[0]))
+
+    failed = db.run_uploads(model, 7, send, "10.0.0.{}".format, wait)
+    assert failed == {}
+    assert order == [("wait", 1), ("send", 1), ("wait", 2), ("send", 2),
+                     ("wait", 3), ("send", 3)]
+    assert any("node 2: no TELEMETRY in session 7" in m
+               for m in model.messages)
+
+
+def test_incomplete_upload_counts_when_the_pico_says_ready() -> None:
+    # DS-12 C: the last CHUNK_ACKs were lost; the Pico's readiness decides.
+    model = _model()
+    _uploadable(model)
+    asked = []
+
+    def send(address, session_id, payload):  # type: ignore[no-untyped-def]
+        if payload[0] in (1, 2):
+            raise uploader.UploadIncomplete("55 of 57 chunks ACKed after "
+                                            "20 rounds")
+        raise uploader.UploadError("tile is playing (BUSY)")
+
+    def ready(node):  # type: ignore[no-untyped-def]
+        asked.append(node)
+        return node == 1
+
+    failed = db.run_uploads(model, 7, send, "10.0.0.{}".format,
+                            ready_of=ready)
+    # Node 1 is ready on the Pico; node 2 is not; a refusal is never asked.
+    assert asked == [1, 2]
+    assert failed == {2: "55 of 57 chunks ACKed after 20 rounds",
+                      3: "tile is playing (BUSY)"}
+    assert model.pending_uploads(7) == [2, 3]
+    assert any("node 1" in m and "Pico counts it ready" in m
+               for m in model.messages)
+
+
 def test_asset_already_acked_for_another_session_is_sent_again() -> None:
     model = _model()
     _uploadable(model)

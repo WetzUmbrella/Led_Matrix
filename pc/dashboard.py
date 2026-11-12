@@ -87,6 +87,14 @@ SESSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 SEQ_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         ".last_seq")
 
+#: DS-12 A1: how long an upload waits for the tile's TELEMETRY to carry the
+#: new session (tiles send it about once a second), and the poll step.
+SESSION_WAIT_S = 3.0
+SESSION_POLL_S = 0.05
+
+#: DS-12 C: how long to wait for a fresh STATUS (the Pico sends 4 a second).
+READY_WAIT_S = 1.0
+
 #: Messages kept in memory for the website.
 MESSAGE_KEEP = 200
 
@@ -135,12 +143,21 @@ def resolve_session(requested: Optional[int],
 
 def run_uploads(model: "DashboardModel", session_id: int,
                 send: Callable[[str, int, bytes], object],
-                address_of: Callable[[int], Optional[str]]) -> Dict[int, str]:
+                address_of: Callable[[int], Optional[str]],
+                wait_session: Optional[Callable[[int], bool]] = None,
+                ready_of: Optional[Callable[[int], bool]] = None
+                ) -> Dict[int, str]:
     """Upload every tile asset that is not yet ACKed for this session.
 
     ``send(address, session_id, payload)`` raises ``uploader.UploadError``
     when a tile refuses; the next tile is still tried. Returns the failed
     Node IDs with the reason. Rerunning sends only the failed tiles.
+
+    DS-12 (12 Nov 2026): ``wait_session(node)`` waits until the tile works
+    in this session, so its MANIFEST is not dropped (A1; False = it never
+    showed, the upload is tried all the same). When the uploader's rounds
+    run out, ``ready_of(node)`` asks the Pico: a tile the Pico counts
+    ready holds the whole asset, only its last CHUNK_ACKs were lost (C).
     """
     failed: Dict[int, str] = {}
     model.state = "UPLOADING ASSETS"
@@ -149,8 +166,17 @@ def run_uploads(model: "DashboardModel", session_id: int,
         if address is None:
             failed[node] = "no TELEMETRY yet, address unknown"
             continue
+        if (wait_session is not None) and (not wait_session(node)):
+            model._say("node %d: no TELEMETRY in session %d yet, uploading "
+                       "anyway" % (node, session_id))
         try:
             send(address, session_id, model.assets[node].payload)
+        except uploader.UploadIncomplete as err:
+            if (ready_of is None) or (not ready_of(node)):
+                failed[node] = str(err)
+                continue
+            model._say("node %d: %s, but the Pico counts it ready: uploaded"
+                       % (node, err))
         except uploader.UploadError as err:
             failed[node] = str(err)
             continue
@@ -606,11 +632,39 @@ class DashboardShell(cmd.Cmd):
                                     stats.resent, stats.seconds))
         return stats
 
+    def _wait_session(self, node: int) -> bool:
+        """DS-12 A1: wait until the tile's TELEMETRY header carries this
+        session. A tile takes a new session from the Pico's beacon; a
+        MANIFEST that arrives before that is dropped (bench 9 Nov 2026)."""
+        deadline = time.monotonic() + SESSION_WAIT_S
+        while True:
+            self.telemetry.poll()
+            if self.telemetry.session_of(node) == self.session_id:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(SESSION_POLL_S)
+
+    def _pico_ready(self, node: int) -> bool:
+        """DS-12 C: whether a STATUS received from now on shows the tile
+        ready (the Pico counts only an ASSET_READY with the session's
+        CRC32). An older STATUS could predate the upload."""
+        asked = time.monotonic()
+        deadline = asked + READY_WAIT_S
+        while time.monotonic() < deadline:
+            status = self.link.poll_status()
+            if (status is not None) and (status.received >= asked):
+                self.model.on_status(status)
+                return node in pico_link.nodes_in(status.readiness)
+            time.sleep(SESSION_POLL_S)
+        return False
+
     def upload_pending(self) -> Dict[int, str]:
         """Upload every tile that has not ACKed its asset; returns failures."""
         self.telemetry.poll()
         return run_uploads(self.model, self.session_id, self._send_asset,
-                           self.telemetry.address_of)
+                           self.telemetry.address_of, self._wait_session,
+                           self._pico_ready)
 
     def publish(self) -> Dict[int, str]:
         """Rebuild, send SESSION_CONFIG and upload what is pending. Used after

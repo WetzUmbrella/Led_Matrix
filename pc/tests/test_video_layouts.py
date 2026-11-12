@@ -63,6 +63,9 @@ class FakeTelemetry:
     def address_of(self, node: int):  # type: ignore[no-untyped-def]
         return "10.0.0.%d" % node
 
+    def session_of(self, node: int) -> int:
+        return 7  # Every tile already works in the shell's session.
+
 
 class FakeUploader:
     def __init__(self) -> None:
@@ -84,6 +87,56 @@ def _shell() -> db.DashboardShell:
     # The Pico reports READY (coordinator state 7): the wall is stopped.
     shell.model.on_status(plink.Status(0, 0, 7, 0.0))
     return shell
+
+
+def test_telemetry_row_keeps_the_tile_session() -> None:
+    import telemetry
+    data = pl.encode_telemetry(session_id=21, seq=5, node_id=4, fault_word=0,
+                               orientation=0, display_state=1)
+    row, _ack = telemetry.parse(data, "10.0.0.4", 1.0)
+    assert (row.node_id, row.session_id) == (4, 21)
+
+
+def test_session_wait_ends_when_the_telemetry_shows_it(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # DS-12 A1: polls until the tile's TELEMETRY carries the session.
+    shell = _shell()
+    sessions = iter([None, 3, 3, 7])
+    polls = []
+    shell.telemetry = types.SimpleNamespace(
+        poll=lambda: polls.append(1), session_of=lambda node: next(sessions))
+    monkeypatch.setattr(db, "time", types.SimpleNamespace(
+        monotonic=lambda: 0.0, sleep=lambda s: None))
+    assert shell._wait_session(4)
+    assert len(polls) == 4
+
+
+def test_session_wait_gives_up(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    shell = _shell()
+    now = [0.0]
+    shell.telemetry = types.SimpleNamespace(poll=lambda: 0,
+                                            session_of=lambda node: 3)
+    monkeypatch.setattr(db, "time", types.SimpleNamespace(
+        monotonic=lambda: now[0],
+        sleep=lambda s: now.__setitem__(0, now[0] + s)))
+    assert not shell._wait_session(4)
+    assert db.SESSION_WAIT_S <= now[0] < db.SESSION_WAIT_S + 0.2
+
+
+def test_pico_ready_needs_a_fresh_status(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # DS-12 C: a STATUS from before the question does not count.
+    shell = _shell()
+    now = [10.0]
+    monkeypatch.setattr(db, "time", types.SimpleNamespace(
+        monotonic=lambda: now[0],
+        sleep=lambda s: now.__setitem__(0, now[0] + s)))
+    old = plink.Status(0b1000, 0b1000, 7, 9.0)   # Node 4 ready, but old.
+    shell.link.poll_status = lambda: old
+    assert not shell._pico_ready(4)
+    now[0] = 20.0
+    fresh = plink.Status(0b1000, 0b1000, 7, 20.0)
+    shell.link.poll_status = lambda: fresh
+    assert shell._pico_ready(4)
+    assert not shell._pico_ready(5)
 
 
 def _gif(tmp_path, layout: str, node_map) -> str:  # type: ignore[no-untyped-def]

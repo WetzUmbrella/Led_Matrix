@@ -18,11 +18,21 @@ for the next round; NACK reason 0 or 1 and BUSY stop the upload.
 
 PROVISIONAL choices (owner Jolyn):
   * window of 4 chunks per round, the tile's Upload Queue length (OD-11);
+    the next window goes as soon as every chunk of this one is ACKed, or
+    after the ACK timeout (12 Nov 2026: waiting the full timeout made every
+    upload take about 5 s, the tile answering in a few ms);
   * 1.0 s pause after the MANIFEST while the tile erases the frames
     partition (about 16 sectors);
   * rate limit 100 chunks/s, about 100 KB/s, until OD-13 is measured in
     T-X-04;
   * at most 20 rounds before giving up.
+
+Upload fixes of 12 Nov 2026 (DS-12 A2, by Cheston): a round in which the
+tile ACKs nothing ends with the MANIFEST sent again and every chunk counted
+as missing, because the tile either never took the MANIFEST (it arrived
+before the tile knew the new session, or was lost) or dropped the upload.
+While nothing is ACKed yet, the round stops after its first silent window,
+so a tile without the MANIFEST is not sent the whole asset first.
 
 Time-to-ready (first chunk to ASSET_READY seen in Pico STATUS) is measured by
 ``pc/dashboard.py`` with ``pc/pico_link.py``, because the tile sends
@@ -84,6 +94,12 @@ class UploadError(RuntimeError):
     """The tile refused the upload (BUSY, NACK reason 0 or 1)."""
 
 
+class UploadIncomplete(UploadError):
+    """The rounds ran out with chunks not ACKed. The tile may still hold
+    the whole asset (its last CHUNK_ACKs were lost): the Pico's STATUS
+    readiness tells (DS-12 C, pc/dashboard.py)."""
+
+
 class RateLimiter:
     """At most ``rate`` sends per second, spaced evenly."""
 
@@ -112,6 +128,7 @@ class UploadStats:
     acked: Set[int] = field(default_factory=set)
     sent: int = 0
     resent: int = 0
+    manifests: int = 0
     queue_full_nacks: int = 0
     rounds: int = 0
     seconds: float = 0.0
@@ -145,9 +162,13 @@ class Uploader:
         return self.seq
 
     def _read_replies(self, deadline: float, session_id: int,
-                      stats: UploadStats) -> None:
-        """Collect CHUNK_ACK, NACK and BUSY until ``deadline``."""
+                      stats: UploadStats,
+                      want: Optional[Set[int]] = None) -> None:
+        """Collect CHUNK_ACK, NACK and BUSY until ``deadline``, or until
+        every chunk in ``want`` is ACKed."""
         while True:
+            if want and want <= stats.acked:
+                return
             left = deadline - time.monotonic()
             if left <= 0:
                 return
@@ -189,32 +210,46 @@ class Uploader:
         to_drop = set(drop)
         frame_bytes = FRAME_8BIT_BYTES if format_version == FORMAT_8BIT \
             else FRAME_BYTES
-        manifest = pl.encode_manifest(
-            session_id=session_id, seq=self._next_seq(),
-            format_version=format_version,
-            frame_count=len(payload) // frame_bytes,
-            crc32=zlib.crc32(payload) if manifest_crc is None
-            else manifest_crc)
+        crc32 = zlib.crc32(payload) if manifest_crc is None else manifest_crc
+
+        def send_manifest() -> None:
+            # A new seq each time; the tile settles (erases) after it.
+            self.sock.sendto(pl.encode_manifest(
+                session_id=session_id, seq=self._next_seq(),
+                format_version=format_version,
+                frame_count=len(payload) // frame_bytes, crc32=crc32),
+                (tile_ip, TILE_PORT))
+            stats.manifests += 1
+            self._read_replies(time.monotonic() + self.settle_s, session_id,
+                               stats)
+
         start = time.monotonic()
-        self.sock.sendto(manifest, (tile_ip, TILE_PORT))
-        self._read_replies(time.monotonic() + self.settle_s, session_id,
-                           stats)
-        self.retry_missing(tile_ip, session_id, payload, stats, to_drop)
+        send_manifest()
+        self.retry_missing(tile_ip, session_id, payload, stats, to_drop,
+                           send_manifest)
         stats.seconds = time.monotonic() - start
         return stats
 
     def retry_missing(self, tile_ip: str, session_id: int, payload: bytes,
-                      stats: UploadStats, to_drop: Set[int]) -> None:
+                      stats: UploadStats, to_drop: Set[int],
+                      send_manifest: Optional[Callable[[], None]] = None
+                      ) -> None:
         """Send every chunk not yet ACKed, a window at a time, until all
-        are ACKed or MAX_ROUNDS pass."""
+        are ACKed or MAX_ROUNDS pass. After a round with chunks sent and
+        none ACKed, ``send_manifest`` sends the MANIFEST again and the
+        upload starts over (DS-12 A2)."""
         tried: Set[int] = set()
         while len(stats.acked) < stats.chunks:
             stats.rounds += 1
             if stats.rounds > MAX_ROUNDS:
-                raise UploadError("%d of %d chunks ACKed after %d rounds" % (
-                    len(stats.acked), stats.chunks, MAX_ROUNDS))
+                raise UploadIncomplete(
+                    "%d of %d chunks ACKed after %d rounds" % (
+                        len(stats.acked), stats.chunks, MAX_ROUNDS))
             missing = [i for i in range(stats.chunks) if i not in stats.acked]
+            acked_before = len(stats.acked)
+            sent_before = stats.sent
             for first in range(0, len(missing), WINDOW):
+                window: Set[int] = set()
                 for index in missing[first:first + WINDOW]:
                     if index in tried:
                         stats.resent += 1
@@ -229,8 +264,19 @@ class Uploader:
                         payload=chunk_bytes(payload, index))
                     self.sock.sendto(data, (tile_ip, TILE_PORT))
                     stats.sent += 1
+                    window.add(index)
                 self._read_replies(time.monotonic() + self.ack_timeout_s,
-                                   session_id, stats)
+                                   session_id, stats, window)
+                if (not stats.acked) and (stats.sent > sent_before):
+                    break  # Nothing ACKed at all: the tile has no MANIFEST.
+            silent = (len(stats.acked) == acked_before) and \
+                (stats.sent > sent_before)
+            if silent and (send_manifest is not None):
+                # The tile may have dropped the upload: what it ACKed
+                # before no longer counts. A tile that still holds those
+                # chunks ACKs them again without writing them.
+                stats.acked.clear()
+                send_manifest()
 
     def count_busy(self, tile_ip: str, session_id: int, payload: bytes,
                    wait_s: float = 2.0) -> int:
