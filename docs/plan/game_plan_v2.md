@@ -352,6 +352,11 @@ Step 1 keeps the "upload twice in the same session" workaround.
 - **Game:** moles only on placed tiles that are on. **Whole-wall rotation** rotates every tile's (row, col) within the grid.
 - **Wall pictures on a sparse grid** (A15): when the placed tiles cover less than half of the grid's cells, the Pico sends every tile the whole small picture (the 1x1 rendering) instead of one big picture cut across the grid.
 
+**Decided 12 Nov 2026 (step 4d, with Cheston):**
+1. **Wire: a slot per Node ID.** SESSION_CONFIG's 9-position node_map becomes, for each Node ID 1 to 9, placed (1 bit), row (4 bits), col (4 bits): 81 bits instead of 36, the message 47 to 53 bytes. The 9 CRC32s are indexed by Node ID (`crc32[n - 1]`), not by map position. Chosen over a list of up to 9 (node, row, col) entries (108 bits, needs a duplicate check, CRCs in list order). The Pico checks: every placed tile's cell is inside rows x cols, no two tiles share a cell, at least one tile is placed; rows and cols stay 1 to 9. A tile switched off on the website is not placed on the wire; the PC remembers its cell. Only the PC and the Pico read the layout (the tiles do not), so no tile change.
+2. **Video: cut over the whole grid.** The GIF is centre-cropped and scaled to (cols x 8) by (rows x 8) as today, and only placed tiles get their 8x8 section; an empty cell's section is not shown. A full grid cuts exactly as before. Rejected: fitting the picture to the placed tiles' bounding box (the grid size would mean different things for video and game) and the whole GIF on every tile (the brief needs per-tile sections).
+3. **Pictures: switch by how full the grid is.** Big (spread across the grid) when the placed tiles fill at least half of the grid's cells, otherwise small (the whole picture on each tile), as above. Rejected: small whenever any cell is empty.
+
 ### DS-16 Website layout (decided 11 Nov)
 
 - **One page, three tabs** (Setup, Video, Game) under a status bar that is always visible: Pico state, tiles online, mode, and any problem (tile offline, upload failed).
