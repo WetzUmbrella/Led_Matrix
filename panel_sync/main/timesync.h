@@ -78,6 +78,14 @@
  *  never triggers it (PROVISIONAL, plan choice, owner Ahsanul). */
 #define TIMESYNC_RESEED_US INT64_C(500000)
 
+/** Re-seed only after this many samples in a row are past
+ *  TIMESYNC_RESEED_US; until then each such sample is dropped (decided
+ *  with Cheston 12 Nov 2026: on the Matrix router with 10 devices single
+ *  beacons arrived up to 514 ms late and re-seeded every few seconds, each
+ *  step a burst of missed display ticks). A real Pico restart re-seeds 2
+ *  beacons (about 200 ms) later. */
+#define TIMESYNC_RESEED_SAMPLES 3u
+
 /** Snapshot flag: a published set was copied at least once. */
 #define TIMESYNC_SNAP_VALID 0x1u
 
@@ -305,6 +313,13 @@ bool timesync_drift_estimate (int32_t * p_drift_ppb);
  * @return The count.
  */
 uint32_t timesync_reseed_count (void);
+
+/**
+ * @brief  Samples dropped as late or early, while fewer than
+ *         TIMESYNC_RESEED_SAMPLES in a row were off (since timesync_init()).
+ * @return The count.
+ */
+uint32_t timesync_dropped_count (void);
 
 /**
  * @brief  The int8_t slew of the last tick, for the host tests.

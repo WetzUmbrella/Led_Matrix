@@ -104,6 +104,8 @@ typedef struct
     timesync_snapshot_t pub;         /**< Writer's copy of what it published. */
     int8_t              last_slew;   /**< Slew of the last tick. */
     uint32_t            reseeds;     /**< Re-seeds since init (R1-2). */
+    uint32_t            off_run;     /**< Off samples in a row so far. */
+    uint32_t            dropped;     /**< Off samples dropped since init. */
 } writer_state_t;
 
 static seqlock_t      g_pub;
@@ -122,6 +124,7 @@ static _Atomic(TaskHandle_t) g_p_sync_task = NULL;
 
 static void     hook_point_reached (timesync_hook_point_t point);
 static bool     reseed_needed (int64_t t_p, int64_t t_l);
+static void     window_add (int64_t t_p, int64_t t_l);
 static void     ready_publish (int64_t newest_t_l, uint32_t flags);
 static int64_t  floor_div (int64_t numerator, int64_t divisor);
 static uint32_t low_word (int64_t value);
@@ -443,13 +446,26 @@ void timesync_init (void)
  * @brief  Add one (t_p, t_l) pair. The filter offset comes from the sample
  *         with the smallest (t_l - t_p). Drift is the slope between the
  *         filtered offsets of the older and newer half of the full window; it
- *         is held (not cleared) when it cannot be computed.
+ *         is held (not cleared) when it cannot be computed. A sample more
+ *         than TIMESYNC_RESEED_US off the estimate is dropped, unless it is
+ *         the TIMESYNC_RESEED_SAMPLES-th off sample in a row: then the
+ *         window is emptied and it starts a new one (R1-2).
  * @param  t_p  Pico time from the beacon, microseconds.
  * @param  t_l  Local receive time, microseconds.
  */
 void timesync_add_sample (int64_t t_p, int64_t t_l)
 {
-    if (reseed_needed(t_p, t_l))
+    bool const b_off = reseed_needed(t_p, t_l);
+
+    g_writer.off_run = b_off ? (g_writer.off_run + 1u) : 0u;
+
+    if ((b_off) && (g_writer.off_run < TIMESYNC_RESEED_SAMPLES))
+    {
+        /* One or two off samples: a late beacon, not another clock. Kept
+         * out of the window, so the estimate does not move. */
+        g_writer.dropped++;
+    }
+    else if (b_off)
     {
         /* Another Pico clock (R1-2): forget the window, the estimates and
          * the published offset, so this sample starts a new window and the
@@ -461,9 +477,28 @@ void timesync_add_sample (int64_t t_p, int64_t t_l)
         g_writer.b_drift_valid = false;
         g_writer.drift_ppb     = 0;
         g_writer.b_pub_valid   = false;
+        g_writer.off_run       = 0u;
         g_writer.reseeds++;
     }
+    else
+    {
+        /* In line with the estimate. */
+    }
 
+    if ((!b_off) || (0u == g_writer.off_run))
+    {
+        window_add(t_p, t_l);
+    }
+}
+
+/**
+ * @brief  Put one sample in the window and update the estimates and the
+ *         SYNC_READY state (the body of timesync_add_sample()).
+ * @param  t_p  Pico time from the beacon, microseconds.
+ * @param  t_l  Local receive time, microseconds.
+ */
+static void window_add (int64_t t_p, int64_t t_l)
+{
     g_writer.t_p[g_writer.head] = t_p;
     g_writer.t_l[g_writer.head] = t_l;
     g_writer.head               = (g_writer.head + 1u) % TIMESYNC_WINDOW;
@@ -764,6 +799,15 @@ uint32_t timesync_reseed_count (void)
 }
 
 /**
+ * @brief  Off samples dropped since timesync_init() (see timesync.h).
+ * @return The count.
+ */
+uint32_t timesync_dropped_count (void)
+{
+    return g_writer.dropped;
+}
+
+/**
  * @brief  The int8_t slew of the last tick, for the host tests.
  * @return Slew in -100 to +100 us.
  */
@@ -851,7 +895,8 @@ void timesync_task (void * p_queue)
 
         while (pdTRUE == xQueueReceive(p_sync_queue, &pair, 0))
         {
-            uint32_t const before = g_writer.reseeds;
+            uint32_t const before  = g_writer.reseeds;
+            uint32_t const dropped = g_writer.dropped;
 
             timesync_add_sample(pair.t_p, pair.t_l);
 
@@ -861,6 +906,17 @@ void timesync_task (void * p_queue)
                 printf("TS reseed n=%" PRIu32 " t_p=%" PRId64 " t_l=%" PRId64
                        "\n",
                        g_writer.reseeds, pair.t_p, pair.t_l);
+            }
+            else if (dropped != g_writer.dropped)
+            {
+                /* A late (or early) beacon, kept out of the window. */
+                printf("TS dropped n=%" PRIu32 " t_p=%" PRId64 " t_l=%" PRId64
+                       "\n",
+                       g_writer.dropped, pair.t_p, pair.t_l);
+            }
+            else
+            {
+                /* A normal sample. */
             }
         }
 

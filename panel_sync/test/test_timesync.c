@@ -34,6 +34,7 @@
 #define READY_STALE_US   INT64_C(1100000)
 #define RESEED_PICO_US   INT64_C(50000)
 #define RESEED_UNDER_US  INT64_C(400000)
+#define RESEED_LATE_US   INT64_C(600000)
 #define FRAMES_600       600u
 #define FRAME_TICKS      UINT64_C(1200)
 #define SET_SCALE        INT64_C(0x100000001)
@@ -54,6 +55,7 @@ static bool                seqlock_case_d (void);
 static bool                supp_frame_and_deadline (void);
 static bool                supp_range_and_round_trip (void);
 static bool                supp_next_tick (void);
+static bool                reseed_late_cases (void);
 static void                hook_publish_new (timesync_hook_point_t point);
 static void hook_read_inside_writer (timesync_hook_point_t point);
 static void hook_random (timesync_hook_point_t point);
@@ -289,9 +291,11 @@ bool test_timesync_sync_ready (void)
 }
 
 /**
- * @brief  R1-2 re-seed (not counted): a sample from another Pico clock
- *         empties the window, drops SYNC_READY, and the next tick publishes
- *         the new offset directly; a 400 ms change does not re-seed.
+ * @brief  R1-2 re-seed (not counted): three samples in a row from another
+ *         Pico clock empty the window (the first two are dropped), drop
+ *         SYNC_READY, and the next tick publishes the new offset directly;
+ *         a 400 ms change does not re-seed; one or two 600 ms late samples
+ *         are dropped and do not re-seed (12 Nov 2026, Matrix router).
  * @return true when every check passed.
  */
 bool test_timesync_reseed (void)
@@ -319,14 +323,30 @@ bool test_timesync_reseed (void)
     timesync_tick(t_local);
     b_ok = (test_main_check(timesync_sync_ready(), __LINE__)) && b_ok;
 
-    /* Second Pico: its clock started 50 ms ago, about 2.5 s behind. */
+    /* Second Pico: its clock started 50 ms ago, about 2.5 s behind. Its
+     * first two beacons are dropped; the third re-seeds. */
     int64_t t_p2 = RESEED_PICO_US;
 
-    t_local += BEACON_PERIOD_US;
-    timesync_add_sample(t_p2, t_local);
+    for (uint32_t idx = 0u; idx < TIMESYNC_RESEED_SAMPLES; idx++)
+    {
+        if (0u != idx)
+        {
+            t_p2 += BEACON_PERIOD_US;
+        }
+
+        t_local += BEACON_PERIOD_US;
+        b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) &&
+               b_ok;
+        timesync_add_sample(t_p2, t_local);
+    }
+
     timesync_test_set_now_us(t_local);
 
     b_ok = (test_main_check(1u == timesync_reseed_count(), __LINE__)) && b_ok;
+    b_ok = (test_main_check((TIMESYNC_RESEED_SAMPLES - 1u) ==
+                                timesync_dropped_count(),
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(!timesync_sync_ready(), __LINE__)) && b_ok;
     b_ok =
         (test_main_check(!timesync_drift_estimate(&drift), __LINE__)) && b_ok;
@@ -357,6 +377,25 @@ bool test_timesync_reseed (void)
     b_ok = (test_main_check(1u == timesync_reseed_count(), __LINE__)) && b_ok;
     printf("    16 samples later: SYNC_READY %d\n", timesync_sync_ready());
 
+    b_ok = (reseed_late_cases()) && b_ok;
+
+    timesync_init();
+
+    return b_ok;
+}
+
+/**
+ * @brief  The late-sample half of the R1-2 re-seed test: a 400 ms change,
+ *         and 600 ms late samples never three in a row, do not re-seed.
+ * @return true when every check passed.
+ */
+static bool reseed_late_cases (void)
+{
+    bool    b_ok   = true;
+    int64_t t_p    = 0;
+    int64_t offset = 0;
+    int64_t ref    = 0;
+
     /* A 400 ms change is network delay, not another clock: no re-seed. */
     timesync_init();
 
@@ -372,7 +411,33 @@ bool test_timesync_reseed (void)
     printf("    400 ms late sample: reseeds %" PRIu32 "\n",
            timesync_reseed_count());
 
-    timesync_init();
+    /* 600 ms late, twice, then a normal beacon, then twice again: never
+     * three in a row, so all four are dropped and nothing re-seeds; the
+     * estimate does not move (bench 12 Nov 2026: up to 514 ms late). */
+    b_ok =
+        (test_main_check(timesync_filter_estimate(&offset, &ref), __LINE__)) &&
+        b_ok;
+
+    int64_t const before = offset;
+
+    for (uint32_t idx = 0u; idx < 5u; idx++)
+    {
+        int64_t const late = (2u == idx) ? 0 : RESEED_LATE_US;
+
+        t_p += BEACON_PERIOD_US;
+        timesync_add_sample(t_p, t_p + READY_DELAY_US + late);
+    }
+
+    b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
+    b_ok = (test_main_check(4u == timesync_dropped_count(), __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
+                             (before == offset),
+                         __LINE__)) &&
+        b_ok;
+    printf("    600 ms late samples, never 3 in a row: reseeds %" PRIu32
+           ", dropped %" PRIu32 "\n",
+           timesync_reseed_count(), timesync_dropped_count());
 
     return b_ok;
 }
