@@ -1,0 +1,41 @@
+>>> config docs/bench/9nov/numbered_1x2.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794453408.234 configuration accepted
+>>> build
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+>>> upload
+failed: none
+1794453411.678 uploaded to 172.20.10.4: 57 of 57 chunks ACKed, resent 0, 2.43 s
+1794453414.489 uploaded to 172.20.10.5: 57 of 57 chunks ACKed, resent 0, 2.81 s
+>>> upload
+failed: none
+1794453414.991 all tiles ready
+1794453417.495 all tiles ready
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> mode game
+1794453420.501 mode game
+>>> tap on
+tap test: tap the tiles for 20 s
+   0.0 s  READY / GAME IDLE score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+>>> tap off
+tap test over: stop tapping; arming in 3 s
+>>> threshold 300
+1794453444.602 tap threshold 300 mg
+>>> game arm easy
+1794453444.603 level easy
+armed: tap the start sprite (60 s)
+   0.0 s  READY / GAME IDLE score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+   0.3 s  COORDINATING GAME / ARMED score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+  60.1 s  READY / GAME IDLE score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794453504.809 round not started (aborted or the start sprite timed out)

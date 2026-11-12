@@ -15,3 +15,38 @@ Found on the bench:
 ## Result
 
 **Steps 4a and 4b pass on the wall 12 Nov.** A game round needs no video (A14), and a restarted PC's commands count. Next: step 4c (DS-12 upload fixes), 4d (sparse grid), 4e (website).
+
+# Step 4c bench, 12 Nov 2026: upload fixes
+
+Built for 4c (DS-12) and the results decision above (decided with the operator: the wall goes blank on the tap test and on a mode switch; the results keep looping otherwise):
+
+- **A1** the uploader waits up to 3 s for the tile's TELEMETRY header to show the new session before its MANIFEST (`pc/dashboard.py`, `pc/telemetry.py`).
+- **A2** a round in which the tile ACKs nothing ends with the MANIFEST sent again and every chunk counted as missing; while nothing is ACKed yet the round stops after its first silent window (`pc/uploader.py`).
+- **B** a MANIFEST for the asset already published opens a held upload: every chunk is ACKed as a repeat, nothing is written (`asset_rx`, `asset_store`; host test A6).
+- **C** when the rounds run out, a tile that the Pico's STATUS (received after the question) counts ready is uploaded.
+- **Speed** the next window goes as soon as every chunk of this one is ACKed, not after the full 0.25 s.
+- **Results** a mode command or the tap test sends every tile a picture CLEAR and clears the counts (C26, C27). A new SESSION_CONFIG ends a tap test (C29).
+- **Display clock jump** (found below) a tick deadline more than 100 ms ahead is a clock step back: the tick is dropped and the next one after now is shown, counted as `jumps=` in the `DE ticks` line, no fault.
+
+Gate at each change: C host tests and ASan, barr_check 0 findings, pytest 451 passed.
+
+| Check | Result | Notes |
+|---|---|---|
+| Round 8 (session 21) | **Upload PASS**, run interrupted | Both tiles took the first upload (57 of 57, 5.19 s each); before 4c tile 4 failed the first upload of nearly every new session. The run was stopped at the tap test after the operator replugged tile 5; that left the tap test on in the Pico. `round8_*.log` |
+| Round 8b (session 22) | **PASS** | First upload 57 of 57 on both, no resends, 5.19 s each. 41 of 41, 0 wrong, 406 ms, 3 stars. Taps during the upload flashed green with no hole: the Pico still had round 8's tap test on, the tiles did not (both had restarted). No tap was logged in the 20 s tap test itself. `round8b_*.log` |
+| Tap test only (session 22) | **PASS** | 30 s tap test, no round (`tap_only.py`). Both tiles showed the hole and flashed green on taps, the hole coming back after (operator). The first try was refused by the PC: the script asked before any STATUS (fixed in the script). `taponly_*.log` |
+| Round 9 (session 22 again, new process) | **PASS (B)** | Both tiles logged `already held` and wrote nothing (flash counters unchanged); 57 of 57 ACKed on both. Still 5.19 s each: the uploader waited the full 0.25 s per window (fixed: speed). 41 of 41, 1 wrong, 402 ms, 3 stars. `round9_*.log` |
+| Round 10 (session 23) | **Not a test: Pico dead** | After `picotool load -x -f` with the speed fix and C29, the Pico sent no serial, answered no ping and sent no beacons; the tiles stayed in session 22, so every upload was "0 of 57". A replug brought it up with the same firmware. `round10_*.log` |
+| Round 10b (session 23) | Upload **PASS**; **bug: LEDs frozen** | 57 of 57 in 2.43 s and 2.81 s (speed fix). Both tiles printed no `DE ticks` line all run and the start sprite never showed (arm timed out). Cause: the Pico restart (the replug) stepped the corrected clock back by its old uptime when Time Sync re-seeded, so the display's next deadline lay minutes ahead and the gptimer waited it out. Also explains the dark tiles this morning (the Pico was flashed after the tiles) and why a replugged tile recovered. Fix: the display clock-jump guard. `round10b_*.log` |
+| Pico replug with the guard | **PASS** | Tiles flashed with the guard (no replug), then the Pico replugged under them: both kept ticking, `jumps=1` on each. |
+| Round 10c (session 24) | **PASS** | Tile 5 57 of 57 in 2.57 s. Tile 4 5.44 s, 58 resent: its first window was not ACKed within 0.25 s after the 1 s settle (most likely still erasing), so A2 sent the MANIFEST again and the whole asset once more; correct but slow. 52 of 52, 1 wrong, 249 ms, 3 stars; no faults; both displays ticked throughout. `round10c_*.log` |
+
+Open from 4c:
+- The first window after a MANIFEST should wait longer (about 1 s) before A2 counts the tile as deaf (round 10c).
+- A tile that restarts is not sent the tap test or the round state again (round 8: a replugged tile stays dark in the tap test).
+- The Pico `…595138` once did not start after `picotool load -x -f`; a replug fixed it. Cause unknown.
+- The display freeze was invisible to every check (no fault, display state normal): a display that stops ticking should raise DISPLAY.
+
+## Result (4c)
+
+**Step 4c done 12 Nov.** The upload race is gone (the first upload passed on both tiles in every new session), a tile that holds the asset answers the PC, uploads take about 2.5 s per tile, and the results go blank on the tap test and a mode switch. Found and fixed on the wall: tile LEDs freezing after a Pico restart. Next: 4d (sparse grid), 4e (website).

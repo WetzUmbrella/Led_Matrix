@@ -1,0 +1,37 @@
+DE ticks=61800 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,61055,736,4,0,0,0,1,1,0,0,3
+DE ticks=62400 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,61651,740,4,0,0,0,1,1,0,0,3
+ASSET_FLASH writes=58 erases=1 refused=0 ignored=0 busy=0 reply_drops=0
+DE ticks=63000 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,62249,742,4,0,0,0,1,1,0,0,3
+DE ticks=63600 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,62846,745,4,0,0,0,1,1,0,0,3
+DE ticks=64200 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,63444,747,4,0,0,0,1,1,0,0,3
+DE ticks=64800 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,64041,750,4,0,0,0,1,1,0,0,3
+DE ticks=65400 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,64641,750,4,0,0,0,1,1,0,0,3
+DE ticks=66000 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,65240,751,4,0,0,0,1,1,0,0,3
+ASSET_FLASH writes=58 erases=1 refused=0 ignored=0 busy=0 reply_drops=0
+DE ticks=66600 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,65834,757,4,0,0,0,1,1,0,0,3
+DE ticks=67200 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,66434,757,4,0,0,0,1,1,0,0,3
+DE ticks=67800 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,67032,759,4,0,0,0,1,1,0,0,3
+DE ticks=68400 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,67630,761,4,0,0,0,1,1,0,0,3
+DE ticks=69000 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,68227,764,4,0,0,0,1,1,0,0,3
+DE ticks=69600 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,68826,765,4,0,0,0,1,1,0,0,3
+ASSET_FLASH writes=58 erases=1 refused=0 ignored=0 busy=0 reply_drops=0
+DE ticks=70200 missed=2 rmt_busy=0 prep_max_us=504 orient=3
+DE_HIST,69422,769,4,0,0,0,1,1,0,0,3
+TAP t_us=1176764472 peak_mg=5839 count=76
+TN_TAP seq=75 peak=5839 t_pico=1846737786
+TAP t_us=1177268485 peak_mg=11999 count=77
+TN_TAP seq=76 peak=11999 t_pico=1847237715
