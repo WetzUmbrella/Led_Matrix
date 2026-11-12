@@ -24,6 +24,7 @@ bool test_coord_start_copies (void);
 bool test_coord_pause_resume_stop (void);
 bool test_coord_pause_policy (void);
 bool test_coord_continue_rejoin (void);
+bool test_coord_full_config (void);
 
 #endif /* TEST_COORD_H */
 

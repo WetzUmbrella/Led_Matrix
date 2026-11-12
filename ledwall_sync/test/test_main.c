@@ -100,6 +100,8 @@ static test_case_t const g_cases[] = {
      test_coord_game_new_session},
     {"C30 step 4d: a sparse layout plays, small pictures on each tile",
      test_coord_game_sparse},
+    {"C31 9-tile SESSION_CONFIG keeps every byte; a longer datagram dropped",
+     test_coord_full_config},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

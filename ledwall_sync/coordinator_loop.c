@@ -117,8 +117,25 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
  *  HEARTBEAT plus 9 ASSET_READY and 5 PC messages before one dispatch). */
 #define CL_RING_LEN 32u
 
-/** Largest datagram the Pico accepts: SESSION_CONFIG is 46 B. */
-#define CL_RX_MAX_BYTES 48u
+/** Largest datagram the Pico accepts: SESSION_CONFIG, 53 B since step 4d
+ *  (it was 46 B; the old 48 B buffer cut the CRC32s of Nodes 8 and 9, bench
+ *  12 Nov 2026, run V2). Every accepted type is checked below. */
+#define CL_RX_MAX_BYTES PROTO_SESSION_CONFIG_BYTES
+
+/* Every message the Pico decodes must fit the receive buffer whole. */
+_Static_assert(PROTO_REGISTER_BYTES <= CL_RX_MAX_BYTES, "REGISTER");
+_Static_assert(PROTO_HEARTBEAT_BYTES <= CL_RX_MAX_BYTES, "HEARTBEAT");
+_Static_assert(PROTO_ASSET_READY_BYTES <= CL_RX_MAX_BYTES, "ASSET_READY");
+_Static_assert(PROTO_SYNC_READY_BYTES <= CL_RX_MAX_BYTES, "SYNC_READY");
+_Static_assert(PROTO_NACK_BYTES <= CL_RX_MAX_BYTES, "NACK");
+_Static_assert(PROTO_TELEMETRY_BYTES <= CL_RX_MAX_BYTES, "TELEMETRY");
+_Static_assert(PROTO_TAP_BYTES <= CL_RX_MAX_BYTES, "TAP");
+_Static_assert(PROTO_ACK_BYTES <= CL_RX_MAX_BYTES, "ACK");
+_Static_assert(PROTO_GAME_CONTROL_BYTES <= CL_RX_MAX_BYTES, "GAME_CONTROL");
+_Static_assert(PROTO_START_AT_BYTES <= CL_RX_MAX_BYTES, "START_AT");
+_Static_assert(PROTO_RESUME_AT_BYTES <= CL_RX_MAX_BYTES, "RESUME_AT");
+_Static_assert(PROTO_PAUSE_BYTES <= CL_RX_MAX_BYTES, "PAUSE");
+_Static_assert(PROTO_STOP_BYTES <= CL_RX_MAX_BYTES, "STOP");
 
 /** Concurrent timed commands (plan choice: START_AT, then PAUSE, then
  *  RESUME_AT, plus one rejoin, can overlap within 200 ms). */
@@ -1879,31 +1896,35 @@ static void cl_hist_add (uint32_t * p_hist, uint32_t bins, uint64_t value_us,
 
 /**
  * @brief  Copy one datagram into the ring (callback context: no decode, no
- *         print). A full ring drops the datagram and counts it.
+ *         print). A full ring drops the datagram and counts it; so does a
+ *         datagram longer than CL_RX_MAX_BYTES, which no accepted message
+ *         is (counted as rx_bad), so no decoder ever reads past the copy.
  * @param  listen_port  Port it arrived on.
  * @param  src_addr     Sender address.
  * @param  src_port     Sender port.
- * @param  p_buf        Bytes.
- * @param  len          Length; above CL_RX_MAX_BYTES it is kept as is so
- *                      the decoder rejects the wrong length.
+ * @param  p_buf        Bytes; at least min(len, CL_RX_MAX_BYTES) of them.
+ * @param  len          The datagram's full length.
  * @param  t_rx         Receive time.
  */
 static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
                         uint16_t src_port, uint8_t const * p_buf, uint32_t len,
                         uint64_t t_rx)
 {
-    if (g_ring_count < CL_RING_LEN)
+    if (len > CL_RX_MAX_BYTES)
+    {
+        g_stats.rx_bad++;
+    }
+    else if (g_ring_count < CL_RING_LEN)
     {
         cl_rx_entry_t * const p_entry =
             &g_ring[(g_ring_head + g_ring_count) % CL_RING_LEN];
-        uint32_t const copy = (len < CL_RX_MAX_BYTES) ? len : CL_RX_MAX_BYTES;
 
         p_entry->t_rx_us     = t_rx;
         p_entry->src_addr    = src_addr;
         p_entry->src_port    = src_port;
         p_entry->listen_port = listen_port;
         p_entry->len         = len;
-        (void)memcpy(p_entry->bytes, p_buf, copy); /* Returns bytes. */
+        (void)memcpy(p_entry->bytes, p_buf, len); /* Returns bytes. */
         g_ring_count++;
     }
     else

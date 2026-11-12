@@ -768,6 +768,75 @@ bool test_coord_continue_rejoin (void)
 }
 
 /**
+ * @brief  C31 (bench 12 Nov 2026, run V2): a 9-tile SESSION_CONFIG through
+ *         the receive path keeps every byte. A 3 x 3 wall with Node IDs 1
+ *         to 9 and a different CRC32 each; every tile registers and sends
+ *         ASSET_READY with its own CRC32, so all nine count ready. With the
+ *         48-byte receive buffer (the message is 53 B since step 4d) the
+ *         CRC32s of Nodes 8 and 9 were read from past the buffer and never
+ *         matched. A datagram one byte longer than SESSION_CONFIG is
+ *         dropped, not decoded.
+ * @return true when every check passed.
+ */
+bool test_coord_full_config (void)
+{
+    uint8_t                buf[PROTO_SESSION_CONFIG_BYTES + 1u];
+    proto_session_config_t msg = {
+        {PROTO_TYPE_SESSION_CONFIG, TST_SESSION, 0u},
+        3u, 3u, PROTO_POLICY_PAUSE, {{0u, 0u, 0u}}, TST_FRAMES, {0u}};
+    bool                   b_ok = true;
+
+    tst_reset();
+
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
+    {
+        msg.cell[node].b_placed = 1u;
+        msg.cell[node].row      = (uint8_t)(node / 3u); /* < 3: fits. */
+        msg.cell[node].col      = (uint8_t)(node % 3u); /* < 3: fits. */
+        /* Every byte of each CRC32 differs from the others' (node < 9). */
+        msg.crc32[node] = UINT32_C(0x11111111) * (node + 1u);
+    }
+
+    /* One byte too long: dropped, the session is not applied. */
+    (void)memset(buf, 0, sizeof(buf)); /* Returns buf. */
+    msg.header.seq = g_pc_seq;
+    /* Returns 53; the extra byte stays 0. */
+    (void)proto_encode_session_config(&msg, buf, sizeof(buf));
+    coordinator_loop_test_rx(CL_PORT_FROM_PC, TST_PC_ADDR, TST_PC_PORT, buf,
+                             sizeof(buf));
+    tst_advance(UINT64_C(100000));
+    b_ok = (test_main_check(PROTO_COORD_WAITING_FOR_SESSION ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    /* The right length: applied, and every CRC32 arrives whole. */
+    coordinator_loop_test_rx(CL_PORT_FROM_PC, TST_PC_ADDR, TST_PC_PORT, buf,
+                             PROTO_SESSION_CONFIG_BYTES);
+    g_pc_seq++;
+
+    for (uint8_t node_id = 1u; node_id <= PROTO_NODE_MAX; node_id++)
+    {
+        tst_register(node_id, 0u, 0u);
+    }
+
+    tst_advance(UINT64_C(100000));
+
+    for (uint8_t node_id = 1u; node_id <= PROTO_NODE_MAX; node_id++)
+    {
+        tst_asset_ready(node_id, TST_SESSION, msg.crc32[node_id - 1u]);
+    }
+
+    tst_advance(UINT64_C(100000));
+    b_ok = (test_main_check(UINT16_C(0x01FF) ==
+                                coordinator_loop_test_readiness(),
+                            __LINE__)) &&
+           b_ok;
+
+    return b_ok;
+}
+
+/**
  * @brief  Fresh coordinator and recorder at T0.
  */
 static void tst_reset (void)
