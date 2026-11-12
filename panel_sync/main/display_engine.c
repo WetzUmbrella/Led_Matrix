@@ -62,6 +62,13 @@
  *  arming calls themselves); a deadline closer than this is a missed tick. */
 #define DE_MIN_LEAD_US INT64_C(200)
 
+/** Most lead for arming a tick, microseconds: six ticks (plan choice). A
+ *  deadline further away means the corrected clock stepped back (the Pico
+ *  restarted and Time Sync re-seeded): the tick is dropped and the next one
+ *  after now is shown. Without this the gptimer waited out the Pico's old
+ *  uptime with the LEDs frozen (bench 12 Nov 2026). */
+#define DE_MAX_LEAD_US INT64_C(100000)
+
 /** Marker every 64 ticks and the two pulse widths (RIG.md section 4b). */
 #define DE_MARKER_PERIOD 64u
 #define DE_PULSE_US      INT64_C(1000)
@@ -145,6 +152,7 @@ static uint8_t *    g_p_back    = g_buf[1];
 static portMUX_TYPE g_swap_lock = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t     g_ticks     = 0u;
 static uint32_t     g_missed    = 0u;
+static uint32_t     g_jumps     = 0u;
 static uint32_t     g_rmt_busy  = 0u;
 static uint32_t     g_hist[DE_HIST_BINS];
 static int64_t      g_prep_max_us = 0;
@@ -333,10 +341,20 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
         timesync_deadline_local(p_reader, DE_ORIGIN_US, tick);
     int64_t const lead = deadline - esp_timer_get_time();
 
-    if (lead < DE_MIN_LEAD_US)
+    if ((lead < DE_MIN_LEAD_US) || (lead > DE_MAX_LEAD_US))
     {
-        g_missed++;
-        fault_word_set(FAULT_BIT_MISSED_DEADLINE);
+        if (lead < DE_MIN_LEAD_US)
+        {
+            g_missed++;
+            fault_word_set(FAULT_BIT_MISSED_DEADLINE);
+        }
+        else
+        {
+            /* The clock stepped back: not a missed tick, no fault. */
+            g_jumps++;
+            printf("DE clock jump lead_us=%" PRId64 "\n", lead);
+        }
+
         next =
             timesync_next_tick(DE_ORIGIN_US, timesync_now_corrected(p_reader));
         de_prepare_frame(next, p_reader);
@@ -644,8 +662,8 @@ static void de_test_after_prepare (uint32_t frame, bool b_frame)
 static void de_log (void)
 {
     printf("DE ticks=%" PRIu32 " missed=%" PRIu32 " rmt_busy=%" PRIu32
-           " prep_max_us=%" PRId64 " orient=%" PRIu8 "\n",
-           g_ticks, g_missed, g_rmt_busy, g_prep_max_us, g_orient);
+           " jumps=%" PRIu32 " prep_max_us=%" PRId64 " orient=%" PRIu8 "\n",
+           g_ticks, g_missed, g_rmt_busy, g_jumps, g_prep_max_us, g_orient);
     printf("DE_HIST");
 
     for (uint32_t bin = 0u; bin < DE_HIST_BINS; bin++)
