@@ -366,6 +366,11 @@ Step 1 keeps the "upload twice in the same session" workaround.
 - Buttons are enabled only when the action is allowed (as today); the page polls the PC 4 times a second (no WebSockets).
 - **Scoreboard page `/score`** (A16): score, timer, stars and "Get ready!" in large type for a TV or projector, from the same data.
 
+### Time sync on the demo network (decided 12 Nov 2026, with Cheston)
+
+- **Re-seed only after 3 off beacons in a row** (option A): one or two beacons more than 0.5 s off the estimate are dropped, so single late beacons on the Matrix router no longer re-seed time sync and cost bursts of missed display ticks. Rejected: a 5 s threshold (misses a Pico that restarted within 5 s), and treating late and early offsets differently.
+- **Sustained congestion is accepted:** the minimum-delay estimate follows a congestion period long enough to make every beacon in the 1.6 s window late, so tiles can be hundreds of ms off for tens of seconds. Accepted on the condition that the error keeps shrinking as the tiles pull back (host check: never rises again, within 5 ms 40 s after a 900 ms ramp). "Hold the reference" was built and dropped; findings and patch in `docs/bench/12nov/step4.md` and `docs/bench/12nov/tools/timesync_hold_reference.patch`.
+
 ### DS-17 Demo network (decided 11 Nov)
 
 - **The Matrix router, dedicated to this wall:** plain WPA2 on 2.4 GHz, no internet, AP isolation off; the Pico `…595138` keeps its reserved IP 192.168.1.154. Cheston can get it back from the teammate at any time.

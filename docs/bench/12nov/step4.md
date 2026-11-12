@@ -150,7 +150,7 @@ Found on the bench:
 - Event fault bits (`MISSED_DEADLINE`, `QUEUE_OVERFLOW`) stay set until the PC acknowledges a TELEMETRY; after reflashing, acknowledge for a few seconds (as the dashboard does) before reading faults.
 
 Open:
-- **Time sync follows sustained network delay** (the simulation above): tiles can be hundreds of ms off for tens of seconds after congestion. It hurts tap grouping (an echo with a wrong time stamp is judged as a separate wrong tap), reaction times and video sync. Design decision for the user (Ahsanul's module): a longer window, or hold the estimate when the window minimum suddenly rises.
+- **Time sync follows sustained network delay** (the simulation above): tiles can be hundreds of ms off for tens of seconds after congestion. It hurts tap grouping (an echo with a wrong time stamp is judged as a separate wrong tap), reaction times and video sync. **Accepted by the user (12 Nov 2026)**, on the condition that the error keeps shrinking as the tiles pull back. Checked on the host with the committed code: after the 900 ms ramp the error never rose again (checked every 1 s) and was within 5 ms 40.5 s after the congestion ended (peak 658 ms). A "hold the reference" fix was built and then dropped: it rode out the 400 and 900 ms ramps within 2 ms, but a 600 ms ramp with a plateau re-seeded onto the congested offset (582 ms off for 89 s), and telling a congestion plateau from a new Pico clock needs a change to decision A (re-seed when the Pico time stamp jumps back). The work is kept as `tools/timesync_hold_reference.patch` with these findings, if the demo room needs it.
 - The bench script refuses to arm on event faults, not only on condition faults (proposed to the user, not decided).
 
 ## Result (receive buffer and time sync)

@@ -1,0 +1,386 @@
+diff --git i/panel_sync/main/timesync.c w/panel_sync/main/timesync.c
+index 5f09746..0e2e43e 100644
+--- i/panel_sync/main/timesync.c
++++ w/panel_sync/main/timesync.c
+@@ -105,7 +105,10 @@ typedef struct
+     int8_t              last_slew;   /**< Slew of the last tick. */
+     uint32_t            reseeds;     /**< Re-seeds since init (R1-2). */
+     uint32_t            off_run;     /**< Off samples in a row so far. */
++    int64_t             off_first;   /**< Offset of the run's first. */
+     uint32_t            dropped;     /**< Off samples dropped since init. */
++    bool                b_holding;   /**< A rise of the minimum is held. */
++    int64_t             hold_since;  /**< t_l when the hold began. */
+ } writer_state_t;
+ 
+ static seqlock_t      g_pub;
+@@ -125,6 +128,8 @@ static _Atomic(TaskHandle_t) g_p_sync_task = NULL;
+ static void     hook_point_reached (timesync_hook_point_t point);
+ static bool     reseed_needed (int64_t t_p, int64_t t_l);
+ static void     window_add (int64_t t_p, int64_t t_l);
++static bool     estimate_take (int64_t cand_offset, int64_t cand_ref,
++                               int64_t t_l);
+ static void     ready_publish (int64_t newest_t_l, uint32_t flags);
+ static int64_t  floor_div (int64_t numerator, int64_t divisor);
+ static uint32_t low_word (int64_t value);
+@@ -448,16 +453,36 @@ void timesync_init (void)
+  *         filtered offsets of the older and newer half of the full window; it
+  *         is held (not cleared) when it cannot be computed. A sample more
+  *         than TIMESYNC_RESEED_US off the estimate is dropped, unless it is
+- *         the TIMESYNC_RESEED_SAMPLES-th off sample in a row: then the
+- *         window is emptied and it starts a new one (R1-2).
++ *         the TIMESYNC_RESEED_SAMPLES-th off sample in a row, all within
++ *         TIMESYNC_RESEED_AGREE_US of each other: then the window is emptied
++ *         and it starts a new one (R1-2).
+  * @param  t_p  Pico time from the beacon, microseconds.
+  * @param  t_l  Local receive time, microseconds.
+  */
+ void timesync_add_sample (int64_t t_p, int64_t t_l)
+ {
+-    bool const b_off = reseed_needed(t_p, t_l);
++    bool const    b_off  = reseed_needed(t_p, t_l);
++    int64_t const offset = t_l - t_p;
++    int64_t const apart  = offset - g_writer.off_first;
++    bool const    b_agree = (g_writer.off_run > 0u) &&
++                            (apart <= TIMESYNC_RESEED_AGREE_US) &&
++                            (apart >= -TIMESYNC_RESEED_AGREE_US);
+ 
+-    g_writer.off_run = b_off ? (g_writer.off_run + 1u) : 0u;
++    if (!b_off)
++    {
++        g_writer.off_run = 0u;
++    }
++    else if (b_agree)
++    {
++        g_writer.off_run++;
++    }
++    else
++    {
++        /* A new run starts here: the first off sample, or one that does not
++         * agree with the run so far (congestion). */
++        g_writer.off_run   = 1u;
++        g_writer.off_first = offset;
++    }
+ 
+     if ((b_off) && (g_writer.off_run < TIMESYNC_RESEED_SAMPLES))
+     {
+@@ -478,6 +503,7 @@ void timesync_add_sample (int64_t t_p, int64_t t_l)
+         g_writer.drift_ppb     = 0;
+         g_writer.b_pub_valid   = false;
+         g_writer.off_run       = 0u;
++        g_writer.b_holding     = false;
+         g_writer.reseeds++;
+     }
+     else
+@@ -508,11 +534,23 @@ static void window_add (int64_t t_p, int64_t t_l)
+         g_writer.count++;
+     }
+ 
+-    min_delay_sample(0u, g_writer.count, &g_writer.est_offset,
+-                     &g_writer.est_ref);
+-    g_writer.b_est_valid = true;
++    int64_t cand_offset = 0;
++    int64_t cand_ref    = 0;
+ 
+-    if (TIMESYNC_WINDOW == g_writer.count)
++    min_delay_sample(0u, g_writer.count, &cand_offset, &cand_ref);
++
++    bool const b_take = estimate_take(cand_offset, cand_ref, t_l);
++
++    if (b_take)
++    {
++        g_writer.est_offset  = cand_offset;
++        g_writer.est_ref     = cand_ref;
++        g_writer.b_est_valid = true;
++    }
++
++    /* While held, the window's halves carry the congestion too, so the
++     * drift is held with the estimate. */
++    if ((b_take) && (TIMESYNC_WINDOW == g_writer.count))
+     {
+         int64_t off_old = 0;
+         int64_t ref_old = 0;
+@@ -530,7 +568,11 @@ static void window_add (int64_t t_p, int64_t t_l)
+         {
+             int64_t const ppb = floor_div(diff * PPB_PER_S64, span);
+ 
+-            if ((ppb >= INT32_MIN) && (ppb <= INT32_MAX))
++            /* A drift faster than TIMESYNC_RISE_US_PER_S (1 ms/s = 10^6
++             * ppb, ten times a crystal's worst) is network delay between
++             * the window's halves, not the clock: held (12 Nov 2026). */
++            if ((ppb >= -TIMESYNC_DRIFT_MAX_PPB) &&
++                (ppb <= TIMESYNC_DRIFT_MAX_PPB))
+             {
+                 /* Range checked on the line above. */
+                 g_writer.drift_ppb     = (int32_t)ppb;
+@@ -925,6 +967,58 @@ void timesync_task (void * p_queue)
+ }
+ #endif /* TIMESYNC_HOST_TEST */
+ 
++/**
++ * @brief  Hold the reference: whether the filter's new smallest offset
++ *         replaces the estimate. A fall, or a rise within
++ *         TIMESYNC_RISE_FLOOR_US plus TIMESYNC_RISE_US_PER_S since the
++ *         estimate's sample (jitter and drift), is taken at once. A faster rise is network delay and is held, until
++ *         it has lasted TIMESYNC_HOLD_MAX_US (a lasting path change).
++ * @param  cand_offset  Smallest (t_l - t_p) in the window now.
++ * @param  cand_ref     t_l of that sample.
++ * @param  t_l          Local receive time of the newest sample.
++ * @return true when the candidate becomes the estimate.
++ */
++static bool estimate_take (int64_t cand_offset, int64_t cand_ref, int64_t t_l)
++{
++    bool b_take = true;
++
++    if (g_writer.b_est_valid)
++    {
++        int32_t const drift =
++            g_writer.b_drift_valid ? g_writer.drift_ppb : 0;
++        int64_t const projected =
++            g_writer.est_offset +
++            timesync_scale_ppb(cand_ref - g_writer.est_ref, drift);
++        int64_t const since   = cand_ref - g_writer.est_ref;
++        int64_t const allowed =
++            TIMESYNC_RISE_FLOOR_US +
++            ((since > 0) ? ((since * TIMESYNC_RISE_US_PER_S) /
++                            (int64_t)TIMESYNC_US_PER_S)
++                         : 0);
++
++        if ((cand_offset - projected) <= allowed)
++        {
++            g_writer.b_holding = false;
++        }
++        else if (!g_writer.b_holding)
++        {
++            g_writer.b_holding  = true;
++            g_writer.hold_since = t_l;
++            b_take              = false;
++        }
++        else if ((t_l - g_writer.hold_since) < TIMESYNC_HOLD_MAX_US)
++        {
++            b_take = false;
++        }
++        else
++        {
++            g_writer.b_holding = false; /* Lasted: a real change. */
++        }
++    }
++
++    return b_take;
++}
++
+ /**
+  * @brief  True when a sample's offset is more than TIMESYNC_RESEED_US away
+  *         from the current estimate, so it comes from another Pico clock
+diff --git i/panel_sync/main/timesync.h w/panel_sync/main/timesync.h
+index 2062d1d..8aea8dc 100644
+--- i/panel_sync/main/timesync.h
++++ w/panel_sync/main/timesync.h
+@@ -86,6 +86,31 @@
+  *  beacons (about 200 ms) later. */
+ #define TIMESYNC_RESEED_SAMPLES 3u
+ 
++/** The off samples of one run must agree with the run's first within this
++ *  much (offset t_l - t_p): another Pico clock gives a steady offset, while
++ *  congestion wanders (tens of ms per beacon), so congestion never
++ *  re-seeds and the held reference rides it out (12 Nov 2026). */
++#define TIMESYNC_RESEED_AGREE_US INT64_C(20000)
++
++/** Hold the reference (decided with Cheston 12 Nov 2026): the filter's new
++ *  smallest offset may rise above the current estimate by at most this many
++ *  microseconds per second since the estimate's sample. A crystal drifts a
++ *  few tens of us per second at most, so a faster rise is network delay
++ *  (every beacon in the 1.6 s window late) and the estimate is held. */
++#define TIMESYNC_RISE_US_PER_S INT64_C(1000)
++
++/** Largest drift taken from the window, ppb: TIMESYNC_RISE_US_PER_S as a
++ *  rate (1,000 us per 10^6 us = 10^6 ppb); a faster slope is held. */
++#define TIMESYNC_DRIFT_MAX_PPB (TIMESYNC_RISE_US_PER_S * INT64_C(1000))
++
++/** A rise up to this much is always taken: ordinary WiFi jitter of the
++ *  window minimum (T-B4-02 absorbs a 2 ms step in 20 ticks). Congestion
++ *  rises by tens to hundreds of ms. */
++#define TIMESYNC_RISE_FLOOR_US INT64_C(5000)
++
++/** A rise held this long is taken as real: the network path changed. */
++#define TIMESYNC_HOLD_MAX_US INT64_C(10000000)
++
+ /** Snapshot flag: a published set was copied at least once. */
+ #define TIMESYNC_SNAP_VALID 0x1u
+ 
+diff --git i/panel_sync/test/test_main.c w/panel_sync/test/test_main.c
+index f04528f..63bb65f 100644
+--- i/panel_sync/test/test_main.c
++++ w/panel_sync/test/test_main.c
+@@ -273,6 +273,9 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
+     bool const b_reseed =
+         test_main_run("R1-2 re-seed on another Pico clock (not counted)",
+                       test_timesync_reseed);
++    bool const b_hold =
++        test_main_run("Hold the reference through congestion (not counted)",
++                      test_timesync_hold);
+ 
+     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
+ 
+@@ -313,7 +316,7 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
+     /* DEVIATION D-2: the exit status is the int that main returns. */
+     int status = 1;
+ 
+-    if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed &&
++    if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed && b_hold &&
+         (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
+         (TELEMETRY_COUNT == telemetry_passed) &&
+         (ASSET_COUNT == asset_passed) && (COORD_COUNT == coord_passed) &&
+diff --git i/panel_sync/test/test_timesync.c w/panel_sync/test/test_timesync.c
+index 4423a26..1b09fec 100644
+--- i/panel_sync/test/test_timesync.c
++++ w/panel_sync/test/test_timesync.c
+@@ -35,6 +35,14 @@
+ #define RESEED_PICO_US   INT64_C(50000)
+ #define RESEED_UNDER_US  INT64_C(400000)
+ #define RESEED_LATE_US   INT64_C(600000)
++#define HOLD_AHEAD_US    INT64_C(5000000)
++#define HOLD_TICKS       6u
++#define HOLD_TICK_US     INT64_C(16667)
++#define HOLD_BEACONS     600u
++#define HOLD_JAM_FIRST   100u
++#define HOLD_JAM_PEAK_US INT64_C(900000)
++#define HOLD_MAX_ERR_US  INT64_C(20000)
++#define HOLD_LASTING_US  INT64_C(300000)
+ #define FRAMES_600       600u
+ #define FRAME_TICKS      UINT64_C(1200)
+ #define SET_SCALE        INT64_C(0x100000001)
+@@ -56,6 +64,7 @@ static bool                supp_frame_and_deadline (void);
+ static bool                supp_range_and_round_trip (void);
+ static bool                supp_next_tick (void);
+ static bool                reseed_late_cases (void);
++static int64_t             hold_step (uint32_t idx, int64_t delay);
+ static void                hook_publish_new (timesync_hook_point_t point);
+ static void hook_read_inside_writer (timesync_hook_point_t point);
+ static void hook_random (timesync_hook_point_t point);
+@@ -442,6 +451,108 @@ static bool reseed_late_cases (void)
+     return b_ok;
+ }
+ 
++/**
++ * @brief  The corrected-clock error after one more beacon and its ticks: a
++ *         beacon every 100 ms, six 60 Hz ticks, the tile clock 5 s ahead.
++ * @param  idx     Beacon number.
++ * @param  delay   Its network delay, microseconds.
++ * @return |corrected - true Pico time| just before the next beacon, us.
++ */
++static int64_t hold_step (uint32_t idx, int64_t delay)
++{
++    timesync_reader_t reader = {0};
++    int64_t const     t_p    = READY_START_US + ((int64_t)idx * BEACON_PERIOD_US);
++    int64_t const     t_l    = t_p + HOLD_AHEAD_US + delay;
++
++    timesync_add_sample(t_p, t_l);
++
++    for (uint32_t tick = 0u; tick < HOLD_TICKS; tick++)
++    {
++        int64_t const now = t_l + ((int64_t)tick * HOLD_TICK_US);
++
++        timesync_test_set_now_us(now);
++        timesync_tick(now);
++    }
++
++    int64_t const now = t_l + BEACON_PERIOD_US - 1;
++
++    timesync_test_set_now_us(now);
++
++    int64_t const err = timesync_now_corrected(&reader) - (now - HOLD_AHEAD_US);
++
++    return (err < 0) ? -err : err;
++}
++
++/**
++ * @brief  Hold the reference (decided with Cheston 12 Nov 2026, Matrix
++ *         router): a 6 s congestion period that ramps the beacon delay to
++ *         900 ms and back keeps the corrected clock within 20 ms (it was
++ *         658 ms off and over 50 ms for 38 s); a lasting 300 ms change of
++ *         the delay is taken after the 10 s hold, so the estimate follows a
++ *         real change.
++ * @return true when every check passed.
++ */
++bool test_timesync_hold (void)
++{
++    bool    b_ok   = true;
++    int64_t worst  = 0;
++    int64_t offset = 0;
++    int64_t ref    = 0;
++
++    timesync_init();
++
++    for (uint32_t idx = 0u; idx < HOLD_BEACONS; idx++)
++    {
++        /* Congestion from beacon 100 to 159: up 30 steps, down 30. */
++        int64_t delay = READY_DELAY_US;
++
++        if ((idx >= HOLD_JAM_FIRST) && (idx < (HOLD_JAM_FIRST + 60u)))
++        {
++            uint32_t const step = idx - HOLD_JAM_FIRST;
++            uint32_t const up   = (step < 30u) ? step : (59u - step);
++
++            delay += (HOLD_JAM_PEAK_US * (int64_t)up) / 30;
++        }
++
++        int64_t const err = hold_step(idx, delay);
++
++        worst = ((idx > TIMESYNC_WINDOW) && (err > worst)) ? err : worst;
++    }
++
++    printf("    900 ms congestion ramp: worst error %" PRId64 " us\n", worst);
++    b_ok = (test_main_check(worst < HOLD_MAX_ERR_US, __LINE__)) && b_ok;
++    b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
++
++    /* A lasting 300 ms rise: held at first, taken after 10 s. */
++    uint32_t idx = HOLD_BEACONS;
++
++    for (uint32_t step = 0u; step < 20u; step++, idx++)
++    {
++        (void)hold_step(idx, READY_DELAY_US + HOLD_LASTING_US); /* Err. */
++    }
++
++    b_ok = (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
++                                (offset < (HOLD_AHEAD_US + HOLD_LASTING_US)),
++                            __LINE__)) &&
++           b_ok;
++
++    for (uint32_t step = 0u; step < 100u; step++, idx++)
++    {
++        (void)hold_step(idx, READY_DELAY_US + HOLD_LASTING_US); /* Err. */
++    }
++
++    b_ok = (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
++                                (offset == (HOLD_AHEAD_US + READY_DELAY_US +
++                                            HOLD_LASTING_US)),
++                            __LINE__)) &&
++           b_ok;
++    printf("    lasting 300 ms rise: estimate %" PRId64 " us after 12 s\n",
++           offset - HOLD_AHEAD_US);
++    timesync_init();
++
++    return b_ok;
++}
++
+ /**
+  * @brief  Supplementary arithmetic checks (not counted in Pass = N of 4).
+  * @return true when every check passed.
+diff --git i/panel_sync/test/test_timesync.h w/panel_sync/test/test_timesync.h
+index 14f1277..afcb18d 100644
+--- i/panel_sync/test/test_timesync.h
++++ w/panel_sync/test/test_timesync.h
+@@ -54,6 +54,13 @@ bool test_timesync_sync_ready (void);
+  */
+ bool test_timesync_reseed (void);
+ 
++/**
++ * @brief  Hold the reference: congestion keeps the clock within 20 ms; a
++ *         lasting change is taken after 10 s (not counted).
++ * @return true when every check passed.
++ */
++bool test_timesync_hold (void);
++
+ /**
+  * @brief  Supplementary arithmetic checks (not counted in Pass = N of 4).
+  * @return true when every check passed.
