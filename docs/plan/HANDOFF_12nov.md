@@ -74,6 +74,9 @@ Step 4 plan (riskiest first, agreed with the user): 4a no-video game (done), 4b 
 - A changed rule changes old tests. Rewrite them to the new rule and say why in the test comment (C9 today). Never delete a check to get green.
 - For a wire change, keep the old cases bit-identical through a helper (the `tst_*` position helpers in `test_score_font.c`), so a full grid is proven unchanged.
 
+- **When a wire message changes size, check every fixed receive buffer on every board** (`CL_RX_MAX_BYTES` on the Pico, the tile receive buffers) and test through the receive path (`coordinator_loop_test_rx()` goes through `cl_enqueue()`), not only the decoder. Missing this let the step 4d SESSION_CONFIG (53 B) overrun the Pico's 48 B buffer; it only showed with 9 tiles (C31 now covers it).
+- For timing behaviour that the wall cannot repeat on demand (network congestion, late beacons), simulate it on the host against each variant of the code (`docs/bench/12nov/tools/timesync_congestion_sim.c`). A quoted include picks up the header next to the `.c` file first, so copy both files for each variant.
+
 **Designing a wall test.**
 - Each fix gets a run that **recreates its original trigger**:
   - round 7 restarted the PC with the same session (4b);
@@ -84,6 +87,10 @@ Step 4 plan (riskiest first, agreed with the user): 4a no-video game (done), 4b 
 - A run spoiled by setup (a replug, a dead Pico, a script bug) is recorded as **"Not a test"** with its cause, then rerun under a new name (8b, 10b, 10c). Its logs are still kept.
 
 **Before each run.**
+- Log **every** board on USB, named by board (added from the night session).
+- Read the Pico's `online=`, `ready=` and `sync=` masks in `CL_STATS` (bit n-1 is Node n, `0x1ff` all nine), and after any upload grep the Pico log for `CRC_MISMATCH`.
+- After reflashing tiles, acknowledge their TELEMETRY for a few seconds (`telemetry.TelemetryReceiver().poll()` in a loop, as the dashboard does) before reading faults: event bits stay set until acknowledged.
+- Dry-run any script that flashes boards, and flash tiles one at a time directly on a laptop port (a loaded hub cut out on 12 Nov).
 - The previous logger has exited (`kill -0 PID`).
 - The Pico answers ping.
 - Both tiles printed a `DE ticks` line in the last 10 s; read 12 to 22 s of serial if unsure. This is read-only, but ask first if the user has just stopped a command.
@@ -109,6 +116,8 @@ Step 4 plan (riskiest first, agreed with the user): 4a no-video game (done), 4b 
 - Then 3 to 5 bullets with the measured numbers (chunks, seconds, hits, wrong, reaction, faults).
 - Then the specific things only their eyes can confirm, as numbered questions ("Did tile 4 show the hole during the tap test?").
 - Then the next run and what to watch for, ending with "Say go".
+
+- Per-tile tap timing: the Pico's `CL_EVENT ... GAME_TAP node=N value=V` has V = arrival minus tap time in us. 15 to 50 ms is normal; hundreds of ms means that tile's clock is off (round 15b).
 
 **Diagnosing a report from the user.**
 - Confirm which physical tile and which moment they mean first.

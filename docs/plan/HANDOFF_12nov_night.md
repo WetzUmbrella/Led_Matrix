@@ -10,6 +10,10 @@ Read in this order before doing anything:
 
 If you cannot see the user's personal files, ignore every mention of them; nothing here depends on them.
 
+## 0. Update, 12 Nov late (main laptop, the orchestrating agent)
+
+Section 3 is done: the Pico receive buffer is fixed (host test C31) and V2b passed on 9 tiles. Round 15 then found time-sync re-seed storms from late beacons on Matrix; fixed (re-seed only after 3 off samples in a row, decided with the user), all 9 tiles flashed, round 15b passed. New open item: time sync follows sustained network delay (simulated). Record: `docs/bench/12nov/step4.md`, last section. The method in `HANDOFF_12nov.md` sections 2 and 2a governs; it now includes this file's additions.
+
 ## 1. Where things stand
 
 | Item | State |

@@ -115,3 +115,44 @@ Open:
 ## Result (9 tiles)
 
 **All nine tiles run a game round on the Matrix router 12 Nov (round 14).** The 9-tile video waits for the Pico receive-buffer fix.
+
+# Pico receive buffer and time sync on Matrix, 12 Nov 2026 late (9 tiles)
+
+Main laptop (Linux). The laptop stays on its WiFi for the agent; a USB Ethernet adapter on a LAN port of the Matrix router reaches the wall (`ipv4.never-default` on the wired profile, so the two networks are not bridged). Both `wifi_secrets.h` files name Matrix. 9 tiles, 3x3 in reading order (map `1,2,3,4,5,6,7,8,9`), Pico 192.168.1.154.
+
+Built:
+- **Pico receive buffer** (the bug found by run V2, `HANDOFF_12nov_night.md` section 3): `CL_RX_MAX_BYTES` is now `PROTO_SESSION_CONFIG_BYTES` (53 B, was a fixed 48 B sized for the 46 B message before step 4d); a compile-time check that every type the Pico decodes fits; `cl_enqueue()` drops and counts (`rx_bad`) a datagram longer than the buffer instead of letting the decoder read past the copy. Host test **C31**: a 9-tile SESSION_CONFIG through the receive path, every tile then counts ready with its own CRC32, and a datagram one byte too long is dropped. C31 failed on the old code (readiness check) and passes with the fix.
+- **Time sync, re-seed only after 3 off samples in a row** (decided with Cheston, option A): one or two beacons more than 0.5 s off the estimate are dropped (`TS dropped` log line, `timesync_dropped_count()`); the third in a row re-seeds, so a real Pico restart is still caught about 200 ms later. Host test extended: with the old one-sample rule the new late-beacon checks fail (3 re-seeds, 0 dropped); with the fix they pass and the "another Pico" case re-seeds on the third beacon. Owner: Ahsanul (time sync) and Benjamin (coordinator) defend these.
+- Gate passes; Pico and tiles built with exit 0; every tile flashed one at a time directly on USB (a hub with 3 tiles and the Ethernet adapter cut out twice and once stayed dead; see "Found").
+
+| Check | Result | Notes |
+|---|---|---|
+| Laptop on Matrix by cable | **PASS** after two fixes | The adapter's name follows the USB port (`enp0s13f0u3u2`, later `enp0s13f0u2u2`); the firewall rule allowing the boards' UDP is per interface name, so after a port change packets arrived (90 in 5 s) but none reached the scripts until a rule for the new name was added. Tiles 1 to 3 were silent until reset: their boot logs showed a normal Matrix join afterwards (stuck from an earlier power-up). |
+| V2b video, 3x3, 9 tiles (session 31), Pico with the buffer fix | **PASS** | All 9 uploads 57 of 57, resent 0, 2.09 to 3.24 s each (about 22 s one after another). No `CRC_MISMATCH`; `ready=0x1ff` (was `0x07f` in V2); START accepted; COORDINATING PLAYBACK then READY about 15 s later. Operator: each tile showed its own cell number, the counter in sync on all nine, all blank after STOP. `faults=none` on all nine before and after. `v2b_9tiles_*.log` |
+| Round 15 game, 3x3 (session 32) | **Not a test: refused to arm** | Eight tiles reported `MISSED_DEADLINE`. Cause: on Matrix some beacons arrived up to 514 ms late; time sync took each one as another Pico clock and re-seeded (tile 5: 21 re-seeds in 200 s, `jumps` 5 to 106, `missed` 44,227 to 218,060, each step a burst of missed ticks). On the hotspot the worst beacon was 360 ms late. Fixed by the time-sync change above. `round15_9tiles_*.log` |
+| 2-minute check after flashing all 9 | **PASS (not exercised)** | Tile 9: no late beacon in 2 minutes, so the new rule was not exercised; 0 re-seeds, 0 drops, 0 missed. `soak_timesync_*.log` |
+| Round 15b game, 3x3 (session 33), all 9 on the time-sync build | **PASS**, with a timing finding | Arrow on tile 5, countdown and results big across the wall (operator). 19 of 22 moles, 3 missed, 7 wrong (the operator's own), 690 ms, 3 stars; `faults=none` on all nine before and after; tile 5: 0 re-seeds, 0 drops, 0 missed ticks, 0 jumps. **Tap arrival latency** (the Pico's `GAME_TAP` value, arrival minus tap time): tiles 1, 2, 3, 5, 9 15 to 45 ms; **tiles 4, 6, 7, 8 730 to 920 ms**, shrinking during the round. Operator: those four were slow, then came back on track by themselves. In round 14 (old time sync) the same tiles were 11 to 160 ms. `round15b_9tiles_*.log` |
+
+Time sync on Matrix, simulated on the host (`tools/timesync_congestion_sim.c`): a 6 s congestion period in which the beacon delay ramps up to a peak and back, on the committed code, the one-sample rule and the new three-sample rule.
+
+| Peak delay | Worst clock error | Time more than 50 ms off | Re-seeds |
+|---|---|---|---|
+| 400 ms | 315 ms | 7.8 s | 0 |
+| 600 ms | 456 ms | 17.5 s | 0 |
+| 900 ms | 658 ms | 37.6 s | 0 |
+
+The same for all three builds. The estimate is the smallest offset of the last 16 beacons (1.6 s), so a congestion period long enough to make every beacon in the window late moves the estimate with it; the published offset follows at the slew limit (100 us per tick, 6 ms/s) and takes minutes to come back. A late start (the first 20 beacons 850 ms late) recovers in about 0.3 s with the new rule. So the slow tiles in round 15b match congestion on the router, not the new rule; this is a model, not a measurement on those tiles (the operator chose not to read tile 8's log).
+
+Found on the bench:
+- The Pico receive buffer (fixed, C31).
+- Re-seed storms from single late beacons on Matrix (fixed, the 3-in-a-row rule).
+- A USB hub carrying 3 tiles and the Ethernet adapter cut out twice (kernel: the hub and everything behind it disconnected at once); after the second time no port saw it, and tiles plugged directly into the laptop worked. Flash tiles one at a time on a laptop port; keep the adapter on its own port.
+- Event fault bits (`MISSED_DEADLINE`, `QUEUE_OVERFLOW`) stay set until the PC acknowledges a TELEMETRY; after reflashing, acknowledge for a few seconds (as the dashboard does) before reading faults.
+
+Open:
+- **Time sync follows sustained network delay** (the simulation above): tiles can be hundreds of ms off for tens of seconds after congestion. It hurts tap grouping (an echo with a wrong time stamp is judged as a separate wrong tap), reaction times and video sync. Design decision for the user (Ahsanul's module): a longer window, or hold the estimate when the window minimum suddenly rises.
+- The bench script refuses to arm on event faults, not only on condition faults (proposed to the user, not decided).
+
+## Result (receive buffer and time sync)
+
+**The 9-tile wall plays video and a full game round on Matrix 12 Nov (V2b, round 15b).** The Pico receive-buffer bug from step 4d is fixed, and single late beacons no longer re-seed time sync. Time sync under sustained congestion is the open item.

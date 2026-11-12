@@ -1,0 +1,15 @@
+>>> layout only 3x3 1,2,3,4,5,6,7,8,9
+>>> status
+pico WAITING FOR TILE READINESS readiness=0x000 online=0x1ff score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc IDLE; start disabled; missing [1, 2, 3, 4, 5, 6, 7, 8, 9]
+tile 1 192.168.1.86 faults=none orient=3 display=1
+tile 2 192.168.1.144 faults=MISSED_DEADLINE orient=3 display=1
+tile 3 192.168.1.97 faults=MISSED_DEADLINE orient=3 display=1
+tile 4 192.168.1.6 faults=MISSED_DEADLINE orient=3 display=1
+tile 5 192.168.1.14 faults=MISSED_DEADLINE orient=3 display=1
+tile 6 192.168.1.130 faults=MISSED_DEADLINE orient=3 display=1
+tile 7 192.168.1.51 faults=MISSED_DEADLINE orient=3 display=1
+tile 8 192.168.1.75 faults=MISSED_DEADLINE orient=3 display=1
+tile 9 192.168.1.219 faults=MISSED_DEADLINE orient=3 display=1
+not arming, tile faults: tile 9: MISSED_DEADLINE; tile 3: MISSED_DEADLINE; tile 5: MISSED_DEADLINE; tile 7: MISSED_DEADLINE; tile 8: MISSED_DEADLINE; tile 6: MISSED_DEADLINE
