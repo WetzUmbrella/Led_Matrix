@@ -2079,6 +2079,9 @@ static void cl_game_command (proto_game_control_t const * p_msg)
             g_b_game_mode = (PROTO_GAME_MODE_GAME == command);
             g_round       = PROTO_ROUND_IDLE;
             g_b_tap_test  = false;
+            /* GAME IDLE shows no counts of the last round (bench 12 Nov
+             * 2026, round 7: wrong and shown stayed, the score did not). */
+            game_rules_clear(&g_game);
             cl_evaluate(); /* Readiness depends on the mode (A14). */
         }
         else

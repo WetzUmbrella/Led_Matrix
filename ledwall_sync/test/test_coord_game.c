@@ -1582,6 +1582,18 @@ bool test_coord_game_status (void)
     b_ok = (test_main_check(gt_check_results(1u), __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_check_results(2u), __LINE__)) && b_ok;
 
+    /* A mode command ends RESULTS: GAME IDLE shows none of this round
+     * (bench 12 Nov 2026, round 7). */
+    gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    gt_advance(300u * GT_MS);
+    b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_ROUND_IDLE == status.round_state) &&
+                                (0 == status.score) && (0u == status.wrong) &&
+                                (0u == status.shown) &&
+                                (0u == status.missed) &&
+                                (0u == status.reaction_ms),
+                            __LINE__)) && b_ok;
+
     /* The next ARM clears the counts: STATUS shows none of this round. */
     gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
     gt_advance(300u * GT_MS);
