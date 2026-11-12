@@ -157,17 +157,21 @@ def test_session_config_round_trips_the_wire_map(layout, node_map,  # type: igno
     sent = shell.link.configs[-1]
     rows, cols = ab.parse_shape(layout)
     assert (sent["rows"], sent["cols"]) == (rows, cols)
-    assert sent["node_map"] == node_map
+    assert sent["node_map"] == node_map[:rows * cols]
+    # Step 4d: one CRC32 per Node ID, 0 for a tile not placed.
     crc_by_node = {n: a.crc32 for n, a in shell.model.assets.items()}
-    assert sent["crcs"] == [crc_by_node.get(n, 0) if n else 0
-                            for n in node_map]
+    assert sent["crcs"] == [crc_by_node.get(n, 0) for n in range(1, 10)]
     wire = pl.encode_session_config(
         session_id=7, seq=1, rows=sent["rows"], cols=sent["cols"],
-        policy=1, node_map=sent["node_map"],
-        frame_count=sent["frame_count"], crc32=sent["crcs"])
+        policy=1, frame_count=sent["frame_count"], crc32=sent["crcs"],
+        **pl.places_from_map(cols, sent["node_map"]))
     decoded = pl.decode(wire)
     assert (decoded["rows"], decoded["cols"]) == (rows, cols)
-    assert list(decoded["node_map"]) == node_map  # type: ignore[arg-type]
+    for slot, node in enumerate(node_map[:rows * cols]):
+        if node:
+            assert decoded["placed"][node - 1] == 1  # type: ignore[index]
+            assert (decoded["row"][node - 1],  # type: ignore[index]
+                    decoded["col"][node - 1]) == divmod(slot, cols)
     assert decoded["frame_count"] == sent["frame_count"]
 
 
@@ -202,7 +206,7 @@ def test_a_grid_change_rebuilds_and_uploads_the_new_shape(tmp_path) -> None:  # 
     shell.publish()
     assert sorted(shell.model.assets) == [1, 2, 3, 4]
     shell.set_grid(1, 5)  # Row 0 keeps tiles 1 and 2; row 1 is gone.
-    assert shell.model.node_map == [1, 2, 0, 0, 0, 0, 0, 0, 0]
+    assert shell.model.node_map == [1, 2, 0, 0, 0]
     sent = shell.link.configs[-1]
     assert (sent["rows"], sent["cols"]) == (1, 5)
     assert sorted(shell.model.assets) == [1, 2]
@@ -217,7 +221,7 @@ def test_only_changed_tiles_are_sent_again(tmp_path) -> None:  # type: ignore
     assert len(shell.uploader.sent) == 4
     shell.set_slot(3, False)  # Tile 4 leaves; the other regions do not move.
     assert shell.uploader.sent[4:] == []
-    assert shell.model.node_map == [1, 2, 3, 0, 0, 0, 0, 0, 0]
+    assert shell.model.node_map == [1, 2, 3, 0]
 
 
 def test_strip_gif_builds_from_the_command_line(tmp_path, capsys) -> None:  # type: ignore

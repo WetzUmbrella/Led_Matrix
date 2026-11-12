@@ -216,14 +216,15 @@ class PicoLink:
                             policy: int, node_map: Sequence[int],
                             frame_count: int,
                             crcs: Sequence[int]) -> bytes:
-        """SESSION_CONFIG with the wall shape, the map (row-major over
-        rows x cols), frame_count and one CRC32 per map position (0 for
-        blank); returns the bytes sent."""
+        """SESSION_CONFIG with the grid shape, each placed tile's cell from
+        the row-major map over rows x cols (0 = an empty cell, step 4d),
+        frame_count and the 9 CRC32s indexed by Node ID - 1 (0 for a tile
+        not placed); returns the bytes sent."""
         self.session_id = session_id
         data = pl.encode_session_config(
             session_id=session_id, seq=self._next_seq(), rows=rows, cols=cols,
-            policy=policy, node_map=list(node_map), frame_count=frame_count,
-            crc32=list(crcs))
+            policy=policy, frame_count=frame_count, crc32=list(crcs),
+            **pl.places_from_map(cols, node_map))
         self._send(data)
         return data
 

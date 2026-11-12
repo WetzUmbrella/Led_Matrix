@@ -16,8 +16,12 @@ T-B1-02 (resample and partition):
   * Each frame is centre-cropped to the layout's aspect ratio (cols : rows),
     resized to (cols x 8) by (rows x 8) and cut into one 8 x 8 region per
     Node ID from the layout and Node ID map (build step 4: position k is row
-    k // cols, column k % cols over rows x cols; 0 = blank). Any shape with
-    rows and cols 1 to 9 and rows x cols at most 9 is accepted.
+    k // cols, column k % cols over rows x cols; 0 = an empty cell). Step 4d
+    (DS-15, 12 Nov 2026): rows and cols are 1 to 9 each, so up to 81 cells,
+    with up to 9 tiles in any of them; the GIF is cut over the whole grid
+    and only the placed tiles get their section. The map has rows x cols
+    entries; the 9-entry form of the bench tools is still taken for a grid
+    of fewer than 9 cells when the entries past the grid are 0.
 
 T-B1-03 (pack and manifest):
   * Each channel value v becomes round(v x b / 255) on the PC only, where b
@@ -151,38 +155,50 @@ def load_gif(path: str):  # type: ignore[no-untyped-def]
 
 
 def parse_shape(layout: str) -> Tuple[int, int]:
-    """'RxC' to (rows, cols): each 1 to 9, rows x cols at most 9 (layout_table
-    section 5.2)."""
+    """'RxC' to (rows, cols): each 1 to 9, so up to 81 cells (layout_table
+    section 5.2, step 4d)."""
     parts = layout.lower().split("x")
     if len(parts) != 2 or not all(part.isdigit() for part in parts):
         raise AssetError("layout must be RxC, for example 2x2 or 1x9")
     rows, cols = int(parts[0]), int(parts[1])
     if not (1 <= rows <= pl.GRID_MAX and 1 <= cols <= pl.GRID_MAX):
         raise AssetError("rows and cols are 1 to 9")
-    if rows * cols > pl.MAP_SLOTS:
-        raise AssetError("rows x cols must be at most 9 tiles")
     return rows, cols
 
 
-def parse_layout(layout: str, node_map: Sequence[int]) -> Tuple[int, int]:
-    """Check the layout and map; returns (rows, cols)."""
+def normalise_map(layout: str, node_map: Sequence[int]) -> List[int]:
+    """The map as rows x cols row-major cells. A 9-entry map for a grid of
+    fewer cells (the bench tools' form) is cut to the grid when the entries
+    past it are 0. Checks every rule; raises AssetError."""
     rows, cols = parse_shape(layout)
-    if len(node_map) != pl.MAP_SLOTS:
-        raise AssetError("the Node ID map has 9 positions")
+    cells = rows * cols
+    entries = list(node_map)
+    if len(entries) == pl.NODE_MAX and cells < pl.NODE_MAX:
+        for slot, node in enumerate(entries[cells:], start=cells):
+            if node:
+                raise AssetError("position %d is outside the %s layout"
+                                 % (slot, layout))
+        entries = entries[:cells]
+    if len(entries) != cells:
+        raise AssetError("the %s map has %d cells, not %d"
+                         % (layout, cells, len(entries)))
     used = []
-    for slot, node in enumerate(node_map):
+    for node in entries:
         if not 0 <= node <= pl.NODE_MAX:
-            raise AssetError("Node IDs are 1 to 9, 0 for blank")
-        if node and slot >= rows * cols:
-            raise AssetError("position %d is outside the %s layout"
-                             % (slot, layout))
+            raise AssetError("Node IDs are 1 to 9, 0 for an empty cell")
         if node:
             used.append(node)
     if len(used) != len(set(used)):
         raise AssetError("a Node ID appears twice in the map")
     if not used:
         raise AssetError("the map has no Node ID")
-    return rows, cols
+    return entries
+
+
+def parse_layout(layout: str, node_map: Sequence[int]) -> Tuple[int, int]:
+    """Check the layout and map; returns (rows, cols)."""
+    normalise_map(layout, node_map)
+    return parse_shape(layout)
 
 
 def centre_crop(frame, rows: int, cols: int):  # type: ignore[no-untyped-def]
@@ -205,6 +221,7 @@ def partition_tiles(frames, layout: str,  # type: ignore[no-untyped-def]
     region per Node ID (row-major over rows x cols)."""
     from PIL import Image
     rows, cols = parse_layout(layout, node_map)
+    node_map = normalise_map(layout, node_map)
     tiles: Dict[int, List[Pixels]] = {n: [] for n in node_map if n}
     for frame in frames:
         wall = centre_crop(frame, rows, cols).resize(

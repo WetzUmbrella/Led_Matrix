@@ -73,7 +73,7 @@ def test_centre_crop_drops_the_sides_of_a_wide_frame() -> None:
     assert all(pixel == (0, 0, 255) for pixel in tiles[1][0])
 
 
-@pytest.mark.parametrize("text", ["2X", "0x3", "10x1", "3x4", "x2", "2x2x2"])
+@pytest.mark.parametrize("text", ["2X", "0x3", "10x1", "9x10", "x2", "2x2x2"])
 def test_bad_shapes_refused(text: str) -> None:
     with pytest.raises(ab.AssetError):
         ab.parse_shape(text)
@@ -99,13 +99,13 @@ def _model(layout: str = "1x5", node_map=(1, 2, 3, 0, 0, 0, 0, 0, 0),
 def test_tap_to_place_writes_the_board_number() -> None:
     model = _model()
     assert model.place(4, FakeTaps(5)) == 5
-    assert model.node_map == [1, 2, 3, 0, 5, 0, 0, 0, 0]
+    assert model.node_map == [1, 2, 3, 0, 5]
 
 
 def test_tap_to_place_moves_a_tile_already_in_the_map() -> None:
     model = _model()
     model.place(0, FakeTaps(2))
-    assert model.node_map == [2, 0, 3, 0, 0, 0, 0, 0, 0]
+    assert model.node_map == [2, 0, 3, 0, 0]
 
 
 def test_no_tap_leaves_the_map_alone() -> None:
@@ -142,7 +142,40 @@ def test_grid_keeps_tiles_still_inside_the_new_shape() -> None:
     model = _model(node_map=(1, 2, 3, 4, 5, 0, 0, 0, 0))
     model.set_grid(2, 2)
     assert model.layout == "2x2"
-    assert model.node_map == [1, 2, 0, 0, 0, 0, 0, 0, 0]
+    assert model.node_map == [1, 2, 0, 0]
+
+
+def test_grid_grows_to_nine_by_nine_with_tiles_kept() -> None:
+    # Step 4d (DS-15): up to 81 cells; tiles keep their row and column.
+    model = _model(node_map=(1, 2, 3, 4, 5, 0, 0, 0, 0))
+    model.set_grid(9, 9)
+    assert len(model.node_map) == 81
+    assert model.node_map[:5] == [1, 2, 3, 4, 5]
+    assert not any(model.node_map[5:])
+
+
+def test_nine_entry_bench_map_is_cut_to_a_small_grid() -> None:
+    assert ab.normalise_map("1x2", [4, 5, 0, 0, 0, 0, 0, 0, 0]) == [4, 5]
+    assert ab.normalise_map("3x3", [1, 0, 0, 0, 0, 0, 0, 0, 2]) == \
+        [1, 0, 0, 0, 0, 0, 0, 0, 2]
+    with pytest.raises(ab.AssetError, match="outside"):
+        ab.normalise_map("1x2", [4, 5, 6, 0, 0, 0, 0, 0, 0])
+    with pytest.raises(ab.AssetError, match="cells"):
+        ab.normalise_map("5x5", [1, 2])
+
+
+def test_sparse_grid_cuts_each_tile_its_own_section() -> None:
+    # Step 4d decision 2: the GIF is cut over the whole 3 x 3 grid; nodes 1
+    # and 2 on opposite corners get the top-left and bottom-right sections.
+    from PIL import Image
+    frame = Image.new("RGB", (24, 24), (0, 0, 0))
+    for y in range(24):
+        for x in range(24):
+            frame.putpixel((x, y), (x // 8 * 100, y // 8 * 100, 7))
+    tiles = ab.partition_tiles([frame], "3x3", [1, 0, 0, 0, 0, 0, 0, 0, 2])
+    assert sorted(tiles) == [1, 2]
+    assert all(pixel == (0, 0, 7) for pixel in tiles[1][0])
+    assert all(pixel == (200, 200, 7) for pixel in tiles[2][0])
 
 
 def test_grid_refused_when_it_leaves_no_tile() -> None:
@@ -155,10 +188,10 @@ def test_grid_refused_when_it_leaves_no_tile() -> None:
 def test_slot_off_remembers_the_board_and_on_writes_it_back() -> None:
     model = _model()
     assert model.set_slot(1, False) == 2
-    assert model.node_map == [1, 0, 3, 0, 0, 0, 0, 0, 0]
+    assert model.node_map == [1, 0, 3, 0, 0]
     assert model.parked == {1: 2}
     assert model.set_slot(1, True) == 2
-    assert model.node_map == [1, 2, 3, 0, 0, 0, 0, 0, 0]
+    assert model.node_map == [1, 2, 3, 0, 0]
     assert model.parked == {}
 
 

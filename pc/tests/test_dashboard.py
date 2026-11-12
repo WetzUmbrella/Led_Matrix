@@ -86,7 +86,11 @@ def test_pico_link_sends_config_and_commands() -> None:
     assert config["type"] == "SESSION_CONFIG"
     assert config["frame_count"] == 600
     assert (config["rows"], config["cols"]) == (2, 2)
-    assert config["node_map"] == wire_map
+    # Step 4d: each Node ID carries its cell; the CRCs follow Node IDs.
+    assert config["placed"] == [1, 1, 1, 1, 0, 0, 0, 0, 0]
+    assert config["row"][:4] == [0, 0, 1, 1]
+    assert config["col"][:4] == [0, 1, 0, 1]
+    assert config["crc32"] == crcs
     for send, name in ((link.start, "START_AT"), (link.pause, "PAUSE"),
                        (link.resume, "RESUME_AT"), (link.stop, "STOP")):
         send()

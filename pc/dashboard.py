@@ -194,7 +194,7 @@ class DashboardModel:
         self.state = "IDLE"
         self.clock = clock
         self.layout = "1x1"
-        self.node_map: List[int] = [1] + [0] * 8
+        self.node_map: List[int] = [1]
         self.policy = pico_link.POLICY_PAUSE
         self.brightness = ab.BRIGHTNESS_MAX
         self.gif: Optional[str] = None
@@ -276,7 +276,8 @@ class DashboardModel:
             self.state = "IDLE" if not self.assets else "READY"
             return False
         self.gif, self.layout = gif, layout
-        self.node_map, self.policy = list(node_map), policy
+        self.node_map = ab.normalise_map(layout, node_map)
+        self.policy = policy
         self.brightness = brightness
         self._drop_assets()
         self._say("configuration accepted")
@@ -301,14 +302,15 @@ class DashboardModel:
         return True
 
     def set_grid(self, rows: int, cols: int) -> None:
-        """Change the wall shape. Tiles keep their row and column when the
-        new grid still has that position; the rest are taken off the map."""
+        """Change the grid shape (up to 9 x 9, step 4d). Tiles keep their row
+        and column when the new grid still has that cell; the rest are taken
+        off the map."""
         if not self.stopped():
             raise Refused("stop playback before changing the grid")
         layout = "%dx%d" % (rows, cols)
         ab.parse_shape(layout)
         _old_rows, old_cols = self.shape()
-        new_map = [0] * pl.MAP_SLOTS
+        new_map = [0] * (rows * cols)
         for slot, node in enumerate(self.node_map):
             row, col = divmod(slot, old_cols)
             if node and row < rows and col < cols:
@@ -534,7 +536,7 @@ class DashboardModel:
             "rows": rows, "cols": cols, "layout": self.layout,
             "node_map": list(self.node_map),
             "parked": [self.parked.get(slot, 0)
-                       for slot in range(pl.MAP_SLOTS)],
+                       for slot in range(rows * cols)],
             "pico_state": self.pico_state(),
             "readiness": self.readiness, "online": self.online,
             "score": status.score if status else 0,
@@ -612,17 +614,18 @@ class DashboardShell(cmd.Cmd):
         With no video built (game only, A14) it carries 1 frame and no CRC
         (0): the Pico needs no video in game mode."""
         model = self.model
+        node_map = ab.normalise_map(model.layout, model.node_map)
         if model.assets:
             frame_count = next(iter(model.assets.values())).frame_count
-            crcs = [model.assets[n].crc32 if n else 0
-                    for n in model.node_map]
         else:
             frame_count = 1
-            crcs = [0] * len(model.node_map)
+        # One CRC32 per Node ID (step 4d); 0 for a tile not placed.
+        crcs = [model.assets[node].crc32 if node in model.assets else 0
+                for node in range(1, pl.NODE_MAX + 1)]
         rows, cols = model.shape()
         self.link.send_session_config(self.session_id, rows, cols,
-                                      model.policy, list(model.node_map),
-                                      frame_count, crcs)
+                                      model.policy, node_map, frame_count,
+                                      crcs)
 
     def _send_asset(self, address: str, session_id: int,
                     payload: bytes) -> object:
@@ -808,7 +811,7 @@ class DashboardShell(cmd.Cmd):
             print("usage: brightness N")
 
     def do_grid(self, arg: str) -> None:
-        """grid ROWS COLS   (each 1 to 9, rows x cols at most 9)"""
+        """grid ROWS COLS   (each 1 to 9: up to 81 cells, 9 tiles in any of them)"""
         try:
             rows, cols = (int(part) for part in arg.split())
             self.set_grid(rows, cols)
