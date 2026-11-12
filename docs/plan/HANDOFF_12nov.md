@@ -68,6 +68,57 @@ Step 4 plan (riskiest first, agreed with the user): 4a no-video game (done), 4b 
 
 **Other deadlines.** Remind the user once per session of deadlines that are closer than the bench work: **UDE2222 A2 deck due Fri 13 Nov 23:59**, still open on the dashboard on 12 Nov. INF2001 M2 presentation is Wed 18 Nov, and the INF2004 quiz and practical are in Week 12.
 
+## 2a. Test methodology in detail (how every result today was checked)
+
+**Host level.**
+- While working, run one suite at a time: `make -C common/proto/test run`, `make -C panel_sync/test run`, `make -C ledwall_sync/test run`, and the `asan` targets; `.venv/bin/python -m pytest pc/tests -q -x`.
+- Run the full gate only before a commit.
+- For a bug fix: write the test, run it **with the fix stashed** (`git stash -q -- <file>`), see it fail, then pop the fix and see it pass.
+- A changed rule changes old tests. Rewrite them to the new rule and say why in the test comment (C9 today). Never delete a check to get green.
+- For a wire change, keep the old cases bit-identical through a helper (the `tst_*` position helpers in `test_score_font.c`), so a full grid is proven unchanged.
+
+**Designing a wall test.**
+- Each fix gets a run that **recreates its original trigger**:
+  - round 7 restarted the PC with the same session (4b);
+  - round 9 reused a session for the held-asset path;
+  - the Pico replug proved the display clock-jump guard.
+- Before a run, write down the **numbers you expect** (upload seconds, chunks, which tile shows what) and compare after. When a prediction is wrong, say so and explain why (round 9: "5.19 s, not 1 to 2 s, because the uploader waited the full window timeout").
+- One change at a time on the wall, and a new session id per run unless the test is about reusing one.
+- A run spoiled by setup (a replug, a dead Pico, a script bug) is recorded as **"Not a test"** with its cause, then rerun under a new name (8b, 10b, 10c). Its logs are still kept.
+
+**Before each run.**
+- The previous logger has exited (`kill -0 PID`).
+- The Pico answers ping.
+- Both tiles printed a `DE ticks` line in the last 10 s; read 12 to 22 s of serial if unsure. This is read-only, but ask first if the user has just stopped a command.
+- Every firmware build used exited 0.
+- Logger length: 150 to 240 s for a round, 40 s for a short check.
+
+**Right after each run, check in this order:**
+1. The script's exit code and `grep -v PLAYING <run>_dashboard.log` (the state changes, uploads, refusals, final STATUS, `faults=` per tile).
+2. Crash words in every log: `grep -aiE 'panic|abort|assert|Guru'`.
+3. The display ran on both tiles: count `DE ticks` lines (about one per 10 s) and look at `missed=` and `jumps=`.
+4. Upload facts on the tiles: `grep -a '^ASSET'` (manifest, `ready`, `already held`, and the `ASSET_FLASH` counters, which prove whether flash was written).
+5. Taps and messages, if anything looks odd:
+   - tiles: `TAP` and `TN_TAP` lines, `TN_GAME type=N` (18 TAP, 19 MOLE_ON, 20 FEEDBACK, 21 GAME_CONTROL, 22 WALL_PICTURE, 23 ACK);
+   - Pico: `CL_EVENT` lines (STATE values, GAME_TAP, GAME_FEEDBACK, GAME_MOLE).
+6. To line events up across boards, convert the clocks:
+   - Pico `CL_EVENT t_ms` against the dashboard's epoch seconds: take one event seen in both (for example STATE 12 at ARM) and use the offset (664.1 s in round 8b);
+   - tile `t_us` / `t_l` against the Pico clock: from a `TN_TAP ... t_pico=` line next to its `TAP t_us=`.
+   - This is how "the green flashes came during the upload, not the tap test" was shown.
+7. Remember: the tiles' USB serial drops lines under load, so one missing line proves nothing, but a whole class missing on both tiles for 20 s does (no TAP lines in round 8b's tap test).
+
+**Reporting to the user after a run.**
+- Lead with pass or fail.
+- Then 3 to 5 bullets with the measured numbers (chunks, seconds, hits, wrong, reaction, faults).
+- Then the specific things only their eyes can confirm, as numbered questions ("Did tile 4 show the hole during the tap test?").
+- Then the next run and what to watch for, ending with "Say go".
+
+**Diagnosing a report from the user.**
+- Confirm which physical tile and which moment they mean first.
+- Read the logs before answering; do not guess hardware faults. Keep the network side (upload, faults, telemetry) apart from the LED side (`DE ticks`): the display can freeze while everything else looks healthy.
+- Prefer the smallest test that separates the explanations (the 30 s tap-test-only run).
+- If the user replugs a board, read its serial afterwards to see whether it recovered, before changing code.
+
 ## 3. Next: finish 4d
 
 ### 3.1 What 4d built (for the record and the defence)
