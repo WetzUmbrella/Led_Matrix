@@ -75,3 +75,43 @@ Open:
 ## Result (4d)
 
 **Step 4d passes on the wall 12 Nov (V1, rounds 11 and 12).** A tile placed anywhere in a 3x3 grid plays its own section of the video, game rounds run on a sparse grid with no upload, and wall pictures switch between big and small by how full the grid is. Next: 4e (website).
+
+# Matrix bench, 12 Nov 2026 evening: the wall on the dedicated router
+
+The bench moved from the phone hotspot to the Matrix router (DS-17). The Pico and both tiles were rebuilt with the Matrix credentials and reflashed (Pico `make` exit 0; tiles `idf.py build` exit 0 after `idf.py set-target esp32s3`; esptool and UF2 writes verified). Addresses: Pico 192.168.1.154, tile 4 192.168.1.6, tile 5 192.168.1.14. The laptop stays on its normal WiFi and reaches Matrix by Ethernet (setup in `HANDOFF_12nov_night.md` section 6).
+
+| Check | Result | Notes |
+|---|---|---|
+| Join with the router in AP mode | **Not a test: no DHCP** | The Pico logged `router join not done in 10000 ms` every 12 s; the laptop's Ethernet got 169.254.x. Switched to Wireless router mode, and the cable moved from WAN to a LAN port: all three boards and the laptop got addresses. |
+| Tap test only (session 28) | **Not a test: firewall** | "the Pico did not acknowledge the mode change". The laptop's Ethernet was set to Private, and Windows Firewall allows Python inbound on Public only. Set back to Public, a mode command was ACKed and STATUS arrived. `tap_only.py` cannot run on a freshly booted Pico anyway: the tap test needs READY, which needs a layout. `taponly_matrix_*.log` |
+| Round 13, 1x2 on Matrix (session 28) | **PASS** | `game_round.py 192.168.1.154 28 - 4,5 --layout 1x2 --no-video --level easy --threshold 300 --tap-test 20`. Layout only, no upload; Pico VALIDATING SESSION, SYNCHRONISING, READY, COORDINATING GAME, READY. Operator: hole and green flash in the tap test (tiles logged 30 and 38 taps); start arrow started the countdown; countdown and results big across both tiles. 28 of 29 moles, 1 missed (a mole left untapped on purpose), 5 wrong (on purpose), 481 ms, 3 stars. Pico: 29 moles, 33 tap groups, 33 FEEDBACK. `faults=none`, no crash words, both tiles ticked throughout. `round13_*.log` |
+
+Found on the bench:
+- The tiles' `DE ticks` counters rose while the network was being changed, not during any run: `missed=102971` and `100167`, and `jumps` 42 and 44 at the tap-test attempt, 47 and 49 before round 13, flat through round 13. Most likely the Pico's restarts and rejoins re-seeding the shared clock (the clock-jump guard's case); the 5 extra jumps in the idle gap before round 13 are not explained.
+
+## Result (Matrix)
+
+**The wall runs a full round on the Matrix router 12 Nov (round 13).** Next: 4e (website).
+
+# 9-tile bench, 12 Nov 2026 night: all nine tiles on Matrix
+
+The 4 new tiles arrived, making 9. Every tile was flashed with the same Matrix build (code of `2593a48`) over USB with esptool, one port at a time; each board's number was read from its NVS (0x9000) first. Wall: 3x3 in reading order (1 2 3 / 4 5 6 / 7 8 9). Addresses and MACs in `HANDOFF_12nov_night.md` section 6.
+
+| Check | Result | Notes |
+|---|---|---|
+| Flash and number tiles 1 to 9 | **PASS** | Tiles 1, 2, 3 already held numbers 1, 2, 3. Tiles 6, 7, 8, 9 held **no number** (boot: `ESP-0, node 0 (no board number: run set_board_number.sh)`), so they never registered; an NVS image with `board:number` was written at 0x9000 for each, as `set_board_number.sh` does. Every write hash-verified. Tile 5 was reflashed twice with the same image by a faulty flash script (fixed); no effect. Pico `online=0x1ff sync=0x1ff`. |
+| V2 video, 3x3, 9 tiles (session 29) | **Not a test: Pico receive buffer** | All 9 uploads 57 of 57 (2.20 to 3.42 s each, about 23 s one after another; 3 resent on tile 1). The Pico logged `CRC_MISMATCH` for node 8 (0xd6ba339a) and node 9 (0x0c609d07), both the CRCs the PC built, and stayed at `ready=0x07f`; the PC refused START ("not ready [8, 9]"). Cause: `CL_RX_MAX_BYTES` is 48, SESSION_CONFIG is 53 B since 4d, and the decoder reads the last 5 bytes from past the buffer (`HANDOFF_12nov_night.md` section 3). `v2_9tiles_*.log` |
+| Round 14 game, 3x3, 9 tiles (session 30) | **PASS** | `game_round.py 192.168.1.154 30 - 1,2,3,4,5,6,7,8,9 --layout 3x3 --no-video --level easy --threshold 300 --tap-test 20`. Operator: looked right (start arrow on tile 5, countdown and results big across the wall). 27 of 28 moles, 1 missed, 9 wrong, 681 ms, 3 stars. Moles on every tile (2 to 4 each). Pico: 58 taps in 36 judged groups (27 hits, 9 wrong), 36 FEEDBACK. `faults=none` on all 9, no crash words. `round14_9tiles_*.log` (Pico and tiles 4, 5, 9 on USB) |
+
+Found on the bench:
+- The Pico receive-buffer bug above. Game rounds are not affected (CRCs unused, cells inside the first 48 bytes); every 9-tile video is.
+- During round 14 the logged tiles' `DE ticks` counters grew while the round ran: `missed` by about 1,200 and `jumps` by 3 each (tile 4 105,579 to 106,756; tile 5 7,157 to 8,370; tile 9 2 to 1,154). On 2 tiles they stayed flat. Cause not established.
+- The dim blue LED 0 (bottom right) on tiles 6 to 9 was the designed "no asset" status; it went off after the V2 upload (operator).
+
+Open:
+- Fix the receive buffer, then rerun V2 and a 9-tile game regression.
+- The display misses with 9 tiles.
+
+## Result (9 tiles)
+
+**All nine tiles run a game round on the Matrix router 12 Nov (round 14).** The 9-tile video waits for the Pico receive-buffer fix.

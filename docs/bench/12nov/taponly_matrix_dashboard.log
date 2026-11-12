@@ -1,0 +1,8 @@
+>>> mode game
+mode refused: the Pico did not acknowledge the mode change
+1794476179.620 mode game
+>>> tap on
+tap test refused: switch to game mode before the tap test
+tap test on for 40 s
+>>> tap off
+tap test refused: switch to game mode before the tap test
