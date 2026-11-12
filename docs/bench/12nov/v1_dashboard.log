@@ -1,0 +1,27 @@
+>>> mode video
+1794458449.567 mode video
+>>> config docs/bench/12nov/numbered_cells_3x3.gif 3x3 4,0,0,0,0,0,0,0,5 pause 8
+1794458449.592 configuration accepted
+>>> build
+node 4: 600 frames, crc32 0x96b418c2
+node 5: 600 frames, crc32 0x0c609d07
+>>> upload
+failed: none
+1794458453.938 uploaded to 172.20.10.4: 57 of 57 chunks ACKed, resent 0, 3.33 s
+1794458457.144 uploaded to 172.20.10.5: 57 of 57 chunks ACKed, resent 0, 3.20 s
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794458457.396 all tiles ready
+>>> start
+playing for 15 s
+>>> stop
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=3 display=4
+tile 5 172.20.10.5 faults=none orient=3 display=4

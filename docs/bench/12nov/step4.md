@@ -50,3 +50,28 @@ Open from 4c:
 ## Result (4c)
 
 **Step 4c done 12 Nov.** The upload race is gone (the first upload passed on both tiles in every new session), a tile that holds the asset answers the PC, uploads take about 2.5 s per tile, and the results go blank on the tap test and a mode switch. Found and fixed on the wall: tile LEDs freezing after a Pico restart. Next: 4d (sparse grid), 4e (website).
+
+# Step 4d bench, 12 Nov 2026: sparse grid
+
+Branch `feature/whack-a-mole`. Pico `…E66430A64B595138` (172.20.10.2) on the 4d build (same code as `2593a48`); tiles 4 (172.20.10.4) and 5 (172.20.10.5) on the 4c build with the display clock-jump guard (same code as `dc71a04`; 4d does not change the tiles), on sponge, phone hotspot. Run from a second laptop (Windows) on the same hotspot: the scripts are unchanged; only the port lookup differs (pyserial's USB serial numbers instead of `udevadm`), and each log is still named by board. Health check before V1: both tiles printed `DE ticks` with `missed=0`, the Pico `CL_STATS` with `online=0x018 sync=0x018`.
+
+| Check | Result | Notes |
+|---|---|---|
+| V1 video, 3x3 corners (session 25) | **PASS** | `video_check.py ... numbered_cells_3x3.gif 3x3 4,0,0,0,0,0,0,0,5 15`. Both uploads 57 of 57, resent 0: tile 4 3.33 s, tile 5 3.20 s; `ASSET ready` with the PC's CRCs (`0x96b418c2`, `0x0c609d07`), flash 58 writes, 1 erase. Pico READY, COORDINATING PLAYBACK, READY again 15.1 s later at STOP. Operator: tile 4 showed 1 red LED top left, tile 5 showed 9 (top row and one of the second), the same green counter moving in sync on both, then blank after STOP (designed: a stopped tile shows no frame). No faults. `v1_*.log` |
+| Round 11 game, 3x3 corners (session 26) | **PASS** | `game_round.py ... 4,0,0,0,0,0,0,0,5 --layout 3x3 --no-video --level easy --threshold 300 --tap-test 20`. Layout only, no upload (flash counters unchanged). Operator: hole and green flash in the tap test; start arrow on **tile 4** (the first cell wins the tie); countdown and results small and whole on each tile (2 of 9 cells is under half). 34 of 35 moles, 1 missed, 6 wrong (made on purpose to check wrong taps), 490 ms, 3 stars; score 34 = hits. Pico: 35 moles, 40 tap groups, 40 FEEDBACK. `faults=none`. `round11_*.log` |
+| Round 12 game, 1x3 with an empty middle (session 27) | **PASS** | Same, map `4,0,5`, `--layout 1x3`. Operator: start arrow on tile 4; countdown and results drawn big across the 3 cells, each tile showing its outer third (2 of 3 cells is at least half); **reads well enough for a child, so decision 3 stands**. 36 of 37 moles, 1 missed, 5 wrong (on purpose), 450 ms, 3 stars. Pico: 37 moles, 43 tap groups, 41 FEEDBACK; the other 2 taps (tile 4, 2.1 s and 2.4 s into the countdown) were ignored as designed (DS-08). `faults=none`. `round12_*.log` |
+
+All three runs: no crash words in any log; both tiles ticked throughout (15, 24 and 24 `DE ticks` lines), `jumps=0`. `prep_max_us` reached 505 µs in game drawing, against 272 µs in video.
+
+Found on the bench:
+- Uploads took 3.2 to 3.3 s per tile, not the predicted 2.5 s (4c rounds: 2.43 to 2.81 s). Nothing was resent, so it was not retries. The only known difference is the laptop; cause not established.
+- Each tile shows `missed=1` in every run: 0 in the health check, 1 at the start of the V1 log, unchanged through all three runs. The one missed tick came while the wall was idle, before V1; cause not established.
+
+Open:
+- The optional regression round (1x2 with video, session 28) was not run.
+- The upload time and the single missed tick above.
+- The open items from 4c stand (HANDOFF_12nov.md section 4, step 2).
+
+## Result (4d)
+
+**Step 4d passes on the wall 12 Nov (V1, rounds 11 and 12).** A tile placed anywhere in a 3x3 grid plays its own section of the video, game rounds run on a sparse grid with no upload, and wall pictures switch between big and small by how full the grid is. Next: 4e (website).

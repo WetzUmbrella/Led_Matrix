@@ -16,8 +16,8 @@ This file is self-contained: everything needed from the user's personal notes (t
 |---|---|
 | Branch | `feature/whack-a-mole` in `Led_Matrix` |
 | Pushed | `origin/feature/whack-a-mole`: steps 4a to 4c (wall-tested) up to `f735f25`; **step 4d committed and pushed on the user's request before any wall test**: `943842d` wire format, `e5105a9` Pico, `2593a48` PC, `6136a7b` bench tools, then the docs commit with this file |
-| **Not yet done for 4d** | the wall test (section 3.2) and its bench record. If the wall test finds a bug, fix it in a new commit on top; do not rewrite the pushed history. |
-| Working tree | clean after the docs commit |
+| **4d wall test** | **passed 12 Nov** (V1, rounds 11 and 12; decision 3 stands): bench record in `docs/bench/12nov/step4.md` "Step 4d bench", logs `v1_*`, `round11_*`, `round12_*`. Run from a second laptop (Windows) with pyserial port lookup; scripts unchanged. Optional regression round not run. |
+| Working tree | the 4d bench record, its logs and this table, to commit when the user asks |
 | Gate | **passes** at the 4d head: C host tests and ASan (proto, panel_sync, ledwall_sync 35 of 35, pico_tap), barr_check 0 findings, pytest 459 passed |
 | Firmware on the bench | **Pico `…595138` flashed with the 4d build** (the same code as `2593a48`; came up, answers ping at 172.20.10.2). **Tiles 4 and 5** run the 4c build with the display clock-jump guard (same code as `dc71a04`); 4d does not change tile behaviour, so they need no reflash. |
 | Builds | Pico `make` and tile `idf.py build` both exit 0 with the 4d tree |
