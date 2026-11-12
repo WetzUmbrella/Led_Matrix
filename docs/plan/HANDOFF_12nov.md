@@ -1,5 +1,7 @@
 # Session handoff, 12 Nov 2026 evening (whack-a-mole, step 4d committed, wall test next)
 
+> **Superseded for the current state by `HANDOFF_12nov_late.md`.** The method in `HANDOFF_12nov.md` sections 2 and 2a still applies.
+
 For the next agent (or the user) starting cold. It replaces the morning version of this file. It is detailed enough to finish **all of step 4** (4d wall test, then 4e website) in the same way this session worked. **Step 5 and later are outlined only**: they start with design decisions that belong to the user.
 
 Read in this order before doing anything:

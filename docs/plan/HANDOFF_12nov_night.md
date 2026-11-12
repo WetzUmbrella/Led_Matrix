@@ -1,5 +1,7 @@
 # Session handoff, 12 Nov 2026 night (whack-a-mole: Matrix router, 9 tiles, Pico receive-buffer bug open)
 
+> **Superseded for the current state by `HANDOFF_12nov_late.md`.** The method in `HANDOFF_12nov.md` sections 2 and 2a still applies.
+
 For Cheston (or the next agent) starting cold. It carries on from `HANDOFF_12nov.md` (the evening version), which stays as it was. This session ran on a second laptop (Windows) and followed that file: step 4d passed on the wall, then the bench moved to the Matrix router and grew to 9 tiles. The 9-tile video found a real step 4d bug on the Pico; fixing it is the next job (section 3).
 
 Read in this order before doing anything:
