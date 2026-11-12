@@ -7,7 +7,8 @@ Read in this order before doing anything:
 2. `docs/plan/game_plan_v2.md`: requirements A1 to A16, decisions D-01 to D-16, design DS-01 to DS-17 (section 9), the **"Decided 12 Nov 2026 (step 4d)"** block under DS-15, and the build order.
 3. `docs/bench/12nov/step4.md`: the bench record for 4a, 4b, 4c, in the format every new record must follow.
 4. `protocol/layout_table.md` SESSION_CONFIG (changed today).
-5. The user's dashboard `~/SIT/Y2/ACADEMIC_DASHBOARD.md` (INF2004 section) and their global rules `~/.claude/CLAUDE.md`.
+
+This file is self-contained: everything needed from the user's personal notes (their global rules and bench facts) is copied into sections 2 and 6. If you cannot see the user's personal files (an academic dashboard, agent memory, a global rules file), ignore every mention of them; nothing in the work depends on them.
 
 ## 1. Where things stand
 
@@ -62,11 +63,7 @@ Step 4 plan (riskiest first, agreed with the user): 4a no-video game (done), 4b 
 - Never use the em dash. Plain, short sentences; simple terms when asked.
 - Be candid about mistakes and wrong predictions: say so plainly, as done for "upload in a second or two" in round 9.
 
-**Keep the user's records current.**
-- Update `~/SIT/Y2/ACADEMIC_DASHBOARD.md` (INF2004 section) after each step.
-- Update the memory files in `~/.claude/projects/-home-coloc-SIT-Y2-inf2004-project/memory/` (`whack-a-mole-phase.md`, `led-matrix-bench-setup.md`).
-
-**Other deadlines.** Remind the user once per session of deadlines that are closer than the bench work: **UDE2222 A2 deck due Fri 13 Nov 23:59**, still open on the dashboard on 12 Nov. INF2001 M2 presentation is Wed 18 Nov, and the INF2004 quiz and practical are in Week 12.
+**Project records.** The project's own records are this file, `game_plan_v2.md` and the bench records in `docs/bench/`; keep them current after each step. (The user also keeps personal planning notes outside the repo; update them only if you have access, otherwise skip.)
 
 ## 2a. Test methodology in detail (how every result today was checked)
 
@@ -170,7 +167,7 @@ Record V1, rounds 11 and 12 as a "Step 4d bench" section in `step4.md`.
 
 1. The code is already committed and pushed. Ask the user before committing the bench record and logs ("Step 4d passes on the wall (V1, rounds 11 and 12)") and any fix, then push when asked.
 2. The user sends Benjamin the note (draft below); it is his table and score_font to defend. The code is already on the branch, so this is due now.
-3. Update the dashboard and memory.
+3. Update this handoff's "Where things stand" table.
 
 > Hi Benjamin, heads-up on your layout table: for the sparse grid (DS-15) SESSION_CONFIG changed. The 9-position node_map is replaced by a cell per board number (placed 1 bit, row 4, col 4, for boards 1 to 9), and crc32[] is now indexed by board number. Grids can be up to 9 × 9 with 9 tiles anywhere; the codecs refuse a cell outside the grid or two tiles in one cell. The message is 53 B, up from 47. The table, both codecs and the vectors are updated on feature/whack-a-mole, and your score_font now takes cells instead of slots. Tiles are unaffected; the PC and the Pico must be updated together. Happy to walk you through it before Tribunal 2.
 
