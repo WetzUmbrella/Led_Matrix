@@ -35,6 +35,8 @@ static test_case_t const g_cases[] = {
     {"messages: out-of-range, wrong type and wrong length refused",
      test_messages_reject},
     {"le helpers: u16, u32, u64 little-endian", test_messages_le},
+    {"session config: sparse cells, shared or outside cells refused",
+     test_messages_cells},
 };
 
 /** Number of tests. */

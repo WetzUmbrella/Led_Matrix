@@ -57,27 +57,45 @@ Offsets are absolute bit offsets in the message. Direction: T = tile, P = Pico, 
 | rows | 29 | 4 | 1 to 9 | rows of the wall (section 5.2) | whack-a-mole re-plan, step 3; width rule, 9 values |
 | cols | 33 | 4 | 1 to 9 | columns of the wall (section 5.2) | as above |
 | policy | 37 | 1 | 0 to 1 | continue, pause (section 5.3) | T-B2-01, FR18 |
-| node_map[0] | 38 | 4 | 0 to 9 | Node ID at position 0 (row 0, column 0); 0 = blank | T-B2-01, OD-21 |
-| node_map[1] | 42 | 4 | 0 to 9 | position 1, row-major over rows x cols | as above |
-| node_map[2] | 46 | 4 | 0 to 9 | position 2 | as above |
-| node_map[3] | 50 | 4 | 0 to 9 | position 3 | as above |
-| node_map[4] | 54 | 4 | 0 to 9 | position 4 | as above |
-| node_map[5] | 58 | 4 | 0 to 9 | position 5 | as above |
-| node_map[6] | 62 | 4 | 0 to 9 | position 6 | as above |
-| node_map[7] | 66 | 4 | 0 to 9 | position 7 | as above |
-| node_map[8] | 70 | 4 | 0 to 9 | position 8 | as above |
-| frame_count | 74 | 10 | 1 to 1023 | frames in every tile asset of the session (all tiles share one duration) | T-B1-03, VC-3; field PROVISIONAL (section 10 item 9) |
-| crc32[0] | 84 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 0; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[1] | 116 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 1; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[2] | 148 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 2; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[3] | 180 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 3; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[4] | 212 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 4; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[5] | 244 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 5; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[6] | 276 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 6; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[7] | 308 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 7; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[8] | 340 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 8; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| placed[0] | 38 | 1 | 0 to 1 | 1 = Node ID 1 is in the wall | step 4d, DS-15 (12 Nov 2026) |
+| row[0] | 39 | 4 | 0 to 8 | Node ID 1's row, 0 to rows - 1; 0 when not placed | as above |
+| col[0] | 43 | 4 | 0 to 8 | Node ID 1's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[1] | 47 | 1 | 0 to 1 | 1 = Node ID 2 is in the wall | as above |
+| row[1] | 48 | 4 | 0 to 8 | Node ID 2's row, 0 to rows - 1; 0 when not placed | as above |
+| col[1] | 52 | 4 | 0 to 8 | Node ID 2's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[2] | 56 | 1 | 0 to 1 | 1 = Node ID 3 is in the wall | as above |
+| row[2] | 57 | 4 | 0 to 8 | Node ID 3's row, 0 to rows - 1; 0 when not placed | as above |
+| col[2] | 61 | 4 | 0 to 8 | Node ID 3's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[3] | 65 | 1 | 0 to 1 | 1 = Node ID 4 is in the wall | as above |
+| row[3] | 66 | 4 | 0 to 8 | Node ID 4's row, 0 to rows - 1; 0 when not placed | as above |
+| col[3] | 70 | 4 | 0 to 8 | Node ID 4's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[4] | 74 | 1 | 0 to 1 | 1 = Node ID 5 is in the wall | as above |
+| row[4] | 75 | 4 | 0 to 8 | Node ID 5's row, 0 to rows - 1; 0 when not placed | as above |
+| col[4] | 79 | 4 | 0 to 8 | Node ID 5's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[5] | 83 | 1 | 0 to 1 | 1 = Node ID 6 is in the wall | as above |
+| row[5] | 84 | 4 | 0 to 8 | Node ID 6's row, 0 to rows - 1; 0 when not placed | as above |
+| col[5] | 88 | 4 | 0 to 8 | Node ID 6's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[6] | 92 | 1 | 0 to 1 | 1 = Node ID 7 is in the wall | as above |
+| row[6] | 93 | 4 | 0 to 8 | Node ID 7's row, 0 to rows - 1; 0 when not placed | as above |
+| col[6] | 97 | 4 | 0 to 8 | Node ID 7's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[7] | 101 | 1 | 0 to 1 | 1 = Node ID 8 is in the wall | as above |
+| row[7] | 102 | 4 | 0 to 8 | Node ID 8's row, 0 to rows - 1; 0 when not placed | as above |
+| col[7] | 106 | 4 | 0 to 8 | Node ID 8's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[8] | 110 | 1 | 0 to 1 | 1 = Node ID 9 is in the wall | as above |
+| row[8] | 111 | 4 | 0 to 8 | Node ID 9's row, 0 to rows - 1; 0 when not placed | as above |
+| col[8] | 115 | 4 | 0 to 8 | Node ID 9's column, 0 to cols - 1; 0 when not placed | as above |
+| frame_count | 119 | 10 | 1 to 1023 | frames in every tile asset of the session (all tiles share one duration) | T-B1-03, VC-3; field PROVISIONAL (section 10 item 9) |
+| crc32[0] | 129 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 1; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[1] | 161 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 2; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[2] | 193 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 3; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[3] | 225 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 4; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[4] | 257 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 5; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[5] | 289 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 6; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[6] | 321 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 7; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[7] | 353 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 8; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[8] | 385 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 9; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
 
-The map is always 9 positions, row-major over rows x cols: the tile at row r, column c is at position r x cols + c, so a 1x9 strip uses positions 0 to 8 left to right, a 2x2 wall positions 0 to 3 and a 3x3 wall all 9 **(whack-a-mole re-plan, step 3; replaces the fixed 3x3 grid and the 2-bit layout code)**. Positions from rows x cols on are 0. Both codecs refuse rows x cols > 9 (an encoder refuses it and a decoder rejects it), because the map has only 9 positions; the Pico, not the codec, checks that positions from rows x cols on are blank and that no Node ID repeats. `crc32[i]` belongs to the tile at `node_map[i]`. **PROVISIONAL (OD-07 item 9, owner Benjamin):** `frame_count` and `crc32[]` were added on 29 Oct 2026 so the Pico can check ASSET_READY against the manifest CRC32 of each Node ID (T-B2-04) and compute the saved frame index it sends in RESUME_AT and in a rejoin (T-B2-05, OD-14). Every tile of a session plays the same GIF duration, so one frame_count serves all of them.
+**Cells (step 4d, DS-15, decided 12 Nov 2026; replaces the 9-position row-major node_map of the whack-a-mole re-plan):** the grid is rows x cols cells, each 1 to 9, so up to 81 cells, and up to 9 tiles sit in any of them (a 5x5 diagonal, an L, a ring). Each Node ID n has one entry, `placed[n-1]`, `row[n-1]`, `col[n-1]`, so a tile cannot appear twice. Both codecs refuse (an encoder refuses it and a decoder rejects it) a placed tile outside the grid, two placed tiles in one cell, and a tile not placed with a row or column other than 0 (one encoding per layout). The Pico, not the codec, checks that at least one tile is placed. A tile switched off on the website is simply not placed; the PC remembers its cell. `crc32[n-1]` belongs to Node ID n (by map position before step 4d). Only the PC and the Pico read this message, so the tiles did not change. A full grid of up to 9 tiles still gives every tile the cell it had: row = position / cols, col = position mod cols. **PROVISIONAL (OD-07 item 9, owner Benjamin):** `frame_count` and `crc32[]` were added on 29 Oct 2026 so the Pico can check ASSET_READY against the manifest CRC32 of each Node ID (T-B2-04) and compute the saved frame index it sends in RESUME_AT and in a rejoin (T-B2-05, OD-14). Every tile of a session plays the same GIF duration, so one frame_count serves all of them.
 
 ### MANIFEST (type 3, C to T)
 
@@ -265,7 +283,7 @@ Replaces SCORE_MASK (same type code 22, renamed 11 Nov 2026, DS-09). The Pico dr
 |---|---|---|---|---|
 | REGISTER | 73 | 10 | 21 | derived, W6 8-bit design |
 | HEARTBEAT | 33 | 5 | 9 (`sizeof(hello_t)`, the tag's heartbeat) | measured (Xtensa `sizeof`); on-air pending B-3 |
-| SESSION_CONFIG | 372 | 47 | 87 | derived |
+| SESSION_CONFIG | 417 | 53 | 87 | derived (step 4d cells; 372 bits, 47 B before) |
 | MANIFEST | 73 | 10 | 22 | derived |
 | ASSET_CHUNK | 40 + payload | 5 + 1 to 1,024 (1,029 full) | 13 + 1,024 = 1,037 | derived |
 | CHUNK_ACK | 40 | 5 | 13 | derived |
@@ -307,7 +325,7 @@ Codes 0 to 17 follow the order of the T-B2-01 message rows **(plan choice)**; 18
 
 ### 5.2 Wall shape (rows 4 bits, cols 4 bits)
 
-rows and cols are each 1 to 9 and rows x cols is at most 9: 1x1 to 1x9 strips, 9x1 columns, 2x2, 2x3, 2x4, 3x2, 3x3, 4x2 and the rest. This replaces the 2-bit layout code (0 = 1x1, 1 = 2x2, 2 = 3x3), which could not hold a strip. 4 bits each is the width rule for 9 values; one shape code (the 23 shapes with rows x cols at most 9, ceil(log2 23) = 5 bits, 3 fewer) was rejected because it needs the same lookup table in C and Python and the re-plan names the two fields **(plan choice)**.
+rows and cols are each 1 to 9, so a grid has 1 to 81 cells; since step 4d (12 Nov 2026) up to 9 tiles sit in any of its cells (section 3, SESSION_CONFIG cells). Until step 4d rows x cols was at most 9 (1x1 to 1x9 strips, 9x1 columns, 2x2, 3x3 and the rest), every cell a position of the node_map. This replaces the 2-bit layout code (0 = 1x1, 1 = 2x2, 2 = 3x3), which could not hold a strip. 4 bits each is the width rule for 9 values; one shape code (then the 23 shapes with rows x cols at most 9, ceil(log2 23) = 5 bits, 3 fewer) was rejected because it needs the same lookup table in C and Python and the re-plan names the two fields **(plan choice)**.
 
 ### 5.3 Failure policy (1 bit)
 
@@ -392,7 +410,9 @@ Every field and every shared packed word, with its valid range, bits before (the
 | format_version | MANIFEST | 0 to 3 | 8 (`uint8_t version`, `panel_sync.c:54`) | 2 | shifts and masks | 4 codes (section 5.4) |
 | chunk index | ASSET_CHUNK, CHUNK_ACK | 0 to 112 | 32 (counter, rule) | 7 | shifts and masks | 113 chunks for the 8-bit 600-frame asset, ceil(log2 113) = 7 |
 | NACK reason | NACK | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | 4 reasons |
-| rows, cols | SESSION_CONFIG | 1 to 9 each, rows x cols at most 9 | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4; replaces the 2-bit layout code |
+| rows, cols | SESSION_CONFIG | 1 to 9 each (up to 81 cells, step 4d) | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4; replaces the 2-bit layout code |
+| cell row, col | SESSION_CONFIG | 0 to 8 each | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4 (step 4d) |
+| placed | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 values (step 4d) |
 | peak | TAP | 0 to 65,535 | 16 (`uint16_t` in `tap_detect`) | 16 | shifts and masks | the tile's peak type; the 0.5 g floor is 2,048 LSB and a hard tap can pass 32,767 |
 | up_ms | MOLE_ON | 1 to 2,000 ms | 16 (`uint16_t`, rule) | 11 | shifts and masks | 2,000 values, ceil(log2 2000) = 11; a 64-bit hide time was rejected (53 bits more per mole) |
 | game score | STATUS | -99 to 99 | 8 (`int8_t`, rule) | 8, two's complement | shifts and masks | 199 values, ceil(log2 199) = 8; the Pico clamps the score |
@@ -445,7 +465,7 @@ The receiver checks session_id against its session and seq against the last acce
 6. frame_rate left off the wire.
 7. ASSET_CHUNK payload on a byte boundary, length from the datagram.
 8. The NACK reason list (CRC mismatch, manifest session mismatch and upload while PLAYING are not in it; any one of them makes 5 reasons and 3 bits).
-9. How the Pico learns each Node ID's manifest CRC32, which T-B2-04 needs to check ASSET_READY: the plan's SESSION_CONFIG row has no CRC field. **PROVISIONAL, implemented 29 Oct 2026:** 9 x 32-bit CRCs, one per map position, plus the shared frame_count, added to SESSION_CONFIG (46 B). The other option, the PC sending each tile's MANIFEST to the Pico, does not work as the row stands: MANIFEST carries no Node ID, so the Pico could not tell which tile a CRC belongs to.
+9. How the Pico learns each Node ID's manifest CRC32, which T-B2-04 needs to check ASSET_READY: the plan's SESSION_CONFIG row has no CRC field. **PROVISIONAL, implemented 29 Oct 2026:** 9 x 32-bit CRCs, one per map position (one per Node ID since step 4d, 12 Nov 2026), plus the shared frame_count, added to SESSION_CONFIG (46 B; 53 B since step 4d). The other option, the PC sending each tile's MANIFEST to the Pico, does not work as the row stands: MANIFEST carries no Node ID, so the Pico could not tell which tile a CRC belongs to.
 10. OD-14 (rejoin message) and OD-20 (two-way exchange) may add rows; 14 type codes are spare. **PROVISIONAL, implemented:** OD-14 option (a), with no new row: the Pico sends the rejoining tile a RESUME_AT (unicast) whose t_resume is a tick deadline at least 600 ms ahead and whose frame_index is the frame the wall shows at that tick.
 11. **PC commands to the Pico (PROVISIONAL, implemented).** The plan lists Start, Pause, Resume and Stop as dashboard commands (T-B1-05 `pico_link.py`) but no row carries them from the PC. They reuse the START_AT, PAUSE, RESUME_AT and STOP rows in the direction C to P, with t_start, t_resume and frame_index sent as 0 and ignored: the Pico chooses those values itself (T-B2-05). No type code is added.
 12. **Transport (PROVISIONAL, implemented):** the ports and addressing of section 11.

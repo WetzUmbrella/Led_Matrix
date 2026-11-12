@@ -14,7 +14,8 @@
  *   proto_vector encode TYPE k=v ... the encoded bytes as lowercase hex
  *   proto_vector nibbles FILE        the 192 nibbles of a 96 B frame
  * Output format: "type=<NAME>", "session_id=", "seq=", then the body fields
- * in layout_table.md order, decimal; node_map as 9 comma-separated values;
+ * in layout_table.md order, decimal; placed, row, col and crc32 as 9
+ * comma-separated values (index Node ID - 1);
  * payload as lowercase hex. Exit status 0 on success, 1 on any error.
  */
 #include "proto_vector_main.h"
@@ -62,7 +63,9 @@ static uint8_t g_payload[PROTO_CHUNK_PAYLOAD_MAX];
 static bool         read_file (char const * p_path, uint32_t * p_len);
 static char const * find_arg (vector_args_t const * p_args, char const * p_key);
 static uint64_t     arg_u64 (vector_args_t const * p_args, char const * p_key);
-static void         arg_map (vector_args_t const * p_args, uint8_t * p_map);
+static void         arg_list8 (vector_args_t const * p_args,
+                               char const * p_key, uint8_t * p_out);
+static void print_cells (proto_session_config_t const * p_msg);
 static void     arg_crc_list (vector_args_t const * p_args, uint32_t * p_crc);
 static uint16_t arg_payload (vector_args_t const * p_args);
 static proto_header_t arg_header (vector_args_t const * p_args);
@@ -277,25 +280,26 @@ static uint32_t arg_u32 (vector_args_t const * p_args, char const * p_key)
 }
 
 /**
- * @brief  node_map=a,b,... into PROTO_MAP_SLOTS entries.
+ * @brief  key=a,b,... into PROTO_NODE_MAX entries; missing entries are 0.
  * @param  p_args  Arguments.
- * @param  p_map   Receives the map.
+ * @param  p_key   Key (placed, row or col).
+ * @param  p_out   Receives the values.
  */
-static void arg_map (vector_args_t const * p_args, uint8_t * p_map)
+static void arg_list8 (vector_args_t const * p_args, char const * p_key,
+                       uint8_t * p_out)
 {
-    char const * p_text = find_arg(p_args, "node_map");
+    char const * p_text = find_arg(p_args, p_key);
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
     {
-        p_map[slot] = 0u;
+        p_out[node] = 0u;
 
         if (NULL != p_text)
         {
             char * p_end = NULL;
 
-            /* A map entry is at most 15 after the encoder's range check,
-             * and strtoul's result is masked to 8 bits here. */
-            p_map[slot] =
+            /* Masked to 8 bits here; the encoder checks the range. */
+            p_out[node] =
                 (uint8_t)(strtoul(p_text, &p_end, DEC_BASE) & UINT8_MAX);
             p_text = (',' == *p_end) ? (p_end + 1) : NULL;
         }
@@ -306,13 +310,13 @@ static void arg_map (vector_args_t const * p_args, uint8_t * p_map)
  * @brief  crc32=<9 comma-separated decimal values> into p_crc; missing
  *         entries are 0.
  * @param  p_args  Arguments.
- * @param  p_crc   Receives PROTO_MAP_SLOTS values.
+ * @param  p_crc   Receives PROTO_NODE_MAX values.
  */
 static void arg_crc_list (vector_args_t const * p_args, uint32_t * p_crc)
 {
     char const * p_text = find_arg(p_args, "crc32");
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t slot = 0u; slot < PROTO_NODE_MAX; slot++)
     {
         p_crc[slot] = 0u;
 
@@ -871,6 +875,32 @@ static bool decode_coordinator (uint8_t const * p_buf, uint32_t len,
 }
 
 /**
+ * @brief  placed=, row= and col= lines of a SESSION_CONFIG, 9 values each.
+ * @param  p_msg  The message.
+ */
+static void print_cells (proto_session_config_t const * p_msg)
+{
+    static char const * const names[] = {"placed", "row", "col"};
+
+    for (uint32_t part = 0u; part < 3u; part++)
+    {
+        printf("%s=", names[part]);
+
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
+        {
+            proto_cell_t const * const p_cell = &p_msg->cell[node];
+            uint8_t const value = (0u == part)   ? p_cell->b_placed
+                                  : (1u == part) ? p_cell->row
+                                                 : p_cell->col;
+
+            printf("%s%" PRIu8, (0u == node) ? "" : ",", value);
+        }
+
+        printf("\n");
+    }
+}
+
+/**
  * @brief  Decode and print a message the PC sends.
  * @param  p_buf  Bytes.
  * @param  len    Length.
@@ -895,19 +925,11 @@ static bool decode_pc (uint8_t const * p_buf, uint32_t len, uint8_t type)
                 print_u64("rows", msg.rows);
                 print_u64("cols", msg.cols);
                 print_u64("policy", msg.policy);
-                printf("node_map=");
-
-                for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
-                {
-                    printf("%s%" PRIu8, (0u == slot) ? "" : ",",
-                           msg.node_map[slot]);
-                }
-
-                printf("\n");
+                print_cells(&msg);
                 print_u64("frame_count", msg.frame_count);
                 printf("crc32=");
 
-                for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+                for (uint32_t slot = 0u; slot < PROTO_NODE_MAX; slot++)
                 {
                     printf("%s%" PRIu32, (0u == slot) ? "" : ",",
                            msg.crc32[slot]);
@@ -1295,11 +1317,24 @@ static uint32_t encode_pc (uint32_t type, vector_args_t const * p_args)
                                           arg_u8(p_args, "rows"),
                                           arg_u8(p_args, "cols"),
                                           arg_u8(p_args, "policy"),
-                                          {0u},
+                                          {{0u, 0u, 0u}},
                                           arg_u16(p_args, "frame_count"),
                                           {0u}};
+            uint8_t placed[PROTO_NODE_MAX];
+            uint8_t row[PROTO_NODE_MAX];
+            uint8_t col[PROTO_NODE_MAX];
 
-            arg_map(p_args, msg.node_map);
+            arg_list8(p_args, "placed", placed);
+            arg_list8(p_args, "row", row);
+            arg_list8(p_args, "col", col);
+
+            for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
+            {
+                msg.cell[node].b_placed = placed[node];
+                msg.cell[node].row      = row[node];
+                msg.cell[node].col      = col[node];
+            }
+
             arg_crc_list(p_args, msg.crc32);
             written = proto_encode_session_config(&msg, g_out, FILE_MAX);
         }

@@ -38,7 +38,11 @@
  *  change of width in proto.h that the table does not follow fails here. */
 #define LEN_REGISTER       10u
 #define LEN_HEARTBEAT      5u
-#define LEN_SESSION_CONFIG 47u
+#define LEN_SESSION_CONFIG 53u
+
+/** First bit of the SESSION_CONFIG cells: node 1's placed flag (step 4d). */
+#define CELL_BIT                                                               \
+    (PROTO_HEADER_BITS + PROTO_GRID_BITS + PROTO_GRID_BITS + PROTO_POLICY_BITS)
 #define LEN_MANIFEST       10u
 #define LEN_CHUNK_HEAD     5u
 #define LEN_CHUNK_ACK      5u
@@ -163,7 +167,7 @@ bool test_messages_lengths (void)
     proto_header_t const         hdr   = header_at(CORNER_MIN);
     proto_register_t const       reg   = {hdr, 1u, 0u, 0u};
     proto_heartbeat_t const      beat  = {hdr, 1u};
-    proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {{0u}}, 1u, {0u}};
     proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
     proto_chunk_ack_t const      cack  = {hdr, 1u, 0u};
@@ -373,7 +377,7 @@ static bool reject_decode_grid (void)
 {
     bool                         b_ok = true;
     proto_header_t const         hdr  = header_at(CORNER_MIN);
-    proto_session_config_t const cfg  = {hdr, 1u, 1u, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t const cfg  = {hdr, 1u, 1u, 0u, {{0u}}, 1u, {0u}};
     proto_session_config_t       cfg_out;
 
     for (uint32_t field = 0u; field < 2u; field++)
@@ -518,7 +522,9 @@ static bool reject_encode (void)
     proto_telemetry_t      tel   = {hdr, 1u, 0u, 0u, PROTO_DISPLAY_COUNT};
     proto_asset_chunk_t    chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
                                     g_payload};
-    proto_session_config_t cfg   = {hdr, 2u, 5u, 0u, {0u}, 1u, {0u}};
+    /* Node 1 placed on row 2 of a 2 x 5 grid: outside it (step 4d). */
+    proto_session_config_t cfg   = {hdr, 2u, 5u, 0u, {{1u, 2u, 0u}}, 1u,
+                                    {0u}};
     proto_mole_on_t        mole  = {hdr, 1u, 0u, 0u, 0u};
     /* Command 8 is past the last (TAP_TEST_OFF); 4 is ARM since 11 Nov. */
     proto_game_control_t   ctrl  = {hdr, 1u, (uint8_t)PROTO_GAME_CMD_COUNT,
@@ -604,7 +610,7 @@ static bool reject_decode_range (void)
                                           0u, 0u, 0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
-    proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {0u}, 1u, {0u}};
+    proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {{0u}}, 1u, {0u}};
     proto_mole_on_t const        mole  = {hdr, 1u, 0u, 1u, 0u};
     proto_heartbeat_t            beat_out;
     proto_manifest_t             man_out;
@@ -616,7 +622,8 @@ static bool reject_decode_range (void)
 
     /* Decoders refuse out-of-range fields written straight into the bits:
      * Node ID 0, frame_count 0, coordinator state 13, display state 7,
-     * chunk index 113, rows x cols > 9, score 100 and target kind 5. */
+     * chunk index 113, a cell outside the grid, score 100 and target
+     * kind 5. */
     (void)proto_encode_heartbeat(&beat, g_buf, BUF_BYTES); /* Valid. */
     proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_NODE_BITS, 0u);
     b_ok = (test_main_check(
@@ -655,10 +662,10 @@ static bool reject_decode_range (void)
                             __LINE__)) &&
            b_ok;
 
+    /* Node 1 placed on row 1 of the 1 x 1 grid (step 4d). */
     (void)proto_encode_session_config(&cfg, g_buf, BUF_BYTES); /* Valid. */
-    proto_put_bits(g_buf, PROTO_HEADER_BITS, PROTO_GRID_BITS, 2u);
-    proto_put_bits(g_buf, PROTO_HEADER_BITS + PROTO_GRID_BITS, PROTO_GRID_BITS,
-                   5u);
+    proto_put_bits(g_buf, CELL_BIT, PROTO_PLACED_BITS, 1u);
+    proto_put_bits(g_buf, CELL_BIT + PROTO_PLACED_BITS, PROTO_GRID_BITS, 1u);
     b_ok = (test_main_check(!proto_decode_session_config(
                                 g_buf, LEN_SESSION_CONFIG, &cfg_out),
                             __LINE__)) &&
@@ -865,28 +872,32 @@ static void rt_heartbeat (uint32_t corner)
 }
 
 /**
- * @brief  SESSION_CONFIG round trip: every map position 0 or 9.
+ * @brief  SESSION_CONFIG round trip: no tile placed on 1 x 1, or every tile
+ *         placed on the bottom row of 9 x 9 (row 8, col n - 1; two tiles
+ *         cannot share row 8 and col 8).
  * @param  corner  0 or 1.
  */
 static void rt_session_config (uint32_t corner)
 {
     bool const             b_max = (CORNER_MIN != corner);
     proto_session_config_t msg   = {
-        header_at(corner), 1u, 1u, 0u, {0u}, 1u, {0u}};
+        header_at(corner), 1u, 1u, 0u, {{0u, 0u, 0u}}, 1u, {0u}};
     proto_session_config_t out;
     bool                   b_same;
 
-    /* rows 9 is the largest; 9 x 9 would break rows x cols <= 9, so the
-     * max corner is a 9 x 1 column. */
-    msg.rows   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u;
+    msg.rows   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u; /* 9 fits. */
+    msg.cols   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u; /* 9 fits. */
     msg.policy = b_max ? (uint8_t)PROTO_POLICY_PAUSE : 0u; /* Code 1. */
 
     msg.frame_count = b_max ? (uint16_t)PROTO_FRAME_MAX : 1u; /* 1023. */
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
     {
-        msg.node_map[slot] = b_max ? PROTO_NODE_MAX : 0u;
-        msg.crc32[slot]    = b_max ? UINT32_MAX : 0u;
+        msg.cell[node].b_placed = b_max ? 1u : 0u;
+        /* Row 8 fits uint8_t. */
+        msg.cell[node].row      = b_max ? (uint8_t)(PROTO_GRID_MAX - 1u) : 0u;
+        msg.cell[node].col      = b_max ? (uint8_t)node : 0u; /* < 9. */
+        msg.crc32[node]         = b_max ? UINT32_MAX : 0u;
     }
 
     uint32_t const len = proto_encode_session_config(&msg, g_buf, BUF_BYTES);
@@ -898,10 +909,13 @@ static void rt_session_config (uint32_t corner)
 
     b_same = b_same && (msg.frame_count == out.frame_count);
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
     {
-        b_same = b_same && (msg.node_map[slot] == out.node_map[slot]) &&
-                 (msg.crc32[slot] == out.crc32[slot]);
+        b_same = b_same &&
+                 (msg.cell[node].b_placed == out.cell[node].b_placed) &&
+                 (msg.cell[node].row == out.cell[node].row) &&
+                 (msg.cell[node].col == out.cell[node].col) &&
+                 (msg.crc32[node] == out.crc32[node]);
     }
 
     tally(b_same);
@@ -1305,6 +1319,78 @@ static void rt_ack (uint32_t corner)
     tally((proto_decode_ack(g_buf, len, &out)) &&
           (same_header(&msg.header, &out.header)) &&
           (msg.node_id == out.node_id) && (msg.acked_seq == out.acked_seq));
+}
+
+/**
+ * @brief  Encode one SESSION_CONFIG with node 1 at (row_a, col_a) and node 2
+ *         at (row_b, col_b), placed flags placed_a and placed_b, on a
+ *         rows x cols grid.
+ * @return true when the encoder accepted it.
+ */
+static bool cells_encode (uint8_t rows, uint8_t cols, uint8_t placed_a,
+                          uint8_t row_a, uint8_t col_a, uint8_t placed_b,
+                          uint8_t row_b, uint8_t col_b)
+{
+    proto_session_config_t msg = {
+        header_at(CORNER_MIN), rows, cols, 0u, {{0u, 0u, 0u}}, 1u, {0u}};
+
+    msg.cell[0].b_placed = placed_a;
+    msg.cell[0].row      = row_a;
+    msg.cell[0].col      = col_a;
+    msg.cell[1].b_placed = placed_b;
+    msg.cell[1].row      = row_b;
+    msg.cell[1].col      = col_b;
+
+    return 0u != proto_encode_session_config(&msg, g_buf, BUF_BYTES);
+}
+
+/**
+ * @brief  SESSION_CONFIG cells (step 4d, DS-15): a sparse 5 x 5 diagonal and
+ *         the far corner of 9 x 9 are accepted; a shared cell, a cell
+ *         outside the grid, a cell on a tile not placed and placed 1 put on
+ *         the wire for a 1 x 1 grid's second tile are refused.
+ * @return true when every check passed.
+ */
+bool test_messages_cells (void)
+{
+    bool                   b_ok = true;
+    proto_session_config_t out;
+
+    /* Accepted: (0, 0) and (4, 4) of 5 x 5; (8, 8) of 9 x 9. */
+    b_ok = (test_main_check(cells_encode(5u, 5u, 1u, 0u, 0u, 1u, 4u, 4u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check((proto_decode_session_config(
+                                g_buf, LEN_SESSION_CONFIG, &out)) &&
+                                (1u == out.cell[1].b_placed) &&
+                                (4u == out.cell[1].row) &&
+                                (4u == out.cell[1].col),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(cells_encode(9u, 9u, 1u, 8u, 8u, 0u, 0u, 0u),
+                            __LINE__)) && b_ok;
+
+    /* Refused by the encoder: one cell twice, outside the grid (row then
+     * col), a cell on a tile not placed, placed 2. */
+    b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 1u, 2u, 1u, 1u, 2u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 3u, 0u, 0u, 0u, 0u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 0u, 3u, 0u, 0u, 0u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 0u, 0u, 0u, 1u, 0u),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(!cells_encode(3u, 3u, 2u, 0u, 0u, 0u, 0u, 0u),
+                            __LINE__)) && b_ok;
+
+    /* Refused by the decoder: a second tile placed on node 1's cell (0, 0)
+     * written into the bits of a valid message. */
+    b_ok = (test_main_check(cells_encode(1u, 1u, 1u, 0u, 0u, 0u, 0u, 0u),
+                            __LINE__)) && b_ok;
+    proto_put_bits(g_buf, CELL_BIT + PROTO_CELL_BITS, PROTO_PLACED_BITS, 1u);
+    b_ok = (test_main_check(!proto_decode_session_config(
+                                g_buf, LEN_SESSION_CONFIG, &out),
+                            __LINE__)) && b_ok;
+
+    return b_ok;
 }
 
 /*** end of file ***/

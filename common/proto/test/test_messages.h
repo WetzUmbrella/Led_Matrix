@@ -33,6 +33,13 @@ bool test_messages_reject (void);
  */
 bool test_messages_le (void);
 
+/**
+ * @brief  SESSION_CONFIG cells (step 4d): sparse grids accepted; a shared
+ *         cell, a cell outside the grid or on a tile not placed refused.
+ * @return true when every check passed.
+ */
+bool test_messages_cells (void);
+
 #endif /* TEST_MESSAGES_H */
 
 /*** end of file ***/

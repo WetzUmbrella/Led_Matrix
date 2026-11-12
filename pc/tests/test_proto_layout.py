@@ -20,7 +20,7 @@ import proto_layout as pl  # noqa: E402
 
 #: Encoded lengths from protocol/layout_table.md section 4 (typed in, so a
 #: width change in LAYOUT that the table does not follow fails here).
-LENGTHS = {"REGISTER": 10, "HEARTBEAT": 5, "SESSION_CONFIG": 47,
+LENGTHS = {"REGISTER": 10, "HEARTBEAT": 5, "SESSION_CONFIG": 53,
            "MANIFEST": 10, "CHUNK_ACK": 5, "NACK": 7, "BUSY": 7,
            "ASSET_READY": 9, "SYNC_READY": 5, "BEACON": 12, "START_AT": 12,
            "RESUME_AT": 13, "PAUSE": 4, "STOP": 4, "STATUS": 13,
@@ -114,6 +114,9 @@ def test_payload_115200_does_not_match_a_600_frame_manifest() -> None:
 _STATUS_GAME = {"round_state": 0, "level": 0, "missed": 0, "wrong": 0,
                 "shown": 0, "time_left_s": 0, "reaction_ms": 0}
 #: WALL_PICTURE fields other than node_id, at valid values.
+#: A valid 1 x 1 SESSION_CONFIG with no tile placed (step 4d fields).
+_CFG = {"rows": 1, "cols": 1, "policy": 0, "placed": [0] * 9, "row": [0] * 9,
+        "col": [0] * 9, "frame_count": 1, "crc32": [0] * 9}
 _PIC = {"slot": 0, "effect": 0, "colour": 0, "repeat": 0, "t_show": 0,
         "dur_ms": 0, "mask": 0}
 
@@ -155,18 +158,18 @@ _PIC = {"slot": 0, "effect": 0, "colour": 0, "repeat": 0, "t_show": 0,
     ("ASSET_CHUNK", {"chunk_index": 113, "payload": b"\x00"}),
     ("ASSET_CHUNK", {"chunk_index": 0, "payload": b""}),
     ("ASSET_CHUNK", {"chunk_index": 0, "payload": bytes(1025)}),
-    ("SESSION_CONFIG", {"rows": 0, "cols": 1, "policy": 0,
-                        "node_map": [0] * 9, "frame_count": 1,
-                        "crc32": [0] * 9}),
-    ("SESSION_CONFIG", {"rows": 1, "cols": 10, "policy": 0,
-                        "node_map": [0] * 9, "frame_count": 1,
-                        "crc32": [0] * 9}),
-    ("SESSION_CONFIG", {"rows": 2, "cols": 5, "policy": 0,
-                        "node_map": [0] * 9, "frame_count": 1,
-                        "crc32": [0] * 9}),
-    ("SESSION_CONFIG", {"rows": 1, "cols": 1, "policy": 0,
-                        "node_map": [10] + [0] * 8, "frame_count": 1,
-                        "crc32": [0] * 9}),
+    ("SESSION_CONFIG", dict(_CFG, rows=0)),
+    ("SESSION_CONFIG", dict(_CFG, cols=10)),
+    # Step 4d cells: outside the grid, shared, on a tile not placed,
+    # placed 2, row 9.
+    ("SESSION_CONFIG", dict(_CFG, rows=2, cols=2, placed=[1] + [0] * 8,
+                            row=[2] + [0] * 8)),
+    ("SESSION_CONFIG", dict(_CFG, rows=2, cols=2, placed=[1, 1] + [0] * 7,
+                            row=[1, 1] + [0] * 7, col=[1, 1] + [0] * 7)),
+    ("SESSION_CONFIG", dict(_CFG, row=[0, 1] + [0] * 7)),
+    ("SESSION_CONFIG", dict(_CFG, placed=[2] + [0] * 8)),
+    ("SESSION_CONFIG", dict(_CFG, rows=9, placed=[1] + [0] * 8,
+                            row=[9] + [0] * 8)),
 ])
 def test_encoder_refuses_out_of_range(name: str, fields: dict) -> None:
     fields = dict(fields, session_id=0, seq=0)
@@ -202,17 +205,36 @@ def test_score_is_twos_complement() -> None:
     assert (int.from_bytes(data, "little") >> 51) & 0xFF == 0xFF
 
 
-def test_decoder_rejects_more_than_nine_tiles() -> None:
-    """rows and cols are each 1 to 9, but 2 x 5 = 10 tiles is refused."""
-    good = pl.encode_session_config(session_id=1, seq=1, rows=1, cols=9,
-                                    policy=0, node_map=list(range(1, 10)),
-                                    frame_count=1, crc32=[0] * 9)
-    assert pl.decode(good)["cols"] == 9
-    # rows at bit 29, cols at bit 33: write 2 x 5 straight into the bits.
-    value = int.from_bytes(good, "little") & ~(0xFF << 29)
-    value |= (2 << 29) | (5 << 33)
-    with pytest.raises(pl.LayoutError):
-        pl.decode(value.to_bytes(len(good), "little"))
+def test_sparse_grid_round_trips() -> None:
+    """Step 4d (DS-15): a 9 x 9 grid with tiles on the diagonal."""
+    diagonal = list(range(9))
+    data = pl.encode_session_config(session_id=1, seq=1, rows=9, cols=9,
+                                    policy=0, placed=[1] * 9, row=diagonal,
+                                    col=diagonal, frame_count=1,
+                                    crc32=[0] * 9)
+    msg = pl.decode(data)
+    assert (msg["rows"], msg["cols"]) == (9, 9)
+    assert msg["placed"] == [1] * 9
+    assert msg["row"] == diagonal and msg["col"] == diagonal
+
+
+def test_decoder_rejects_a_shared_cell() -> None:
+    """Node 1 at (0, 0) of 1 x 1; node 2's placed bit (bit 47) set on the
+    wire puts it on the same cell."""
+    good = pl.encode_session_config(session_id=1, seq=1, rows=1, cols=1,
+                                    policy=0, placed=[1] + [0] * 8,
+                                    row=[0] * 9, col=[0] * 9, frame_count=1,
+                                    crc32=[0] * 9)
+    assert pl.decode(good)["placed"][0] == 1  # type: ignore[index]
+    with pytest.raises(pl.LayoutError, match="shares"):
+        pl.decode(_with_bits(good, 47, 1, 1))
+
+
+def test_places_from_a_row_major_map() -> None:
+    """The bench form "1x2 4,5,0,..." gives nodes 4 and 5 their cells."""
+    cells = pl.places_from_map(3, [1, 0, 2, 0, 3, 0, 0, 0, 0])
+    assert cells["placed"] == [1, 1, 1, 0, 0, 0, 0, 0, 0]
+    assert cells["row"][:3] == [0, 0, 1] and cells["col"][:3] == [0, 2, 1]
 
 
 #: The six whack-a-mole rows (re-plan build step 3).

@@ -76,8 +76,15 @@
  *  re-plan, step 3; PROVISIONAL, OD-07). */
 #define PROTO_GRID_BITS 4u
 
-/** Largest rows, cols and rows x cols of a wall (9 tiles). */
+/** Largest rows and cols of a grid (step 4d, DS-15: up to 9 x 9 cells,
+ *  at most 9 of them holding a tile). */
 #define PROTO_GRID_MAX 9u
+
+/** Width of a SESSION_CONFIG placed flag, bits (step 4d). */
+#define PROTO_PLACED_BITS 1u
+
+/** Bits of one SESSION_CONFIG cell entry: placed, row, col (step 4d). */
+#define PROTO_CELL_BITS (PROTO_PLACED_BITS + PROTO_GRID_BITS + PROTO_GRID_BITS)
 
 /** Width of the failure policy, bits (PROVISIONAL, OD-07). */
 #define PROTO_POLICY_BITS 1u
@@ -168,9 +175,6 @@
 /** Largest Node ID (CL_MAX_NODES 9, T-B2-03). */
 #define PROTO_NODE_MAX 9u
 
-/** Positions in a SESSION_CONFIG Node ID map (rows x cols is at most 9). */
-#define PROTO_MAP_SLOTS 9u
-
 /** Largest frame_count and frame index (VC-3: 1023 frames). */
 #define PROTO_FRAME_MAX 1023u
 
@@ -203,8 +207,8 @@
 #define PROTO_HEARTBEAT_BYTES PROTO_BYTES(PROTO_HEARTBEAT_BITS)
 #define PROTO_SESSION_CONFIG_BITS                                              \
     (PROTO_HEADER_BITS + PROTO_GRID_BITS + PROTO_GRID_BITS +                   \
-     PROTO_POLICY_BITS + (PROTO_MAP_SLOTS * PROTO_NODE_BITS) +                 \
-     PROTO_FRAME_BITS + (PROTO_MAP_SLOTS * PROTO_CRC_BITS))
+     PROTO_POLICY_BITS + (PROTO_NODE_MAX * PROTO_CELL_BITS) +                  \
+     PROTO_FRAME_BITS + (PROTO_NODE_MAX * PROTO_CRC_BITS))
 #define PROTO_SESSION_CONFIG_BYTES PROTO_BYTES(PROTO_SESSION_CONFIG_BITS)
 #define PROTO_MANIFEST_BITS                                                    \
     (PROTO_HEADER_BITS + PROTO_FORMAT_BITS + PROTO_FRAME_BITS + PROTO_CRC_BITS)
@@ -475,25 +479,33 @@ typedef struct
     uint8_t        node_id; /**< 1 to 9. */
 } proto_heartbeat_t;
 
+/** A tile's cell in the grid (SESSION_CONFIG, step 4d, DS-15). */
+typedef struct
+{
+    uint8_t b_placed; /**< 1 = the tile is in the wall. */
+    uint8_t row;      /**< 0 to rows - 1 when placed, otherwise 0. */
+    uint8_t col;      /**< 0 to cols - 1 when placed, otherwise 0. */
+} proto_cell_t;
+
 /** SESSION_CONFIG, PC to Pico (T-B2-04, T-B1-05). frame_count and crc32[]
  *  are PROVISIONAL (OD-07 item 9, owner Benjamin): the Pico needs each
  *  tile's manifest CRC32 to check ASSET_READY, and the shared frame_count to
- *  compute the saved frame index for RESUME_AT and a rejoin. rows and cols
- *  replace the 2-bit layout code (whack-a-mole re-plan); the codec refuses
- *  rows x cols > 9. */
+ *  compute the saved frame index for RESUME_AT and a rejoin. Step 4d
+ *  (DS-15, 12 Nov 2026): a grid of up to 9 x 9 cells and a cell per Node
+ *  ID, replacing the 9-position row-major node_map; the codec refuses a
+ *  placed cell outside the grid, two tiles in one cell and a cell on a tile
+ *  that is not placed. */
 typedef struct
 {
     proto_header_t header;
-    uint8_t        rows;                /**< 1 to 9. */
-    uint8_t        cols;                /**< 1 to 9. */
-    uint8_t        policy;              /**< proto_policy_t. */
-    uint8_t  node_map[PROTO_MAP_SLOTS]; /**< Row-major over rows x cols, so
-                                            position r x cols + c; 0 = blank
-                                            and every position from
-                                            rows x cols on is 0. */
-    uint16_t frame_count;               /**< 1 to 1023, every tile. */
-    uint32_t crc32[PROTO_MAP_SLOTS];    /**< Manifest CRC32 per position,
-                                                0 for a blank position. */
+    uint8_t        rows;                    /**< 1 to 9. */
+    uint8_t        cols;                    /**< 1 to 9. */
+    uint8_t        policy;                  /**< proto_policy_t. */
+    proto_cell_t   cell[PROTO_NODE_MAX];    /**< Node ID n at cell[n - 1]. */
+    uint16_t       frame_count;             /**< 1 to 1023, every tile. */
+    uint32_t       crc32[PROTO_NODE_MAX];   /**< Manifest CRC32 of Node ID
+                                                 n at crc32[n - 1]; 0 for a
+                                                 tile not placed. */
 } proto_session_config_t;
 
 /** MANIFEST, PC to tile (VC-5, IFM-1a). Session is header.session_id. */

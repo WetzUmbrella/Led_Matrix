@@ -30,7 +30,6 @@ HEADER_BITS = TYPE_BITS + SESSION_BITS + SEQ_BITS
 
 #: Ranges and sizes shared with proto.h.
 NODE_MAX = 9
-MAP_SLOTS = 9
 FRAME_MAX = 1023
 FRAME_RATE = 60
 FRAME_BYTES = 96
@@ -79,11 +78,16 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     "HEARTBEAT": (1, [_NODE]),
     "SESSION_CONFIG": (2, [("rows", 4, 1, GRID_MAX), ("cols", 4, 1, GRID_MAX),
                            ("policy", 1, 0, 1)]
-                       + [("node_map[%d]" % slot, 4, 0, NODE_MAX)
-                          for slot in range(MAP_SLOTS)]
+                       # Step 4d (DS-15): a cell per Node ID 1 to 9.
+                       + [field for node in range(NODE_MAX)
+                          for field in (("placed[%d]" % node, 1, 0, 1),
+                                        ("row[%d]" % node, 4, 0,
+                                         GRID_MAX - 1),
+                                        ("col[%d]" % node, 4, 0,
+                                         GRID_MAX - 1))]
                        + [("frame_count", 10, 1, FRAME_MAX)]
-                       + [("crc32[%d]" % slot, 32, 0, _CRC_MAX)
-                          for slot in range(MAP_SLOTS)]),
+                       + [("crc32[%d]" % node, 32, 0, _CRC_MAX)
+                          for node in range(NODE_MAX)]),
     "MANIFEST": (3, [("format_version", 2, 0, 3),
                      ("frame_count", 10, 1, FRAME_MAX),
                      ("crc32", 32, 0, _CRC_MAX)]),
@@ -172,13 +176,50 @@ def _check(field: str, value: int, low: int, high: int) -> None:
         raise LayoutError("%s=%r outside %d to %d" % (field, value, low, high))
 
 
+def _array(fields: Mapping[str, object], base: str) -> List[int]:
+    """An array field as a list, given whole or as ``base[i]`` entries."""
+    whole = fields.get(base)
+    if isinstance(whole, (list, tuple)):
+        return [int(item) for item in whole]
+    return [int(fields["%s[%d]" % (base, i)])  # type: ignore[call-overload]
+            for i in range(NODE_MAX)]
+
+
 def _check_shape(name: str, fields: Mapping[str, object]) -> None:
-    """SESSION_CONFIG: rows x cols is at most 9 (whack-a-mole re-plan)."""
-    if name == "SESSION_CONFIG":
-        rows, cols = int(fields["rows"]), int(fields["cols"])  # type: ignore
-        if rows * cols > GRID_MAX:
-            raise LayoutError("rows x cols = %d x %d is more than %d tiles"
-                              % (rows, cols, GRID_MAX))
+    """SESSION_CONFIG (step 4d, DS-15): a placed tile's cell is inside the
+    grid and no other placed tile has it; a tile not placed has row and col
+    0, so each layout has one encoding."""
+    if name != "SESSION_CONFIG":
+        return
+    rows, cols = int(fields["rows"]), int(fields["cols"])  # type: ignore
+    seen = set()
+    for node, (placed, row, col) in enumerate(zip(
+            _array(fields, "placed"), _array(fields, "row"),
+            _array(fields, "col")), start=1):
+        if not placed:
+            if row or col:
+                raise LayoutError("node %d is not placed but has cell "
+                                  "(%d, %d)" % (node, row, col))
+        elif row >= rows or col >= cols:
+            raise LayoutError("node %d at (%d, %d) is outside the %d x %d "
+                              "grid" % (node, row, col, rows, cols))
+        elif (row, col) in seen:
+            raise LayoutError("node %d shares cell (%d, %d)"
+                              % (node, row, col))
+        else:
+            seen.add((row, col))
+
+
+def places_from_map(cols: int, node_map: Sequence[int]
+                    ) -> Dict[str, List[int]]:
+    """The SESSION_CONFIG cell fields for a row-major map (0 = empty), the
+    form the bench tools and a full grid use."""
+    placed, rows_of, cols_of = [0] * NODE_MAX, [0] * NODE_MAX, [0] * NODE_MAX
+    for position, node in enumerate(node_map):
+        if node:
+            placed[node - 1] = 1
+            rows_of[node - 1], cols_of[node - 1] = divmod(position, cols)
+    return {"placed": placed, "row": rows_of, "col": cols_of}
 
 
 def _to_signed(value: int, width: int) -> int:
@@ -190,8 +231,9 @@ def encode(name: str, fields: Mapping[str, object]) -> bytes:
     """Encode one message from a dict of its fields.
 
     ``fields`` holds ``session_id``, ``seq`` and every body field of the row;
-    an array field (``node_map``, ``crc32`` of SESSION_CONFIG) may be given
-    as a list of 9 entries; ASSET_CHUNK also needs ``payload`` (bytes, 1 to
+    an array field (``placed``, ``row``, ``col``, ``crc32`` of
+    SESSION_CONFIG, each indexed by Node ID - 1) may be given as a list of 9
+    entries; ASSET_CHUNK also needs ``payload`` (bytes, 1 to
     1,024).
     """
     if name not in LAYOUT:

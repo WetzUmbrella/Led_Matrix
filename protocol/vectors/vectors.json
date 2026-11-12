@@ -85,44 +85,77 @@
  },
  {
   "fields": {
-   "cols": 3,
+   "col": [
+    0,
+    4,
+    0,
+    2,
+    1,
+    0,
+    4,
+    0,
+    0
+   ],
+   "cols": 5,
    "crc32": [
     286331153,
     572662306,
     0,
-    858993459,
     1145324612,
     1431655765,
     0,
+    2004318071,
     0,
     0
    ],
    "frame_count": 600,
-   "node_map": [
+   "placed": [
     1,
-    2,
+    1,
     0,
-    3,
-    4,
-    5,
+    1,
+    1,
     0,
+    1,
     0,
     0
    ],
    "policy": 1,
-   "rows": 2,
+   "row": [
+    0,
+    0,
+    0,
+    1,
+    2,
+    0,
+    2,
+    0,
+    0
+   ],
+   "rows": 3,
    "seq": 4660,
    "session_id": 60
   },
   "file": "session_config_typical.bin",
-  "hex": "8287464266080c15006019111111212222220200000030333333434444445455555505000000000000000000000000",
+  "hex": "828746626a804000869400500800002c23222222444444440000000088888888aaaaaaaa00000000eeeeeeee000000000000000000",
   "kind": "message",
-  "length": 47,
+  "length": 53,
   "message": "SESSION_CONFIG",
   "name": "session_config_typical"
  },
  {
   "fields": {
+   "col": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
    "cols": 1,
    "crc32": [
     0,
@@ -136,7 +169,7 @@
     0
    ],
    "frame_count": 1,
-   "node_map": [
+   "placed": [
     0,
     0,
     0,
@@ -148,20 +181,42 @@
     0
    ],
    "policy": 0,
+   "row": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
    "rows": 1,
    "seq": 0,
    "session_id": 0
   },
   "file": "session_config_min.bin",
-  "hex": "0200002002000000000400000000000000000000000000000000000000000000000000000000000000000000000000",
+  "hex": "0200002002000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000",
   "kind": "message",
-  "length": 47,
+  "length": 53,
   "message": "SESSION_CONFIG",
   "name": "session_config_min"
  },
  {
   "fields": {
-   "cols": 1,
+   "col": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "cols": 9,
    "crc32": [
     4294967295,
     4294967295,
@@ -174,26 +229,37 @@
     4294967295
    ],
    "frame_count": 1023,
-   "node_map": [
-    9,
-    9,
-    9,
-    9,
-    9,
-    9,
-    9,
-    9,
-    9
+   "placed": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
    ],
    "policy": 1,
+   "row": [
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8
+   ],
    "rows": 9,
    "seq": 65535,
    "session_id": 255
   },
   "file": "session_config_max.bin",
-  "hex": "e2ffff3f6366666666feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0f",
+  "hex": "e2ffff3f73841851e2448a152d5ec4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01",
   "kind": "message",
-  "length": 47,
+  "length": 53,
   "message": "SESSION_CONFIG",
   "name": "session_config_max"
  },

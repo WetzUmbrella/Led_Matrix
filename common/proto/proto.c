@@ -59,7 +59,7 @@ static void     put_signed (writer_t * p_writer, uint32_t width, int8_t value);
 static int8_t   take_s8 (reader_t * p_reader, uint32_t width);
 static bool     score_ok (int8_t score);
 static bool     node_ok (uint8_t node_id);
-static bool     map_ok (uint8_t const * p_map);
+static bool     cells_ok (proto_session_config_t const * p_msg);
 static bool     frame_count_ok (uint16_t frame_count);
 static bool     register_ok (proto_register_t const * p_msg);
 static bool     session_config_ok (proto_session_config_t const * p_msg);
@@ -346,16 +346,18 @@ uint32_t proto_encode_session_config (proto_session_config_t const * p_msg,
         put_field(&writer, PROTO_GRID_BITS, p_msg->cols);
         put_field(&writer, PROTO_POLICY_BITS, p_msg->policy);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            put_field(&writer, PROTO_NODE_BITS, p_msg->node_map[slot]);
+            put_field(&writer, PROTO_PLACED_BITS, p_msg->cell[node].b_placed);
+            put_field(&writer, PROTO_GRID_BITS, p_msg->cell[node].row);
+            put_field(&writer, PROTO_GRID_BITS, p_msg->cell[node].col);
         }
 
         put_field(&writer, PROTO_FRAME_BITS, p_msg->frame_count);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            put_field(&writer, PROTO_CRC_BITS, p_msg->crc32[slot]);
+            put_field(&writer, PROTO_CRC_BITS, p_msg->crc32[node]);
         }
 
         written = PROTO_SESSION_CONFIG_BYTES;
@@ -384,16 +386,18 @@ bool proto_decode_session_config (uint8_t const * p_buf, uint32_t len,
         p_msg->cols   = take_u8(&reader, PROTO_GRID_BITS);
         p_msg->policy = take_u8(&reader, PROTO_POLICY_BITS);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            p_msg->node_map[slot] = take_u8(&reader, PROTO_NODE_BITS);
+            p_msg->cell[node].b_placed = take_u8(&reader, PROTO_PLACED_BITS);
+            p_msg->cell[node].row      = take_u8(&reader, PROTO_GRID_BITS);
+            p_msg->cell[node].col      = take_u8(&reader, PROTO_GRID_BITS);
         }
 
         p_msg->frame_count = take_u16(&reader, PROTO_FRAME_BITS);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            p_msg->crc32[slot] = take_u32(&reader, PROTO_CRC_BITS);
+            p_msg->crc32[node] = take_u32(&reader, PROTO_CRC_BITS);
         }
 
         b_ok = session_config_ok(p_msg);
@@ -1674,17 +1678,38 @@ static bool node_ok (uint8_t node_id)
 }
 
 /**
- * @brief  Every map position holds 0 (blank) or a Node ID 1 to 9.
- * @param  p_map  PROTO_MAP_SLOTS entries.
- * @return true when every entry is in range.
+ * @brief  The SESSION_CONFIG cells (step 4d, DS-15): a placed tile's cell
+ *         is inside rows x cols and no other placed tile has it; a tile not
+ *         placed has row and col 0, so each layout has one encoding.
+ * @param  p_msg  Message; rows and cols are checked by the caller.
+ * @return true when every cell is valid.
  */
-static bool map_ok (uint8_t const * p_map)
+static bool cells_ok (proto_session_config_t const * p_msg)
 {
-    bool b_ok = true;
+    uint16_t taken[PROTO_GRID_MAX] = {0u}; /* Bit c of taken[r]: (r, c). */
+    bool     b_ok                  = true;
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
     {
-        b_ok = b_ok && (p_map[slot] <= PROTO_NODE_MAX);
+        proto_cell_t const * const p_cell = &p_msg->cell[node];
+
+        if (0u == p_cell->b_placed)
+        {
+            b_ok = b_ok && (0u == p_cell->row) && (0u == p_cell->col);
+        }
+        else if ((1u != p_cell->b_placed) || (p_cell->row >= p_msg->rows) ||
+                 (p_cell->col >= p_msg->cols))
+        {
+            b_ok = false;
+        }
+        else
+        {
+            /* col < 9, so the shift fits uint16_t. */
+            uint16_t const bit = (uint16_t)(1u << p_cell->col);
+
+            b_ok = b_ok && (0u == (taken[p_cell->row] & bit));
+            taken[p_cell->row] |= bit;
+        }
     }
 
     return b_ok;
@@ -1720,11 +1745,9 @@ static bool session_config_ok (proto_session_config_t const * p_msg)
     bool const b_rows = (p_msg->rows >= 1u) && (p_msg->rows <= PROTO_GRID_MAX);
     bool const b_cols = (p_msg->cols >= 1u) && (p_msg->cols <= PROTO_GRID_MAX);
 
-    /* Both are at most 9 when tested, so the product is at most 81. */
     return (b_rows) && (b_cols) &&
-           (((uint32_t)p_msg->rows * p_msg->cols) <= PROTO_GRID_MAX) &&
            (p_msg->policy < (uint8_t)PROTO_POLICY_COUNT) && /* Code < 2. */
-           (map_ok(p_msg->node_map)) && (frame_count_ok(p_msg->frame_count));
+           (cells_ok(p_msg)) && (frame_count_ok(p_msg->frame_count));
 }
 
 /**
