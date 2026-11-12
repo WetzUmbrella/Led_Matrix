@@ -33,6 +33,11 @@ FAULT_NAMES = {0: "WIFI", 1: "CRC_FAIL", 2: "QUEUE_OVERFLOW",
                3: "BEACON_LOSS", 4: "IMU", 5: "MISSED_DEADLINE",
                6: "ASSET_FORMAT", 7: "DISPLAY", 8: "SYNC_STALE"}
 
+#: Condition bits (fault_word.h FAULT_CONDITION_MASK): set while the problem
+#: lasts (no router, no beacon, IMU failed, a bad asset, no LED output).
+#: The others are events: something happened since the PC last ACKed.
+CONDITION_BITS = (1 << 0) | (1 << 3) | (1 << 4) | (1 << 6) | (1 << 7)
+
 #: Display states (layout_table.md section 5.8).
 DISPLAY_STATES = ("INITIALISING DISPLAY", "DISPLAY IDLE", "PREPARING FRAME",
                   "TRANSMITTING PIXELS", "WAITING FOR NEXT TICK",
@@ -54,11 +59,20 @@ class TileRow:
     #: (DS-12 A1: an upload waits until it is the PC's).
     session_id: int = 0
 
-    def faults(self) -> str:
-        """Names of the set fault bits, or ``none``."""
+    def faults(self, mask: int = ~0) -> str:
+        """Names of the set fault bits (only those in ``mask``), or
+        ``none``."""
         names = [name for bit, name in sorted(FAULT_NAMES.items())
-                 if self.fault_word & (1 << bit)]
+                 if self.fault_word & mask & (1 << bit)]
         return ",".join(names) or "none"
+
+    def conditions(self) -> str:
+        """The set condition faults: the tile cannot play now."""
+        return self.faults(CONDITION_BITS)
+
+    def events(self) -> str:
+        """The set event faults: reports of something that happened."""
+        return self.faults(~CONDITION_BITS)
 
 
 def make_ack(session_id: int, seq: int) -> bytes:

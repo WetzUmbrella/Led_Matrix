@@ -107,8 +107,18 @@ run("status")
 # A tile with a fault (a DISPLAY fault: no LED output) must not be played
 # on; the round would run on the Pico with nothing on the wall (bench
 # 12 Nov 2026, round 4).
-faulty = ["tile %d: %s" % (row.node_id, row.faults())
-          for row in sh.telemetry.tiles.values() if row.faults() != "none"]
+# Only condition faults stop the round (decided with Cheston 12 Nov 2026):
+# an event fault (MISSED_DEADLINE, QUEUE_OVERFLOW, ...) only reports that
+# something happened since the last ACK, and blocked round 15 on a wall
+# that played fine. Events are printed as a warning.
+faulty = ["tile %d: %s" % (row.node_id, row.conditions())
+          for row in sh.telemetry.tiles.values()
+          if row.conditions() != "none"]
+warned = ["tile %d: %s" % (row.node_id, row.events())
+          for row in sh.telemetry.tiles.values() if row.events() != "none"]
+if warned:
+    print("warning, tile event faults (arming anyway): %s"
+          % "; ".join(warned), flush=True)
 if faulty:
     print("not arming, tile faults: %s" % "; ".join(faulty), flush=True)
     sys.exit(1)

@@ -89,6 +89,18 @@ def _shell() -> db.DashboardShell:
     return shell
 
 
+def test_fault_bits_split_into_conditions_and_events() -> None:
+    import telemetry
+    row = telemetry.TileRow(node_id=4, address="10.0.0.4", last_seen=0.0,
+                            seq=1, fault_word=(1 << 5) | (1 << 2) | (1 << 7),
+                            orientation=0, display_state=1)
+    assert row.conditions() == "DISPLAY"
+    assert row.events() == "QUEUE_OVERFLOW,MISSED_DEADLINE"
+    assert row.faults() == "QUEUE_OVERFLOW,MISSED_DEADLINE,DISPLAY"
+    row.fault_word = 1 << 5
+    assert row.conditions() == "none" and row.events() == "MISSED_DEADLINE"
+
+
 def test_telemetry_row_keeps_the_tile_session() -> None:
     import telemetry
     data = pl.encode_telemetry(session_id=21, seq=5, node_id=4, fault_word=0,
