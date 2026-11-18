@@ -282,6 +282,19 @@ def test_resend_config_sends_the_last_session_config_unchanged() -> None:
         sender.close()
 
 
+def test_a_repeated_session_id_uploads_every_tile_again(tmp_path, monkeypatch) -> None:  # type: ignore
+    # Session ids are 8 bits, so a fresh one can repeat an earlier one: an
+    # upload ACKed in that earlier use must not make a tile be skipped.
+    shell = _three_tile_shell(tmp_path)
+    shell.publish()  # Session 7.
+    ids = iter([9, 7])
+    monkeypatch.setattr(db, "pick_session_id", lambda _last: next(ids))
+    shell.publish()  # Session 9.
+    shell.publish()  # Session 7 again.
+    assert [c[0] for c in shell.link.configs] == [7, 9, 7]
+    assert len(shell.uploads_log) == 9  # Every tile, every time.
+
+
 # Background publishing (the website).
 
 def test_website_publish_runs_in_the_background(tmp_path) -> None:  # type: ignore

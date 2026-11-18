@@ -811,6 +811,9 @@ class DashboardShell(cmd.Cmd):
                 self.session_id = pick_session_id(self.session_id)
                 if self.session_file:
                     save_last_session(self.session_id, self.session_file)
+                # Session ids repeat (8 bits): an upload ACKed in an earlier
+                # use of this id must not count in this one.
+                self.model.acked = {}
                 self.model._say("session %d" % self.session_id)
             self.config_sent = True
             model = self.model
