@@ -995,14 +995,26 @@ class DashboardShell(cmd.Cmd):
         SESSION_CONFIG, but a tile reports ASSET_READY only after an upload,
         so tiles that hold the asset already were never counted ready.
         Publishing again (a fresh session) has every tile confirm it; a tile
-        that holds it ACKs without writing (DS-12 B)."""
+        that holds it ACKs without writing (DS-12 B). A restarted Pico also
+        starts in video mode, so the website's mode is sent again."""
         with self.lock:
             self.model._say("Pico back: publishing again")
         try:
+            self._restore_mode()
             self._republish()
         except Refused as err:  # A job runs; it publishes anyway.
             with self.lock:
                 self.model._say("Pico back: %s" % err)
+
+    def _restore_mode(self) -> None:
+        """Send the website's mode to the Pico again (a restarted Pico is in
+        video mode); a mode not acknowledged becomes a message."""
+        with self.lock:
+            mode = self.model.mode
+            code = pico_link.MODE_GAME if mode == "game" else \
+                pico_link.MODE_VIDEO
+            if not self.link.send_game_control(code):
+                self.model._say("Pico back: mode %s not acknowledged" % mode)
 
     def snapshot(self) -> Dict[str, object]:
         """Fresh STATUS and telemetry, an armed placement, then the model,

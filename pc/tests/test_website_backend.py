@@ -278,6 +278,7 @@ def test_a_pico_back_from_silence_gets_a_fresh_publish(tmp_path) -> None:  # typ
     assert len(shell.link.configs) == 2  # Published again, fresh session.
     assert shell.link.configs[1][0] != shell.link.configs[0][0]
     assert len(shell.uploads_log) == 6
+    assert shell.link.commands == [("game", plink.MODE_VIDEO)]  # Mode again.
     shell.pump()
     assert len(shell.link.configs) == 2  # Once only.
 
