@@ -210,16 +210,19 @@ def run_uploads(model: "DashboardModel", session_id: int,
             model.uploads[node].update(fields)
 
     def upload(node: int) -> Optional[str]:
-        """Upload one tile: None when done, else the reason it failed."""
+        """Upload one tile: None when done, else the reason it failed. The
+        wait for the session comes first: it is also the wait for the
+        tile's first TELEMETRY, which gives its address (a website just
+        started knows no address yet; wall test 18 Nov 2026)."""
+        if (wait_session is not None) and (not wait_session(node)):
+            with guard:
+                model._say("node %d: no TELEMETRY in session %d yet, "
+                           "uploading anyway" % (node, session_id))
         address = address_of(node)
         if address is None:
             note(node, state="failed", error="no TELEMETRY yet, address "
                  "unknown")
             return "no TELEMETRY yet, address unknown"
-        if (wait_session is not None) and (not wait_session(node)):
-            with guard:
-                model._say("node %d: no TELEMETRY in session %d yet, "
-                           "uploading anyway" % (node, session_id))
         note(node, state="uploading", address=address)
         started = time.monotonic()
         try:
@@ -965,6 +968,8 @@ class DashboardShell(cmd.Cmd):
         CONFIG_RESEND_S (see STATUS_STALE_S)."""
         age = self.status_age()
         resend = getattr(self.link, "resend_config", None)
+        if (age is None) and self.config_sent:
+            age = STATUS_STALE_S  # Never answered since the layout went out.
         if (resend is None) or (age is None) or (age < STATUS_STALE_S):
             return
         now = time.monotonic()
@@ -976,6 +981,9 @@ class DashboardShell(cmd.Cmd):
     def _pico_back(self) -> bool:
         """Whether the Pico answers again after the pump woke it (once)."""
         age = self.status_age()
+        if (age is not None) and (self.model.status is not None) and \
+                (self.model.status.received < self.config_resent):
+            return False  # A STATUS from before the wake-up, not an answer.
         if self.pico_was_silent and (age is not None) and \
                 (age < STATUS_STALE_S):
             self.pico_was_silent = False

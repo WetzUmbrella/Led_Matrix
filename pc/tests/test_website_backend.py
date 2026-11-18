@@ -282,6 +282,35 @@ def test_a_pico_back_from_silence_gets_a_fresh_publish(tmp_path) -> None:  # typ
     assert len(shell.link.configs) == 2  # Once only.
 
 
+def test_a_pico_that_never_answered_gets_the_layout_again(tmp_path) -> None:  # type: ignore
+    # Wall test 18 Nov 2026: the website started while the Pico was stuck,
+    # so no STATUS ever came and nothing was resent.
+    shell = _three_tile_shell(tmp_path)
+    shell.publish()
+    resent = []
+    shell.link.resend_config = lambda: resent.append(1) or True
+    shell.model.status = None
+    shell.link.status = None
+    shell.pump()
+    assert resent == [1]
+    assert shell.snapshot()["pico_state"] == "NO STATUS YET"
+
+
+def test_an_upload_waits_for_the_first_telemetry_of_a_tile() -> None:
+    model = _uploadable_model()
+    heard = set()
+
+    def wait(node):  # type: ignore[no-untyped-def]
+        heard.add(node)  # The tile's TELEMETRY arrives while waiting.
+        return True
+
+    def address(node):  # type: ignore[no-untyped-def]
+        return "10.0.0.%d" % node if node in heard else None
+
+    failed = db.run_uploads(model, 7, lambda *a: None, address, wait)
+    assert failed == {}
+
+
 def test_resend_config_sends_the_last_session_config_unchanged() -> None:
     import socket
     receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
