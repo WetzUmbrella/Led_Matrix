@@ -15,8 +15,8 @@ Read before acting, in this order:
 | Step 4e website | **Done and wall-tested**: the whole demo runs from the website (A13). Tabs Setup, Video, Game; `/score`; GIF library in `pc/gifs` (gitignored); preview (first frame); parallel uploads about 3 s for nine tiles. |
 | Pictures | Countdown, score and stars show **whole on every tile** (decided 18 Nov, replaces DS-15 decision 3). |
 | Pico restart | **Recovers by itself**: the website resends the layout, publishes again in a fresh session and restores the mode; tiles forget the old Pico's game state (`game_tile_new_pico`). Proved on the wall. |
-| Gate | Passes at head: C host tests and ASan, barr_check 0 findings, pytest 448 passed. clang-format 18.1.8 not run (offline); CI checks it. |
-| Pushed | See the end of section 5. |
+| Gate | Passes at head: C host tests and ASan, barr_check 0 findings, pytest 498 passed (tools and pc). clang-format 18.1.8 not run (offline); CI checks it. |
+| Pushed | Yes: origin `feature/whack-a-mole` has every commit of 18 Nov. |
 
 ### Firmware on the bench
 
@@ -51,7 +51,3 @@ Read before acting, in this order:
 - `dispatch_max_us` is timed from the pass's `now`, taken just before dispatch: a large value is inside `cl_dispatch_entry`.
 - Before testing a website fix on the wall, check the running website has it (restart it; `--layout`, `--gif` restore the wall).
 - When the user asks to repeat an action ("flash the tiles connected now"), do exactly that; they declined an automatic watcher.
-
-## 5. Push
-
-Commits of 18 Nov were made while SIT-WIFI had no internet; they are pushed at the end of the session if the network allows (check `git status -sb`: "ahead" means not pushed).
