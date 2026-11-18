@@ -115,6 +115,11 @@ READY_WAIT_S = 1.0
 STATUS_STALE_S = 2.0
 CONFIG_RESEND_S = 1.0
 
+#: A tile not heard on TELEMETRY (about once a second) for this long is
+#: offline: it is not uploaded to (wall test 18 Nov 2026: an upload to an
+#: unplugged tile retried for 27 s and held up every layout change).
+TILE_SILENT_S = 5.0
+
 #: Messages kept in memory for the website.
 MESSAGE_KEEP = 200
 
@@ -855,7 +860,13 @@ class DashboardShell(cmd.Cmd):
         return stats
 
     def _address_of(self, node: int) -> Optional[str]:
+        """The tile's address, or None when it has been silent for
+        TILE_SILENT_S (offline: an upload would only time out)."""
         with self.lock:
+            row = getattr(self.telemetry, "tiles", {}).get(node)
+            if (row is not None) and \
+                    (time.monotonic() - row.last_seen > TILE_SILENT_S):
+                return None
             return self.telemetry.address_of(node)
 
     def _wait_session(self, node: int) -> bool:

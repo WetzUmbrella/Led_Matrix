@@ -297,6 +297,21 @@ def test_a_pico_that_never_answered_gets_the_layout_again(tmp_path) -> None:  # 
     assert shell.snapshot()["pico_state"] == "NO STATUS YET"
 
 
+def test_a_silent_tile_is_not_uploaded_to(tmp_path) -> None:  # type: ignore
+    # Wall test 18 Nov 2026: unplugged tiles held every change up for 27 s.
+    shell = _three_tile_shell(tmp_path)
+    now = time.monotonic()
+    for node, seen in ((1, now), (2, now - 60.0), (3, now)):
+        shell.telemetry.tiles[node] = telemetry.TileRow(
+            node_id=node, address="10.0.0.%d" % node, last_seen=seen, seq=1,
+            fault_word=0, orientation=0, display_state=1)
+    started = time.monotonic()
+    failed = shell.publish()
+    assert time.monotonic() - started < 5.0
+    assert failed == {2: "no TELEMETRY yet, address unknown"}
+    assert sorted(shell.uploads_log) == ["10.0.0.1", "10.0.0.3"]
+
+
 def test_an_upload_waits_for_the_first_telemetry_of_a_tile() -> None:
     model = _uploadable_model()
     heard = set()
