@@ -108,6 +108,13 @@ SESSION_POLL_S = 0.05
 #: DS-12 C: how long to wait for a fresh STATUS (the Pico sends 4 a second).
 READY_WAIT_S = 1.0
 
+#: The website calls the Pico silent after this long without a STATUS, and
+#: then resends its last SESSION_CONFIG this often, so a restarted Pico
+#: takes the session back and learns where to send STATUS (wall test 18 Nov
+#: 2026: after a Pico restart the page kept showing the last STATUS).
+STATUS_STALE_S = 2.0
+CONFIG_RESEND_S = 1.0
+
 #: Messages kept in memory for the website.
 MESSAGE_KEEP = 200
 
@@ -725,6 +732,8 @@ class DashboardShell(cmd.Cmd):
     #: send_config), and where the session in use is saved.
     config_sent = False
     session_file: Optional[str] = None
+    #: When the pump last resent SESSION_CONFIG to a silent Pico.
+    config_resent = 0.0
 
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
@@ -923,6 +932,7 @@ class DashboardShell(cmd.Cmd):
         about 50 times a second from its own thread."""
         with self.lock:
             self._flush()
+            self._wake_pico()
             if self.model.armed is None:
                 return
             try:
@@ -934,12 +944,40 @@ class DashboardShell(cmd.Cmd):
         if node is not None:
             self._republish()
 
+    def status_age(self) -> Optional[float]:
+        """Seconds since the last STATUS, or None before any."""
+        status = self.model.status
+        if status is None:
+            return None
+        return max(time.monotonic() - status.received, 0.0)
+
+    def _wake_pico(self) -> None:
+        """While the Pico is silent, resend the last SESSION_CONFIG every
+        CONFIG_RESEND_S (see STATUS_STALE_S)."""
+        age = self.status_age()
+        resend = getattr(self.link, "resend_config", None)
+        if (resend is None) or (age is None) or (age < STATUS_STALE_S):
+            return
+        now = time.monotonic()
+        if now - self.config_resent >= CONFIG_RESEND_S:
+            self.config_resent = now
+            resend()
+
     def snapshot(self) -> Dict[str, object]:
         """Fresh STATUS and telemetry, an armed placement, then the model,
-        with each tile's health (A8) and upload progress."""
+        with each tile's health (A8) and upload progress. A Pico silent
+        for STATUS_STALE_S shows as NO STATUS, with nothing to press."""
         self.pump()
         with self.lock:
             snap = self.model.snapshot()
+            age = self.status_age()
+            snap["status_age_s"] = None if age is None else round(age, 1)
+            if (age is not None) and (age >= STATUS_STALE_S):
+                snap["pico_state"] = "NO STATUS"
+                for key in ("play_enabled", "pause_enabled", "resume_enabled",
+                            "stop_enabled", "game_start_enabled",
+                            "start_now_enabled", "start_enabled"):
+                    snap[key] = False
             snap["session"] = self.session_id
             for row in snap["uploads"]:  # type: ignore[union-attr]
                 stats = self.live.get(str(row.get("address")))

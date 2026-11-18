@@ -57,6 +57,8 @@ static uint64_t g_last_beat[CL_MAX_NODES + 1u];
 static uint16_t g_live           = 0u;
 static uint32_t g_ack_scan       = 0u; /* Sends already answered by ACK. */
 static uint32_t g_score_tiles    = 0u; /* Tiles given a WALL_PICTURE. */
+/* Every tile was given the same score picture. */
+static bool g_b_score_same = false;
 
 static void gt_reset (void);
 static void gt_advance (uint64_t duration_us);
@@ -114,6 +116,7 @@ static bool gt_node_seq (coordinator_port_send_t const * p_send,
 static bool gt_last_status (int32_t * p_score, uint8_t * p_state);
 static uint32_t gt_popcount (uint64_t value);
 static uint32_t gt_score_pixels (void);
+static uint64_t gt_one_tile_score (int32_t score);
 
 /**
  * @brief  Run passes for a duration in 50 us steps; live tiles heartbeat
@@ -639,11 +642,12 @@ static uint32_t gt_popcount (uint64_t value)
 }
 
 /**
- * @brief  Lit pixels of the score drawn across the wall: the first score
- *         entry (list slot 1) of each tile's results (retries repeat it, so
- *         only the first counts), summed.
+ * @brief  Lit pixels of the score on the wall: the first score entry (list
+ *         slot 1) of each tile's results (retries repeat it, so only the
+ *         first counts), summed.
  * @return Total lit pixels, and the number of tiles that got one in
- *         g_score_tiles.
+ *         g_score_tiles; g_b_score_same says whether every tile got the same
+ *         picture.
  */
 static uint32_t gt_score_pixels (void)
 {
@@ -671,12 +675,39 @@ static uint32_t gt_score_pixels (void)
         }
     }
 
+    g_b_score_same = true;
+
     for (uint32_t node = 1u; node <= CL_MAX_NODES; node++)
     {
         total += gt_popcount(seen_mask[node]);
+
+        for (uint32_t other = 1u; other < node; other++)
+        {
+            if ((b_seen[node]) && (b_seen[other]) &&
+                (seen_mask[node] != seen_mask[other]))
+            {
+                g_b_score_same = false;
+            }
+        }
     }
 
     return total;
+}
+
+/**
+ * @brief  The score as one tile draws it on its own (1 x 1).
+ * @param  score  The score.
+ * @return The tile's 8 x 8 mask.
+ */
+static uint64_t gt_one_tile_score (int32_t score)
+{
+    score_cells_t one_tile;
+
+    (void)memset(&one_tile, 0, sizeof(one_tile)); /* Returns one_tile. */
+    one_tile.row_bits[0] = 1u;
+
+    return score_font_picture_mask(SCORE_PIC_NUMBER, score, 1u, 1u, &one_tile,
+                                   0u, 0u);
 }
 
 /**
@@ -941,9 +972,13 @@ static bool gt_check_round_end (gt_round_t const * p_round)
     b_ok = (test_main_check(gt_count_cmd(2u, PROTO_GAME_END) >= 1u,
                             __LINE__)) && b_ok;
 
+    /* Each tile shows the whole score (decided 18 Nov 2026): the same
+     * picture on both tiles, each the one-tile drawing of the 1. */
     lit = gt_score_pixels();
     b_ok = (test_main_check(2u == g_score_tiles, __LINE__)) && b_ok;
-    b_ok = (test_main_check(8u == lit, __LINE__)) && b_ok;
+    b_ok = (test_main_check(g_b_score_same, __LINE__)) && b_ok;
+    b_ok = (test_main_check((2u * gt_popcount(gt_one_tile_score(1))) == lit,
+                            __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
 
     gt_advance(300u * GT_MS);
@@ -959,8 +994,8 @@ static bool gt_check_round_end (gt_round_t const * p_round)
  * @brief  C21: a full round on a 2 x 2 wall: MOLE_ON resent until ACKed and
  *         then not again, a tap on the mole is ACKed, relayed to the PC and
  *         answered with a green FEEDBACK, STATUS carries the live score, and
- *         the round end sends END and the score across the wall (8 lit
- *         pixels for a 1), then the Pico is READY again.
+ *         the round end sends END and the whole score on each tile (the
+ *         same one-tile picture of the 1), then the Pico is READY again.
  * @return true when every check passed.
  */
 bool test_coord_game_round (void)

@@ -240,6 +240,48 @@ def test_every_layout_after_the_first_goes_out_in_a_fresh_session(tmp_path) -> N
     assert shell.model.pending_uploads(sessions[-1]) == []
 
 
+def test_a_silent_pico_shows_no_status_and_gets_the_layout_again() -> None:
+    # Wall test 18 Nov 2026: after the Pico restarted the page kept its
+    # last STATUS (READY), and the Pico had nowhere to send a new one.
+    shell = _shell()
+    resent = []
+    shell.link.resend_config = lambda: resent.append(1) or True
+    shell.link.status = plink.Status(0b111, 0b111, READY,
+                                     time.monotonic() - 5.0)
+    snap = shell.snapshot()
+    assert snap["pico_state"] == "NO STATUS" and snap["status_age_s"] >= 5
+    assert snap["game_start_enabled"] is False and snap["play_enabled"] is False
+    assert resent == [1]
+    shell.pump()
+    assert resent == [1]  # At most once per CONFIG_RESEND_S.
+    shell.config_resent -= db.CONFIG_RESEND_S
+    shell.pump()
+    assert resent == [1, 1]
+    shell.link.status = _status()  # The Pico answers again.
+    shell.config_resent -= db.CONFIG_RESEND_S
+    snap = shell.snapshot()
+    assert snap["pico_state"] == "READY" and resent == [1, 1]
+
+
+def test_resend_config_sends_the_last_session_config_unchanged() -> None:
+    import socket
+    receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    receiver.bind(("127.0.0.1", 0))
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    link = plink.PicoLink("127.0.0.1", sock=sender)
+    link.pico = receiver.getsockname()
+    try:
+        assert link.resend_config() is False
+        first = link.send_session_config(9, 1, 2, plink.POLICY_PAUSE,
+                                         [1, 2], 1, [0] * 9)
+        assert link.resend_config() is True
+        receiver.settimeout(2)
+        assert receiver.recv(256) == first and receiver.recv(256) == first
+    finally:
+        receiver.close()
+        sender.close()
+
+
 # Background publishing (the website).
 
 def test_website_publish_runs_in_the_background(tmp_path) -> None:  # type: ignore

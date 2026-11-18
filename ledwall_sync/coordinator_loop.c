@@ -402,7 +402,7 @@ static void cl_game_sync_active (void);
 static bool cl_stopped (void);
 static int8_t cl_status_score (void);
 static uint16_t cl_next_cmd_seq (void);
-static void cl_active_cells (score_cells_t * p_cells);
+static uint64_t cl_tile_picture (score_pic_t pic, int32_t value);
 static void cl_scan_heartbeats (uint64_t now);
 static void cl_scan_one (uint32_t index, uint64_t now);
 static void cl_send_due_copy (uint64_t now);
@@ -2467,17 +2467,13 @@ static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
 }
 
 /**
- * @brief  The countdown (DS-09): 3, 2 and 1 in yellow across the wall, one
+ * @brief  The countdown (DS-09): 3, 2 and 1 in yellow on every tile, one
  *         second each from t_first, as a timed list on every tile of the
  *         round, so all tiles change together.
  * @param  t_first  Show time of the 3, Pico clock, microseconds.
  */
 static void cl_send_countdown (uint64_t t_first)
 {
-    score_cells_t cells;
-
-    cl_active_cells(&cells);
-
     for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
     {
         uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
@@ -2491,9 +2487,7 @@ static void cl_send_countdown (uint64_t t_first)
             {
                 /* 3, 2, 1: step < 3, so the digit fits. */
                 int32_t const  digit = (int32_t)(CL_COUNTDOWN_STEPS - step);
-                uint64_t const mask  = score_font_picture_mask(
-                    SCORE_PIC_NUMBER, digit, g_session.rows, g_session.cols,
-                    &cells, row, col);
+                uint64_t const mask  = cl_tile_picture(SCORE_PIC_NUMBER, digit);
 
                 cl_queue_picture(node_id, (uint8_t)step, /* step < 3. */
                                  (uint8_t)PROTO_PIC_PICTURE,   /* 3 fit. */
@@ -2507,21 +2501,23 @@ static void cl_send_countdown (uint64_t t_first)
 
 /**
  * @brief  The results (DS-09): a sparkle (the tile's own end animation),
- *         then the score in white and the stars in yellow in turn, looping
+ *         then the score in white and the stars in yellow in turn, the same
+ *         whole pictures on every tile, looping
  *         until the next round or mode change, as a timed list on every tile
  *         of the map.
  * @param  t_first  Show time of the sparkle, Pico clock, microseconds.
  */
 static void cl_send_results (uint64_t t_first)
 {
-    score_cells_t  cells;
     int32_t const  score = game_rules_score(&g_game);
     /* 1 to 3 stars: fits int32_t. */
     int32_t const  stars = (int32_t)game_rules_stars(&g_game);
     uint64_t const t_score = t_first + (UINT64_C(1000) * CL_SPARKLE_MS);
     uint64_t const t_stars = t_score + (UINT64_C(1000) * CL_RESULT_MS);
 
-    cl_active_cells(&cells);
+    /* The same whole pictures go to every tile. */
+    uint64_t const score_pic = cl_tile_picture(SCORE_PIC_NUMBER, score);
+    uint64_t const stars_pic = cl_tile_picture(SCORE_PIC_STARS, stars);
 
     for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
     {
@@ -2532,13 +2528,6 @@ static void cl_send_results (uint64_t t_first)
         if ((0u != (g_session.required & cl_node_bit(node_id))) &&
             (cl_cell_of(node_id, &row, &col)))
         {
-            uint64_t const score_pic = score_font_picture_mask(
-                SCORE_PIC_NUMBER, score, g_session.rows, g_session.cols,
-                &cells, row, col);
-            uint64_t const stars_pic = score_font_picture_mask(
-                SCORE_PIC_STARS, stars, g_session.rows, g_session.cols,
-                &cells, row, col);
-
             cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_SPARKLE, /* 3. */
                              (uint8_t)PROTO_COLOUR_YELLOW, /* 8 fit. */
                              0u, t_first, CL_SPARKLE_MS, 0u);
@@ -2840,27 +2829,24 @@ static int8_t cl_status_score (void)
 }
 
 /**
- * @brief  The cells that hold a placed tile, for the wall pictures.
- * @param  p_cells  Receives them.
+ * @brief  A wall picture as every tile shows it: the whole picture drawn for
+ *         one tile (the 1 x 1 rendering of score_font). Decided 18 Nov 2026
+ *         with Cheston, replacing DS-15 decision 3 (big across the grid when
+ *         it is at least half full): the demo tiles stand apart, so a
+ *         picture cut across them was hard to read; each tile now shows the
+ *         countdown and the results whole.
+ * @param  pic    What to draw.
+ * @param  value  The number, or the star count.
+ * @return The tile's 8 x 8 mask, the same for every tile.
  */
-static void cl_active_cells (score_cells_t * p_cells)
+static uint64_t cl_tile_picture (score_pic_t pic, int32_t value)
 {
-    for (uint32_t row = 0u; row < SCORE_FONT_GRID_MAX; row++)
-    {
-        p_cells->row_bits[row] = 0u;
-    }
+    score_cells_t one_tile;
 
-    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
-    {
-        proto_cell_t const * const p_cell = &g_session.cell[node];
+    (void)memset(&one_tile, 0, sizeof(one_tile)); /* Returns one_tile. */
+    one_tile.row_bits[0] = 1u;
 
-        if ((0u != p_cell->b_placed) && (p_cell->row < SCORE_FONT_GRID_MAX) &&
-            (p_cell->col < SCORE_FONT_GRID_MAX))
-        {
-            /* col < 9: the shift fits uint16_t. */
-            p_cells->row_bits[p_cell->row] |= (uint16_t)(1u << p_cell->col);
-        }
-    }
+    return score_font_picture_mask(pic, value, 1u, 1u, &one_tile, 0u, 0u);
 }
 
 /**

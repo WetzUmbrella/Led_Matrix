@@ -206,6 +206,8 @@ class PicoLink:
         self.tap_events: List[Tuple[int, int, float]] = []
         #: Seq numbers of the Pico's ACKs (node 0) not yet taken.
         self.acks: List[int] = []
+        #: The last SESSION_CONFIG sent, for resend_config().
+        self.last_config: Optional[bytes] = None
 
     def _send(self, data: bytes) -> None:
         self.sock.sendto(data, self.pico)
@@ -228,8 +230,18 @@ class PicoLink:
             session_id=session_id, seq=self._next_seq(), rows=rows, cols=cols,
             policy=policy, frame_count=frame_count, crc32=list(crcs),
             **pl.places_from_map(cols, node_map))
+        self.last_config = data
         self._send(data)
         return data
+
+    def resend_config(self) -> bool:
+        """Send the last SESSION_CONFIG again, unchanged. A Pico in that
+        session ignores it as a repeat; a restarted Pico takes it, and
+        learns where to send STATUS. False when none was sent yet."""
+        if self.last_config is None:
+            return False
+        self._send(self.last_config)
+        return True
 
     def _command(self, name: str) -> bytes:
         fields = {"session_id": self.session_id, "seq": self._next_seq()}

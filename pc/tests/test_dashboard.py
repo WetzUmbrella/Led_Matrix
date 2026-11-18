@@ -9,6 +9,7 @@ import os
 import socket
 import sys
 import threading
+import time
 
 import pytest
 
@@ -152,8 +153,9 @@ def test_send_mode_is_a_game_control_to_the_pico() -> None:
 
 def _ready_status(state: int, score: int = 0,
                   round_state: int = 0, **counts: int) -> plink.Status:
-    """A status with both tiles ready, in the given coordinator state."""
-    return plink.Status(0b11, 0b11, state, 0.0, score,
+    """A status with both tiles ready, in the given coordinator state, just
+    received."""
+    return plink.Status(0b11, 0b11, state, time.monotonic(), score,
                         round_state=round_state, **counts)
 
 
