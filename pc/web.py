@@ -51,6 +51,9 @@ Every request runs under the shell's lock (``shell.lock``), so the shell is
 only used by one thread at a time; a GIF upload and the preview take it only
 briefly. Usage:
     python3 pc/web.py --pico 192.168.1.57 [--session 7] [--port 8080]
+        [--layout 3x3 [--map 1,2,3,4,5,6,7,8,9]] [--gif NAME.gif]
+--layout, --map and --gif set up the wall at start (demo day: no
+tap-placing after a restart); the map defaults to reading order.
 """
 
 from __future__ import annotations
@@ -69,6 +72,7 @@ sys.path.insert(0, HERE)
 import asset_builder as ab  # noqa: E402
 import dashboard as db  # noqa: E402
 import gif_library as gl  # noqa: E402
+import proto_layout as pl  # noqa: E402
 
 #: Port and bind address (the page is for the laptop and the wall's PC LAN).
 DEFAULT_PORT = 8080
@@ -321,6 +325,34 @@ def start_pump(shell, stop: threading.Event,  # type: ignore[no-untyped-def]
     return thread
 
 
+def start_wall(shell, layout: Optional[str],  # type: ignore[no-untyped-def]
+               map_text: Optional[str], gif: Optional[str]) -> None:
+    """The wall at start: the layout (the map in reading order when not
+    given), a library GIF, then one publish in the background. Raises
+    ab.AssetError on a bad layout, map or GIF name."""
+    if layout is None and map_text is None and gif is None:
+        return
+    model = shell.model
+    if layout is not None:
+        rows, cols = ab.parse_shape(layout)
+        if map_text is None:
+            node_map = [n if n <= pl.NODE_MAX else 0
+                        for n in range(1, rows * cols + 1)]
+        else:
+            try:
+                node_map = [int(n) for n in map_text.split(",")]
+            except ValueError:
+                raise ab.AssetError("the map is Node IDs separated by commas")
+        ab.parse_layout(layout, node_map)
+        model.layout = layout
+        model.node_map = ab.normalise_map(layout, node_map)
+    elif map_text is not None:
+        raise ab.AssetError("--map needs --layout")
+    if gif is not None:
+        model.gif = gl.path_of(gif)
+    shell.run_job("upload", shell.publish)
+
+
 def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
     """Command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -329,6 +361,12 @@ def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
                         help="session id 1 to 255; default: a fresh one")
     parser.add_argument("--host", default=BIND_ADDRESS)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--layout", default=None,
+                        help="grid at start, e.g. 3x3")
+    parser.add_argument("--map", default=None,
+                        help="Node IDs in reading order, 0 = empty cell")
+    parser.add_argument("--gif", default=None,
+                        help="a GIF of the library (pc/gifs) to play")
     args = parser.parse_args(argv)
     try:
         session = db.resolve_session(args.session)
@@ -337,6 +375,13 @@ def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
         return 1
     shell = db.DashboardShell(args.pico, session)
     shell.background = True
+    try:
+        start_wall(shell, args.layout, args.map, args.gif)
+    except ab.AssetError as err:
+        print("web: %s" % err, file=sys.stderr)
+        shell.link.close()
+        shell.telemetry.close()
+        return 1
     server = make_server(shell, args.host, args.port)
     stop = threading.Event()
     start_pump(shell, stop)

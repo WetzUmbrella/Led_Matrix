@@ -314,6 +314,31 @@ def test_a_repeated_session_id_uploads_every_tile_again(tmp_path, monkeypatch) -
     assert len(shell.uploads_log) == 9  # Every tile, every time.
 
 
+def test_start_wall_sets_the_layout_and_gif_then_publishes(tmp_path, monkeypatch) -> None:  # type: ignore
+    monkeypatch.setattr(gl, "GIF_DIR", str(tmp_path))
+    data = open(_gif(str(tmp_path / "src.gif"), size=(24, 24)), "rb").read()
+    gl.save_gif("demo.gif", data, str(tmp_path))
+    shell = _shell(background=True)
+    web.start_wall(shell, "3x3", None, "demo.gif")
+    assert shell.model.node_map == list(range(1, 10))
+    assert shell.model.gif.endswith("demo.gif")
+    deadline = time.monotonic() + 10
+    while shell.model.job is not None:
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert len(shell.link.configs) == 1 and len(shell.uploads_log) == 9
+    shell = _shell()
+    web.start_wall(shell, "2x5", "0,1,0,2,0,0,3,0,0,4", None)
+    assert shell.model.node_map == [0, 1, 0, 2, 0, 0, 3, 0, 0, 4]
+    for args in (("3x3", "1,1,2", None), ("3x3", "a,b", None),
+                 (None, "1,2", None), ("3x3", None, "missing.gif")):
+        with pytest.raises(ab.AssetError):
+            web.start_wall(_shell(), *args)
+    start = _shell()
+    web.start_wall(start, None, None, None)  # Nothing asked: nothing sent.
+    assert start.link.configs == [] and start.model.job is None
+
+
 # Background publishing (the website).
 
 def test_website_publish_runs_in_the_background(tmp_path) -> None:  # type: ignore
