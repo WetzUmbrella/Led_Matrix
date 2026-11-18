@@ -34,6 +34,11 @@ T-B1-03 (pack and manifest):
   * Manifest {session_id, format_version 2, frame_count, crc32}; frame_rate
     60 is not on the wire (layout_table.md MANIFEST).
 
+Website preview (step 4e, 18 Nov 2026): ``render_preview`` draws a frame
+cut for the grid as a PNG, from the same ``wall_image`` the tiles' sections
+are cut from, so the preview shows exactly what each tile gets; empty and
+switched-off cells are greyed.
+
 Usage:
     python3 pc/asset_builder.py in.gif --layout 2x2 --map 1,2,3,4,0,0,0,0,0
         [--brightness 8] [--session 1] --out assets/
@@ -75,6 +80,18 @@ FORMAT_8BIT = 1
 
 #: Tile side in LEDs.
 TILE = 8
+
+#: Preview colours: the gaps between tiles, an empty cell and a cell whose
+#: tile is switched off (step 4e).
+PREVIEW_GAP = (38, 38, 38)
+PREVIEW_EMPTY = (62, 62, 62)
+PREVIEW_OFF = (104, 104, 104)
+
+#: Preview size: the longer side aims at this many pixels, each LED drawn
+#: 4 to 16 px wide, with this gap between tiles.
+PREVIEW_TARGET_PX = 480
+PREVIEW_LED_MIN, PREVIEW_LED_MAX = 4, 16
+PREVIEW_GAP_PX = 3
 
 #: One RGB frame of a tile: 64 (r, g, b) tuples, LED 8 x row + column.
 Pixels = List[Tuple[int, int, int]]
@@ -154,6 +171,13 @@ def load_gif(path: str):  # type: ignore[no-untyped-def]
     return frames, delays
 
 
+def load_first_frame(path: str):  # type: ignore[no-untyped-def]
+    """The first frame of a GIF as an RGB PIL image (the preview)."""
+    from PIL import Image
+    with Image.open(path) as gif:
+        return gif.convert("RGB")
+
+
 def parse_shape(layout: str) -> Tuple[int, int]:
     """'RxC' to (rows, cols): each 1 to 9, so up to 81 cells (layout_table
     section 5.2, step 4d)."""
@@ -215,18 +239,23 @@ def centre_crop(frame, rows: int, cols: int):  # type: ignore[no-untyped-def]
     return frame.crop(box)
 
 
+def wall_image(frame, rows: int, cols: int):  # type: ignore[no-untyped-def]
+    """The frame centre-cropped and resized to the whole grid, one pixel per
+    LED: (cols x 8) by (rows x 8)."""
+    from PIL import Image
+    return centre_crop(frame, rows, cols).resize(
+        (cols * TILE, rows * TILE), Image.BOX)
+
+
 def partition_tiles(frames, layout: str,  # type: ignore[no-untyped-def]
                     node_map: Sequence[int]) -> Dict[int, List[Pixels]]:
     """Centre-crop and resize each frame to the wall, then cut one 8x8
     region per Node ID (row-major over rows x cols)."""
-    from PIL import Image
     rows, cols = parse_layout(layout, node_map)
     node_map = normalise_map(layout, node_map)
     tiles: Dict[int, List[Pixels]] = {n: [] for n in node_map if n}
     for frame in frames:
-        wall = centre_crop(frame, rows, cols).resize(
-            (cols * TILE, rows * TILE), Image.BOX)
-        data = wall.load()
+        data = wall_image(frame, rows, cols).load()
         for slot, node in enumerate(node_map):
             if not node:
                 continue
@@ -235,6 +264,43 @@ def partition_tiles(frames, layout: str,  # type: ignore[no-untyped-def]
                       for y in range(TILE) for x in range(TILE)]
             tiles[node].append(pixels)
     return tiles
+
+
+def preview_led_px(rows: int, cols: int) -> int:
+    """How wide the preview draws one LED for a rows x cols grid."""
+    led = PREVIEW_TARGET_PX // (TILE * max(rows, cols))
+    return max(PREVIEW_LED_MIN, min(PREVIEW_LED_MAX, led))
+
+
+def render_preview(frame, layout: str, node_map: Sequence[int],  # type: ignore
+                   off_slots: Sequence[int] = ()) -> bytes:
+    """PNG of ``frame`` as the wall shows it: each placed tile's 8x8 section
+    in its cell, an empty cell in PREVIEW_EMPTY, a switched-off tile's cell
+    (``off_slots``) in PREVIEW_OFF, the tiles PREVIEW_GAP_PX apart."""
+    import io
+    from PIL import Image
+    rows, cols = parse_layout(layout, node_map)
+    node_map = normalise_map(layout, node_map)
+    led = preview_led_px(rows, cols)
+    side = TILE * led
+    pitch = side + PREVIEW_GAP_PX
+    canvas = Image.new("RGB", (cols * pitch - PREVIEW_GAP_PX,
+                               rows * pitch - PREVIEW_GAP_PX), PREVIEW_GAP)
+    wall = wall_image(frame, rows, cols)
+    off = set(off_slots)
+    for slot, node in enumerate(node_map):
+        row, col = divmod(slot, cols)
+        corner = (col * pitch, row * pitch)
+        if node:
+            section = wall.crop((col * TILE, row * TILE,
+                                 (col + 1) * TILE, (row + 1) * TILE))
+            canvas.paste(section.resize((side, side), Image.NEAREST), corner)
+        else:
+            colour = PREVIEW_OFF if slot in off else PREVIEW_EMPTY
+            canvas.paste(colour, corner + (corner[0] + side, corner[1] + side))
+    out = io.BytesIO()
+    canvas.save(out, "PNG")
+    return out.getvalue()
 
 
 def check_brightness(brightness: int) -> None:

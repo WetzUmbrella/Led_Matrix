@@ -22,7 +22,7 @@ import socket
 import sys
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import proto_layout as pl  # noqa: E402
@@ -201,6 +201,9 @@ class PicoLink:
         self.status: Optional[Status] = None
         #: Board numbers of TAP datagrams not yet taken (build step 4).
         self.taps: List[int] = []
+        #: (board, peak in mg, time.monotonic()) of every TAP not yet taken,
+        #: for the website's tap test (A11).
+        self.tap_events: List[Tuple[int, int, float]] = []
         #: Seq numbers of the Pico's ACKs (node 0) not yet taken.
         self.acks: List[int] = []
 
@@ -310,6 +313,10 @@ class PicoLink:
             if msg["type"] == "TAP":
                 self.taps.append(int(msg["node_id"]))  # type: ignore
                 del self.taps[:-TAP_KEEP]
+                self.tap_events.append((
+                    int(msg["node_id"]), int(msg["peak"]),  # type: ignore
+                    time.monotonic()))
+                del self.tap_events[:-TAP_KEEP]
                 continue
             if msg["type"] == "ACK":
                 if int(msg["node_id"]) == 0:  # type: ignore

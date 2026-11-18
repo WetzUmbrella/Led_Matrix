@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import socket
 import sys
+import threading
 
 import pytest
 
@@ -189,6 +190,9 @@ def _shell(ack: bool = True, state: int = 7,
     shell.model.mode = mode
     shell.link = _FakeLink(ack)  # type: ignore[assignment]
     shell.telemetry = _FakeTelemetry()  # type: ignore[assignment]
+    shell.lock = threading.RLock()
+    shell.background = False
+    shell.live = {}
     return shell
 
 
@@ -323,7 +327,8 @@ def test_last_score_keeps_the_final_score_after_the_round_ends() -> None:
     assert snap["round_state"] == "RESULTS"
     assert snap["last_result"] == {
         "score": 8, "hits": 8, "missed": 2, "wrong": 1, "shown": 10,
-        "reaction_ms": 420, "stars": 3}
+        "reaction_ms": 420, "stars": 3, "level": "easy",
+        "accuracy_pct": 80, "new_best": True}
 
 
 def test_last_score_is_replaced_by_the_next_round() -> None:

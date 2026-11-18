@@ -161,6 +161,10 @@ class Uploader:
         self.seq = (self.seq + 1) & 0xFFFF
         return self.seq
 
+    def close(self) -> None:
+        """Release the socket."""
+        self.sock.close()
+
     def _read_replies(self, deadline: float, session_id: int,
                       stats: UploadStats,
                       want: Optional[Set[int]] = None) -> None:
@@ -197,7 +201,8 @@ class Uploader:
     def upload_asset(self, tile_ip: str, session_id: int, payload: bytes,
                      drop: Iterable[int] = (),
                      manifest_crc: Optional[int] = None,
-                     format_version: int = FORMAT_PACKED) -> UploadStats:
+                     format_version: int = FORMAT_PACKED,
+                     stats: Optional[UploadStats] = None) -> UploadStats:
         """MANIFEST, then chunks until all are ACKed.
 
         ``drop`` is the T-B1-04 test hook: the first send of each listed
@@ -205,8 +210,12 @@ class Uploader:
         ``manifest_crc`` is the T-X-08 case 1 hook: the MANIFEST carries this
         CRC32 instead of the CRC32 of ``payload``. ``format_version`` 1 is
         the OD-15 8-bit asset (192 B frames) for the DE_PROFILE build.
+        ``stats``, when given, is filled in as the upload goes, so another
+        thread can show its progress (the website, step 4e).
         """
-        stats = UploadStats(chunks=chunk_count(len(payload)))
+        if stats is None:
+            stats = UploadStats()
+        stats.chunks = chunk_count(len(payload))
         to_drop = set(drop)
         frame_bytes = FRAME_8BIT_BYTES if format_version == FORMAT_8BIT \
             else FRAME_BYTES

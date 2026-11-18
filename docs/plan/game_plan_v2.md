@@ -366,6 +366,14 @@ Step 1 keeps the "upload twice in the same session" workaround.
 - Buttons are enabled only when the action is allowed (as today); the page polls the PC 4 times a second (no WebSockets).
 - **Scoreboard page `/score`** (A16): score, timer, stars and "Get ready!" in large type for a TV or projector, from the same data.
 
+**Decided 18 Nov 2026 (step 4e, with Cheston):**
+1. **GIF library on the laptop:** GIFs uploaded from the browser are kept in `pc/gifs/` (gitignored), so they survive a restart of the website. Rejected: in memory only.
+2. **Preview drawn on the laptop:** `GET /api/preview.png`, the first frame cut by `asset_builder.wall_image`, the same function that cuts the tiles' sections, so the preview cannot differ from the wall; empty cells and switched-off tiles greyed. Rejected: re-cutting in the browser (the cut would exist twice and could drift).
+3. **Best score per level in memory:** it lasts until the website restarts ("best today"), so every demo starts fresh. Rejected: a file (one bench-day record nobody at the demo could beat).
+4. **Scoreboard as a separate static page** (`pc/web/score.html` on `/score`), no buttons, reading `/api/state`. Rejected: a full-screen view inside the control page.
+
+**Built with it (engineering, no decision needed):** a pump thread reads STATUS, TAPs and TELEMETRY (and ACKs TELEMETRY) 50 times a second whether or not a browser is open; a layout or GIF change publishes as a background job, so the page keeps updating during an upload; every tile is uploaded at the same time from its own socket (DS-14), with its progress on the page. `pc/tools/web_demo.py` runs the website against a simulated wall for page work and demo practice.
+
 ### Time sync on the demo network (decided 12 Nov 2026, with Cheston)
 
 - **Re-seed only after 3 off beacons in a row** (option A): one or two beacons more than 0.5 s off the estimate are dropped, so single late beacons on the Matrix router no longer re-seed time sync and cost bursts of missed display ticks. Rejected: a 5 s threshold (misses a Pico that restarted within 5 s), and treating late and early offsets differently.

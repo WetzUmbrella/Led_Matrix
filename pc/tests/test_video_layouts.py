@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import types
 import zlib
 
@@ -71,10 +72,13 @@ class FakeUploader:
     def __init__(self) -> None:
         self.sent = []  # type: list
 
-    def upload_asset(self, address, session_id, payload):  # type: ignore
+    def upload_asset(self, address, session_id, payload,  # type: ignore
+                     stats=None):
         self.sent.append((address, session_id, len(payload)))
-        return types.SimpleNamespace(acked=set(), chunks=1, resent=0,
-                                     seconds=0.0)
+        return stats
+
+    def close(self) -> None:
+        pass
 
 
 def _shell() -> db.DashboardShell:
@@ -83,7 +87,11 @@ def _shell() -> db.DashboardShell:
     shell.link = FakeLink()
     shell.telemetry = FakeTelemetry()
     shell.uploader = FakeUploader()
+    shell.new_uploader = lambda: shell.uploader
     shell.session_id = 7
+    shell.lock = threading.RLock()
+    shell.background = False
+    shell.live = {}
     # The Pico reports READY (coordinator state 7): the wall is stopped.
     shell.model.on_status(plink.Status(0, 0, 7, 0.0))
     return shell
