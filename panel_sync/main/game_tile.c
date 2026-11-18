@@ -73,6 +73,16 @@ void game_tile_init (game_tile_state_t * p_state)
 }
 
 /**
+ * @brief  A new or restarted Pico (see game_tile.h): nothing of the old
+ *         Pico's game is kept, its seq baselines included.
+ * @param  p_state  State; must not be NULL.
+ */
+void game_tile_new_pico (game_tile_state_t * p_state)
+{
+    game_tile_init(p_state);
+}
+
+/**
  * @brief  MOLE_ON for this tile: ACKed; applied when the seq is newer.
  * @param  p_state     State.
  * @param  node_id     This tile.

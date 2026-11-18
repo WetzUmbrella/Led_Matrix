@@ -299,6 +299,7 @@ static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
 static void tn_service (TickType_t wait);
 static void tn_post_game (uint8_t const * p_buf, uint32_t len, int64_t t_l);
 static bool tn_pico_restarted (tn_record_t const * p_record);
+static void tn_game_new_pico (void);
 static void tn_handle_record (tn_record_t const * p_record);
 static void tn_housekeeping (void);
 static void tn_send_heartbeat (int64_t now);
@@ -1124,6 +1125,19 @@ static bool tn_pico_restarted (tn_record_t const * p_record)
 }
 
 /**
+ * @brief  Network Task: a new or restarted Pico. The game state starts over,
+ *         every seq baseline included (game_tile_new_pico), and the cleared
+ *         state is published, so the display drops the old Pico's round and
+ *         pictures at once.
+ */
+static void tn_game_new_pico (void)
+{
+    game_tile_new_pico(&g_game);
+    orientation_set_tap_threshold(game_tile_threshold_mg(&g_game));
+    game_tile_publish(&g_game);
+}
+
+/**
  * @brief  Network Task: one record. A beacon updates the Pico address and
  *         the session, and prints the spread line; a NACK request is sent.
  * @param  p_record  The record.
@@ -1137,14 +1151,14 @@ static void tn_handle_record (tn_record_t const * p_record)
             g_b_pico_known    = true;
             g_pico_addr       = p_record->src_addr;
             g_b_need_register = true;
-            g_game.b_seq_known = 0u; /* A new Pico: its command seq starts. */
+            tn_game_new_pico(); /* A new Pico: its command seq starts. */
         }
         else if (tn_pico_restarted(p_record))
         {
             g_b_need_register = true; /* R1-1: same IP, Pico rebooted. */
             /* A restarted Pico counts its commands from 0 again: without this
              * the tile would drop them as stale (mirror of host test C23). */
-            g_game.b_seq_known = 0u;
+            tn_game_new_pico();
         }
         else
         {

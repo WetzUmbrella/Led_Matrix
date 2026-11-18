@@ -50,6 +50,15 @@ bool test_game_tile_pulses (void);
  */
 bool test_game_tile_codecs (void);
 
+/**
+ * @brief  G7: a restarted Pico numbers its messages from 0 again. Its ARM
+ *         and pictures are dropped as old until game_tile_new_pico(), then
+ *         taken; the old round and pictures are gone (wall test 18 Nov
+ *         2026).
+ * @return true when every check passed.
+ */
+bool test_game_tile_new_pico (void);
+
 #endif /* TEST_GAME_TILE_H */
 
 /*** end of file ***/

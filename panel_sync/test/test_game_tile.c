@@ -858,4 +858,51 @@ bool test_game_tile_codecs (void)
     return b_ok;
 }
 
+/**
+ * @brief  G7: a restarted Pico numbers its messages from 0 again. Its ARM
+ *         and pictures are dropped as old until game_tile_new_pico(), then
+ *         taken; the old round and pictures are gone (wall test 18 Nov
+ *         2026).
+ * @return true when every check passed.
+ */
+bool test_game_tile_new_pico (void)
+{
+    game_tile_state_t state;
+    uint8_t           buf[PROTO_WALL_PICTURE_BYTES];
+    uint32_t          len  = 0u;
+    bool              b_ok = true;
+
+    game_tile_init(&state);
+
+    /* The old Pico, long running: ARM and a looping picture at high seqs. */
+    len = tst_control(buf, 5000u, PROTO_GAME_ARM, 0u);
+    b_ok = (test_main_check(tst_feed(&state, buf, len, 0), __LINE__)) && b_ok;
+    len = tst_picture(buf, 5001u, 1u, PROTO_PIC_PICTURE, 1u, 0, 1000u,
+                      UINT64_C(1) << 1);
+    b_ok = (test_main_check(tst_feed(&state, buf, len, 0), __LINE__)) && b_ok;
+    len = tst_control(buf, 5002u, PROTO_GAME_END, 0u);
+    b_ok = (test_main_check(tst_feed(&state, buf, len, 0), __LINE__)) && b_ok;
+    b_ok = (test_main_check(1u == tst_showing(&state, 10), __LINE__)) && b_ok;
+
+    /* The Pico restarts and arms at seq 1: dropped as old, no hole. */
+    state.b_seq_known = 0u; /* All the restart path used to forget. */
+    len = tst_control(buf, 1u, PROTO_GAME_ARM, 0u);
+    (void)tst_feed(&state, buf, len, 0); /* Repeats are ACKed all the same. */
+    b_ok = (test_main_check(0u == state.b_round, __LINE__)) && b_ok;
+
+    /* With everything forgotten: the old picture is gone, ARM and a new
+     * picture from seq 1 on are taken. */
+    game_tile_new_pico(&state);
+    b_ok = (test_main_check(4u == tst_showing(&state, 10), __LINE__)) && b_ok;
+    len = tst_control(buf, 1u, PROTO_GAME_ARM, 0u);
+    b_ok = (test_main_check(tst_feed(&state, buf, len, 0), __LINE__)) && b_ok;
+    b_ok = (test_main_check(1u == state.b_round, __LINE__)) && b_ok;
+    len = tst_picture(buf, 2u, 2u, PROTO_PIC_PICTURE, 0u, 0, 1000u,
+                      UINT64_C(1) << 2);
+    b_ok = (test_main_check(tst_feed(&state, buf, len, 0), __LINE__)) && b_ok;
+    b_ok = (test_main_check(2u == tst_showing(&state, 10), __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
 /*** end of file ***/

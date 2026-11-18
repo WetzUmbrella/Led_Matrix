@@ -161,6 +161,8 @@ static test_case_t const g_tap[] = {
      test_game_tile_pulses},
     {"G6 re-plan: TAP and ACK encodings, state publish reads back whole",
      test_game_tile_codecs},
+    {"G7: a restarted Pico's ARM and pictures are taken after new_pico",
+     test_game_tile_new_pico},
 };
 
 /** Number of counted tap tests (6): a six-entry array count fits uint32_t. */

@@ -108,6 +108,18 @@ typedef struct
 void game_tile_init (game_tile_state_t * p_state);
 
 /**
+ * @brief  A new or restarted Pico: forget everything the old one sent (the
+ *         round, the target, the picture list) and every seq baseline,
+ *         since the new one numbers its messages from 0 again. Wall test 18
+ *         Nov 2026: only the message seq was forgotten, so ARM, START and
+ *         every picture of a restarted Pico were dropped as old against
+ *         ctl_seq and clear_seq, and tiles that lived through the restart
+ *         showed no hole and kept the old results.
+ * @param  p_state  State; must not be NULL.
+ */
+void game_tile_new_pico (game_tile_state_t * p_state);
+
+/**
  * @brief  Handle one datagram from the Pico on port 4210: MOLE_ON, FEEDBACK,
  *         GAME_CONTROL or WALL_PICTURE. Other types are not for this module.
  * @param  p_state     State; must not be NULL.
