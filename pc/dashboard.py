@@ -721,6 +721,11 @@ class DashboardShell(cmd.Cmd):
     intro = "SE15 dashboard. Type help or ? to list commands."
     prompt = "(se15) "
 
+    #: Whether a SESSION_CONFIG went out from this shell yet (see
+    #: send_config), and where the session in use is saved.
+    config_sent = False
+    session_file: Optional[str] = None
+
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
         self.model = DashboardModel()
@@ -728,6 +733,7 @@ class DashboardShell(cmd.Cmd):
         self.telemetry = telemetry.TelemetryReceiver()
         self.new_uploader: Callable[[], uploader.Uploader] = uploader.Uploader
         self.session_id = session_id
+        self.session_file = SESSION_FILE
         #: Guards the model and the link and telemetry sockets: the website's
         #: request threads, its pump and the upload threads all take it.
         self.lock = threading.RLock()
@@ -782,8 +788,22 @@ class DashboardShell(cmd.Cmd):
     def send_config(self) -> None:
         """SESSION_CONFIG: the shape, the map and one CRC32 per position.
         With no video built (game only, A14) it carries 1 frame and no CRC
-        (0): the Pico needs no video in game mode."""
+        (0): the Pico needs no video in game mode.
+
+        The Pico ignores a SESSION_CONFIG that repeats its active session
+        (``cl_session_apply``), so the first one goes out in the session
+        given and every later one in a fresh session (wall test 18 Nov 2026:
+        the website's GIF, sent after its layout in the same session, was
+        ignored and every tile's ASSET_READY failed the Pico's CRC check). A
+        fresh session also makes every tile take the asset again; a tile
+        that holds it already ACKs it without writing it (DS-12 B)."""
         with self.lock:
+            if self.config_sent:
+                self.session_id = pick_session_id(self.session_id)
+                if self.session_file:
+                    save_last_session(self.session_id, self.session_file)
+                self.model._say("session %d" % self.session_id)
+            self.config_sent = True
             model = self.model
             node_map = ab.normalise_map(model.layout, model.node_map)
             if model.assets:
@@ -920,6 +940,7 @@ class DashboardShell(cmd.Cmd):
         self.pump()
         with self.lock:
             snap = self.model.snapshot()
+            snap["session"] = self.session_id
             for row in snap["uploads"]:  # type: ignore[union-attr]
                 stats = self.live.get(str(row.get("address")))
                 row["acked"] = len(stats.acked) if stats else 0

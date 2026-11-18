@@ -138,6 +138,8 @@ def _shell(tmp_path=None, background: bool = False):  # type: ignore
     shell.live = {}
     shell.uploads_log = []
     shell.new_uploader = lambda: FakeUploader(shell.uploads_log)
+    # Tiles follow the Pico's beacon into whatever session the PC uses.
+    shell.telemetry.session_of = lambda _node: shell.session_id
     shell.model.on_status(_status())
     return shell
 
@@ -216,6 +218,26 @@ def test_sync_publish_with_parallel_uploads_does_not_deadlock(tmp_path) -> None:
     threading.Thread(target=change, daemon=True).start()
     assert done.wait(10), "set_grid hung: publish held the lock"
     assert shell.model.pending_uploads(7) == []
+
+
+def test_every_layout_after_the_first_goes_out_in_a_fresh_session(tmp_path) -> None:  # type: ignore
+    # Wall test 18 Nov 2026: the Pico ignores a SESSION_CONFIG repeating its
+    # active session, so a GIF chosen after the layout was never seen and
+    # every tile's ASSET_READY failed the CRC check.
+    shell = _three_tile_shell(tmp_path)
+    gif, shell.model.gif = shell.model.gif, None
+    shell.set_grid(1, 3)  # Layout only, in the session given.
+    shell.model.set_gif(gif)
+    shell.publish()  # The GIF: a new session, and every tile uploaded.
+    shell.model.set_gif(gif)  # Re-choosing the same GIF publishes again.
+    shell.publish()
+    sessions = [config[0] for config in shell.link.configs]
+    assert sessions[0] == 7
+    assert len(set(sessions)) == 3 and all(1 <= s <= 255 for s in sessions)
+    assert shell.snapshot()["session"] == sessions[-1]
+    assert sorted(shell.uploads_log) == sorted(
+        ["10.0.0.1", "10.0.0.2", "10.0.0.3"] * 2)
+    assert shell.model.pending_uploads(sessions[-1]) == []
 
 
 # Background publishing (the website).

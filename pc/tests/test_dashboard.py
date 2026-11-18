@@ -193,6 +193,7 @@ def _shell(ack: bool = True, state: int = 7,
     shell.lock = threading.RLock()
     shell.background = False
     shell.live = {}
+    shell.session_id = 7
     return shell
 
 

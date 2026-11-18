@@ -65,7 +65,7 @@ class FakeTelemetry:
         return "10.0.0.%d" % node
 
     def session_of(self, node: int) -> int:
-        return 7  # Every tile already works in the shell's session.
+        return 7  # The shell's first session (_shell follows later ones).
 
 
 class FakeUploader:
@@ -88,6 +88,8 @@ def _shell() -> db.DashboardShell:
     shell.telemetry = FakeTelemetry()
     shell.uploader = FakeUploader()
     shell.new_uploader = lambda: shell.uploader
+    # Every tile follows the beacon into the shell's session at once.
+    shell.telemetry.session_of = lambda _node: shell.session_id
     shell.session_id = 7
     shell.lock = threading.RLock()
     shell.background = False
@@ -232,15 +234,23 @@ def test_a_grid_change_rebuilds_and_uploads_the_new_shape(tmp_path) -> None:  # 
     assert sorted(shell.model.assets) == [1, 2]
 
 
-def test_only_changed_tiles_are_sent_again(tmp_path) -> None:  # type: ignore
+def test_a_layout_change_sends_the_placed_tiles_in_a_new_session(tmp_path) -> None:  # type: ignore
+    # The Pico ignores a SESSION_CONFIG repeating its session (wall test 18
+    # Nov 2026), so a change goes out in a fresh session and every placed
+    # tile is sent again; a tile holding the asset ACKs it without writing
+    # it (DS-12 B). Tile 4, switched off, is not sent.
     shell = _shell()
     node_map = [1, 2, 3, 4, 0, 0, 0, 0, 0]
     shell.model.configure(_gif(tmp_path, "2x2", node_map), "2x2",
                           node_map, 1, 8)
     shell.publish()
     assert len(shell.uploader.sent) == 4
+    first = shell.session_id
     shell.set_slot(3, False)  # Tile 4 leaves; the other regions do not move.
-    assert shell.uploader.sent[4:] == []
+    assert shell.session_id != first
+    assert sorted(a for a, _s, _n in shell.uploader.sent[4:]) == [
+        "10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    assert {s for _a, s, _n in shell.uploader.sent[4:]} == {shell.session_id}
     assert shell.model.node_map == [1, 2, 3, 0]
 
 
