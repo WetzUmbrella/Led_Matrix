@@ -1,0 +1,29 @@
+# Wall test of the website (step 4e), 18 Nov 2026 evening
+
+Branch `feature/whack-a-mole`. The website (`pc/web.py`) ran against the real wall: Pico `…E66430A64B595138` at 192.168.1.154, nine tiles on the `MATRIX` router (fixed channel 11, 20 MHz, DTIM 1), laptop on the router by USB Ethernet. Operator: Cheston at the wall; agent on the logs. Logs in this folder: `wall*_*.log` and `repro*_*.log` are serial logs named by USB serial number (`E66430A64B595138` the Pico; `9C139EF13070` tile 1, `9C139EF12EB0` tile 4, `9C139EF12C70` tile 7), `wall*_web.log` the website's console.
+
+## Result
+
+**The demo runs from the website alone (A13)** for grid, tap-to-place, tiles on and off, GIF upload, play, pause, resume, stop, game mode, arm, a full round, results and `/score`: the operator reported every step working. Parallel uploads (DS-14): every tile at once, **about 2.5 to 3.2 s for all nine** (was about 22 s one after another), 57 of 57 chunks, resent 0.
+
+Seven bugs found and fixed on the way, all committed with tests:
+
+| # | Seen on the wall | Cause | Fix (commit) |
+|---|---|---|---|
+| 1 | After choosing a GIF, every tile uploaded but none became ready; `CRC_MISMATCH` for all nine in the Pico log; Play stayed disabled | The Pico ignores a SESSION_CONFIG repeating its active session; the website sent the grid, then the GIF, in one session | Every SESSION_CONFIG after the first goes out in a fresh session (`06b78a0`) |
+| 2 | After the Pico restarted, the page still said READY | The Pico sends STATUS only to where the PC last wrote from; the page kept the last STATUS | NO STATUS after 2 s of silence, actions disabled; the last SESSION_CONFIG resent every second until STATUS returns (`bdc2920`) |
+| 3 | Only tiles 1, 4, 7 showed the hole in game mode; rounds ran on those three only; earlier, tiles 6, 8, 9 kept round 39's results after a mode switch | **Tile firmware:** on a new or restarted Pico, `tile_net` forgot only `g_game.b_seq_known`; `game_tile` also keeps `ctl_seq` and `clear_seq`, so ARM, START and every picture of the restarted Pico (counting from 0) were dropped as old. Tiles that had just rebooted worked, which hid it | `game_tile_new_pico()` forgets the whole game state; host test G7 (`77e3165`). **All nine tiles flashed.** Proved on the wall: Pico power-cycled with six tiles running, all six joined the next round |
+| 4 | A tile could be skipped by an upload | Session ids are 8 bits and repeat; an ACK from an earlier use of the id counted | Upload ACKs forgotten on a new session (`0ecb14e`) |
+| 5 | After the Pico came back, WAITING FOR TILE READINESS forever | Tiles report ASSET_READY only after an upload; the restored session had none | When the Pico answers again after silence, publish once more in a fresh session, and send the mode again (a restarted Pico starts in video mode) (`132e456`, `e68cb66`) |
+| 6 | A website restart failed every upload at once | The address check came before the wait for the tile's first TELEMETRY | Wait first (`f6c48c6`); a Pico that never answered is also woken (`f6c48c6`) |
+| 7 | With tiles unplugged, every layout change was refused for about 27 s | Uploads to a silent tile retried 20 rounds | A tile silent for 5 s is not uploaded to (`6e3c526`) |
+
+Also changed at the operator's request: **the countdown, score and stars show whole on every tile** instead of one picture cut across the grid (the tiles stand apart; replaces DS-15 decision 3; `bdc2920`, Pico flashed). And `--layout`, `--map`, `--gif` set up the wall when the website starts (`87792ff`).
+
+## Open
+
+- **Pico freezes (three today).** 16:13 (`[CYW43] do_ioctl(2, 134, 4): timeout`, restarted), round 37 (about 100 s, recovered), 18:42 after a round's results (did not recover; power-cycled), and one at 19:09 caught in the counters: **`dispatch_max_us=143928567`**, one datagram's handling took 144 s (`skipped=1438`). Every case came with bursts of traffic. Likely the CYW43 WiFi chip stops answering and each send blocks in the driver. Proposed, not decided: a hardware watchdog (reboot after about 5 s without a loop pass; the router join must not block past it), now that the website and the tiles recover a restarted Pico by themselves.
+- **USB power.** An unpowered hub with three tiles kept disconnecting (device numbers past 126), resetting tiles 1, 4, 7 (their unexplained reboots) and once the Pico. The operator suspects the laptop cannot power the Pico and tiles; tiles 1, 4, 7 ran from another laptop at the end. For the demo: tiles on their own power, the Pico on a direct port or a good charger.
+- **Opening a tile's serial port can reset it** (boot lines at the start of `repro_9C139EF12EB0.log` and `repro_9C139EF13070.log`), and some freshly flashed tiles print nothing on USB for 15 s. Judge a tile by its TELEMETRY on the website, not its serial log.
+- **The preview is the first frame only** (operator asked; animated preview not built).
+- clang-format 18.1.8 (CI's pinned version) was not available offline; changed C lines were formatted by hand to `.clang-format`. CI will tell.
