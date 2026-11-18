@@ -263,6 +263,25 @@ def test_a_silent_pico_shows_no_status_and_gets_the_layout_again() -> None:
     assert snap["pico_state"] == "READY" and resent == [1, 1]
 
 
+def test_a_pico_back_from_silence_gets_a_fresh_publish(tmp_path) -> None:  # type: ignore
+    # Wall test 18 Nov 2026: the Pico came back and took the resent session,
+    # but tiles that already held the asset never reported ready again.
+    shell = _three_tile_shell(tmp_path)
+    shell.publish()
+    shell.link.resend_config = lambda: True
+    shell.link.status = plink.Status(0b111, 0b111, READY,
+                                     time.monotonic() - 5.0)
+    shell.pump()  # Silent: the layout is resent, nothing published.
+    assert len(shell.link.configs) == 1
+    shell.link.status = _status()  # Back.
+    shell.pump()
+    assert len(shell.link.configs) == 2  # Published again, fresh session.
+    assert shell.link.configs[1][0] != shell.link.configs[0][0]
+    assert len(shell.uploads_log) == 6
+    shell.pump()
+    assert len(shell.link.configs) == 2  # Once only.
+
+
 def test_resend_config_sends_the_last_session_config_unchanged() -> None:
     import socket
     receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

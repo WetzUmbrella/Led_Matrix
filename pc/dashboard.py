@@ -732,8 +732,10 @@ class DashboardShell(cmd.Cmd):
     #: send_config), and where the session in use is saved.
     config_sent = False
     session_file: Optional[str] = None
-    #: When the pump last resent SESSION_CONFIG to a silent Pico.
+    #: When the pump last resent SESSION_CONFIG to a silent Pico, and
+    #: whether it did since the Pico was last heard.
     config_resent = 0.0
+    pico_was_silent = False
 
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
@@ -936,6 +938,10 @@ class DashboardShell(cmd.Cmd):
         with self.lock:
             self._flush()
             self._wake_pico()
+            back = self._pico_back()
+        if back:
+            self._republish_after_silence()
+        with self.lock:
             if self.model.armed is None:
                 return
             try:
@@ -964,7 +970,31 @@ class DashboardShell(cmd.Cmd):
         now = time.monotonic()
         if now - self.config_resent >= CONFIG_RESEND_S:
             self.config_resent = now
+            self.pico_was_silent = True
             resend()
+
+    def _pico_back(self) -> bool:
+        """Whether the Pico answers again after the pump woke it (once)."""
+        age = self.status_age()
+        if self.pico_was_silent and (age is not None) and \
+                (age < STATUS_STALE_S):
+            self.pico_was_silent = False
+            return True
+        return False
+
+    def _republish_after_silence(self) -> None:
+        """The Pico is back (wall test 18 Nov 2026): it took the resent
+        SESSION_CONFIG, but a tile reports ASSET_READY only after an upload,
+        so tiles that hold the asset already were never counted ready.
+        Publishing again (a fresh session) has every tile confirm it; a tile
+        that holds it ACKs without writing (DS-12 B)."""
+        with self.lock:
+            self.model._say("Pico back: publishing again")
+        try:
+            self._republish()
+        except Refused as err:  # A job runs; it publishes anyway.
+            with self.lock:
+                self.model._say("Pico back: %s" % err)
 
     def snapshot(self) -> Dict[str, object]:
         """Fresh STATUS and telemetry, an armed placement, then the model,
