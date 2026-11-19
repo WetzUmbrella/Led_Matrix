@@ -113,6 +113,25 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
 #define CL_WATCHDOG_MS  8000u
 #define CL_JOIN_FEED_MS 100u
 
+/** Breadcrumbs (bench 19 Nov 2026): the step the loop is in is written to
+ *  watchdog scratch[0], which a watchdog reset keeps, so the boot after a
+ *  freeze reports where it hung (CL_STATS wd_step). Bits 0 to 7 the step,
+ *  8 to 15 the first byte of a datagram being dispatched, 16 to 23 its
+ *  listen port minus 4210, bit 31 set while inside a UDP send. */
+#define CL_STEP_POLL     1u
+#define CL_STEP_BEACON   2u
+#define CL_STEP_SCAN     3u
+#define CL_STEP_CMD      4u
+#define CL_STEP_OUTBOX   5u
+#define CL_STEP_STATUS   6u
+#define CL_STEP_GAME     7u
+#define CL_STEP_DISPATCH 8u
+#define CL_STEP_LOG      9u
+#define CL_STEP_JOIN     10u
+#define CL_STEP_CONNECT  11u
+#define CL_STEP_STA_MODE 12u
+#define CL_STEP_IN_SEND  UINT32_C(0x80000000)
+
 /** Recovery timeout 5 s (proposed, W6D-2c). */
 #define CL_RECOVERY_TIMEOUT_US 5000000u
 
@@ -377,11 +396,15 @@ static uint32_t   g_lateness_hist[CL_LATE_BINS];
 static uint32_t   g_cb_hist[CL_TIME_BINS];
 static uint32_t   g_dispatch_hist[CL_TIME_BINS];
 static bool       g_b_suppress_done = false;
-/** The watchdog caused this boot (CL_STATS wd_boot: a freeze happened). */
+/** The watchdog caused this boot (CL_STATS wd_boot: a freeze happened),
+ *  and the breadcrumb the frozen run left (CL_STATS wd_step). */
 static bool       g_b_watchdog_boot = false;
+static uint32_t   g_watchdog_step   = 0u;
 #ifndef CL_HOST_TEST
-/** scratch[4] as watchdog_enable() left it (see cl_watchdog_feed). */
+/** scratch[4] as watchdog_enable() left it (see cl_watchdog_feed), and
+ *  the current breadcrumb step (see cl_crumb). */
 static uint32_t   g_watchdog_mark = 0u;
+static uint32_t   g_crumb         = 0u;
 #endif
 
 static void cl_reset_state (uint32_t bcast_addr, uint64_t now);
@@ -484,6 +507,10 @@ static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
                         uint16_t src_port, uint8_t const * p_buf, uint32_t len,
                         uint64_t t_rx);
 static uint64_t cl_now_us (void);
+static void     cl_crumb (uint32_t step);
+#ifndef CL_HOST_TEST
+static void     cl_crumb_send (bool b_in);
+#endif
 static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
                          uint32_t len);
 static bool cl_send_beacon_bytes (uint8_t * p_buf, uint64_t * p_t_p);
@@ -570,35 +597,48 @@ static void cl_pass (void)
 
     if (now >= g_next_beacon_us)
     {
+        cl_crumb(CL_STEP_BEACON);
         cl_beacon_routine(now);
     }
     else if (now >= g_next_scan_us)
     {
+        cl_crumb(CL_STEP_SCAN);
         cl_scan_heartbeats(now);
     }
     else if (now >= cmd_due)
     {
+        cl_crumb(CL_STEP_CMD);
         cl_send_due_copy(now);
     }
     else if ((b_room) && (ack_outbox_next_due(&g_outbox) <= now))
     {
+        cl_crumb(CL_STEP_OUTBOX);
         cl_outbox_routine(now);
     }
     else if (now >= g_next_status_us)
     {
+        cl_crumb(CL_STEP_STATUS);
         cl_send_status(now);
     }
     else if ((b_room) && (cl_round_next_due() <= now))
     {
+        cl_crumb(CL_STEP_GAME);
         cl_game_routine(now);
     }
     else if ((0u != g_ring_count) && (b_room))
     {
+        cl_rx_entry_t const * const p_next = &g_ring[g_ring_head];
+
+        /* Port 4210 to 4213 less 4210 fits 8 bits; byte 0 is the header's
+         * first byte (it holds the type). */
+        cl_crumb(CL_STEP_DISPATCH | ((uint32_t)p_next->bytes[0] << 8u) |
+                 ((uint32_t)(p_next->listen_port - CL_PORT_TILE_RX) << 16u));
         cl_dispatch_one(now);
     }
     else if (((now + CL_LOG_GUARD_US) <= g_next_beacon_us) &&
              ((now + CL_LOG_GUARD_US) <= cmd_due))
     {
+        cl_crumb(CL_STEP_LOG);
         cl_log_routine(now);
     }
     else
@@ -1873,13 +1913,13 @@ static void cl_print_stats (void)
            " cmd_fail=%" PRIu32 " events_lost=%" PRIu32 " exc_max=%" PRIu32
            " cb_max_us=%" PRIu32 " dispatch_max_us=%" PRIu32
            " online=0x%03" PRIx16 " ready=0x%03" PRIx16 " sync=0x%03" PRIx16
-           " wd_boot=%u\n",
+           " wd_boot=%u wd_step=0x%08" PRIx32 "\n",
            cl_state_code(), g_stats.sent, g_stats.first_seq, g_stats.last_seq,
            g_stats.send_fail, g_stats.skipped, g_stats.rx_dropped,
            g_stats.rx_bad, g_stats.stale, g_stats.cmd_fail, g_stats.events_lost,
            g_stats.exc_max, g_stats.cb_max_us, g_stats.dispatch_max_us,
            cl_online_bits(), g_readiness, g_sync,
-           g_b_watchdog_boot ? 1u : 0u);
+           g_b_watchdog_boot ? 1u : 0u, g_watchdog_step);
 
     printf("LATE_HIST");
 
@@ -2934,6 +2974,15 @@ static uint64_t cl_now_us (void)
 }
 
 /**
+ * @brief  Breadcrumb (host test: none, there is no watchdog).
+ * @param  step  The step.
+ */
+static void cl_crumb (uint32_t step)
+{
+    (void)step; /* No watchdog on the host. */
+}
+
+/**
  * @brief  Send one datagram (host test: recorded by the test).
  * @param  addr   Destination address.
  * @param  port   Destination port.
@@ -3096,8 +3145,11 @@ void coordinator_loop_run (void)
 
     if (b_by_watchdog)
     {
-        /* The evidence of a freeze: the loop had stopped for 8 s. */
-        printf("COORDINATOR: restarted by the watchdog\n");
+        /* The evidence of a freeze: the loop had stopped for 8 s, at the
+         * step the breadcrumb names. */
+        g_watchdog_step = watchdog_hw->scratch[0];
+        printf("COORDINATOR: restarted by the watchdog, step 0x%08" PRIx32
+               "\n", g_watchdog_step);
     }
 
     watchdog_enable(CL_WATCHDOG_MS, true); /* Paused under a debugger. */
@@ -3120,6 +3172,7 @@ void coordinator_loop_run (void)
             }
         }
 #endif
+        cl_crumb(CL_STEP_POLL);
         cyw43_arch_poll();
 
         if (PROTO_COORD_FAULT != g_state)
@@ -3247,9 +3300,11 @@ static bool cl_connect_router (void)
     absolute_time_t const until = make_timeout_time_ms(CL_CONNECT_TIMEOUT_MS);
     int32_t               status = CYW43_LINK_JOIN;
 
+    cl_crumb(CL_STEP_STA_MODE);
     cyw43_arch_enable_sta_mode();
     printf("Joining %s (timeout %u ms)\n", ROUTER_SSID, CL_CONNECT_TIMEOUT_MS);
 
+    cl_crumb(CL_STEP_CONNECT);
     if (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass, auth))
     {
         status = CYW43_LINK_FAIL;
@@ -3261,20 +3316,21 @@ static bool cl_connect_router (void)
         absolute_time_t const step = make_timeout_time_ms(CL_JOIN_FEED_MS);
 
         cl_watchdog_feed();
+        cl_crumb(CL_STEP_JOIN);
         cyw43_arch_poll();
         cyw43_arch_wait_for_work_until(
             (absolute_time_diff_us(step, until) > 0) ? step : until);
         /* The link codes are -3 to 3: int32_t holds them. */
         status = (int32_t)cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
 
-        if ((CYW43_LINK_NONET == status) &&
-            (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass, auth)))
+        if (CYW43_LINK_NONET == status)
         {
-            status = CYW43_LINK_FAIL; /* No network yet: join again. */
-        }
-        else if (CYW43_LINK_NONET == status)
-        {
-            status = CYW43_LINK_JOIN;
+            /* No network yet: join again. */
+            cl_crumb(CL_STEP_CONNECT);
+            status = (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass,
+                                                         auth))
+                         ? CYW43_LINK_FAIL
+                         : CYW43_LINK_JOIN;
         }
         else
         {
@@ -3376,6 +3432,27 @@ static uint64_t cl_now_us (void)
 }
 
 /**
+ * @brief  Breadcrumb: the step the loop is in, in watchdog scratch[0],
+ *         which survives a watchdog reset (see CL_STEP_POLL).
+ * @param  step  The step and its detail bits.
+ */
+static void cl_crumb (uint32_t step)
+{
+    g_crumb                 = step;
+    watchdog_hw->scratch[0] = step;
+}
+
+/**
+ * @brief  Mark the breadcrumb as inside a UDP send, or no longer: plain
+ *         writes of the step kept in RAM, with or without CL_STEP_IN_SEND.
+ * @param  b_in  true on entry, false on return.
+ */
+static void cl_crumb_send (bool b_in)
+{
+    watchdog_hw->scratch[0] = b_in ? (g_crumb | CL_STEP_IN_SEND) : g_crumb;
+}
+
+/**
  * @brief  Send one datagram from the send pcb.
  * @param  addr   Destination (network order u32).
  * @param  port   Destination port.
@@ -3398,7 +3475,9 @@ static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
 
         ip_addr_set_ip4_u32(&dest, addr);
         (void)memcpy(p_pbuf->payload, p_buf, len); /* Returns payload. */
+        cl_crumb_send(true);
         b_sent = (ERR_OK == udp_sendto(g_p_tx_pcb, p_pbuf, &dest, port));
+        cl_crumb_send(false);
     }
 
     if (NULL != p_pbuf)
@@ -3432,10 +3511,13 @@ static bool cl_send_beacon_bytes (uint8_t * p_buf, uint64_t * p_t_p)
 
         ip_addr_set_ip4_u32(&dest, g_bcast_addr);
         (void)memcpy(p_payload, p_buf, PROTO_BEACON_BYTES); /* Returns it. */
+        cl_crumb_send(true); /* Before t_p: nothing more between it and the
+                              * send. */
         *p_t_p = time_us_64();
         proto_beacon_set_t_p(p_payload, *p_t_p);
         b_sent =
             (ERR_OK == udp_sendto(g_p_tx_pcb, p_pbuf, &dest, CL_PORT_TILE_RX));
+        cl_crumb_send(false);
     }
     else
     {
