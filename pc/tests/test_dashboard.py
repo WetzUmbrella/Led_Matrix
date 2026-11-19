@@ -168,13 +168,18 @@ class _FakeLink:
         self.args = []  # type: list
         self.taps = []  # type: list
 
+        self.status = None  # type: object
+        self.arms = True  # A Pico that takes an ARM it ACKs.
+
     def poll_status(self):  # type: ignore[no-untyped-def]
-        return None
+        return self.status
 
     def send_game_control(self, command: int, level: int = 0,
                           threshold: int = 0) -> bool:
         self.sent.append(command)
         self.args.append((level, threshold))
+        if self.ack and self.arms and command == plink.GAME_ARM:
+            self.status = _ready_status(12, round_state=1)  # ARMED.
         return self.ack
 
 
@@ -399,6 +404,16 @@ def test_arm_sends_the_level_and_threshold() -> None:
             shell.set_threshold(bad)
     shell.set_threshold(0)
     assert shell.model.threshold_code() == 0
+
+
+def test_an_arm_the_pico_refuses_is_reported() -> None:
+    # Bench 19 Nov 2026: ARM was ACKed, the Pico did not arm, and the page
+    # said nothing.
+    shell = _shell(state=7, mode="game")
+    shell.link.arms = False
+    with pytest.raises(db.Refused, match="did not arm the round"):
+        shell.arm_game()
+    assert any("did not arm" in m for m in shell.model.messages)
 
 
 def test_arm_needs_game_mode_and_ready() -> None:

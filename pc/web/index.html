@@ -190,6 +190,7 @@
   .log li:last-child { border-bottom: 0; }
   .log time { color: var(--muted); flex: none; }
   a { color: var(--accent); }
+  .error { color: var(--bad); font-size: 0.88rem; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -335,6 +336,7 @@
             <button class="btn" id="start-now">Start now</button>
             <button class="btn danger" id="abort">Abort</button>
           </div>
+          <div class="row error" id="game-error" role="alert" hidden></div>
           <div class="muted">Arm shows the start arrow on the wall; the child's tap on it starts the countdown.
             Start now skips the arrow.</div>
         </section>
@@ -382,6 +384,7 @@ let problemNote = "";
 let problemUntil = 0;
 let libraryVersion = 0;
 let previewKey = "";
+let lastError = "";
 
 function store(key, value) {
   try { localStorage.setItem(key, value); } catch (e) { /* Private window. */ }
@@ -425,7 +428,11 @@ async function post(path, body) {
       body: JSON.stringify(body || {}),
     });
     const data = await res.json();
-    if (!res.ok) { say(data.error || ("refused (" + res.status + ")")); return null; }
+    if (!res.ok) {
+      lastError = data.error || ("refused (" + res.status + ")");
+      say(lastError);
+      return null;
+    }
     if (data && data.rows !== undefined) { state = data; render(); }
     return data;
   } catch (e) {
@@ -750,9 +757,18 @@ function renderGame() {
 for (const button of $("level").querySelectorAll("button")) {
   button.addEventListener("click", () => { level = button.dataset.level; store("se15-level", level); renderGame(); });
 }
-$("arm").addEventListener("click", () => post("/api/game/arm", {level: level}));
-$("start-now").addEventListener("click", () => post("/api/game/now"));
-$("abort").addEventListener("click", () => post("/api/game/abort"));
+/* A round command's error also shows next to the buttons (bench 19 Nov
+   2026: an arm the Pico refused looked like nothing happened). */
+function roundCommand(path, body) {
+  const note = $("game-error");
+  post(path, body).then((reply) => {
+    note.hidden = reply !== null;
+    note.textContent = reply === null ? lastError : "";
+  });
+}
+$("arm").addEventListener("click", () => roundCommand("/api/game/arm", {level: level}));
+$("start-now").addEventListener("click", () => roundCommand("/api/game/now"));
+$("abort").addEventListener("click", () => roundCommand("/api/game/abort"));
 
 function render() {
   renderBar();

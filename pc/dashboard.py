@@ -115,6 +115,11 @@ READY_WAIT_S = 1.0
 STATUS_STALE_S = 2.0
 CONFIG_RESEND_S = 1.0
 
+#: How long an ARM waits for STATUS to show the round armed. The Pico ACKs
+#: every GAME_CONTROL, a refused one too (bench 19 Nov 2026: ARM pressed,
+#: nothing happened, no error).
+ARM_CONFIRM_S = 1.5
+
 #: A tile not heard on TELEMETRY (about once a second) for this long is
 #: offline: it is not uploaded to (wall test 18 Nov 2026: an upload to an
 #: unplugged tile retried for 27 s and held up every layout change).
@@ -1209,12 +1214,35 @@ class DashboardShell(cmd.Cmd):
         """Arm a round at the model's level and tap threshold (DS-08)."""
         self._flush()
         self.model.arm_game()
+        asked = time.monotonic()
         if not self.link.send_game_control(
                 pico_link.GAME_ARM, level=self.model.level_code(),
                 threshold=self.model.threshold_code()):
             raise OSError("the Pico did not acknowledge the arm")
         self.model.tap_test = False
+        self._confirm_round(asked, "arm the round",
+                            ("ARMED", "COUNTDOWN", "PLAYING"))
         return self.snapshot()
+
+    def _confirm_round(self, asked: float, what: str,
+                       rounds: Sequence[str]) -> None:
+        """Wait up to ARM_CONFIRM_S for a STATUS received after ``asked``
+        whose round state is one of ``rounds``; Refused (with what the Pico
+        reports) when none comes, since the Pico ACKs a command it refuses
+        all the same."""
+        deadline = asked + ARM_CONFIRM_S
+        while True:
+            self._flush()
+            status = self.model.status
+            if (status is not None) and (status.received >= asked) and \
+                    (status.round_name() in rounds):
+                return
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(SESSION_POLL_S)
+        self.model._say("the Pico did not %s" % what)
+        raise Refused("the Pico did not %s (it reports %s, %s)" % (
+            what, self.model.pico_state(), self.model.round_state()))
 
     def start_now(self) -> Dict[str, object]:
         """Skip the start sprite: the countdown starts now."""
