@@ -461,6 +461,25 @@ class DashboardModel:
         self._say("slot %d %s" % (slot, "on" if on else "off"))
         return node
 
+    def remove_slot(self, slot: int) -> int:
+        """Take the tile in ``slot`` out of the grid (19 Nov 2026): unlike
+        off, the cell is freed and nothing remembers the tile there. Works
+        on a switched-off tile too. Returns the board number removed (0 for
+        an empty cell)."""
+        self._check_slot(slot)
+        node = self.node_map[slot] or self.parked.get(slot, 0)
+        if not node:
+            return 0
+        if self.node_map[slot] and sum(1 for n in self.node_map if n) == 1:
+            raise ab.AssetError("at least one tile must stay on the grid")
+        new_map = list(self.node_map)
+        new_map[slot] = 0
+        self.node_map = new_map
+        self.parked.pop(slot, None)
+        self._drop_assets()
+        self._say("tile %d removed from slot %d" % (node, slot))
+        return node
+
     def _place_node(self, slot: int, node: int) -> None:
         new_map = [0 if other == node else other for other in self.node_map]
         new_map[slot] = node
@@ -1202,6 +1221,12 @@ class DashboardShell(cmd.Cmd):
     def set_slot(self, slot: int, on: bool) -> Dict[str, object]:
         with self.lock:
             self.model.set_slot(slot, on)
+        return self._after_change()
+
+    def remove_slot(self, slot: int) -> Dict[str, object]:
+        """Take a tile out of the grid; the layout is published again."""
+        with self.lock:
+            self.model.remove_slot(slot)
         return self._after_change()
 
     def arm_place(self, slot: int) -> Dict[str, object]:

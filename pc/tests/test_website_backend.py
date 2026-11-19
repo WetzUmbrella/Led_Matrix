@@ -536,6 +536,37 @@ def test_placing_a_switched_off_tile_elsewhere_clears_its_old_cell() -> None:
         model.set_slot(4, True)
 
 
+def test_remove_frees_the_cell_unlike_off() -> None:
+    model = db.DashboardModel(clock=lambda: 0.0)
+    model.layout, model.node_map = "1x3", [1, 2, 3]
+    assert model.remove_slot(1) == 2
+    assert model.node_map == [1, 0, 3] and model.parked == {}
+    with pytest.raises(ab.AssetError, match="no tile to put back"):
+        model.set_slot(1, True)  # Removed, not off: nothing to switch on.
+    model.set_slot(2, False)  # Off: remembered in its cell...
+    assert model.remove_slot(2) == 3  # ...until removed.
+    assert model.parked == {} and model.node_map == [1, 0, 0]
+    assert model.remove_slot(2) == 0  # An empty cell: nothing to do.
+    with pytest.raises(ab.AssetError, match="at least one tile"):
+        model.remove_slot(0)
+    model.job = "upload"
+    with pytest.raises(db.Refused):
+        model.remove_slot(0)
+
+
+def test_remove_route_reaches_the_shell() -> None:
+    calls = []
+
+    class Shell:
+        def remove_slot(self, slot):  # type: ignore[no-untyped-def]
+            calls.append(slot)
+            return {}
+
+    assert web.dispatch(Shell(), "POST", "/api/remove", {"slot": 4})[0] == 200
+    assert web.dispatch(Shell(), "POST", "/api/remove", {"slot": "4"})[0] == 400
+    assert calls == [4]
+
+
 # Best score per level (A10).
 
 def _round(model, level: int, score: int, shown: int = 10) -> dict:  # type: ignore

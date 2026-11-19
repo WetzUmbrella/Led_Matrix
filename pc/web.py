@@ -29,6 +29,8 @@ JSON API (every answer is JSON, except the preview; errors are
   POST /api/place  {slot}         arm tap-to-place: the next TAP fills slot
   POST /api/slot   {slot, on}     off writes 0, on writes the board back;
                                   rebuilds and re-uploads
+  POST /api/remove {slot}         take the tile out of the grid: the cell
+                                  is freed (not off); rebuilds and uploads
   POST /api/mode   {mode}         video or game; 409 unless stopped; the
                                   Pico must ACK it, or 500 and no change
   POST /api/game/start            a round: game mode and the wall READY;
@@ -121,6 +123,7 @@ def post_routes(shell) -> Dict[str, Route]:  # type: ignore[no-untyped-def]
         "/api/place": lambda b: shell.arm_place(_field(b, "slot", int)),
         "/api/slot": lambda b: shell.set_slot(
             _field(b, "slot", int), _field(b, "on", bool)),
+        "/api/remove": lambda b: shell.remove_slot(_field(b, "slot", int)),
         "/api/mode": lambda b: shell.set_mode(_field(b, "mode", str)),
         "/api/game/start": lambda _b: shell.start_game(),
         "/api/game/abort": lambda _b: shell.abort_game(),

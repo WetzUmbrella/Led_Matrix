@@ -136,6 +136,12 @@
   .cell.armed { background: var(--armed); border-color: var(--armed-line); animation: pulse 1.1s ease-in-out infinite; }
   .cell .led { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
   .cell.on .led.ok { background: var(--ok); } .cell .led.bad { background: var(--bad); }
+  .cell .remove {
+    position: absolute; top: 2px; left: 4px; border: 0; background: none; padding: 0 2px;
+    color: var(--muted); font-size: 0.9rem; line-height: 1; cursor: pointer; font-weight: 700;
+  }
+  .cell .remove:hover { color: var(--bad); }
+  .cell.small .remove { font-size: 0.75rem; top: 0; left: 2px; }
   .cell.small .sub { display: none; }
   .cell.small .led { top: 3px; right: 3px; width: 5px; height: 5px; }
   @keyframes pulse { 50% { border-color: var(--line-strong); } }
@@ -535,10 +541,28 @@ function renderGrid() {
     if (cell < 52) cls += " small";
     const attrs = {class: cls, title: label, "aria-label": label, style: "width:" + cell + "px"};
     if (busy || armed) attrs.disabled = "";
-    const button = el("button", attrs);
+    const button = el("div", attrs);
+    button.setAttribute("role", "button");
+    button.tabIndex = busy || armed ? -1 : 0;
     if (node) button.append(el("span", {class: "led " + (isOnline(node) ? "ok" : "bad")}));
     button.append(el("span", {class: "num", text: num}), el("span", {class: "sub", text: sub}));
-    if (action) button.addEventListener("click", action);
+    if ((node || parked) && !busy && !armed) {
+      /* Remove (19 Nov 2026): the tile leaves the grid, the cell is freed. */
+      const tile = node || parked;
+      const remove = el("button", {class: "remove", text: "×", title: "Remove tile " + tile + " from the grid",
+                                   "aria-label": "Remove tile " + tile + " from the grid"});
+      remove.addEventListener("click", (event) => {
+        event.stopPropagation();
+        post("/api/remove", {slot: slot});
+      });
+      button.append(remove);
+    }
+    if (action && !busy && !armed) {
+      button.addEventListener("click", action);
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); action(); }
+      });
+    }
     cells.push(button);
   }
   replace(wall, cells);
@@ -546,7 +570,7 @@ function renderGrid() {
     ? "Tap the tile that belongs in the highlighted cell (30 s)."
     : !state.stopped ? "Stop the wall to change the layout."
     : state.job ? "Uploading: the layout can change when it finishes."
-    : "Empty cell: click it, then tap the tile that belongs there. Tile: click to switch it off. Dashed: switched off, click to switch it back on.";
+    : "Empty cell: click it, then tap the tile that belongs there. Tile: click to switch it off, × to remove it from the grid. Dashed: switched off, click to switch it back on.";
 }
 $("set-grid").addEventListener("click", () => {
   post("/api/grid", {rows: Number($("rows").value), cols: Number($("cols").value)});
@@ -559,7 +583,7 @@ function renderHealth() {
   const rows = state.tiles.map((t) => {
     const cellText = t.cell === null || t.cell === undefined ? "-"
       : (Math.floor(t.cell / state.cols) + 1) + ", " + (t.cell % state.cols + 1);
-    const status = !t.on ? el("span", {class: "tag", text: "off"})
+    const status = !t.on ? el("span", {class: "tag", text: t.cell === null || t.cell === undefined ? "not placed" : "off"})
       : isOnline(t.node) ? el("span", {class: "tag ok", text: "online"})
       : el("span", {class: "tag bad", text: "offline"});
     const faults = t.faults === null ? "-" : t.faults;
