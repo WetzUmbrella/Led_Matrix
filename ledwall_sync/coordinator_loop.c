@@ -10,11 +10,13 @@
  * calls cyw43_arch_poll(), whose receive callbacks only timestamp, copy and
  * return, and then runs exactly one routine, the first that is due:
  *   1. BEACON, when next_beacon_us is reached;
- *   2. heartbeat scan, every 100 ms on its own absolute schedule;
- *   3. one copy of a timed command (START_AT, RESUME_AT, PAUSE, STOP);
- *   4. STATUS to the PC, every 250 ms on an absolute schedule;
- *   5. one buffered message, only if 1 ms is left before the next beacon;
- *   6. one log line, only if 5 ms is left before the next beacon.
+ *   2. one copy of a timed command (START_AT, RESUME_AT, PAUSE, STOP);
+ *   3. one datagram of the send queue (19 Nov 2026, see CL_TXQ_LEN):
+ *      every other send is queued, so a pass sends at most one;
+ *   4. heartbeat scan, every 100 ms on its own absolute schedule;
+ *   5. one outbox resend, STATUS to the PC every 250 ms, a game event;
+ *   6. one buffered message, only if 1 ms is left before the next beacon;
+ *   7. one log line, only if 5 ms is left before the next beacon.
  * Every routine is bounded by a fixed amount of work; T-B2-06 measures the
  * callback and dispatch times (cb_max_us, dispatch_max_us in CL_STATS).
  *
@@ -130,6 +132,17 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
 #define CL_STEP_JOIN     10u
 #define CL_STEP_CONNECT  11u
 #define CL_STEP_STA_MODE 12u
+#define CL_STEP_TX       13u
+
+/** Send pacing (bench 19 Nov 2026): every send but the BEACON goes into
+ *  this queue and the loop sends one per pass, right after polling the
+ *  WiFi chip. A burst of TAPs from every tile (a hard tap felt by the
+ *  whole board) had the Pico send dozens of datagrams back to back, and
+ *  each tap test ended with the Pico frozen inside the WiFi driver. The
+ *  timed commands (START_AT, PAUSE, RESUME_AT, STOP: three copies 100 ms
+ *  apart) go at once as well, since they carry times read just before. */
+#define CL_TXQ_LEN      32u
+#define CL_TX_MAX_BYTES CL_RX_MAX_BYTES
 #define CL_STEP_IN_SEND  UINT32_C(0x80000000)
 
 /** Recovery timeout 5 s (proposed, W6D-2c). */
@@ -226,6 +239,15 @@ _Static_assert(PROTO_STOP_BYTES <= CL_RX_MAX_BYTES, "STOP");
 /** All 9 node bits. */
 #define CL_ALL_NODES UINT16_C(0x01FF)
 
+/** One datagram waiting in the send queue. */
+typedef struct
+{
+    uint32_t addr;
+    uint16_t port;
+    uint32_t len;
+    uint8_t  bytes[CL_TX_MAX_BYTES];
+} cl_tx_entry_t;
+
 /** One received datagram, copied by the callback. */
 typedef struct
 {
@@ -317,6 +339,8 @@ typedef struct
 {
     uint32_t sent;            /**< Beacons sent. */
     uint32_t send_fail;       /**< Beacons whose udp_sendto failed. */
+    uint32_t tx_drop;         /**< Sends dropped: the send queue was full. */
+    uint32_t tx_fail;         /**< Queued sends lwIP refused. */
     uint32_t skipped;         /**< Beacon slots skipped after a stall. */
     uint16_t first_seq;       /**< seq of the first beacon in the window. */
     uint16_t last_seq;        /**< seq of the last beacon sent. */
@@ -396,6 +420,11 @@ static uint32_t   g_lateness_hist[CL_LATE_BINS];
 static uint32_t   g_cb_hist[CL_TIME_BINS];
 static uint32_t   g_dispatch_hist[CL_TIME_BINS];
 static bool       g_b_suppress_done = false;
+/** The send queue (see CL_TXQ_LEN): a ring, oldest at g_txq_head. */
+static cl_tx_entry_t g_txq[CL_TXQ_LEN];
+static uint32_t      g_txq_head  = 0u;
+static uint32_t      g_txq_count = 0u;
+
 /** The watchdog caused this boot (CL_STATS wd_boot: a freeze happened),
  *  and the breadcrumb the frozen run left (CL_STATS wd_step). */
 static bool       g_b_watchdog_boot = false;
@@ -508,6 +537,9 @@ static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
                         uint64_t t_rx);
 static uint64_t cl_now_us (void);
 static void     cl_crumb (uint32_t step);
+static bool     cl_port_send (uint32_t addr, uint16_t port,
+                              uint8_t const * p_buf, uint32_t len);
+static void     cl_tx_routine (void);
 #ifndef CL_HOST_TEST
 static void     cl_crumb_send (bool b_in);
 #endif
@@ -544,6 +576,8 @@ static void cl_reset_state (uint32_t bcast_addr, uint64_t now)
     (void)memset(&g_session, 0, sizeof(g_session));  /* Returns its target. */
     (void)memset(g_slots, 0, sizeof(g_slots));       /* Returns g_slots. */
     (void)memset(&g_stats, 0, sizeof(g_stats));      /* Returns &g_stats. */
+    g_txq_head  = 0u;
+    g_txq_count = 0u;
     (void)memset(g_lateness_hist, 0, sizeof(g_lateness_hist)); /* Same. */
     (void)memset(g_cb_hist, 0, sizeof(g_cb_hist));             /* Same. */
     (void)memset(g_dispatch_hist, 0, sizeof(g_dispatch_hist)); /* Same. */
@@ -600,15 +634,22 @@ static void cl_pass (void)
         cl_crumb(CL_STEP_BEACON);
         cl_beacon_routine(now);
     }
+    else if (now >= cmd_due)
+    {
+        /* Before the send queue: a copy is due at its own time. */
+        cl_crumb(CL_STEP_CMD);
+        cl_send_due_copy(now);
+    }
+    else if (0u != g_txq_count)
+    {
+        /* The port (4210 to 4213, or the PC's) in bits 8 to 23. */
+        cl_crumb(CL_STEP_TX | ((uint32_t)g_txq[g_txq_head].port << 8u));
+        cl_tx_routine();
+    }
     else if (now >= g_next_scan_us)
     {
         cl_crumb(CL_STEP_SCAN);
         cl_scan_heartbeats(now);
-    }
-    else if (now >= cmd_due)
-    {
-        cl_crumb(CL_STEP_CMD);
-        cl_send_due_copy(now);
     }
     else if ((b_room) && (ack_outbox_next_due(&g_outbox) <= now))
     {
@@ -892,7 +933,8 @@ static void cl_send_copy (cl_send_slot_t * p_slot, uint64_t now)
         len = proto_encode_stop(&msg, buf, sizeof(buf));
     }
 
-    if (!cl_udp_send(p_slot->addr, CL_PORT_TILE_RX, buf, len))
+    /* Sent at once, not queued: the times in it were read just now. */
+    if (!cl_port_send(p_slot->addr, CL_PORT_TILE_RX, buf, len))
     {
         g_stats.cmd_fail++;
     }
@@ -1913,13 +1955,15 @@ static void cl_print_stats (void)
            " cmd_fail=%" PRIu32 " events_lost=%" PRIu32 " exc_max=%" PRIu32
            " cb_max_us=%" PRIu32 " dispatch_max_us=%" PRIu32
            " online=0x%03" PRIx16 " ready=0x%03" PRIx16 " sync=0x%03" PRIx16
-           " wd_boot=%u wd_step=0x%08" PRIx32 "\n",
+           " wd_boot=%u wd_step=0x%08" PRIx32 " tx_drop=%" PRIu32
+           " tx_fail=%" PRIu32 "\n",
            cl_state_code(), g_stats.sent, g_stats.first_seq, g_stats.last_seq,
            g_stats.send_fail, g_stats.skipped, g_stats.rx_dropped,
            g_stats.rx_bad, g_stats.stale, g_stats.cmd_fail, g_stats.events_lost,
            g_stats.exc_max, g_stats.cb_max_us, g_stats.dispatch_max_us,
            cl_online_bits(), g_readiness, g_sync,
-           g_b_watchdog_boot ? 1u : 0u, g_watchdog_step);
+           g_b_watchdog_boot ? 1u : 0u, g_watchdog_step, g_stats.tx_drop,
+           g_stats.tx_fail);
 
     printf("LATE_HIST");
 
@@ -2963,6 +3007,58 @@ static uint16_t cl_next_cmd_seq (void)
     return seq;
 }
 
+/**
+ * @brief  Queue one datagram for sending (see CL_TXQ_LEN); the loop sends
+ *         it in a later pass, one per pass. BEACON is sent at once.
+ * @param  addr   Destination address.
+ * @param  port   Destination port.
+ * @param  p_buf  Bytes.
+ * @param  len    Length, at most CL_TX_MAX_BYTES.
+ * @return true when queued; false (counted in tx_drop) when the queue is
+ *         full or the datagram too long.
+ */
+static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                         uint32_t len)
+{
+    bool b_queued = false;
+
+    if ((g_txq_count < CL_TXQ_LEN) && (len <= CL_TX_MAX_BYTES))
+    {
+        cl_tx_entry_t * const p_entry =
+            &g_txq[(g_txq_head + g_txq_count) % CL_TXQ_LEN];
+
+        p_entry->addr = addr;
+        p_entry->port = port;
+        p_entry->len  = len;
+        (void)memcpy(p_entry->bytes, p_buf, len); /* Returns bytes. */
+        g_txq_count++;
+        b_queued = true;
+    }
+    else
+    {
+        g_stats.tx_drop++;
+    }
+
+    return b_queued;
+}
+
+/**
+ * @brief  Send the oldest queued datagram (one per loop pass).
+ */
+static void cl_tx_routine (void)
+{
+    cl_tx_entry_t const * const p_entry = &g_txq[g_txq_head];
+
+    if (!cl_port_send(p_entry->addr, p_entry->port, p_entry->bytes,
+                      p_entry->len))
+    {
+        g_stats.tx_fail++;
+    }
+
+    g_txq_head = (g_txq_head + 1u) % CL_TXQ_LEN;
+    g_txq_count--;
+}
+
 #ifdef CL_HOST_TEST
 /**
  * @brief  Current time (host test: the test's fake clock).
@@ -2983,15 +3079,15 @@ static void cl_crumb (uint32_t step)
 }
 
 /**
- * @brief  Send one datagram (host test: recorded by the test).
+ * @brief  Send one datagram now (host test: recorded by the test).
  * @param  addr   Destination address.
  * @param  port   Destination port.
  * @param  p_buf  Bytes.
  * @param  len    Length.
  * @return true when sent.
  */
-static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
-                         uint32_t len)
+static bool cl_port_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                          uint32_t len)
 {
     return coordinator_port_send(addr, port, p_buf, len);
 }
@@ -3007,8 +3103,8 @@ static bool cl_send_beacon_bytes (uint8_t * p_buf, uint64_t * p_t_p)
     *p_t_p = cl_now_us();
     proto_beacon_set_t_p(p_buf, *p_t_p);
 
-    return cl_udp_send(g_bcast_addr, CL_PORT_TILE_RX, p_buf,
-                       PROTO_BEACON_BYTES);
+    return cl_port_send(g_bcast_addr, CL_PORT_TILE_RX, p_buf,
+                        PROTO_BEACON_BYTES);
 }
 
 /**
@@ -3453,15 +3549,15 @@ static void cl_crumb_send (bool b_in)
 }
 
 /**
- * @brief  Send one datagram from the send pcb.
+ * @brief  Send one datagram now from the send pcb (cl_tx_routine).
  * @param  addr   Destination (network order u32).
  * @param  port   Destination port.
  * @param  p_buf  Bytes.
  * @param  len    Length.
  * @return true when lwIP accepted it.
  */
-static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
-                         uint32_t len)
+static bool cl_port_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                          uint32_t len)
 {
     bool b_sent = false;
 

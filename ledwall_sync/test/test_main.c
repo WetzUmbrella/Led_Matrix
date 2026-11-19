@@ -104,6 +104,8 @@ static test_case_t const g_cases[] = {
      test_coord_full_config},
     {"C32: a tile switched off is sent a picture clear (layout, ARM)",
      test_coord_game_unplaced_clear},
+    {"C33: a burst of nine TAPs: one send per pass, every ACK and relay",
+     test_coord_game_paced_sends},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

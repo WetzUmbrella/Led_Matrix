@@ -95,6 +95,15 @@ bool test_coord_game_sparse (void);
  */
 bool test_coord_game_unplaced_clear (void);
 
+/**
+ * @brief  C33: a burst of TAPs from all nine tiles is answered at most one
+ *         datagram per loop pass, and every ACK and relay goes out (bench 19
+ *         Nov 2026: such bursts preceded the Pico freezing in the WiFi
+ *         driver).
+ * @return true when every check passed.
+ */
+bool test_coord_game_paced_sends (void);
+
 #endif /* TEST_COORD_GAME_H */
 
 /*** end of file ***/

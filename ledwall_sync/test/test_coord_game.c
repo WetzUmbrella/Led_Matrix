@@ -1882,4 +1882,61 @@ bool test_coord_game_unplaced_clear (void)
     return b_ok;
 }
 
+/**
+ * @brief  C33: a burst of TAPs from all nine tiles is answered at most one
+ *         datagram per loop pass, and every ACK and relay goes out (bench 19
+ *         Nov 2026: such bursts preceded the Pico freezing in the WiFi
+ *         driver).
+ * @return true when every check passed.
+ */
+bool test_coord_game_paced_sends (void)
+{
+    uint32_t relays = 0u;
+    uint32_t index  = 0u;
+    uint32_t from   = 0u;
+    uint32_t prev   = 0u;
+    bool     b_one  = true;
+    bool     b_ok   = true;
+
+    gt_to_ready();
+    gt_advance(GT_MS * 300u); /* Nothing left to send from the start. */
+    from = coordinator_port_count();
+
+    /* A hard tap felt by the whole wall: nine TAPs at once. */
+    for (uint8_t node_id = 1u; node_id <= CL_MAX_NODES; node_id++)
+    {
+        gt_tap(node_id, 2000u, coordinator_port_now_us(), 40u);
+    }
+
+    prev = coordinator_port_count();
+
+    for (uint32_t pass = 0u; pass < 400u; pass++)
+    {
+        coordinator_port_set_now(coordinator_port_now_us() + 50u);
+        coordinator_loop_test_pass();
+        b_one = b_one && ((coordinator_port_count() - prev) <= 1u);
+        prev  = coordinator_port_count();
+    }
+
+    b_ok = (test_main_check(b_one, __LINE__)) && b_ok;
+
+    for (uint8_t node_id = 1u; node_id <= CL_MAX_NODES; node_id++)
+    {
+        b_ok = (test_main_check(1u == gt_ack_count(node_id, 40u), __LINE__)) &&
+               b_ok;
+    }
+
+    index = from;
+
+    while (0u != gt_find(PROTO_TYPE_TAP, GT_PC_PORT, index, &index))
+    {
+        relays++;
+        index++;
+    }
+
+    b_ok = (test_main_check(CL_MAX_NODES == relays, __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
 /*** end of file ***/
