@@ -1842,4 +1842,44 @@ bool test_coord_game_sparse (void)
     return b_ok;
 }
 
+/**
+ * @brief  C32: a registered tile that is not placed is sent a picture clear
+ *         on a new layout and at ARM; placed tiles are not (A3, bench 19 Nov
+ *         2026: tile 5, switched off after a round, kept looping its results
+ *         while the others played).
+ * @return true when every check passed.
+ */
+bool test_coord_game_unplaced_clear (void)
+{
+    uint8_t                reg[PROTO_REGISTER_BYTES];
+    proto_register_t const reg_msg = {{PROTO_TYPE_REGISTER, 0u, 0u}, 3u, 0u,
+                                      0u};
+    uint32_t               before = 0u;
+    bool                   b_ok   = true;
+
+    gt_to_ready(); /* Nodes 1 and 2 placed. */
+
+    /* Node 3 registers but has no cell: switched off on the website. */
+    g_tile_seq[3]  = 1u;
+    g_last_beat[3] = coordinator_port_now_us();
+    gt_rx_tile(3u, reg, proto_encode_register(&reg_msg, reg, sizeof(reg)));
+    b_ok = (test_main_check(0u == gt_count_clear(3u), __LINE__)) && b_ok;
+
+    /* A new layout: node 3 is cleared, the placed tiles are not. */
+    gt_session_config((uint8_t)(GT_SESSION + 1u)); /* Below 255. */
+    gt_advance(GT_MS * 10u);
+    b_ok = (test_main_check(gt_count_clear(3u) >= 1u, __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == gt_count_clear(1u), __LINE__)) && b_ok;
+
+    /* ARM cancels pending pictures, then clears node 3 again. */
+    gt_tile_ack(3u, 0u); /* Not the clear's seq: it stays pending. */
+    before = gt_count_clear(3u);
+    gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
+    gt_pc(PROTO_GAME_ARM, 0u, 0u);
+    gt_advance(GT_MS * 10u);
+    b_ok = (test_main_check(gt_count_clear(3u) > before, __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
 /*** end of file ***/

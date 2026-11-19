@@ -102,6 +102,8 @@ static test_case_t const g_cases[] = {
      test_coord_game_sparse},
     {"C31 9-tile SESSION_CONFIG keeps every byte; a longer datagram dropped",
      test_coord_full_config},
+    {"C32: a tile switched off is sent a picture clear (layout, ARM)",
+     test_coord_game_unplaced_clear},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

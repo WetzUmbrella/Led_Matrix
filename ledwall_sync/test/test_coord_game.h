@@ -87,6 +87,14 @@ bool test_coord_game_new_session (void);
  */
 bool test_coord_game_sparse (void);
 
+/**
+ * @brief  C32: a registered tile that is not placed is sent a picture clear
+ *         on a new layout and at ARM; placed tiles are not (A3, bench 19 Nov
+ *         2026).
+ * @return true when every check passed.
+ */
+bool test_coord_game_unplaced_clear (void);
+
 #endif /* TEST_COORD_GAME_H */
 
 /*** end of file ***/

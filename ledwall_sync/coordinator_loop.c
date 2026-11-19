@@ -431,6 +431,7 @@ static bool cl_stopped (void);
 static int8_t cl_status_score (void);
 static uint16_t cl_next_cmd_seq (void);
 static uint64_t cl_tile_picture (score_pic_t pic, int32_t value);
+static void cl_clear_unplaced (uint64_t now);
 static void cl_scan_heartbeats (uint64_t now);
 static void cl_scan_one (uint32_t index, uint64_t now);
 static void cl_send_due_copy (uint64_t now);
@@ -1296,6 +1297,7 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
             cl_round_to_tiles(PROTO_GAME_TAP_TEST_OFF, p_entry->t_rx_us);
         }
 
+        cl_clear_unplaced(p_entry->t_rx_us); /* A tile switched off. */
         cl_evaluate();
     }
 }
@@ -2226,6 +2228,7 @@ static void cl_game_start (uint64_t now)
 
         game_rules_start(&g_game, now, mask, g_level);
         ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE); /* Results. */
+        cl_clear_unplaced(now);
         g_round      = PROTO_ROUND_PLAYING;
         g_round_mask = mask;
         cl_set_state(PROTO_COORD_COORDINATING_GAME);
@@ -2301,6 +2304,7 @@ static void cl_round_arm (uint64_t now)
         g_arm_deadline_us = now + CL_ARM_TIMEOUT_US;
         g_b_tap_test      = false;
         ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE); /* Results. */
+        cl_clear_unplaced(now);
         cl_set_state(PROTO_COORD_COORDINATING_GAME);
         cl_round_to_tiles(PROTO_GAME_ARM, now);
         cl_queue_target(start, g_start_show_us, 0u,
@@ -2590,6 +2594,33 @@ static void cl_results_end (uint64_t now)
         uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
 
         if (0u != (g_session.required & cl_node_bit(node_id)))
+        {
+            /* Resent until ACKed or the control life ends. */
+            cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_CLEAR, /* 3. */
+                             (uint8_t)PROTO_COLOUR_WHITE, /* 8 fit. */
+                             0u, now + CL_CONTROL_LIFE_US, 0u, 0u);
+        }
+    }
+
+    cl_clear_unplaced(now);
+}
+
+/**
+ * @brief  Clear the picture list of every tile the Pico knows that is not
+ *         placed (A3: a tile switched off goes blank). The Pico sends game
+ *         messages only to placed tiles, so a tile switched off after a
+ *         round kept looping its results while the others played the next
+ *         round (bench 19 Nov 2026). Sent on a new layout, at ARM and
+ *         START, and when the results end; a blank tile ACKs it unchanged.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_clear_unplaced (uint64_t now)
+{
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+
+        if ((g_registry[index].b_known) && (!cl_placed(node_id)))
         {
             /* Resent until ACKed or the control life ends. */
             cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_CLEAR, /* 3. */
