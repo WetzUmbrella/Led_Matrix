@@ -8,7 +8,7 @@ pico_sdk_init()
 add_executable(ledwall_sync main.c coordinator_loop.c join_backoff.c game_rules.c score_font.c ../common/proto/proto.c ../common/proto/ack_outbox.c)
 target_include_directories(ledwall_sync PRIVATE ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../common/proto)
 # Poll mode: T-B2-02, OD-01 PROVISIONAL (owner Benjamin).
-target_link_libraries(ledwall_sync pico_stdlib pico_cyw43_arch_lwip_poll)
+target_link_libraries(ledwall_sync pico_stdlib pico_cyw43_arch_lwip_poll hardware_watchdog)
 # Name shown in the router's client list (hyphens, not underscores: routers reject "_" in hostnames)
 target_compile_definitions(ledwall_sync PRIVATE CYW43_HOST_NAME="PICO-Main")
 # A USB host that has the port open but stops reading can block printf for
@@ -18,6 +18,10 @@ target_compile_definitions(ledwall_sync PRIVATE PICO_STDIO_USB_STDOUT_TIMEOUT_US
 # T-B4-05 test build: cmake -DCL_TEST_SUPPRESS_MS=<ms> ..
 if(DEFINED CL_TEST_SUPPRESS_MS)
     target_compile_definitions(ledwall_sync PRIVATE CL_TEST_SUPPRESS_MS=${CL_TEST_SUPPRESS_MS})
+endif()
+# Watchdog test build: cmake -DCL_TEST_HANG_S=<s> .. (see coordinator_loop.c)
+if(DEFINED CL_TEST_HANG_S)
+    target_compile_definitions(ledwall_sync PRIVATE CL_TEST_HANG_S=${CL_TEST_HANG_S})
 endif()
 pico_enable_stdio_usb(ledwall_sync 1)
 pico_enable_stdio_uart(ledwall_sync 0)

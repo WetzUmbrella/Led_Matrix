@@ -35,6 +35,18 @@
  *   CL_TEST_SUPPRESS_MS=<n> T-B4-05 test build: 20 s into each playback,
  *                           beacons stop for n ms once (bench procedure in
  *                           docs/week13/holdover_sizing.md).
+ *   CL_TEST_HANG_S=<n>      watchdog test build: n s after boot the loop
+ *                           stops once, as in a freeze, unless the watchdog
+ *                           caused this boot; the watchdog must restart the
+ *                           Pico (bench 19 Nov 2026).
+ *
+ * Watchdog (decided 19 Nov 2026 with Cheston): the Pico froze three to four
+ * times on the 18 Nov bench, once for 144 s inside one datagram's handling
+ * (dispatch_max_us), most likely in the CYW43 driver. The hardware watchdog
+ * restarts the Pico when the loop has not run for CL_WATCHDOG_MS (8 s); the PC
+ * and the tiles take a restarted Pico back by themselves. The loop feeds it
+ * every pass, and the router join, which takes up to 10 s, feeds it while
+ * it waits (cl_connect_router).
  *
  * DEVIATION D-2 (module-wide): Pico SDK and lwIP names and types
  * (struct udp_pcb, struct pbuf, ip_addr_t, u16_t, err_t, PBUF_RAM).
@@ -54,6 +66,8 @@
 #ifdef CL_HOST_TEST
 #include "coordinator_port.h"
 #else
+#include "hardware/structs/watchdog.h"
+#include "hardware/watchdog.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 #include "lwip/pbuf.h"
@@ -90,6 +104,14 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
 /** One router join attempt is bounded by 10 s (proposed, W6D-2d). Attempts
  *  repeat forever, spaced by join_backoff_ms(). */
 #define CL_CONNECT_TIMEOUT_MS 10000u
+
+/** The watchdog restarts the Pico when the loop has not run for 8 s (plan
+ *  choice, 19 Nov 2026: a pass takes microseconds to a few milliseconds;
+ *  the RP2040 allows at most 8.3 s, and the margin covers a slow call into
+ *  the WiFi driver during a join, after an unexplained restart 14 s after a
+ *  flash with 5 s); the join feeds it every CL_JOIN_FEED_MS while it waits. */
+#define CL_WATCHDOG_MS  8000u
+#define CL_JOIN_FEED_MS 100u
 
 /** Recovery timeout 5 s (proposed, W6D-2c). */
 #define CL_RECOVERY_TIMEOUT_US 5000000u
@@ -355,6 +377,12 @@ static uint32_t   g_lateness_hist[CL_LATE_BINS];
 static uint32_t   g_cb_hist[CL_TIME_BINS];
 static uint32_t   g_dispatch_hist[CL_TIME_BINS];
 static bool       g_b_suppress_done = false;
+/** The watchdog caused this boot (CL_STATS wd_boot: a freeze happened). */
+static bool       g_b_watchdog_boot = false;
+#ifndef CL_HOST_TEST
+/** scratch[4] as watchdog_enable() left it (see cl_watchdog_feed). */
+static uint32_t   g_watchdog_mark = 0u;
+#endif
 
 static void cl_reset_state (uint32_t bcast_addr, uint64_t now);
 #ifndef CL_HOST_TEST
@@ -1843,12 +1871,13 @@ static void cl_print_stats (void)
            " cmd_fail=%" PRIu32 " events_lost=%" PRIu32 " exc_max=%" PRIu32
            " cb_max_us=%" PRIu32 " dispatch_max_us=%" PRIu32
            " online=0x%03" PRIx16 " ready=0x%03" PRIx16 " sync=0x%03" PRIx16
-           "\n",
+           " wd_boot=%u\n",
            cl_state_code(), g_stats.sent, g_stats.first_seq, g_stats.last_seq,
            g_stats.send_fail, g_stats.skipped, g_stats.rx_dropped,
            g_stats.rx_bad, g_stats.stale, g_stats.cmd_fail, g_stats.events_lost,
            g_stats.exc_max, g_stats.cb_max_us, g_stats.dispatch_max_us,
-           cl_online_bits(), g_readiness, g_sync);
+           cl_online_bits(), g_readiness, g_sync,
+           g_b_watchdog_boot ? 1u : 0u);
 
     printf("LATE_HIST");
 
@@ -3017,6 +3046,7 @@ static bool cl_connect_router (void);
 static bool cl_try_join (void);
 static void cl_schedule_join (uint64_t now);
 static void cl_rejoin_routine (uint64_t now);
+static void cl_watchdog_feed (void);
 static void cl_open_pcbs (void);
 static void cl_rx_cb (void * p_arg, struct udp_pcb * p_pcb,
                       struct pbuf * p_pbuf, ip_addr_t const * p_addr,
@@ -3029,11 +3059,36 @@ static void cl_rx_cb (void * p_arg, struct udp_pcb * p_pcb,
  */
 void coordinator_loop_run (void)
 {
+    bool const b_by_watchdog = watchdog_enable_caused_reboot();
+
+    g_b_watchdog_boot = b_by_watchdog;
+
+    if (b_by_watchdog)
+    {
+        /* The evidence of a freeze: the loop had stopped for 8 s. */
+        printf("COORDINATOR: restarted by the watchdog\n");
+    }
+
+    watchdog_enable(CL_WATCHDOG_MS, true); /* Paused under a debugger. */
+    g_watchdog_mark = watchdog_hw->scratch[4];
     cl_set_state(PROTO_COORD_CONNECTING_TO_ROUTER);
     (void)cl_try_join(); /* A failure schedules the next attempt. */
 
     for (;;)
     {
+        cl_watchdog_feed();
+#ifdef CL_TEST_HANG_S
+        if ((!b_by_watchdog) &&
+            (cl_now_us() >= (UINT64_C(1000000) * CL_TEST_HANG_S)))
+        {
+            printf("COORDINATOR: CL_TEST_HANG_S, the loop stops now\n");
+
+            for (;;)
+            {
+                /* A freeze: only the watchdog ends this. */
+            }
+        }
+#endif
         cyw43_arch_poll();
 
         if (PROTO_COORD_FAULT != g_state)
@@ -3047,6 +3102,21 @@ void coordinator_loop_run (void)
             cl_rejoin_routine(cl_now_us());
             cl_log_routine(cl_now_us());
         }
+    }
+}
+
+/**
+ * @brief  Feed the watchdog, unless a reboot was asked for. watchdog_reboot()
+ *         (picotool reboot, through the USB reset interface) arms the
+ *         watchdog with a short delay and rewrites scratch[4]; feeding it
+ *         then would reload that delay forever and the reboot would never
+ *         happen (bench 19 Nov 2026).
+ */
+static void cl_watchdog_feed (void)
+{
+    if (g_watchdog_mark == watchdog_hw->scratch[4])
+    {
+        watchdog_update();
     }
 }
 
@@ -3132,21 +3202,56 @@ static void cl_on_link_lost (uint64_t now)
 
 /**
  * @brief  CONNECTING TO ROUTER, bounded by the 10 s timeout (W6D-2d,
- *         T-B2-03); power save off once joined (SRM-8Mc).
+ *         T-B2-03); power save off once joined (SRM-8Mc). The SDK's
+ *         cyw43_arch_wifi_connect_timeout_ms() loop, with the watchdog fed
+ *         every CL_JOIN_FEED_MS while it waits: no network restarts the
+ *         join, a bad password or a failure ends it.
  * @return true when joined with an IP address.
  */
 static bool cl_connect_router (void)
 {
     uint32_t const auth =
         ('\0' != ROUTER_PASS[0]) ? CYW43_AUTH_WPA2_AES_PSK : CYW43_AUTH_OPEN;
+    char const * const p_pass = ('\0' != ROUTER_PASS[0]) ? ROUTER_PASS : NULL;
+    absolute_time_t const until = make_timeout_time_ms(CL_CONNECT_TIMEOUT_MS);
+    int32_t               status = CYW43_LINK_JOIN;
 
     cyw43_arch_enable_sta_mode();
     printf("Joining %s (timeout %u ms)\n", ROUTER_SSID, CL_CONNECT_TIMEOUT_MS);
 
-    bool const b_joined =
-        (0 == cyw43_arch_wifi_connect_timeout_ms(
-                  ROUTER_SSID, ('\0' != ROUTER_PASS[0]) ? ROUTER_PASS : NULL,
-                  auth, CL_CONNECT_TIMEOUT_MS));
+    if (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass, auth))
+    {
+        status = CYW43_LINK_FAIL;
+    }
+
+    while ((status >= 0) && (CYW43_LINK_UP != status) &&
+           (!time_reached(until)))
+    {
+        absolute_time_t const step = make_timeout_time_ms(CL_JOIN_FEED_MS);
+
+        cl_watchdog_feed();
+        cyw43_arch_poll();
+        cyw43_arch_wait_for_work_until(
+            (absolute_time_diff_us(step, until) > 0) ? step : until);
+        /* The link codes are -3 to 3: int32_t holds them. */
+        status = (int32_t)cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+
+        if ((CYW43_LINK_NONET == status) &&
+            (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass, auth)))
+        {
+            status = CYW43_LINK_FAIL; /* No network yet: join again. */
+        }
+        else if (CYW43_LINK_NONET == status)
+        {
+            status = CYW43_LINK_JOIN;
+        }
+        else
+        {
+            /* Joining, up, or failed: the loop condition decides. */
+        }
+    }
+
+    bool const b_joined = (CYW43_LINK_UP == status);
 
     if (b_joined)
     {

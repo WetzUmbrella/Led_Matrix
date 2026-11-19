@@ -22,7 +22,7 @@ Read before acting, in this order:
 
 | Board | Built from | Notes |
 |---|---|---|
-| Pico `…E66430A64B595138` | `bdc2920` (whole pictures) | SSID `MATRIX`. No Pico change after it. |
+| Pico `…E66430A64B595138` | watchdog build (19 Nov) | SSID `MATRIX`; whole pictures and the 8 s watchdog. |
 | Tiles 1 to 9 | `77e3165` (restart fix) | All nine flashed 18 Nov evening. SSID `MATRIX`. |
 
 ## 2. Bench setup (current)
@@ -37,7 +37,7 @@ Read before acting, in this order:
 
 ## 3. Open items, in order
 
-1. **Pico freezes** (three to four today, `wall_test.md`): one datagram's handling took 144 s; likely the CYW43 chip stops answering. **Proposed to the user, not decided:** a hardware watchdog (reboot after about 5 s without a loop pass), with the router join made non-blocking so it never trips it. Present it as a decision; it changes Benjamin's coordinator.
+1. **Pico freezes: watchdog done 19 Nov** (`wall_test.md`, last section): an 8 s hardware watchdog restarts a frozen Pico and the website and tiles recover it untouched (about 23 s in all). The freezes themselves (likely CYW43) are not fixed; `wd_boot=1` in CL_STATS shows when one happened. Pico now on the watchdog build.
 2. **Echo grouping by arrival time** (`router.md`): hard slaps split into extra wrong taps on this router. Grouping by the tiles' tap time stamps would fix it.
 3. **Tribunal 2, Mon 23 Nov.** Cheston must explain his modules, including what changed: `tile_net` + `game_tile` restart fix (`77e3165`, host test G7), `asset_rx` held upload (4c), and the PC uploader now running every tile at once. Ahsanul's time sync (decision A), Benjamin's coordinator (C31 buffer, whole pictures `cl_tile_picture`, SESSION_CONFIG repeat rule) changed too; draft messages are in `HANDOFF_12nov_late.md` section 7 plus: "Countdown and results are now drawn whole on every tile (cl_tile_picture)."
 4. Smaller: animated preview (not asked yet); step 5 whole-wall rotation (stretch); GPIO4 pulse measurement (DS-13).

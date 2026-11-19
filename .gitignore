@@ -9,6 +9,7 @@ __pycache__/
 **/build2/
 **/build_vc4/
 **/build_bench*/
+**/build_hang/
 .claude/settings.local.json
 pc/.last_session
 pc/.last_seq

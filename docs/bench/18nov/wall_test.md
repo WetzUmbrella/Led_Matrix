@@ -27,3 +27,19 @@ Also changed at the operator's request: **the countdown, score and stars show wh
 - **Opening a tile's serial port can reset it** (boot lines at the start of `repro_9C139EF12EB0.log` and `repro_9C139EF13070.log`), and some freshly flashed tiles print nothing on USB for 15 s. Judge a tile by its TELEMETRY on the website, not its serial log.
 - **The preview is the first frame only** (operator asked; animated preview not built).
 - clang-format 18.1.8 (CI's pinned version) was not available offline; changed C lines were formatted by hand to `.clang-format`. CI will tell.
+
+## 19 Nov 2026: Pico watchdog (decided with Cheston)
+
+Another freeze before any traffic: the Pico was silent on USB and WiFi while waiting for a session (14:30). Built and flashed the hardware watchdog (`coordinator_loop.c`, normal build in `ledwall_sync/build`):
+
+- The loop feeds an **8 s** watchdog every pass (a pass takes microseconds to milliseconds; the RP2040 maximum is 8.3 s). The router join no longer blocks in `cyw43_arch_wifi_connect_timeout_ms()`: the same loop, with the watchdog fed every 100 ms.
+- `CL_STATS` ends with `wd_boot=1` after a boot the watchdog caused, so a freeze leaves a trace.
+- The loop feeds the watchdog only while `scratch[4]` is what `watchdog_enable()` left: `picotool reboot` arms the watchdog with a short delay and rewrites it, and feeding then cancelled the reboot (found on the bench: the Pico never restarted).
+
+| Check | Result |
+|---|---|
+| Test build `cmake -DCL_TEST_HANG_S=30` (`ledwall_sync/build_hang`, gitignored) | **PASS**: plain restart showed `wd_boot=0`; the loop stopped at 30 s (`CL_TEST_HANG_S, the loop stops now`); USB disconnected exactly 5 s later (then 5 s limit); the Pico rejoined with `wd_boot=1` and did not stop again |
+| Normal build, `picotool reboot -f` with the website and nine tiles running | **PASS**: NO STATUS 2 s after, Pico back 17 s after (its first join timed out at 10 s and the retry joined, as on every boot today), the website published again and the wall was READY with all nine tiles 23 s after the restart, untouched |
+| Gate | C host tests and ASan, barr_check 0 findings; Pico builds with no warnings |
+
+Open: one unexplained restart 14 s after a flash with the 5 s limit (hence 8 s); the first router join after a boot timing out at 10 s on this router.
