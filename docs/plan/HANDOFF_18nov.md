@@ -27,7 +27,7 @@ Read before acting, in this order:
 
 ## 2. Bench setup (current)
 
-- **Router `MATRIX`** (2.4 GHz; `MATRIX_5G` unused), same password as Matrix. Settings that matter: **fixed channel 11, 20 MHz, DTIM 1, nothing else joined**; DHCP reservations for the Pico and the tiles (addresses as in `HANDOFF_12nov_late.md` section 4). On auto channel the wall missed ticks and overflowed queues (`router.md`).
+- **Router `MATRIX`** (Asus RT-AC87U; 2.4 GHz; `MATRIX_5G` unused), same password as Matrix. Settings that matter: **fixed channel 11, 20 MHz, DTIM 1, nothing else joined; WPA2-AES only; Turbo QAM, beamforming, TX bursting, airtime fairness and roaming assistant off** (19 Nov: the Pico froze about once a round until these extras were turned off; `wall_test.md` last section); DHCP reservations for the Pico and the tiles (addresses as in `HANDOFF_12nov_late.md` section 4). On auto channel the wall missed ticks and overflowed queues (`router.md`).
 - **Laptop**: SIT-WIFI for the internet, the router by a USB Ethernet adapter (192.168.1.226). The adapter's interface name changes on replug; the firewall allows UDP from 192.168.1.0/24 on any interface. For a phone or TV to open the website: `sudo ufw allow from 192.168.1.0/24 proto tcp to any port 8080`.
 - **Power**: the unpowered USB hub drops out under tiles. Tiles on their own power; the Pico on a direct laptop port or a charger.
 - **Start the website** (from `Led_Matrix`):

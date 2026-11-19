@@ -43,3 +43,11 @@ Another freeze before any traffic: the Pico was silent on USB and WiFi while wai
 | Gate | C host tests and ASan, barr_check 0 findings; Pico builds with no warnings |
 
 Open: one unexplained restart 14 s after a flash with the 5 s limit (hence 8 s); the first router join after a boot timing out at 10 s on this router.
+
+## 19 Nov 2026: breadcrumbs and the router's 2.4 GHz extras
+
+Breadcrumbs (`5690403`, `CL_STATS wd_step`) showed every caught hang inside the WiFi driver: once inside a UDP send from the outbox routine during a round (`0x80000005`), once in the router join right after a restart (`0x0a`). The Pico still froze several times during rounds on a phone charger, so laptop power was not the cause. The freezes began with the new router (none on the old Matrix router on 12 Nov with the same Pico).
+
+**Router changed (Asus RT-AC87U, 2.4 GHz):** Wireless → General: WPA2-Personal, AES only, PMF disabled if offered, group key rotation 86400 s; Wireless → Professional: **Turbo QAM off**, explicit and universal beamforming off, TX bursting off, airtime fairness off, roaming assistant off, DTIM 1. Channel 11, 20 MHz unchanged.
+
+**Result: three rounds with no freeze** (before: about one per one or two rounds). Early evidence, not proof: keep counting rounds; if a freeze comes back, read `wd_step` with the Pico on the laptop's USB.
