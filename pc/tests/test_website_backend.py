@@ -18,6 +18,7 @@ import asset_builder as ab  # noqa: E402
 import dashboard as db  # noqa: E402
 import gif_library as gl  # noqa: E402
 import pico_link as plink  # noqa: E402
+import tap_log as tl  # noqa: E402
 import telemetry  # noqa: E402
 import uploader  # noqa: E402
 import web  # noqa: E402
@@ -435,6 +436,53 @@ def test_pump_reads_status_telemetry_and_tap_peaks() -> None:
     assert [(t["node"], t["peak_mg"]) for t in snap["taps"]] == [
         (3, 1300), (1, 420)]  # Newest first.
     assert snap["online"] == 0b101
+
+
+def test_every_tap_is_logged_with_its_tile_time(tmp_path) -> None:  # type: ignore
+    import csv
+    shell = _shell()
+    shell.tap_log = tl.TapLog(str(tmp_path / "logs" / "taps.csv"))
+    shell.model.mode, shell.model.tap_test = "game", True
+    now = time.monotonic()
+    shell.link.tap_events.extend([(5, 13757, now, 1000123),
+                                  (4, 508, now, 1000127),
+                                  (3, 420, now)])  # No t_tap (simulator).
+    shell.pump()
+    shell.tap_log.close()
+    with open(shell.tap_log.path, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert [(r["tile"], r["peak_mg"], r["t_tap_us"]) for r in rows] == [
+        ("5", "13757", "1000123"), ("4", "508", "1000127"), ("3", "420", "")]
+    assert {(r["mode"], r["tap_test"], r["session"]) for r in rows} == {
+        ("game", "1", "7")}
+    assert shell.snapshot()["taps"][0]["node"] == 3  # The page still shows.
+    again = tl.TapLog(shell.tap_log.path)  # Appends; no second header.
+    again.write(time.time(), 1, 300, 5, "game", False, "PLAYING", 7)
+    again.close()
+    with open(shell.tap_log.path, encoding="utf-8") as handle:
+        assert handle.read().count("pc_time") == 1
+
+
+def test_pico_link_keeps_the_tile_time_of_a_tap() -> None:
+    import proto_layout as pl
+    import socket
+    receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    receiver.bind(("127.0.0.1", 0))
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    link = plink.PicoLink("127.0.0.1", sock=receiver)
+    try:
+        sender.sendto(pl.encode_tap(session_id=1, seq=1, node_id=6, peak=777,
+                                    t_tap=123456789),
+                      receiver.getsockname())
+        deadline = time.monotonic() + 2
+        while not link.tap_events and time.monotonic() < deadline:
+            link.poll_status()
+            time.sleep(0.01)
+        node, peak, _when, t_tap = link.tap_events[0]
+        assert (node, peak, t_tap) == (6, 777, 123456789)
+    finally:
+        receiver.close()
+        sender.close()
 
 
 def test_tiles_show_online_cell_on_off_and_orientation() -> None:

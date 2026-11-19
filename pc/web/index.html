@@ -249,6 +249,7 @@
             <thead><tr><th>Tile</th><th>Strength</th><th class="num">Peak</th><th class="num">When</th></tr></thead>
             <tbody id="taps"></tbody>
           </table>
+          <div class="muted" id="tap-log"></div>
         </section>
         <section class="card">
           <h2>Tap sensitivity</h2>
@@ -593,6 +594,7 @@ function renderTaps() {
     $("threshold-out").textContent = state.threshold_mg ? state.threshold_mg + " mg" : "tile default";
   }
   $("threshold-default").disabled = state.threshold_mg === 0;
+  $("tap-log").textContent = state.tap_log ? "Every tap is saved to pc/logs/" + state.tap_log + "." : "";
 }
 $("tap-toggle").addEventListener("click", () => post("/api/game/tap_test", {on: !state.tap_test}));
 $("threshold").addEventListener("input", () => { $("threshold-out").textContent = $("threshold").value + " mg"; });

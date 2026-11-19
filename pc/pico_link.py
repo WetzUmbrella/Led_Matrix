@@ -201,9 +201,10 @@ class PicoLink:
         self.status: Optional[Status] = None
         #: Board numbers of TAP datagrams not yet taken (build step 4).
         self.taps: List[int] = []
-        #: (board, peak in mg, time.monotonic()) of every TAP not yet taken,
-        #: for the website's tap test (A11).
-        self.tap_events: List[Tuple[int, int, float]] = []
+        #: (board, peak in mg, time.monotonic(), the tile's t_tap in us on
+        #: the Pico clock) of every TAP not yet taken, for the website's tap
+        #: test (A11) and tap log.
+        self.tap_events: List[Tuple[int, int, float, int]] = []
         #: Seq numbers of the Pico's ACKs (node 0) not yet taken.
         self.acks: List[int] = []
         #: The last SESSION_CONFIG sent, for resend_config().
@@ -327,7 +328,7 @@ class PicoLink:
                 del self.taps[:-TAP_KEEP]
                 self.tap_events.append((
                     int(msg["node_id"]), int(msg["peak"]),  # type: ignore
-                    time.monotonic()))
+                    time.monotonic(), int(msg["t_tap"])))  # type: ignore
                 del self.tap_events[:-TAP_KEEP]
                 continue
             if msg["type"] == "ACK":

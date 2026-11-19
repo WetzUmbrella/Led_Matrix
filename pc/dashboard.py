@@ -65,6 +65,7 @@ import asset_builder as ab  # noqa: E402
 import gif_library  # noqa: E402
 import pico_link  # noqa: E402
 import proto_layout as pl  # noqa: E402
+import tap_log as tl  # noqa: E402
 import telemetry  # noqa: E402
 import uploader  # noqa: E402
 
@@ -570,9 +571,11 @@ class DashboardModel:
         if state not in allowed:
             raise Refused("cannot %s now (the wall is %s)" % (action, state))
 
-    def add_taps(self, events: Sequence[Tuple[int, int, float]]) -> None:
-        """Keep the latest taps for the tap test (A11)."""
-        self.taps.extend(events)
+    def add_taps(self, events: Sequence[Sequence[float]]) -> None:
+        """Keep the latest taps for the tap test (A11): (board, peak in mg,
+        time.monotonic()), any further fields left out."""
+        self.taps.extend((int(e[0]), int(e[1]), float(e[2]))
+                         for e in events)
         del self.taps[:-TAP_KEEP]
 
     def set_tap_test(self, on: bool) -> None:
@@ -745,6 +748,9 @@ class DashboardShell(cmd.Cmd):
     #: send_config), and where the session in use is saved.
     config_sent = False
     session_file: Optional[str] = None
+    #: Where every tap is logged (website), or None.
+    tap_log: Optional[tl.TapLog] = None
+
     #: When the pump last resent SESSION_CONFIG to a silent Pico, and
     #: whether it did since the Pico was last heard.
     config_resent = 0.0
@@ -774,8 +780,21 @@ class DashboardShell(cmd.Cmd):
                 self.model.on_status(status)
             events = getattr(self.link, "tap_events", None)
             if events:
+                self._log_taps(events)
                 self.model.add_taps(events)
                 events.clear()
+
+    def _log_taps(self, events: Sequence[Sequence[float]]) -> None:
+        """Write each TAP to the tap log, when there is one."""
+        if self.tap_log is None:
+            return
+        offset = time.time() - time.monotonic()
+        model = self.model
+        for event in events:
+            self.tap_log.write(
+                offset + float(event[2]), int(event[0]), int(event[1]),
+                int(event[3]) if len(event) > 3 else None, model.mode,
+                model.tap_test, model.round_state(), self.session_id)
 
     def _print_messages(self) -> None:
         for line in self.model.messages:
@@ -1048,6 +1067,8 @@ class DashboardShell(cmd.Cmd):
                             "start_now_enabled", "start_enabled"):
                     snap[key] = False
             snap["session"] = self.session_id
+            snap["tap_log"] = (os.path.basename(self.tap_log.path)
+                               if self.tap_log is not None else None)
             for row in snap["uploads"]:  # type: ignore[union-attr]
                 stats = self.live.get(str(row.get("address")))
                 row["acked"] = len(stats.acked) if stats else 0

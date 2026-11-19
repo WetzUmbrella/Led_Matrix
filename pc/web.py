@@ -73,6 +73,7 @@ import asset_builder as ab  # noqa: E402
 import dashboard as db  # noqa: E402
 import gif_library as gl  # noqa: E402
 import proto_layout as pl  # noqa: E402
+import tap_log as tl  # noqa: E402
 
 #: Port and bind address (the page is for the laptop and the wall's PC LAN).
 DEFAULT_PORT = 8080
@@ -367,6 +368,9 @@ def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
                         help="Node IDs in reading order, 0 = empty cell")
     parser.add_argument("--gif", default=None,
                         help="a GIF of the library (pc/gifs) to play")
+    parser.add_argument("--tap-log", default="auto",
+                        help="CSV of every tap: auto (pc/logs/taps_<time>"
+                             ".csv), none, or a path")
     args = parser.parse_args(argv)
     try:
         session = db.resolve_session(args.session)
@@ -375,6 +379,10 @@ def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
         return 1
     shell = db.DashboardShell(args.pico, session)
     shell.background = True
+    if args.tap_log != "none":
+        shell.tap_log = tl.TapLog(tl.default_path() if args.tap_log == "auto"
+                                  else args.tap_log)
+        print("taps logged to %s" % shell.tap_log.path)
     try:
         start_wall(shell, args.layout, args.map, args.gif)
     except ab.AssetError as err:
@@ -394,6 +402,8 @@ def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
     finally:
         stop.set()
         server.server_close()
+        if shell.tap_log is not None:
+            shell.tap_log.close()
         shell.link.close()
         shell.telemetry.close()
     return 0
