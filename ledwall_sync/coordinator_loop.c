@@ -429,6 +429,9 @@ static uint32_t      g_txq_count = 0u;
  *  and the breadcrumb the frozen run left (CL_STATS wd_step). */
 static bool       g_b_watchdog_boot = false;
 static uint32_t   g_watchdog_step   = 0u;
+/** The breadcrumb of the watchdog boot before (CL_STATS wd_prev): a second
+ *  freeze while rejoining no longer hides where the first one was. */
+static uint32_t   g_watchdog_prev   = 0u;
 #ifndef CL_HOST_TEST
 /** scratch[4] as watchdog_enable() left it (see cl_watchdog_feed), and
  *  the current breadcrumb step (see cl_crumb). */
@@ -1955,15 +1958,15 @@ static void cl_print_stats (void)
            " cmd_fail=%" PRIu32 " events_lost=%" PRIu32 " exc_max=%" PRIu32
            " cb_max_us=%" PRIu32 " dispatch_max_us=%" PRIu32
            " online=0x%03" PRIx16 " ready=0x%03" PRIx16 " sync=0x%03" PRIx16
-           " wd_boot=%u wd_step=0x%08" PRIx32 " tx_drop=%" PRIu32
-           " tx_fail=%" PRIu32 "\n",
+           " wd_boot=%u wd_step=0x%08" PRIx32 " wd_prev=0x%08" PRIx32
+           " tx_drop=%" PRIu32 " tx_fail=%" PRIu32 "\n",
            cl_state_code(), g_stats.sent, g_stats.first_seq, g_stats.last_seq,
            g_stats.send_fail, g_stats.skipped, g_stats.rx_dropped,
            g_stats.rx_bad, g_stats.stale, g_stats.cmd_fail, g_stats.events_lost,
            g_stats.exc_max, g_stats.cb_max_us, g_stats.dispatch_max_us,
            cl_online_bits(), g_readiness, g_sync,
-           g_b_watchdog_boot ? 1u : 0u, g_watchdog_step, g_stats.tx_drop,
-           g_stats.tx_fail);
+           g_b_watchdog_boot ? 1u : 0u, g_watchdog_step, g_watchdog_prev,
+           g_stats.tx_drop, g_stats.tx_fail);
 
     printf("LATE_HIST");
 
@@ -3244,8 +3247,11 @@ void coordinator_loop_run (void)
         /* The evidence of a freeze: the loop had stopped for 8 s, at the
          * step the breadcrumb names. */
         g_watchdog_step = watchdog_hw->scratch[0];
+        g_watchdog_prev = watchdog_hw->scratch[1];
+        watchdog_hw->scratch[1] = g_watchdog_step; /* For the next one. */
         printf("COORDINATOR: restarted by the watchdog, step 0x%08" PRIx32
-               "\n", g_watchdog_step);
+               ", the one before 0x%08" PRIx32 "\n", g_watchdog_step,
+               g_watchdog_prev);
     }
 
     watchdog_enable(CL_WATCHDOG_MS, true); /* Paused under a debugger. */
