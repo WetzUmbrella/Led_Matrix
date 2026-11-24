@@ -61,3 +61,16 @@ After the 14:54 restart every ARM was refused (`GAME_REFUSED value=7`): the Pico
 Fix (`pc/dashboard.py`): after "Pico back" the mode is marked unsent and sent at the first fresh STATUS showing READY; a user's own mode switch clears the mark. Host tests `test_a_pico_back_gets_the_mode_only_once_ready` and `test_a_mode_switch_after_a_pico_restart_is_not_sent_twice` (both fail on the old code); pytest 505 passed.
 
 Wall check (15:12:21, website in game mode, `picotool reboot -f`, serial from boot in `pico_restart_fix.log`): READY at t=14.1 s, no GAME_REFUSED, ARM accepted (state 12 at t=24.7 s). Also passed once at 15:10:34 (ARM accepted).
+
+## Echo grouping (15:15 to 15:28)
+
+Two rounds with the Pico logged (`pico_round_echo.log`; round 1 at 300 mg: 20 hits, 38 wrong; round 2 hard at 620 mg: 16 of 29, 19 wrong). Tiles 3 and 6 dropped off together at 15:13 and came back on a replug (likely their power feed). Analysis joins the Pico's GAME_TAP events (arrival, delivery time) with the website tap log's peaks (`echo_sim.py` in the session scratchpad; logic below):
+
+- Tile stamps of one tap are tight (90% within about 20 ms): the 30 ms dedupe window is right.
+- Delivery to the Pico: median 50 to 64 ms, 95th percentile 285 to 385 ms, worst 1 s.
+- Two failure modes: the strongest TAP arrived after the 20 ms collect wait, so the group was judged on an echo (a wrong tap, and the real one dropped as a duplicate); and an echo arriving after the next group closed was judged as a tap of its own (the Pico remembered one closed group).
+- A replay of the Pico's rules matched its judgement counts (59 against 58, 37 against 35). On 84 taps: today's rules judged 36 on an echo plus 12 extra; remembering 8 groups removes the extras; a 150 ms collect leaves 5.
+
+Fix (user's choice of 150 ms; `game_rules.h`/`.c`): `GAME_COLLECT_MS` 20 to 150, the last `GAME_WINDOWS` = 8 closed groups checked for late duplicates, `GAME_TAP_SLOTS` 16 to 32. After a hit the next mole shows about 50 ms later (MOLE_ON keeps its 200 ms lead after the later verdict). Host test C18d (fails on the old rules); C18 and C27 now state their waits by the constants. Host tests 39 of 39 (also ASan), barr_check 0 findings, firmware builds.
+
+Wall round (15:28, hard, 620 mg, `pico_round_fix.log`): **34 of 34 moles, 0 wrong, 0 missed, 3 stars.** On the same data the old rules would have judged 8 of 35 taps on an echo. The radio was calmer than at 15:20 (95th percentile delivery 160 ms), so not all of the gain is the fix.
