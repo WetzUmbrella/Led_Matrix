@@ -7,24 +7,23 @@ Read before acting, in this order:
 2. `docs/final/requirements_check_24nov.md`: what is met, what is not, and the NR-03 decision.
 3. `docs/bench/24nov/freeze_old_router.md`: the day's bench record (freeze runs, real rounds, both fixes).
 
-## 1. Where things stand
+## 1. Where things stand (updated 24 Nov, 17:20)
 
 | Item | State |
 |---|---|
-| Branch | `feature/whack-a-mole`, pushed to `263d5c4` and this file. |
-| Pico freezes | **Verdict: use the old router for the demo.** Head firmware passed the 6 min reproducer twice and 6 real rounds (hard slaps to 21 g) with no freeze; the Asus froze in about 2.5 min. The Pico still hangs in the router join (`wd_step 0x0b`) when the router disappears; the watchdog recovers it. |
-| Echo grouping | Fixed (`d7399f4`): collect wait 150 ms, 8 remembered groups, 32 tap slots. Wall round: 34 of 34 moles, 0 wrong. **Breaks NR-03** (decision pending, requirements check section 5). |
-| Website | Mode resent to a restarted Pico once it is READY (`314f51e`). |
-| CI | **Red 9 to 24 Nov** (clang-format), fixed in `263d5c4`; check the run on that commit. Formatter: `.venv/bin/clang-format` 18.1.8 (installed in the venv; the system one is 23 and formats differently). |
-| Gate | Host tests (all suites, plain and ASan) pass, coordinator 39 of 39; barr_check 0 findings on 100 files; pytest 505 passed; Pico firmware builds. |
+| Branch | `feature/whack-a-mole`, pushed (head after `ac53533`). CI green from `263d5c4`. |
+| Pico freezes | Old router for the demo. One freeze in the evening, during a re-upload after a wall turn back; 30 plain re-uploads and 10 turn re-uploads afterwards had none. The watchdog recovers it. |
+| Echo grouping | Fixed (`d7399f4`, collect wait 150 ms); NR-03 restated to under 300 ms (user's decision). |
+| **Whole-wall rotation (D-17)** | **Built and passing on the wall, video mode only.** The Pico listens to the tiles' TELEMETRY (port 4215), decides a wall turn (`wall_turn.c`), stops and saves the frame, reports STATUS `wall_turn`; the website re-cuts and re-uploads; the Pico resumes at the saved frame. NR-08: 10 of 10 board turns (detection at most 1.8 s, playing again at most 7.9 s), 0 of 10 single-tile turns. E7 (rotation in a round) deferred. |
+| Robustness fixes today | Website resends the mode once a restarted Pico is READY (`314f51e`); tiles stop playing when the Pico restarts (`6b1e446`); failed uploads retried once the tile rejoins (`a18bce7`); Pico UDP pcbs raised to 6 (`8988105`); two wall-turn fixes (`f9d313c`). |
+| Gate | All host suites plain and ASan (coordinator 43 of 43, playback 7 of 7), barr_check 0 findings on 104 files, pytest 511, both firmwares build. |
 
 ### Boards on the bench
 
 | Board | Firmware | Notes |
 |---|---|---|
-| Pico `…E66430A64B595138` (MAC `2c:cf:67:d7:eb:c3`) | `d7399f4` (echo fix) | 192.168.1.154, on the laptop's USB for logs |
-| Pico `…E66430A64B608538` | `0007a53` | Off the bench |
-| Tiles 1 to 9 | `77e3165` | No tile change since 18 Nov; on a power bank |
+| Pico `…E66430A64B595138` (MAC `2c:cf:67:d7:eb:c3`) | `f9d313c` | 192.168.1.154, on the laptop's USB for logs |
+| Tiles 1 to 9 | `6b1e446` | Power bank; tiles 8 and 9 share a power run, and 3 and 6 dropped together once |
 
 ## 2. Bench setup changes
 
@@ -35,12 +34,10 @@ Read before acting, in this order:
 
 ## 3. Next, in order
 
-1. **NR-03 decision** (user): keep 150 ms and restate NR-03, go back to 20 ms, or flash locally (requirements check section 5).
-2. **Whole-wall rotation E3 to E8** (user): build step 5 or record the descope with its reason in `game_plan_v2.md`.
-3. **Measure video sync skew (NR-07)**: wire `pico_tap` (Pico `…3B6838`) to two tiles' GPIO4 and GND, run `pc/tools/skew_analyse.py`; the rig is in `docs/week10/skew_2tile/RIG.md`. This is the brief's core claim and has never been measured.
-4. **Week 13 change-requirement evidence**: add the game rows to `docs/week13/data_representation.md` (bit widths from `protocol/layout_table.md`), re-measure the "after" sizes on head, fill the `[NEEDS MEASUREMENT]` cells (heap after WiFi, on-air bytes), and run or explicitly drop the five hardware tests (section 4.2 of the check).
-5. **Defence docs**: each buddy's `docs/*_DEFENCE.md` needs its game part (NR-14).
-6. Smaller: the Pico's `stale=928` after the 14:54 restart (not checked); 10 rounds in a row for NR-06; time A6, A7, A8 against the Pico log.
+1. **Measure video sync skew (NR-07)**: wire `pico_tap` (Pico `…3B6838`) to two tiles' GPIO4 and GND and run `pc/tools/skew_analyse.py` (rig: `docs/week10/skew_2tile/RIG.md`). Never measured; it is the brief's core claim.
+2. **Week 13 change-requirement evidence**: game rows and the new STATUS `wall_turn` in `docs/week13/data_representation.md`, re-measure the "after" sizes on head, fill the `[NEEDS MEASUREMENT]` cells, run or explicitly drop the five hardware tests (`requirements_check_24nov.md` section 4.2).
+3. **Defence docs** (NR-14): each buddy's game part, now including `wall_turn` (Benjamin), the TELEMETRY-on-turn and restart stop (Cheston, Ahsanul for playback), the website turn and retry (Jolyn).
+4. Smaller: the Pico's `stale` counter after restarts (not checked); 10 rounds in a row for NR-06; time A6, A7, A8; whether turns while paused behave (built, not wall-tested).
 
 ## 4. Method notes from today
 
@@ -48,4 +45,8 @@ Read before acting, in this order:
 - The Pico's USB log keeps nothing from before the port is opened: start the capture before a reboot to see boot events. Use plain `cat`; a `stty` left in D state held the port once (kill -9 it).
 - `docs/bench/24nov/tools/echo_sim.py PICO_LOG TAPS_CSV` replays the Pico's grouping on a round's real arrival times; it matched the Pico's judgement counts within 2.
 - Barr output: read all of it, not `tail -1`; several findings hid behind the last line today.
+- `docs/bench/24nov/tools/upload_soak.py RUNS LOG` re-uploads the whole wall from the website and counts freezes.
+- The Pico prints `tel_rx`, `wt_known`, `wall_turn` in CL_STATS: `tel_rx` must rise about 9 per second, `wt_known=0x1ff` for a 9-tile wall.
+- After any layout change by hand, check the website's map against the tiles' orientations before a turn test.
+- Host tests inject datagrams without opening sockets, so a port that fails to open (lwIP pcb limit) passes them; read the Pico's boot lines after adding a port.
 - A restarted Pico passes SYNCHRONISING, where it refuses a mode change but ACKs it.
