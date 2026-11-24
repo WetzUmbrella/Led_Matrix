@@ -8,9 +8,10 @@ Verdicts: **Met** (built, and the evidence named passes), **Built, not measured*
 
 | | Count |
 |---|---|
-| Must and Should rows met | 35 |
-| Built, not measured or partly met | 15 (including NR-07 video sync) |
-| Not met | 9: E3 to E8 whole-wall rotation, NR-03 latency, NR-08 rotation detection, NR-14 defence docs |
+| Must and Should rows met | 41 (updated 24 Nov evening: rotation E3 to E6, E8 and NR-08 met) |
+| Built, not measured or partly met | 16 (including NR-07 video sync and NR-03 latency) |
+| Not met | 1: NR-14 defence docs |
+| Deferred | E7 rotation in a round (D-17) |
 | Stretch, not built | B8, C7, G1 to G9, F1 to F5 |
 
 Biggest gaps, in order of risk for the final demo and report:
