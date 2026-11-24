@@ -1,0 +1,84 @@
+=== IMG_3429.mov  start 0 s  boxes A 120,228,181,135  B 531,200,166,153
+readable frames: A 302, B 302
+steps: A 80, B 76; implied frame rate 189.3 fps (50 steps/s)
+paired steps: 76
+skew B - A: median -0.24 ms, mean 3.27 ms
+|skew|: median 0.38 ms, p95 3.75 ms, max 291.78 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_3429.mov  start 10 s  boxes A 91,230,173,166  B 553,199,195,181
+readable frames: A 305, B 305
+steps: A 63, B 63; implied frame rate 240.3 fps (50 steps/s)
+paired steps: 63
+skew B - A: median -0.43 ms, mean -0.77 ms
+|skew|: median 0.53 ms, p95 3.56 ms, max 3.84 ms
+NR-07 (under 5 ms): PASS
+=== IMG_3429.mov  start 20 s  boxes A 104,228,181,168  B 590,194,180,182
+readable frames: A 305, B 305
+steps: A 63, B 63; implied frame rate 238.6 fps (50 steps/s)
+paired steps: 63
+skew B - A: median -0.12 ms, mean -0.31 ms
+|skew|: median 0.46 ms, p95 3.46 ms, max 4.86 ms
+NR-07 (under 5 ms): PASS
+=== IMG_3429.mov  start 30 s  boxes A 113,216,173,156  B 599,183,175,173
+readable frames: A 305, B 305
+steps: A 62, B 60; implied frame rate 245.1 fps (50 steps/s)
+paired steps: 60
+skew B - A: median -0.19 ms, mean -0.16 ms
+|skew|: median 0.63 ms, p95 2.47 ms, max 7.58 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_3429.mov  start 40 s  boxes A 126,212,166,155  B 612,179,166,172
+readable frames: A 305, B 305
+steps: A 64, B 62; implied frame rate 237.2 fps (50 steps/s)
+paired steps: 62
+skew B - A: median -0.23 ms, mean -0.20 ms
+|skew|: median 0.62 ms, p95 2.27 ms, max 6.23 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_3429.mov  start 50 s  boxes A 132,213,169,151  B 616,180,172,168
+readable frames: A 305, B 305
+steps: A 63, B 55; implied frame rate 237.6 fps (50 steps/s)
+paired steps: 55
+skew B - A: median -0.09 ms, mean -0.93 ms
+|skew|: median 0.86 ms, p95 3.52 ms, max 25.99 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_3429.mov  start 60 s  boxes A 120,206,178,157  B 609,172,177,176
+readable frames: A 305, B 305
+steps: A 62, B 60; implied frame rate 243.6 fps (50 steps/s)
+paired steps: 60
+skew B - A: median 1.84 ms, mean 1.44 ms
+|skew|: median 1.92 ms, p95 3.96 ms, max 9.87 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_3429.mov  start 70 s  boxes A 119,201,166,152  B 607,167,167,169
+readable frames: A 305, B 305
+steps: A 63, B 63; implied frame rate 237.8 fps (50 steps/s)
+paired steps: 63
+skew B - A: median 0.00 ms, mean 0.17 ms
+|skew|: median 0.48 ms, p95 3.46 ms, max 4.66 ms
+NR-07 (under 5 ms): PASS
+=== IMG_3429.mov  start 80 s  boxes A 121,209,168,148  B 609,175,170,167
+readable frames: A 305, B 305
+steps: A 63, B 63; implied frame rate 239.3 fps (50 steps/s)
+paired steps: 63
+skew B - A: median -0.20 ms, mean -0.11 ms
+|skew|: median 0.37 ms, p95 0.97 ms, max 1.21 ms
+NR-07 (under 5 ms): PASS
+=== IMG_3429.mov  start 90 s  boxes A 124,204,168,152  B 612,170,170,168
+readable frames: A 305, B 305
+steps: A 63, B 63; implied frame rate 238.6 fps (50 steps/s)
+paired steps: 63
+skew B - A: median -0.16 ms, mean -0.08 ms
+|skew|: median 0.38 ms, p95 0.95 ms, max 1.27 ms
+NR-07 (under 5 ms): PASS
+=== IMG_3429.mov  start 100 s  boxes A 128,206,169,161  B 616,172,169,178
+readable frames: A 305, B 305
+steps: A 63, B 59; implied frame rate 239.4 fps (50 steps/s)
+paired steps: 59
+skew B - A: median -0.36 ms, mean -0.83 ms
+|skew|: median 0.53 ms, p95 2.80 ms, max 29.79 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_3429.mov  start 110 s  boxes A 126,204,179,179  B 614,168,181,197
+readable frames: A 232, B 232
+steps: A 63, B 63; implied frame rate 183.8 fps (50 steps/s)
+paired steps: 62
+skew B - A: median 0.00 ms, mean -0.36 ms
+|skew|: median 0.65 ms, p95 2.66 ms, max 5.16 ms
+NR-07 (under 5 ms): FAIL

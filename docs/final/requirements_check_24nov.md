@@ -8,15 +8,15 @@ Verdicts: **Met** (built, and the evidence named passes), **Built, not measured*
 
 | | Count |
 |---|---|
-| Must and Should rows met | 41 (updated 24 Nov evening: rotation E3 to E6, E8 and NR-08 met) |
-| Built, not measured or partly met | 16 (including NR-07 video sync and NR-03 latency) |
+| Must and Should rows met | 42 (updated 24 Nov evening: rotation E3 to E6, E8 and NR-08 met; NR-07 met at 21:07 with the drift fix `cbe7763`) |
+| Built, not measured or partly met | 15 (including NR-03 latency) |
 | Not met | 1: NR-14 defence docs |
 | Deferred | E7 rotation in a round (D-17) |
 | Stretch, not built | B8, C7, G1 to G9, F1 to F5 |
 
 Biggest gaps, in order of risk for the final demo and report:
 
-1. **Video sync skew was never measured** (NR-07; the brief's core claim, W6 NFR2: 5 ms target, 16.67 ms limit). Every skew run (5 Nov B1 to B9, G6, T-X-09 soak) is recorded NOT RUN: no logic analyser, and the `pico_tap` recorder (Pico `…3B6838`) was never wired to the tiles' GPIO4.
+1. ~~Video sync skew was never measured~~ (NR-07; the brief's core claim, W6 NFR2: 5 ms target, 16.67 ms limit). **Measured 24 Nov by 240 fps camera** (the tiles have no GPIO4 access for `pico_tap`): it failed on tiles 7 and 8 (up to 8.6 ms), the cause was the tiles' drift estimate, and with the fix `cbe7763` every pair filmed on tiles 4 to 9 is under 5 ms (section 3).
 2. ~~Whole-wall rotation (E3 to E8) never built.~~ **Built 24 Nov evening for video mode (D-17); E3 to E6, E8 and NR-08 met on the wall; E7 deferred.** D-15 kept it Must after the prototype; later handoffs call step 5 "stretch", but no decision moving it is recorded. Either build it or record the descope with its reason.
 3. **NR-03 (tap to hit burst under 100 ms) now fails by design.** The tile flashes only on the Pico's FEEDBACK (DS-07), so the 24 Nov collect wait of 150 ms (user's choice, `d7399f4`) puts tap to flash at about 240 ms. It was never measured before either; on the 24 Nov network the 20 ms wait gave about 110 to 130 ms. Options in section 5.
 4. **The Week 13 change-requirement evidence (Tribunal 1) is incomplete and dated 3 Nov**, before the game added six message types (section 4).
@@ -105,7 +105,7 @@ Stretch since D-15 (10 Nov): not built. The professor consult on a workaround (1
 | NR-04 rotate feedback | n/a | Rotate sprite is stretch |
 | NR-05 no double counts (50 hits) | Partly | 24 Nov: 34 of 34 hits, 0 wrong after the echo fix; not the 50-hit card |
 | NR-06 10 rounds without reboot | Partly | 24 Nov: 6 rounds and 2 x 6 min reproducer runs without a freeze on the old router; not 10 in a row; the watchdog recovers a freeze in about 20 s |
-| NR-07 video sync under 5 ms | **Not met** (24 Nov evening, by camera) | 240 fps slow-motion video, threshold 200, normal-speed pieces excluded (`docs/bench/24nov/freeze_old_router.md`, "NR-07 by camera"). Tiles 4 and 5: every real step under 5 ms (medians -0.4 to +1.8 ms; 6 misreads up to 30 ms shown by eye and excluded). Tiles 7 and 8: no one-tick slip, but tile 8 drifts about 3 ms ahead in the last 2 s, with 7 real steps of 5.0 to 8.6 ms. Steps timed to about one frame (4.17 ms). Next: the time sync between tiles 7 and 8 |
+| NR-07 video sync under 5 ms | **Met** (24 Nov, 21:07, by camera, tiles 4 to 9 on `cbe7763`) | 240 fps slow-motion video, two tiles at a time, threshold 200, pieces within 2 % of 240 fps, every step over 4 ms checked (`docs/bench/24nov/freeze_old_router.md`, "NR-07 by camera" and "NR-07 with the drift fix"). Before the fix tiles 7 and 8 failed (tile 8 up to 8.6 ms ahead; cause: a drift estimate of about 1,500 ppm from beacon delay). With `cbe7763` (drift limited to 50 ppm): 7-8 (twice), 8-9 and 5-6 have no real step at or over 5 ms, medians -0.38 to +0.31 ms; misreads shown by eye and excluded. Limits: about 15 s of real time per recording, 5-6 on 3 pieces, 4-5 filmed only on the old firmware (passed), tiles 1 to 3 not tested; steps timed to about one frame (4.17 ms) |
 | NR-08 rotation detection | Met (24 Nov) | 10 of 10 board turns, 0 of 10 single-tile turns |
 | NR-09 brightness cap and 4-bit packing | Met | `check_assets` host test; `docs/week13/check_assets.log` |
 | NR-10 code standard, CI green | Met from 24 Nov | barr_check 0 findings on 104 files; CI green from `263d5c4` (red 9 to 24 Nov) |
@@ -151,4 +151,4 @@ None of the three meets 100 ms and keeps accuracy without a design change; the r
 
 ## 6. What the demo can claim today
 
-A full child round on a 3x3 wall from the website, with level choice, tap tuning, start sprite, countdown, scoring without penalties, results and `/score`; video of any GIF on any layout up to 9x9 sparse; recovery from a Pico restart by itself; 34 of 34 hits with 0 wrong on the old router after the echo fix; whole-wall rotation in video mode (E3 to E6 and E8; NR-08: 10 of 10 wall turns, 0 of 10 single-tile turns). It cannot yet claim a measured sync skew (NR-07) or a measured tap latency (NR-03), and rotation during a round (E7) is deferred.
+A full child round on a 3x3 wall from the website, with level choice, tap tuning, start sprite, countdown, scoring without penalties, results and `/score`; video of any GIF on any layout up to 9x9 sparse; recovery from a Pico restart by itself; 34 of 34 hits with 0 wrong on the old router after the echo fix; whole-wall rotation in video mode (E3 to E6 and E8; NR-08: 10 of 10 wall turns, 0 of 10 single-tile turns); and a measured video sync skew under 5 ms between neighbouring tiles (NR-07, tiles 4 to 9, firmware `cbe7763`). It cannot yet claim a measured tap latency (NR-03), and rotation during a round (E7) is deferred.

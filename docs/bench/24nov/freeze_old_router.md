@@ -198,3 +198,62 @@ Every pair over 4 ms was checked from both tiles' decoded values over frames f-3
 Each step is timed to about one frame (4.17 ms), not the 0.15 ms of the synthetic check: the iPhone's exposure was much shorter than the frame period, so the reader's sub-frame interpolation does not apply. The medians (55 to 64 steps per piece) are the finer figure.
 
 **NR-07: FAIL on tiles 7 and 8** (rule: every real step in the usable pieces under 5 ms; misreads shown by eye excluded; a one-tick slip of about 16.7 ms fails). Tiles 4 and 5: every real step under 5 ms, medians -0.4 to +1.8 ms. Tiles 7 and 8: no one-tick slip, but tile 8 drifts ahead of tile 7 at the end of the recording (median 0.0 to -0.9 ms over 10 to 80 s, then -1.4, -2.8, and -4.1 ms in the excluded end piece, about the last 2 s of 15 s real), with 7 real steps of 5.0 to 8.6 ms. Rolling shutter does not explain it: tile 8 is lower in the picture, so it is read later, which would show it later, not earlier. Next: look at the time sync between tiles 7 and 8 (offset and drift corrections around 18:12).
+
+## Time sync: why tiles 7 and 8 drift apart (18:48 to 19:07)
+
+Tiles 7, 8 and 9 on the laptop's USB (COM10, COM11, COM12; matched by USB serial number = MAC, as in `docs/bench/12nov/tools/flash_tiles.sh`), firmware `6b1e446`, logged with `tools/tile_capture.py` (DTR and RTS held low so opening the port does not reset the board): `ts_tile7.log`, `ts_tile8.log`, `ts_tile9.log`. Every tile prints `BCN,seq,t_pico,t_local` for each Pico beacon (10 Hz), the raw input of the time-sync filter. Tiles 1 to 3 were off (their power adapter is failing; website slots 0 to 2 set off with `POST /api/slot`), the wall ran on tiles 4 to 9.
+
+`tools/ts_replay.py` replays the firmware filter (`panel_sync/main/timesync.c`: 16-beacon minimum, drift from the minima of the two 8-beacon halves, target = estimate + drift x age of the minimum sample, slew at most 100 us per 60 Hz tick, the re-seed rule) on those samples. Reference for the true offset: each tile's lower envelope (smallest delay in each 5 s block). A tile whose offset is e us too large fires its ticks e us late, so skew B - A = e_B - e_A at the same Pico time. Output: `ts_replay.log`.
+
+- **Beacon delay is large but common to all tiles:** over the floor, median 10 ms, p90 43 ms, p99 127 ms, max 300 to 410 ms, the same on every tile within 0.1 ms (the router holds broadcasts). Per beacon, tile 8 minus tile 7 (trend removed): median 0.09 ms, max 1.0 ms.
+- **The drift estimate is far outside the crystals' range:** from two minima only 0.8 s apart, |drift| had a median of about 1,500 ppm, p90 21,000 ppm, max 103,000 ppm (tile 7); 85 % of estimates above the 50 ppm worst case (VA-4.7). Extrapolated over the minimum sample's age (up to 1.6 s), it turns sub-millisecond differences into milliseconds.
+- **Replay, 19 min of tiles 7, 8 and 9:**
+
+| Drift in the replay | Skew 8 - 7, p1 / p99 | Ticks over 5 ms (of 68,959) |
+|---|---|---|
+| As in the firmware | -7.10 / +9.00 ms | 5,103 |
+| Drift off | -0.26 / +0.41 ms | 40 (the re-seed below) |
+| Limited to +-50 ppm | -0.26 / +0.39 ms | 40 (the re-seed below) |
+
+  The first 2 minutes alone gave -10.1 / +4.6 ms and a worst 10.9 ms with the firmware's drift, 0.47 ms limited: the same shape the camera saw (mostly under 5 ms, bursts of 5 to 10 ms).
+- **A whole-wall re-seed at about 19:06:50:** three beacons in a row more than 500 ms late made all three tiles re-seed on the same beacon (`TS reseed ... t_p=3164928655`) and step their display clock (`DE clock jump lead_us=667000`). Common to the tiles, so not a skew, but a visible jump of the video on the whole wall. The 40 ticks of about 650 ms in the replay are the replay pairing ticks across that step. Not addressed yet.
+- Limits: the replay models the filter, it does not measure light; a constant difference in the tiles' floor delay is invisible to it.
+
+**Fix:** `cbe7763` limits the drift estimate to +-50 ppm (`TIMESYNC_DRIFT_MAX_PPB`). Host test first, failing on the old code (drift 6,211,180 ppb, published offset 9,347 us from the estimate), passing after (50,000 ppb, 75 us; a real 20 ppm drift kept at 19,999 ppb). Gate: clang-format 18.1.8 clean on the 104 scope files, barr_check 0 findings, all host suites plain and ASan (panel_sync all groups, proto 8 of 8, coordinator 43 of 43, pico_tap 4 of 4), pytest 509 passed 3 skipped, cross-lang 3 of 3, both firmwares build (tile image 19:03).
+
+## Drift limit flashed to tiles 7, 8 and 9 (19:08): they do not join the WiFi
+
+esptool 5.6.0 from `.venv` (Windows), at the offsets of `panel_sync/build/flash_args` (0x0, 0x8000, 0x10000; NVS at 0x9000 untouched): tiles 7 (COM10), 8 (COM11), 9 (COM12) flash exit 0, MAC matches, hashes verified (`flash_cbe7763_tile7.log` to `tile9.log`).
+
+After the reset none of the three joined: in 2 minutes each printed only its boot line and `ASSET_FLASH` once a minute, no `BCN`, `TN_STATS` or `DE ticks` (`after_flash_tile7.log` to `tile9.log`). Tiles 4, 5 and 6 (not flashed) stayed online. Most likely cause: the image was built on the Windows laptop, whose `panel_sync/main/wifi_secrets.h` dates from 12 Nov; the tiles' working image (`6b1e446`) was built on the bench machine. If the old router's password differs from the 12 Nov one, the new image cannot join. Not confirmed: the file is closed to the agent by the laptop's permission settings and was not changed (still 12 Nov 16:37).
+
+Also seen:
+- **Pico watchdog restart** at about 19:08 (STATUS lost about 19:08:10, back about 19:09:20, `wd_boot=1`), right as tiles 7 to 9 dropped off for the flash. It recovered by itself and served tiles 4 to 6.
+- At about 19:15 the laptop's **Ethernet link went down** (`Ethernet: Disconnected`), so the website shows NO STATUS; the Pico's own USB log shows it running normally (`sent=4401`, tiles 4 to 6 online).
+- An empty stray file `panel_syncmainwifi_secrets.h` at the repo root (a `!` command in Git Bash dropped the backslashes of a Windows path). Untracked, not committed; delete it.
+
+**Resolved (19:27):** both `wifi_secrets.h` copies on the laptop (`panel_sync/main/` and `ledwall_sync/`) had `ROUTER_SSID "Matrix"`; the old router broadcasts `MATRIX` (BSSID `88:d7:f6:be:85:70`, channel 11, from `netsh wlan show networks`), and WiFi names are case-sensitive. The password was already right (same 8 characters in both files). With the user's permission the agent changed only the SSID in `panel_sync/main/wifi_secrets.h` (compared and edited by script, the password never printed; the file is git-ignored). `ledwall_sync/wifi_secrets.h` still says `Matrix`: fix it before building the Pico on this laptop. Rebuilt (19:26), re-flashed tiles 7, 8, 9 (`flash_matrix_tile7.log` to `tile9.log`, exit 0, hashes verified): all three received beacons within seconds and the website was READY on tiles 4 to 9.
+
+**Laptop network:** with the cable in, Windows also took the Matrix router as a DNS server, so the internet failed although the route stayed on SIT-WIFI (Ethernet metric 9000). The Ethernet adapter is now static `192.168.1.228/24`, no gateway, no DNS (set in `ncpa.cpl`); undo with "obtain automatically".
+
+## NR-07 with the drift fix (20:20 to 21:07)
+
+Same method as "NR-07 by camera" (10 s pieces, `--threshold 200`, pieces within 2 % of 240 fps, every step over 4 ms checked from decoded values and the 13 over 5 ms by eye; rule: every real step in the usable pieces under 5 ms). For two rows of tiles in one picture, `tools/segments2.py` takes a height range per tile; `SEG_FPS` sets the frame rate.
+
+Firmware at the time: tiles 7 to 9 on `cbe7763` from 19:27; tiles 4 to 6 on `6b1e446` until about 20:44, then `cbe7763` (`flash_cbe7763_tile4.log` to `tile6.log`). Tiles 1 to 3 off (failing power adapter), website slots 0 to 2 off.
+
+| Video (iPhone 17 Pro Max, 240 fps) | Tiles | Firmware | Usable pieces | Medians | Real steps >= 5 ms | Over 4 ms | Result |
+|---|---|---|---|---|---|---|---|
+| `IMG_3433.mov` (20:23) | 7, 8 | `cbe7763` | 9 | +0.06 to +0.25 ms | 0 | 7 one-frame granularity (4.31 to 4.48), 1 misread (+8.56, by eye) | **PASS** |
+| `IMG_3434.mov` (20:24) | 4, 5 | `6b1e446` (old) | 9 | -0.40 to +0.03 ms | 0 | 1 misread (-13.10, by eye); at 60 s tile 5 a whole frame ahead on values 1, 2, 5 (-4.21 to -4.79 ms) | PASS |
+| `IMG_3437.mov` (21:06) | 7, 8 | `cbe7763` | 4 | -0.24 to 0.00 ms | 0 | 2 granularity (4.19, 4.47) | **PASS** |
+| `IMG_3436.mov` (21:05) | 8, 9 | `cbe7763` | 9 | -0.38 to +0.04 ms | 0 | 6 granularity (4.01 to 4.84) | **PASS** |
+| `IMG_3435.mov` (21:04) | 5, 6 | `cbe7763` | 3 | +0.18 to +0.31 ms | 0 | 1 misread (+7.80, by eye) | **PASS** (thin: tile 6 read only 2 to 25 steps per piece from 70 s on) |
+
+Excluded pieces: 3433 at 0, 80, 110 s; 3434 at 0, 10, 110 s; 3437 at 0, 10, 30, 40, 70, 90, 100, 110 s (tile 7 missed steps, which raises the implied rate); 3436 at 0, 60 (245.5), 110 s; 3435 at 0, 10, 30, 50, 60, 110 s and 80 to 100 s (tile 6 unreadable, 2 to 6 steps). Missed steps in the usable pieces: none, except tile 9 (4 at 10 s; most of 50 s and 90 s, its reading broke down) and the GIF's 13-value loop jump on both tiles. Logs: `nr07fix_segments_*.log`, `nr07fix_outliers.log`.
+
+Not usable:
+- `IMG_3431.mov` (19:42, six tiles in one picture): tiles 5 and 7 tilted 10 to 20 degrees, about 100 px wide and over-exposed; tile 7 never readable, 4 to 6 read 5 to 50 steps per piece (`nr07fix_segments_3431_pair*.log`). Film two tiles at a time, square-on.
+- `IMG_4536 (2).mov` to `IMG_4538.MOV` (iPhone 15 Pro, 20:52 to 20:54): recorded at 240 fps but the file reached the laptop rendered at quarter speed, about 120 frames per real second (about 125 counter steps per 10 s piece, file 60 s for 15 s of filming). One frame is 8.33 ms, longer than the 5 ms limit, so no strict verdict (medians 0.00 to 0.24 ms; `nr07fix_segments_*_120fps.log`). A full 240 fps file is about 2 minutes long for 15 s of filming. `IMG_4536.MOV` and `IMG_4537.MOV` (without "(2)") are truncated copies.
+
+**NR-07: met on tiles 4 to 9 with `cbe7763`.** Every pair filmed on the new firmware (7-8 twice, 8-9, 5-6) has no real step at or over 5 ms, and no tile is a whole frame ahead on repeated steps; with the old firmware 7-8 failed (`IMG_3430.mov`, 7 real steps of 5.0 to 8.6 ms) and 4-5 already showed the pattern under 5 ms. Limits: each recording is about 15 s of real time; 5-6 rests on 3 pieces; 4-5 was not filmed on the new firmware; tiles 1 to 3 not tested (unpowered). Each step is timed to about one frame (4.17 ms).
