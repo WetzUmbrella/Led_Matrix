@@ -766,10 +766,11 @@
    "shown": 17,
    "state": 12,
    "time_left_s": 21,
+   "wall_turn": 3,
    "wrong": 2
   },
   "file": "status_typical.bin",
-  "hex": "8f8746a29456ce5f0541a47a0d",
+  "hex": "8f8746a29456ce5f0541a47acd",
   "kind": "message",
   "length": 13,
   "message": "STATUS",
@@ -789,6 +790,7 @@
    "shown": 0,
    "state": 0,
    "time_left_s": 0,
+   "wall_turn": 0,
    "wrong": 0
   },
   "file": "status_min.bin",
@@ -812,10 +814,11 @@
    "shown": 127,
    "state": 12,
    "time_left_s": 63,
+   "wall_turn": 3,
    "wrong": 127
   },
   "file": "status_max.bin",
-  "hex": "efffffffff7f1ea3ffffffff3f",
+  "hex": "efffffffff7f1ea3ffffffffff",
   "kind": "message",
   "length": 13,
   "message": "STATUS",

@@ -862,6 +862,7 @@ static bool decode_coordinator (uint8_t const * p_buf, uint32_t len,
                 print_u64("shown", msg.shown);
                 print_u64("time_left_s", msg.time_left_s);
                 print_u64("reaction_ms", msg.reaction_ms);
+                print_u64("wall_turn", msg.wall_turn);
             }
         }
         break;
@@ -1199,7 +1200,8 @@ static uint32_t encode_coordinator (uint32_t type, vector_args_t const * p_args)
                                         arg_u8(p_args, "wrong"),
                                         arg_u8(p_args, "shown"),
                                         arg_u8(p_args, "time_left_s"),
-                                        arg_u16(p_args, "reaction_ms")};
+                                        arg_u16(p_args, "reaction_ms"),
+                                        arg_u8(p_args, "wall_turn")};
 
             written = proto_encode_status(&msg, g_out, FILE_MAX);
         }

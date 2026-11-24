@@ -112,7 +112,8 @@ def test_payload_115200_does_not_match_a_600_frame_manifest() -> None:
 
 #: STATUS game fields at their idle values (build step 3).
 _STATUS_GAME = {"round_state": 0, "level": 0, "missed": 0, "wrong": 0,
-                "shown": 0, "time_left_s": 0, "reaction_ms": 0}
+                "shown": 0, "time_left_s": 0, "reaction_ms": 0,
+                "wall_turn": 0}
 #: WALL_PICTURE fields other than node_id, at valid values.
 #: A valid 1 x 1 SESSION_CONFIG with no tile placed (step 4d fields).
 _CFG = {"rows": 1, "cols": 1, "policy": 0, "placed": [0] * 9, "row": [0] * 9,
@@ -203,6 +204,20 @@ def test_score_is_twos_complement() -> None:
     data = pl.encode_status(session_id=0, seq=0, readiness=0, online=0,
                             state=0, score=-1, **_STATUS_GAME)
     assert (int.from_bytes(data, "little") >> 51) & 0xFF == 0xFF
+
+
+def test_wall_turn_round_trips_in_the_13_byte_status() -> None:
+    # D-17 (24 Nov 2026): 2 bits at offset 102, inside the same 13 B.
+    for turn in range(4):
+        fields = dict(_STATUS_GAME, wall_turn=turn)
+        data = pl.encode_status(session_id=1, seq=1, readiness=0, online=0,
+                                state=7, score=0, **fields)
+        assert len(data) == 13
+        assert pl.decode_status(data)["wall_turn"] == turn
+        assert (int.from_bytes(data, "little") >> 102) & 0x3 == turn
+    with pytest.raises(pl.LayoutError):
+        pl.encode_status(session_id=1, seq=1, readiness=0, online=0, state=7,
+                         score=0, **dict(_STATUS_GAME, wall_turn=4))
 
 
 def test_sparse_grid_round_trips() -> None:

@@ -109,7 +109,10 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
                     ("round_state", 3, 0, 4), ("level", 2, 0, 2),
                     ("missed", 7, 0, 127), ("wrong", 7, 0, 127),
                     ("shown", 7, 0, 127), ("time_left_s", 6, 0, 63),
-                    ("reaction_ms", 11, 0, 2047)]),
+                    ("reaction_ms", 11, 0, 2047),
+                    # D-17 (24 Nov 2026): quarter turns clockwise of the
+                    # whole wall since the session's layout.
+                    ("wall_turn", 2, 0, 3)]),
     "TELEMETRY": (16, [_NODE, ("fault_word", 32, 0, _U32),
                        ("orientation", 2, 0, 3),
                        ("display_state", 3, 0, 6)]),

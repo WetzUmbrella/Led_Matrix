@@ -147,6 +147,12 @@
 #define PROTO_TIME_LEFT_BITS   6u
 #define PROTO_REACTION_BITS    11u
 
+/** STATUS wall_turn: quarter turns clockwise of the whole wall since the
+ *  session's layout, 0 to 3 (D-17, 24 Nov 2026: whole-wall rotation in video
+ *  mode, decided on the Pico). */
+#define PROTO_WALL_TURN_BITS 2u
+#define PROTO_WALL_TURN_MAX  3u
+
 /** Largest counts, time left (s) and reaction time (ms) on STATUS. */
 #define PROTO_COUNT_MAX     127u
 #define PROTO_TIME_LEFT_MAX 63u
@@ -242,7 +248,7 @@
     (PROTO_HEADER_BITS + PROTO_BITMAP_BITS + PROTO_BITMAP_BITS +               \
      PROTO_COORD_STATE_BITS + PROTO_SCORE_BITS + PROTO_ROUND_STATE_BITS +      \
      PROTO_LEVEL_BITS + (3u * PROTO_COUNT_BITS) + PROTO_TIME_LEFT_BITS +       \
-     PROTO_REACTION_BITS)
+     PROTO_REACTION_BITS + PROTO_WALL_TURN_BITS)
 #define PROTO_STATUS_BYTES PROTO_BYTES(PROTO_STATUS_BITS)
 #define PROTO_TELEMETRY_BITS                                                   \
     (PROTO_HEADER_BITS + PROTO_NODE_BITS + PROTO_FAULT_BITS +                  \
@@ -610,6 +616,8 @@ typedef struct
     uint8_t        shown;       /**< Targets shown, 0 to 127. */
     uint8_t        time_left_s; /**< Seconds left in the round, 0 to 63. */
     uint16_t       reaction_ms; /**< Average hit reaction time, 0 to 2,047. */
+    uint8_t        wall_turn;   /**< Quarter turns clockwise since the
+                                     session's layout, 0 to 3 (D-17). */
 } proto_status_t;
 
 /** TELEMETRY {seq, fault word, orientation, display state}, tile to PC

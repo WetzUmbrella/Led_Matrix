@@ -179,7 +179,7 @@ bool test_messages_lengths (void)
     proto_start_at_t const       start = {hdr, 0u};
     proto_resume_at_t const      res   = {hdr, 0u, 0u};
     proto_command_t const        cmd   = {hdr};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u, 0u,
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u, 0u, 0u,
                                           0u,  0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_telemetry_ack_t const  tack  = {hdr, 0u};
@@ -514,10 +514,10 @@ static bool reject_encode (void)
     proto_heartbeat_t    beat = {hdr, 0u};
     proto_manifest_t     man  = {hdr, 2u, 0u, 0u};
     proto_status_t       stat = {
-        hdr, BITMAP_MAX + 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
-    proto_status_t      hi    = {hdr, 0u, 0u, 0u, SCORE_OVER, 0u,
+        hdr, BITMAP_MAX + 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t      hi    = {hdr, 0u, 0u, 0u, SCORE_OVER, 0u, 0u,
                                  0u,  0u, 0u, 0u, 0u,         0u};
-    proto_status_t      lo    = {hdr, 0u, 0u, 0u, SCORE_UNDER, 0u,
+    proto_status_t      lo    = {hdr, 0u, 0u, 0u, SCORE_UNDER, 0u, 0u,
                                  0u,  0u, 0u, 0u, 0u,          0u};
     proto_telemetry_t   tel   = {hdr, 1u, 0u, 0u, PROTO_DISPLAY_COUNT};
     proto_asset_chunk_t chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
@@ -545,6 +545,11 @@ static bool reject_encode (void)
     b_ok = (test_main_check(0u == proto_encode_manifest(&man, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
+    b_ok = (test_main_check(0u == proto_encode_status(&stat, g_buf, BUF_BYTES),
+                            __LINE__)) &&
+           b_ok;
+    stat.readiness = 0u;
+    stat.wall_turn = PROTO_WALL_TURN_MAX + 1u; /* 4 does not fit 2 bits. */
     b_ok = (test_main_check(0u == proto_encode_status(&stat, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
@@ -605,7 +610,7 @@ static bool reject_decode_range (void)
     proto_header_t const         hdr   = header_at(CORNER_MIN);
     proto_heartbeat_t const      beat  = {hdr, 1u};
     proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u, 0u,
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u, 0u, 0u,
                                           0u,  0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
@@ -1145,7 +1150,8 @@ static void rt_status (uint32_t corner)
         b_max ? PROTO_COUNT_MAX : 0u,
         b_max ? PROTO_COUNT_MAX : 0u,
         b_max ? PROTO_TIME_LEFT_MAX : 0u,
-        b_max ? PROTO_REACTION_MAX : 0u};
+        b_max ? PROTO_REACTION_MAX : 0u,
+        b_max ? PROTO_WALL_TURN_MAX : 0u};
     proto_status_t out;
     uint32_t const len = proto_encode_status(&msg, g_buf, BUF_BYTES);
 
@@ -1156,7 +1162,8 @@ static void rt_status (uint32_t corner)
           (msg.round_state == out.round_state) && (msg.level == out.level) &&
           (msg.missed == out.missed) && (msg.wrong == out.wrong) &&
           (msg.shown == out.shown) && (msg.time_left_s == out.time_left_s) &&
-          (msg.reaction_ms == out.reaction_ms));
+          (msg.reaction_ms == out.reaction_ms) &&
+          (msg.wall_turn == out.wall_turn));
 }
 
 /**

@@ -998,6 +998,7 @@ uint32_t proto_encode_status (proto_status_t const * p_msg, uint8_t * p_buf,
         put_field(&writer, PROTO_COUNT_BITS, p_msg->shown);
         put_field(&writer, PROTO_TIME_LEFT_BITS, p_msg->time_left_s);
         put_field(&writer, PROTO_REACTION_BITS, p_msg->reaction_ms);
+        put_field(&writer, PROTO_WALL_TURN_BITS, p_msg->wall_turn);
         written = PROTO_STATUS_BYTES;
     }
 
@@ -1031,6 +1032,7 @@ bool proto_decode_status (uint8_t const * p_buf, uint32_t len,
         p_msg->shown       = take_u8(&reader, PROTO_COUNT_BITS);
         p_msg->time_left_s = take_u8(&reader, PROTO_TIME_LEFT_BITS);
         p_msg->reaction_ms = take_u16(&reader, PROTO_REACTION_BITS);
+        p_msg->wall_turn   = take_u8(&reader, PROTO_WALL_TURN_BITS);
         b_ok               = status_ok(p_msg);
     }
 
@@ -1799,7 +1801,8 @@ static bool status_ok (proto_status_t const * p_msg)
            (p_msg->wrong <= PROTO_COUNT_MAX) &&
            (p_msg->shown <= PROTO_COUNT_MAX) &&
            (p_msg->time_left_s <= PROTO_TIME_LEFT_MAX) &&
-           (p_msg->reaction_ms <= PROTO_REACTION_MAX);
+           (p_msg->reaction_ms <= PROTO_REACTION_MAX) &&
+           (p_msg->wall_turn <= PROTO_WALL_TURN_MAX);
 }
 
 /**

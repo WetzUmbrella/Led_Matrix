@@ -61,7 +61,7 @@ TYPICAL: Dict[str, Dict[str, object]] = {
     "STATUS": {"readiness": 0x0A5, "online": 0x15A, "state": 12,
                "score": -7, "round_state": 3, "level": 1, "missed": 5,
                "wrong": 2, "shown": 17, "time_left_s": 21,
-               "reaction_ms": 431},
+               "reaction_ms": 431, "wall_turn": 3},
     "TELEMETRY": {"node_id": 8, "fault_word": 0x80000041,
                   "orientation": 2, "display_state": 4},
     "TELEMETRY_ACK": {"acked_seq": 0xBEEF},

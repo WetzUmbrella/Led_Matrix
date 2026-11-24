@@ -198,6 +198,7 @@ Header only. Accepted in PLAYING and PAUSED (W6D-2e).
 | shown | 78 | 7 | 0 to 127 | targets shown this round (stars and accuracy, C6, A9) | C6, A9 |
 | time_left_s | 85 | 6 | 0 to 63 | seconds left in the round | A7; width rule, 31 values for a 30 s round, 6 bits for room |
 | reaction_ms | 91 | 11 | 0 to 2,047 | average reaction time of this round's hits, ms (show to tap) | A9; width rule, 2,048 values |
+| wall_turn | 102 | 2 | 0 to 3 | quarter turns clockwise of the whole wall since the active session's layout; 0 = none. The PC re-cuts for the turned layout and sends a new SESSION_CONFIG (section 10 item 17) | D-17 (24 Nov 2026); width rule, 4 values; fits the 13 B STATUS (102 to 104 bits) |
 
 ### TELEMETRY (type 16, T to C)
 
@@ -296,7 +297,7 @@ Replaces SCORE_MASK (same type code 22, renamed 11 Nov 2026, DS-09). The Pico dr
 | RESUME_AT | 103 | 13 | 21 | derived |
 | PAUSE | 29 | 4 | 9 | derived |
 | STOP | 29 | 4 | 9 | derived |
-| STATUS | 102 | 13 | 28 | derived |
+| STATUS | 104 | 13 | 28 | derived (wall_turn added 24 Nov: 102 to 104 bits, same 13 B) |
 | TELEMETRY | 70 | 9 | 15 | derived |
 | TELEMETRY_ACK | 45 | 6 | 13 | derived |
 | TAP | 113 | 15 | none | new row, no before |
@@ -477,6 +478,8 @@ The receiver checks session_id against its session and seq against the last acce
     - **ACK has no acknowledged-type field.** All acked messages from one sender share one seq counter (the ACK rule, item 13; on the Pico the command counter), so acked_seq alone names the message. A type field would only repeat what seq already says.
 16. **Widths widened on purpose, decided by Ahsanul on 6 Nov 2026:** FEEDBACK result is 2 bits (3 codes, the decoy code reserved) and GAME_CONTROL command is 4 bits (4 codes, 12 spare), so the decoy stretch goal and later commands need no layout change. Neither changes a byte count: FEEDBACK is 35 bits and GAME_CONTROL 37 bits, both 5 bytes.
 
+17. **Whole-wall rotation (D-17, 24 Nov 2026, video mode only):** the Pico also listens on 4215 for the tiles' broadcast TELEMETRY and reads only node_id and orientation (the PC still ACKs it). A tile sends TELEMETRY as soon as its orientation changes, besides its 1 s period. When every placed, online tile has turned by the same quarter turns k from its reference within 1.5 s of the first change, the Pico adds k to STATUS wall_turn and, if it was playing, saves the frame and sends STOP; if it was paused, it stops too and returns to PAUSED after the new layout. The PC turns its layout by wall_turn (a cell at row r, column c of a rows x cols grid goes to row c, column rows - 1 - r for each quarter turn clockwise, and rows and cols swap), re-cuts and re-uploads, and sends a new SESSION_CONFIG. The Pico finds the turn j (0 to 3) that maps its previous layout onto the new one and subtracts it from wall_turn; when no j fits, the layout is new and every tile's reference is taken again. A pending resume then sends RESUME_AT with the saved frame once every tile is ready. Turns are ignored in game mode.
+
 ## 11. Transport (PROVISIONAL, section 10 item 12, owner Benjamin)
 
 All messages are single UDP datagrams on the dedicated router's subnet. Port numbers are plan choices; 4210 and 4211 keep the prototype's beacon and HELLO ports.
@@ -488,6 +491,6 @@ All messages are single UDP datagrams on the dedicated router's subnet. Port num
 | 4212 | Pico (`coordinator_loop`) | SESSION_CONFIG, the C to P commands of section 10 item 11 and GAME_CONTROL | unicast from the PC to the Pico's address (shown on the Pico's USB log and in the router's client list as `PICO-Main`) |
 | 4213 | PC (`pc/pico_link.py`) | STATUS and ACK (of a GAME_CONTROL) from the Pico | the Pico replies to the address and port of the last valid datagram from the PC |
 | 4214 | every tile (`tile_net`) | MANIFEST, ASSET_CHUNK, TELEMETRY_ACK from the PC | unicast from the PC to the tile address it learnt from that tile's TELEMETRY |
-| 4215 | PC (`pc/uploader.py`, `pc/telemetry.py`) | TELEMETRY (subnet broadcast); CHUNK_ACK, NACK, BUSY (unicast replies) from tiles | TELEMETRY is broadcast, so the PC learns every tile's address and Node ID without a lookup; replies go to the address and port the request came from |
+| 4215 | PC (`pc/uploader.py`, `pc/telemetry.py`); Pico (`coordinator_loop`, TELEMETRY only, from 24 Nov, D-17) | TELEMETRY (subnet broadcast); CHUNK_ACK, NACK, BUSY (unicast replies) from tiles | TELEMETRY is broadcast, so the PC learns every tile's address and Node ID without a lookup; replies go to the address and port the request came from |
 
 TELEMETRY is broadcast because nothing else tells the PC which address a Node ID has, and the PC must unicast MANIFEST and ASSET_CHUNK to the right tile (MANIFEST has no Node ID field). One 9 B TELEMETRY per tile per telemetry period (OD-11) is small next to the 120 B/s of beacons.
