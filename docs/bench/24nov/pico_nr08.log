@@ -1,0 +1,636 @@
+## open 17:06:19
+CL_STATS state=7 sent=8001 first_seq=0 last_seq=8000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=6781 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8001,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,34316,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,34272,8,20,15,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=805579 STATE node=0 value=8
+
+CL_EVENT t_ms=815044 STATE node=0 value=7
+
+CL_STATS state=7 sent=8101 first_seq=0 last_seq=8100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=6871 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,34768,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,34724,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8201 first_seq=0 last_seq=8200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=6961 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8201,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,35218,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,35174,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8301 first_seq=0 last_seq=8300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7051 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,35668,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,35624,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8401 first_seq=0 last_seq=8400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7141 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,36118,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,36074,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8501 first_seq=0 last_seq=8500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7231 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,36567,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,36523,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8601 first_seq=0 last_seq=8600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7321 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,37018,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,36974,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8701 first_seq=0 last_seq=8700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7411 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8701,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,37468,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,37424,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8801 first_seq=0 last_seq=8800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7501 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8801,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,37918,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,37874,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=8901 first_seq=0 last_seq=8900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7591 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,8901,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,38367,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,38323,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9001 first_seq=0 last_seq=9000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7681 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9001,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,38818,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,38774,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9101 first_seq=0 last_seq=9100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7771 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,39267,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,39223,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9201 first_seq=0 last_seq=9200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7861 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9201,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,39718,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,39674,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9301 first_seq=0 last_seq=9300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=7951 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,40168,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,40124,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9401 first_seq=0 last_seq=9400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=8041 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,40617,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,40573,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9501 first_seq=0 last_seq=9500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=8131 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,41068,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,41024,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9601 first_seq=0 last_seq=9600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=8221 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,41518,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,41474,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9701 first_seq=0 last_seq=9700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=8310 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9701,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,41967,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,41923,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9801 first_seq=0 last_seq=9800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=8399 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9801,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,42416,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,42372,8,20,15,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=9901 first_seq=0 last_seq=9900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=138 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=41 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=8489 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,9901,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,42864,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,42820,8,20,15,0,0,1,0,0,0,0
+
+## open 17:09:49
+## open 17:09:49
+## open 17:09:49
+Joining MATRIX (timeout 10000 ms)
+
+COORDINATOR up: ip=192.168.1.154, beacons on 4210, tiles to 4211, PC to 4212
+
+CL_EVENT t_ms=5592 JOIN node=3 value=1627498688
+
+CL_EVENT t_ms=5592 BACK node=3 value=0
+
+CL_EVENT t_ms=5593 JOIN node=2 value=2416027840
+
+CL_EVENT t_ms=5593 BACK node=2 value=0
+
+CL_EVENT t_ms=5594 JOIN node=1 value=1442949312
+
+CL_EVENT t_ms=5594 BACK node=1 value=0
+
+CL_EVENT t_ms=5595 JOIN node=6 value=2181146816
+
+CL_EVENT t_ms=5595 BACK node=6 value=0
+
+CL_EVENT t_ms=5595 JOIN node=4 value=100772032
+
+CL_EVENT t_ms=5596 BACK node=4 value=0
+
+CL_EVENT t_ms=5596 JOIN node=9 value=3674319040
+
+CL_EVENT t_ms=5596 BACK node=9 value=0
+
+CL_EVENT t_ms=5597 JOIN node=7 value=855746752
+
+CL_EVENT t_ms=5597 BACK node=7 value=0
+
+CL_EVENT t_ms=5599 JOIN node=8 value=1258399936
+
+CL_EVENT t_ms=5599 BACK node=8 value=0
+
+CL_EVENT t_ms=5601 JOIN node=5 value=234989760
+
+CL_EVENT t_ms=5602 BACK node=5 value=0
+
+CL_EVENT t_ms=6137 STATE node=0 value=3
+
+CL_EVENT t_ms=6137 STATE node=0 value=5
+
+CL_EVENT t_ms=10069 STATE node=0 value=7
+
+CL_STATS state=7 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=90 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,465,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,462,1,0,1,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=201 first_seq=0 last_seq=200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=180 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,201,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,916,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,913,1,0,1,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=301 first_seq=0 last_seq=300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=269 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,1365,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,1362,1,0,1,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=401 first_seq=0 last_seq=400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=359 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,1813,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,1810,1,0,1,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=501 first_seq=0 last_seq=500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=449 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,2265,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,2262,1,0,1,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=601 first_seq=0 last_seq=600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=1 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=538 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,2712,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,2709,1,0,1,0,0,1,0,0,0,0
+
+CL_STATS state=7 sent=701 first_seq=0 last_seq=700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=12 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=629 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,701,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,3210,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,3181,27,0,1,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=77414 STATE node=0 value=8
+
+CL_STATS state=8 sent=801 first_seq=0 last_seq=800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=28 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=717 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,801,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,3717,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,3651,64,0,1,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=94686 WALL_TURN node=0 value=1
+
+CL_EVENT t_ms=94686 STATE node=0 value=7
+
+CL_EVENT t_ms=95130 STATE node=0 value=3
+
+CL_EVENT t_ms=95130 STATE node=0 value=5
+
+CL_STATS state=5 sent=901 first_seq=0 last_seq=900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x000 sync=0x1fc wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=812 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,901,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,4206,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,4119,84,0,2,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=100433 STATE node=0 value=8
+
+CL_STATS state=8 sent=1001 first_seq=0 last_seq=1000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=902 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1001,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,4665,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,4578,84,0,2,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=113186 WALL_TURN node=0 value=1
+
+CL_EVENT t_ms=113186 STATE node=0 value=7
+
+CL_EVENT t_ms=113609 STATE node=0 value=3
+
+CL_EVENT t_ms=113609 STATE node=0 value=5
+
+CL_STATS state=5 sent=1101 first_seq=0 last_seq=1100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=62 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x000 sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=993 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,5205,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,5079,122,0,3,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=118509 STATE node=0 value=8
+
+CL_EVENT t_ms=125386 WALL_TURN node=0 value=3
+
+CL_EVENT t_ms=125386 STATE node=0 value=7
+
+CL_STATS state=7 sent=1201 first_seq=0 last_seq=1200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=74 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1089 wt_known=0x1ff wall_turn=3
+
+LATE_HIST,1201,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,5701,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,5559,138,0,3,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=125849 STATE node=0 value=3
+
+CL_EVENT t_ms=125849 STATE node=0 value=5
+
+CL_EVENT t_ms=131143 STATE node=0 value=8
+
+CL_STATS state=8 sent=1301 first_seq=0 last_seq=1300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=80 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1179 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,6163,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,6017,141,0,4,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=139286 WALL_TURN node=0 value=3
+
+CL_EVENT t_ms=139286 STATE node=0 value=7
+
+CL_EVENT t_ms=139602 STATE node=0 value=3
+
+CL_EVENT t_ms=139602 STATE node=0 value=5
+
+CL_EVENT t_ms=144350 STATE node=0 value=8
+
+CL_STATS state=8 sent=1401 first_seq=0 last_seq=1400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=127 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1276 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,6746,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,6548,192,0,5,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=150086 WALL_TURN node=0 value=2
+
+CL_EVENT t_ms=150086 STATE node=0 value=7
+
+CL_EVENT t_ms=150360 STATE node=0 value=3
+
+CL_EVENT t_ms=150360 STATE node=0 value=5
+
+CL_EVENT t_ms=155408 STATE node=0 value=8
+
+CL_STATS state=8 sent=1501 first_seq=0 last_seq=1500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=165 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1373 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,7287,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,7051,229,0,6,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=161686 WALL_TURN node=0 value=2
+
+CL_EVENT t_ms=161686 STATE node=0 value=7
+
+CL_EVENT t_ms=162103 STATE node=0 value=3
+
+CL_EVENT t_ms=162103 STATE node=0 value=5
+
+CL_STATS state=5 sent=1601 first_seq=0 last_seq=1600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=199 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x05d sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1464 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,7801,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,7535,258,0,7,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=166941 STATE node=0 value=8
+
+CL_EVENT t_ms=172686 WALL_TURN node=0 value=1
+
+CL_EVENT t_ms=172686 STATE node=0 value=7
+
+CL_EVENT t_ms=173099 STATE node=0 value=3
+
+CL_EVENT t_ms=173099 STATE node=0 value=5
+
+CL_STATS state=5 sent=1701 first_seq=0 last_seq=1700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=216 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x000 sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1560 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1701,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,8321,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,8032,280,0,8,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=178892 STATE node=0 value=8
+
+CL_EVENT t_ms=183686 WALL_TURN node=0 value=3
+
+CL_EVENT t_ms=183686 STATE node=0 value=7
+
+CL_EVENT t_ms=184114 STATE node=0 value=3
+
+CL_EVENT t_ms=184114 STATE node=0 value=5
+
+CL_STATS state=5 sent=1801 first_seq=0 last_seq=1800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=242 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x000 sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1658 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1801,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,8834,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,8530,294,0,9,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=188751 STATE node=0 value=8
+
+CL_EVENT t_ms=193086 WALL_TURN node=0 value=2
+
+CL_EVENT t_ms=193086 STATE node=0 value=7
+
+CL_EVENT t_ms=193363 STATE node=0 value=3
+
+CL_EVENT t_ms=193363 STATE node=0 value=5
+
+CL_STATS state=5 sent=1901 first_seq=0 last_seq=1900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=251 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x000 sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1757 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,1901,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,9353,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,9022,320,0,10,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=199304 STATE node=0 value=8
+
+CL_STATS state=8 sent=2001 first_seq=0 last_seq=2000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=257 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1847 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2001,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,9854,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,9500,343,0,10,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=206286 WALL_TURN node=0 value=2
+
+CL_EVENT t_ms=206286 STATE node=0 value=7
+
+CL_EVENT t_ms=206607 STATE node=0 value=3
+
+CL_EVENT t_ms=206607 STATE node=0 value=5
+
+CL_EVENT t_ms=211382 STATE node=0 value=8
+
+CL_STATS state=8 sent=2101 first_seq=0 last_seq=2100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=326 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=1937 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,10482,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,10037,433,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2201 first_seq=0 last_seq=2200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=397 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2027 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2201,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,11076,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,10559,505,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2301 first_seq=0 last_seq=2300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=408 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2117 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,11602,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,11041,549,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2401 first_seq=0 last_seq=2400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2207 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,12160,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,11534,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2501 first_seq=0 last_seq=2500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2297 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,12612,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,11986,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2601 first_seq=0 last_seq=2600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2387 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,13062,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,12436,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2701 first_seq=0 last_seq=2700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2477 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2701,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,13512,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,12886,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2801 first_seq=0 last_seq=2800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2567 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2801,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,13962,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,13336,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=2901 first_seq=0 last_seq=2900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2657 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2901,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,14412,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,13786,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3001 first_seq=0 last_seq=3000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2747 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3001,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,14860,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,14234,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3101 first_seq=0 last_seq=3100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2837 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,15312,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,14686,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3201 first_seq=0 last_seq=3200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=442 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=2927 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3201,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,15762,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,15136,614,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3301 first_seq=0 last_seq=3300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=452 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3018 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,16246,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,15600,634,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3401 first_seq=0 last_seq=3400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=464 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3109 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,16731,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,16067,652,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3501 first_seq=0 last_seq=3500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=466 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3202 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,17196,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,16523,661,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3601 first_seq=0 last_seq=3600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=485 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3293 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,17685,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,16999,674,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3701 first_seq=0 last_seq=3700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=495 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3385 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3701,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,18167,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,17462,693,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3801 first_seq=0 last_seq=3800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=501 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3476 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3801,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,18636,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,17919,705,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=3901 first_seq=0 last_seq=3900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=501 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3566 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,3901,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,19083,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,18366,705,0,11,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=4001 first_seq=0 last_seq=4000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=501 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=52 dispatch_max_us=676 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=3656 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,4001,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,19536,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,18819,705,0,11,0,0,1,0,0,0,0
+

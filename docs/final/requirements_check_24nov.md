@@ -16,7 +16,7 @@ Verdicts: **Met** (built, and the evidence named passes), **Built, not measured*
 Biggest gaps, in order of risk for the final demo and report:
 
 1. **Video sync skew was never measured** (NR-07; the brief's core claim, W6 NFR2: 5 ms target, 16.67 ms limit). Every skew run (5 Nov B1 to B9, G6, T-X-09 soak) is recorded NOT RUN: no logic analyser, and the `pico_tap` recorder (Pico `…3B6838`) was never wired to the tiles' GPIO4.
-2. **Whole-wall rotation (E3 to E8) is a Must and was never built.** D-15 kept it Must after the prototype; later handoffs call step 5 "stretch", but no decision moving it is recorded. Either build it or record the descope with its reason.
+2. ~~Whole-wall rotation (E3 to E8) never built.~~ **Built 24 Nov evening for video mode (D-17); E3 to E6, E8 and NR-08 met on the wall; E7 deferred.** D-15 kept it Must after the prototype; later handoffs call step 5 "stretch", but no decision moving it is recorded. Either build it or record the descope with its reason.
 3. **NR-03 (tap to hit burst under 100 ms) now fails by design.** The tile flashes only on the Pico's FEEDBACK (DS-07), so the 24 Nov collect wait of 150 ms (user's choice, `d7399f4`) puts tap to flash at about 240 ms. It was never measured before either; on the 24 Nov network the 20 ms wait gave about 110 to 130 ms. Options in section 5.
 4. **The Week 13 change-requirement evidence (Tribunal 1) is incomplete and dated 3 Nov**, before the game added six message types (section 4).
 5. **Defence docs do not cover the game** (NR-14): only `orientation_DEFENCE.md` mentions it.
@@ -84,7 +84,9 @@ Biggest gaps, in order of risk for the final demo and report:
 |---|---|---|---|
 | E1 any layout, video and game | M | Partly | 2x2, 3x3 and the 5x5 sparse diagonal on the wall; 1x5 and 1x9 not run as bench cards |
 | E2 each tile upright | M | Met | Host tests D4 to D6; 11 Nov step 1 |
-| E3 to E8 whole-wall rotation | M | **Not met** | Never built (step 5); no descope recorded |
+| E3 to E5, E8 whole-wall rotation (video mode, D-17) | M | Met (24 Nov evening) | Pico decides (`wall_turn`, C35 to C38); NR-08 bench: 10 of 10 turns, detection at most 1.8 s, map turned right |
+| E6 video resumes after a turn | M | Met | Playing again at most 7.9 s after the first tile moved (mean 7.2 s), at the saved frame (`freeze_old_router.md`) |
+| E7 rotation in a round | M | Deferred (D-17) | Turns are ignored in game mode until a justification is found |
 | E9 tile drops out mid-round | M | Built, not measured | `game_rules_set_active`; never unplugged during a round on purpose |
 | E10 video as on master | M | Met | 12 Nov V2b (9 tiles), 18 Nov |
 
@@ -103,9 +105,9 @@ Stretch since D-15 (10 Nov): not built. The professor consult on a workaround (1
 | NR-05 no double counts (50 hits) | Partly | 24 Nov: 34 of 34 hits, 0 wrong after the echo fix; not the 50-hit card |
 | NR-06 10 rounds without reboot | Partly | 24 Nov: 6 rounds and 2 x 6 min reproducer runs without a freeze on the old router; not 10 in a row; the watchdog recovers a freeze in about 20 s |
 | NR-07 video sync under 5 ms | **Not measured** | No skew capture ever ran (section 1, gap 1) |
-| NR-08 rotation detection | Not met | E3 not built |
+| NR-08 rotation detection | Met (24 Nov) | 10 of 10 board turns, 0 of 10 single-tile turns |
 | NR-09 brightness cap and 4-bit packing | Met | `check_assets` host test; `docs/week13/check_assets.log` |
-| NR-10 code standard, CI green | Met from 24 Nov | barr_check 0 findings on 100 files; CI was red 9 to 24 Nov (fixed `263d5c4`) |
+| NR-10 code standard, CI green | Met from 24 Nov | barr_check 0 findings on 104 files; CI green from `263d5c4` (red 9 to 24 Nov) |
 | NR-11 score consistency | Met | Website, Pico STATUS and wall agree (24 Nov) |
 | NR-12 setup in 3 min | Built, not measured | Website start plus uploads of 3 to 40 s; never timed from power-on |
 | NR-13 upload in 60 s | Met | 3 to 40 s per tile for a whole wall (18 and 24 Nov) |

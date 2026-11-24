@@ -107,3 +107,28 @@ Tile 9 unplugged, the GIF chosen again at 16:57:12: 8 tiles uploaded, tile 9 fai
 ## Upload soak (17:01 to 17:05)
 
 `.venv/bin/python -I docs/bench/24nov/tools/upload_soak.py 30 docs/bench/24nov/soak_w9.log`: the website re-uploads the whole 3x3 wall 30 times (9 tiles at once, video stopped). **0 freezes in 30**; READY 6 to 7 s after each start, slowest tile about 5.5 s, longest STATUS gap 0.3 s. Parallel uploads alone do not freeze the Pico, so pacing them is not justified by this. The 16:36 freeze came during the re-upload after a wall turn back (STOP x3, new session, 9 uploads); the NR-08 turn card will show whether turn re-uploads freeze more often.
+
+## NR-08 part A: 10 whole-board turns (17:11 to 17:13, Pico `f9d313c`)
+
+Before the run the website's map was found turned (7 4 1 / 8 5 2 / 9 6 3) with the wall upright, sometime after 16:55 (the Pico log had a gap there). Two Pico bugs could each cause it and both were fixed first (`f9d313c`, host tests C36 and C38): a wall turn moved only the online tiles' references (tiles 8 and 9 were offline during the retry test), and a new layout that happened to be a turn of the last one invented a pending turn. The website was restarted with the upright map.
+
+Video playing; the user turned the board cw, cw, ccw, ccw, 180, 180, cw, ccw, 180, then back to upright, waiting for the video each time (`nr08_monitor.log`, `pico_nr08.log`):
+
+| Turn | Pico WALL_TURN | Map after | Detected after the first tile change | Playing again after the first tile change |
+|---|---|---|---|---|
+| 1 cw | 1 | 7 4 1 / 8 5 2 / 9 6 3 | 1.7 s | 7.5 s |
+| 2 cw | 1 | 9 8 7 / 6 5 4 / 3 2 1 | 1.7 s | 7.0 s |
+| 3 ccw | 3 | 7 4 1 / 8 5 2 / 9 6 3 | 1.7 s | 7.5 s |
+| 4 ccw | 3 | 1 2 3 / 4 5 6 / 7 8 9 | 1.7 s | 6.8 s |
+| 5 180 | 2 | 9 8 7 / 6 5 4 / 3 2 1 | 1.5 s | 7.1 s |
+| 6 180 | 2 | 1 2 3 / 4 5 6 / 7 8 9 | 1.7 s | 7.0 s |
+| 7 cw | 1 | 7 4 1 / 8 5 2 / 9 6 3 | 1.8 s | 7.9 s |
+| 8 ccw | 3 | 1 2 3 / 4 5 6 / 7 8 9 | 1.7 s | 6.7 s |
+| 9 180 | 2 | 9 8 7 / 6 5 4 / 3 2 1 | 1.5 s | 7.9 s |
+| 10 back | 2 | 1 2 3 / 4 5 6 / 7 8 9 | 1.6 s | 6.9 s |
+
+**10 of 10 detected with the right turn**; detection at most 1.8 s (E8: 2 s), playing again at most 7.9 s, mean 7.2 s (E6: 10 s). **No Pico freeze** in these 10 turn re-uploads (`wd_boot=0`, no STATUS gap).
+
+## NR-08 part B: 10 single-tile turns (17:15 to 17:16)
+
+The user turned one tile a quarter and back, ten times: tiles 1, 6, 8, 3, 9, 1, 9, 2, 8, 6. The website saw each tile's orientation change and return 3 to 5 s later; **no WALL_TURN, no "wall turned" message, and the video played throughout** (COORDINATING PLAYBACK the whole time). **NR-08 passes: 10 of 10 wall turns, 0 of 10 single-tile turns read as a wall turn.**
