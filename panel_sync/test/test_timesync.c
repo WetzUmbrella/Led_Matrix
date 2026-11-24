@@ -32,7 +32,7 @@
 #define READY_START_US   INT64_C(1000000)
 #define READY_DELAY_US   INT64_C(2000)
 #define READY_STALE_US   INT64_C(1100000)
-#define RESEED_PICO_US   INT64_C(50000)
+#define RESEED_PICO_US   INT64_C(20000000)
 #define RESEED_UNDER_US  INT64_C(400000)
 #define RESEED_LATE_US   INT64_C(600000)
 #define FRAMES_600       600u
@@ -332,8 +332,9 @@ bool test_timesync_reseed (void)
     timesync_tick(t_local);
     b_ok = (test_main_check(timesync_sync_ready(), __LINE__)) && b_ok;
 
-    /* Second Pico: its clock started 50 ms ago, about 2.5 s behind. Its
-     * first two beacons are dropped; the third re-seeds. */
+    /* Another Pico clock about 17 s ahead, past the 5 s fallback (the
+     * restart signal is not used here): its first two beacons are dropped;
+     * the third re-seeds. */
     int64_t t_p2 = RESEED_PICO_US;
 
     for (uint32_t idx = 0u; idx < TIMESYNC_RESEED_SAMPLES; idx++)
@@ -524,9 +525,10 @@ static bool reseed_late_cases (void)
     printf("    400 ms late sample: reseeds %" PRIu32 "\n",
            timesync_reseed_count());
 
-    /* 600 ms late, twice, then a normal beacon, then twice again: never
-     * three in a row, so all four are dropped and nothing re-seeds; the
-     * estimate does not move (bench 12 Nov 2026: up to 514 ms late). */
+    /* 600 ms late, twice, then a normal beacon, then twice again: under the
+     * 5 s threshold they are window samples, nothing is dropped or
+     * re-seeded, and the minimum-delay estimate does not move (bench 12 Nov
+     * 2026: up to 514 ms late). */
     b_ok =
         (test_main_check(timesync_filter_estimate(&offset, &ref), __LINE__)) &&
         b_ok;
@@ -542,14 +544,126 @@ static bool reseed_late_cases (void)
     }
 
     b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
-    b_ok = (test_main_check(4u == timesync_dropped_count(), __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == timesync_dropped_count(), __LINE__)) && b_ok;
     b_ok = (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
                                 (before == offset),
                             __LINE__)) &&
            b_ok;
-    printf("    600 ms late samples, never 3 in a row: reseeds %" PRIu32
-           ", dropped %" PRIu32 "\n",
+    printf("    600 ms late samples: reseeds %" PRIu32 ", dropped %" PRIu32
+           "\n",
            timesync_reseed_count(), timesync_dropped_count());
+
+    return b_ok;
+}
+
+/**
+ * @brief  WiFi stall (not counted; bench 24 Nov 2026, 19:06:50, tile 7's
+ *         log): after a 0.65 s stall the buffered beacons came 540, 634,
+ *         648, 583, 489, 390, 292, 194 and 95 ms late, then on time. Under
+ *         the old 500 ms rule the third re-seeded and the video jumped 667 ms
+ *         on every tile; now nothing re-seeds and the estimate and the
+ *         published offset do not move.
+ * @return true when every check passed.
+ */
+bool test_timesync_wifi_stall (void)
+{
+    static int64_t const late_ms[] = {540, 634, 648, 583, 489,
+                                      390, 292, 194, 95,  0};
+    timesync_reader_t    reader    = {0};
+    bool                 b_ok      = true;
+    int64_t              t_p       = 0;
+    int64_t              offset    = 0;
+    int64_t              ref       = 0;
+
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        t_p = beacon_time(READY_START_US, idx);
+        timesync_add_sample(t_p, t_p + READY_DELAY_US);
+    }
+
+    timesync_test_set_now_us(t_p + READY_DELAY_US);
+    timesync_tick(t_p + READY_DELAY_US);
+
+    int64_t const before = timesync_now_corrected(&reader);
+
+    for (uint32_t idx = 0u; idx < (sizeof(late_ms) / sizeof(late_ms[0])); idx++)
+    {
+        t_p += BEACON_PERIOD_US;
+        timesync_add_sample(t_p, t_p + READY_DELAY_US + (late_ms[idx] * 1000));
+        timesync_tick(t_p + READY_DELAY_US);
+    }
+
+    timesync_test_set_now_us(t_p + READY_DELAY_US);
+    b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
+    b_ok = (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
+                                (READY_DELAY_US == offset),
+                            __LINE__)) &&
+           b_ok;
+
+    /* One second of beacons later the corrected clock moved one second. */
+    int64_t const moved = timesync_now_corrected(&reader) - before;
+
+    b_ok = (test_main_check((moved >= (INT64_C(1000000) - 1000)) &&
+                                (moved <= (INT64_C(1000000) + 1000)),
+                            __LINE__)) &&
+           b_ok;
+    printf("    stall burst: reseeds %" PRIu32 ", clock moved %" PRId64
+           " us over 1 s of beacons\n",
+           timesync_reseed_count(), moved);
+    timesync_init();
+
+    return b_ok;
+}
+
+/**
+ * @brief  Pico restart (not counted; bench 24 Nov 2026): after
+ *         timesync_pico_restart() the next beacon starts a new window at
+ *         once, even from a clock only 300 ms away (under the 5 s fallback),
+ *         and the next tick publishes it without a slew.
+ * @return true when every check passed.
+ */
+bool test_timesync_pico_restart (void)
+{
+    timesync_reader_t reader = {0};
+    bool              b_ok   = true;
+    int64_t           t_p    = 0;
+    int64_t           offset = 0;
+    int64_t           ref    = 0;
+
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        t_p = beacon_time(READY_START_US, idx);
+        timesync_add_sample(t_p, t_p + READY_DELAY_US);
+    }
+
+    int64_t const t_local = t_p + BEACON_PERIOD_US + READY_DELAY_US;
+    int64_t const t_p2    = t_p + BEACON_PERIOD_US - INT64_C(300000);
+
+    timesync_add_sample(t_p2, t_local); /* Without the signal: kept. */
+    b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
+
+    timesync_pico_restart();
+    timesync_add_sample(t_p2 + BEACON_PERIOD_US, t_local + BEACON_PERIOD_US);
+    b_ok = (test_main_check(1u == timesync_reseed_count(), __LINE__)) && b_ok;
+    b_ok = (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
+                                ((t_local - t_p2) == offset),
+                            __LINE__)) &&
+           b_ok;
+
+    timesync_test_set_now_us(t_local + BEACON_PERIOD_US);
+    timesync_tick(t_local + BEACON_PERIOD_US);
+    b_ok = (test_main_check(0 == timesync_last_slew(), __LINE__)) && b_ok;
+    b_ok = (test_main_check((t_p2 + BEACON_PERIOD_US) ==
+                                timesync_now_corrected(&reader),
+                            __LINE__)) &&
+           b_ok;
+    printf("    restart signal: reseeds %" PRIu32 " on the next beacon\n",
+           timesync_reseed_count());
+    timesync_init();
 
     return b_ok;
 }

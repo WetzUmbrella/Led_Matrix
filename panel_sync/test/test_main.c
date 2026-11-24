@@ -280,6 +280,12 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
                       test_timesync_reseed);
     bool const b_drift = test_main_run(
         "24 Nov drift limit, 50 ppm (not counted)", test_timesync_drift_limit);
+    bool const b_stall =
+        test_main_run("24 Nov WiFi stall, no re-seed (not counted)",
+                      test_timesync_wifi_stall);
+    bool const b_restart =
+        test_main_run("24 Nov Pico restart re-seeds at once (not counted)",
+                      test_timesync_pico_restart);
 
     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
 
@@ -321,7 +327,8 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     int status = 1;
 
     if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed && b_drift &&
-        (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
+        b_stall && b_restart && (FAULT_COUNT == fault_passed) &&
+        (PLAYBACK_COUNT == playback_passed) &&
         (TELEMETRY_COUNT == telemetry_passed) &&
         (ASSET_COUNT == asset_passed) && (COORD_COUNT == coord_passed) &&
         (DISPLAY_COUNT == display_passed) && (TAP_COUNT == tap_passed))

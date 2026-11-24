@@ -6,7 +6,7 @@ Per tile: samples o = t_l - t_p. Filter as in the firmware: window of 16,
 estimate = smallest o (and its t_l), drift = (min of newer 8 - min of older
 8) / (their t_l span) once full, target = est + drift x (t - est_ref), the
 published offset moves to the target by at most 100 us per 60 Hz tick;
-reseed rule (500 ms, 3 samples) included.
+reseed rule (5 s since 24 Nov evening, 3 samples) included.
 Reference ("true" offset): lower envelope of o, the smallest o in each
 BLOCK_S block joined by straight lines. Error = published - reference: a
 tile with error e fires its ticks e us late. Skew B - A = e_B - e_A at the
@@ -16,8 +16,12 @@ Usage: ts_replay.py LOG_A LOG_B [LOG_C ...]
 import bisect
 import statistics
 import sys
+import os
 
-WINDOW, HALF, SLEW, RESEED_US, RESEED_N = 16, 8, 100, 500000, 3
+# RESEED_US: 5 s since 24 Nov evening (TIMESYNC_RESEED_US); RESEED_US=500000
+# in the environment replays the old rule.
+WINDOW, HALF, SLEW, RESEED_N = 16, 8, 100, 3
+RESEED_US = int(os.environ.get("RESEED_US", "5000000"))
 TICK_US = 1000000.0 / 60.0
 BLOCK_S = 5.0
 import os

@@ -1123,7 +1123,9 @@ static bool tn_pico_restarted (tn_record_t const * p_record)
 /**
  * @brief  Network Task: a new or restarted Pico. Playback stops (its
  *         timeline went with the old Pico, and a playing tile refuses
- *         uploads; bench 24 Nov 2026), the game state starts over, every seq
+ *         uploads; bench 24 Nov 2026), the time sync starts a new window on
+ *         the next beacon (its clock is another one), the game state starts
+ *         over, every seq
  *         baseline included (game_tile_new_pico), and the cleared state is
  *         published, so the display drops the old Pico's round and pictures
  *         at once.
@@ -1131,6 +1133,7 @@ static bool tn_pico_restarted (tn_record_t const * p_record)
 static void tn_game_new_pico (void)
 {
     playback_control_pico_restart(); /* Its timeline is gone. */
+    timesync_pico_restart();         /* And its clock: start over. */
     game_tile_new_pico(&g_game);
     orientation_set_tap_threshold(game_tile_threshold_mg(&g_game));
     game_tile_publish(&g_game);

@@ -64,6 +64,20 @@ bool test_timesync_reseed (void);
 bool test_timesync_drift_limit (void);
 
 /**
+ * @brief  WiFi stall (not counted): the bench burst of late beacons (540 to
+ *         648 ms) re-seeds nothing and moves nothing (bench 24 Nov 2026).
+ * @return true when every check passed.
+ */
+bool test_timesync_wifi_stall (void);
+
+/**
+ * @brief  Pico restart (not counted): timesync_pico_restart() re-seeds on
+ *         the next beacon, also from a clock only 300 ms away.
+ * @return true when every check passed.
+ */
+bool test_timesync_pico_restart (void);
+
+/**
  * @brief  Supplementary arithmetic checks (not counted in Pass = N of 4).
  * @return true when every check passed.
  */

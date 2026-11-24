@@ -111,6 +111,8 @@ typedef struct
 static seqlock_t      g_pub;
 static ready_lock_t   g_ready;
 static writer_state_t g_writer;
+/* Set by tile_net on a Pico restart or switch, taken by the next sample. */
+static _Atomic bool g_b_restart = false;
 
 #ifdef TIMESYNC_HOST_TEST
 static timesync_hook_fn_t g_p_test_hook = NULL;
@@ -425,6 +427,7 @@ uint32_t timesync_frame_index (int64_t t_us, int64_t origin_us,
 void timesync_init (void)
 {
     (void)memset(&g_writer, 0, sizeof(g_writer)); /* Result not needed. */
+    atomic_store_explicit(&g_b_restart, false, memory_order_relaxed);
     atomic_store_explicit(&g_pub.seq, 0u, memory_order_relaxed);
 
     /* WORD_COUNT is a small positive enum constant (5): it fits uint32_t. */
@@ -446,16 +449,19 @@ void timesync_init (void)
  * @brief  Add one (t_p, t_l) pair. The filter offset comes from the sample
  *         with the smallest (t_l - t_p). Drift is the slope between the
  *         filtered offsets of the older and newer half of the full window; it
- *         is held (not cleared) when it cannot be computed. A sample more
- *         than TIMESYNC_RESEED_US off the estimate is dropped, unless it is
- *         the TIMESYNC_RESEED_SAMPLES-th off sample in a row: then the
- *         window is emptied and it starts a new one (R1-2).
+ *         is held (not cleared) when it cannot be computed. After
+ *         timesync_pico_restart() the sample starts a new window at once. A
+ *         sample more than TIMESYNC_RESEED_US off the estimate is dropped,
+ *         unless it is the TIMESYNC_RESEED_SAMPLES-th off sample in a row:
+ *         then the window is emptied and it starts a new one (R1-2).
  * @param  t_p  Pico time from the beacon, microseconds.
  * @param  t_l  Local receive time, microseconds.
  */
 void timesync_add_sample (int64_t t_p, int64_t t_l)
 {
-    bool const b_off = reseed_needed(t_p, t_l);
+    bool const b_restart =
+        atomic_exchange_explicit(&g_b_restart, false, memory_order_acq_rel);
+    bool const b_off = (!b_restart) && (reseed_needed(t_p, t_l));
 
     g_writer.off_run = b_off ? (g_writer.off_run + 1u) : 0u;
 
@@ -465,7 +471,7 @@ void timesync_add_sample (int64_t t_p, int64_t t_l)
          * out of the window, so the estimate does not move. */
         g_writer.dropped++;
     }
-    else if (b_off)
+    else if ((b_off) || (b_restart))
     {
         /* Another Pico clock (R1-2): forget the window, the estimates and
          * the published offset, so this sample starts a new window and the
@@ -797,6 +803,14 @@ bool timesync_drift_estimate (int32_t * p_drift_ppb)
     }
 
     return g_writer.b_drift_valid;
+}
+
+/**
+ * @brief  The Pico restarted or changed (see timesync.h).
+ */
+void timesync_pico_restart (void)
+{
+    atomic_store_explicit(&g_b_restart, true, memory_order_release);
 }
 
 /**
