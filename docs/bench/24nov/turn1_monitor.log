@@ -1,0 +1,127 @@
+1795508846.300 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508779.842 video play
+1795508852.617 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508852.517 video play
+1795508861.792 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 3, 1, 3, 2) | 1795508852.517 video play
+1795508861.894 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 3, 1, 1, 3, 1, 0, 3) | 1795508852.517 video play
+1795508861.996 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(2, 1, 3, 1, 1, 3, 1, 0, 3) | 1795508852.517 video play
+1795508862.098 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(2, 2, 3, 1, 1, 3, 2, 0, 3) | 1795508852.517 video play
+1795508862.201 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795508852.517 video play
+1795508889.019 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 2, 3, 1, 1, 3, 1, 0, 3) | 1795508852.517 video play
+1795508889.120 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 3, 1, 0, 3) | 1795508852.517 video play
+1795508889.223 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508852.517 video play
+1795508897.081 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 3, 1, 1, 3, 1, 0, 3) | 1795508852.517 video play
+1795508897.183 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(2, 2, 3, 1, 1, 3, 2, 0, 3) | 1795508852.517 video play
+1795508897.285 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795508852.517 video play
+1795508904.629 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 3, 1, 1, 3, 1, 0, 3) | 1795508852.517 video play
+1795508904.731 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 3) | 1795508852.517 video play
+1795508904.935 COORDINATING PLAYBACK 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508852.517 video play
+1795508969.824 NO STATUS 3x3 session=77 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508852.517 video play
+1795508980.027 WAITING FOR TILE READINESS 3x3 session=77 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508979.970 Pico back: publishing again
+1795508980.246 WAITING FOR TILE READINESS 3x3 session=211 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508980.244 session 211
+1795508981.060 WAITING FOR TILE READINESS 3x3 session=211 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508980.993 node 9 not uploaded: tile is playing (BUSY)
+1795509043.768 NO STATUS 3x3 session=211 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795508980.993 node 9 not uploaded: tile is playing (BUSY)
+1795509054.059 WAITING FOR TILE READINESS 3x3 session=211 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509053.981 Pico back: publishing again
+1795509054.387 WAITING FOR TILE READINESS 3x3 session=107 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509054.286 session 107
+1795509055.098 WAITING FOR TILE READINESS 3x3 session=107 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509055.045 node 9 not uploaded: tile is playing (BUSY)
+1795509096.094 WAITING FOR TILE READINESS 3x3 session=107 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509095.999 GIF frog_ripple_64x64.gif
+1795509096.337 WAITING FOR TILE READINESS 3x3 session=6 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509096.323 session 6
+1795509097.048 WAITING FOR TILE READINESS 3x3 session=6 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509097.014 node 9 not uploaded: tile is playing (BUSY)
+1795509109.547 NO STATUS 3x3 session=6 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509097.014 node 9 not uploaded: tile is playing (BUSY)
+1795509146.927 WAITING FOR TILE READINESS 3x3 session=6 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509146.880 Pico back: publishing again
+1795509147.262 WAITING FOR TILE READINESS 3x3 session=29 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509147.170 session 29
+1795509148.074 WAITING FOR TILE READINESS 3x3 session=29 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509147.986 node 9 not uploaded: tile is playing (BUSY)
+1795509155.894 WAITING FOR TILE READINESS 3x3 session=29 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509155.845 GIF frog_ripple_64x64.gif
+1795509156.253 WAITING FOR TILE READINESS 3x3 session=119 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509156.163 session 119
+1795509157.065 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509156.981 node 9 not uploaded: tile is playing (BUSY)
+1795509211.896 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509211.842 tile 1 lost (Pico STATUS online bit cleared)
+1795509215.670 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509211.842 tile 1 lost (Pico STATUS online bit cleared)
+1795509216.486 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(0, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509211.842 tile 1 lost (Pico STATUS online bit cleared)
+1795509217.201 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509211.842 tile 1 lost (Pico STATUS online bit cleared)
+1795509217.405 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509217.342 tile 2 lost (Pico STATUS online bit cleared)
+1795509220.362 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509217.342 tile 2 lost (Pico STATUS online bit cleared)
+1795509221.280 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 0, 2, 0, 1, 2, 1, 3, 2) | 1795509217.342 tile 2 lost (Pico STATUS online bit cleared)
+1795509221.891 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509217.342 tile 2 lost (Pico STATUS online bit cleared)
+1795509223.933 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509223.853 tile 3 lost (Pico STATUS online bit cleared)
+1795509227.914 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509223.853 tile 3 lost (Pico STATUS online bit cleared)
+1795509228.629 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 0, 0, 1, 2, 1, 3, 2) | 1795509223.853 tile 3 lost (Pico STATUS online bit cleared)
+1795509229.139 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509223.853 tile 3 lost (Pico STATUS online bit cleared)
+1795509231.384 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509231.354 tile 6 lost (Pico STATUS online bit cleared)
+1795509233.425 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 2, 2, 1, 3, 2) | 1795509231.354 tile 6 lost (Pico STATUS online bit cleared)
+1795509234.343 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 2, 2, 1, 3, 2) | 1795509231.354 tile 6 lost (Pico STATUS online bit cleared)
+1795509235.260 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 2, 0, 1, 3, 2) | 1795509231.354 tile 6 lost (Pico STATUS online bit cleared)
+1795509235.770 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 2, 2, 1, 3, 2) | 1795509231.354 tile 6 lost (Pico STATUS online bit cleared)
+1795509236.688 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 2, 2, 1, 3, 2) | 1795509236.593 tile 5 lost (Pico STATUS online bit cleared)
+1795509239.649 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 2, 2, 1, 3, 2) | 1795509236.593 tile 5 lost (Pico STATUS online bit cleared)
+1795509240.364 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 0, 2, 1, 3, 2) | 1795509236.593 tile 5 lost (Pico STATUS online bit cleared)
+1795509241.078 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509236.593 tile 5 lost (Pico STATUS online bit cleared)
+1795509241.180 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509241.106 tile 4 lost (Pico STATUS online bit cleared)
+1795509244.138 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509241.106 tile 4 lost (Pico STATUS online bit cleared)
+1795509244.649 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509244.594 tile 7 lost (Pico STATUS online bit cleared)
+1795509247.608 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509244.594 tile 7 lost (Pico STATUS online bit cleared)
+1795509248.423 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 0, 3, 2) | 1795509244.594 tile 7 lost (Pico STATUS online bit cleared)
+1795509248.934 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509244.594 tile 7 lost (Pico STATUS online bit cleared)
+1795509249.648 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509249.595 tile 8 lost (Pico STATUS online bit cleared)
+1795509253.625 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509253.607 tile 9 lost (Pico STATUS online bit cleared)
+1795509254.645 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 0, 2) | 1795509253.607 tile 9 lost (Pico STATUS online bit cleared)
+1795509255.053 WAITING FOR NODES 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509253.607 tile 9 lost (Pico STATUS online bit cleared)
+1795509257.093 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509253.607 tile 9 lost (Pico STATUS online bit cleared)
+1795509257.808 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 0) | 1795509253.607 tile 9 lost (Pico STATUS online bit cleared)
+1795509258.419 WAITING FOR TILE READINESS 3x3 session=119 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509253.607 tile 9 lost (Pico STATUS online bit cleared)
+1795509321.769 WAITING FOR TILE READINESS 3x3 session=119 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509321.715 GIF frog_ripple_64x64.gif
+1795509322.120 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509322.039 session 228
+1795509325.674 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509325.580 uploaded to 192.168.1.219: 60 of 60 chunks ACKed, resent 0, 3.14 s
+1795509325.775 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509325.675 uploaded to 192.168.1.130: 60 of 60 chunks ACKed, resent 0, 2.88 s
+1795509326.586 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509326.495 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 3.60 s
+1795509327.196 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509327.121 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 5, 4.08 s
+1795509327.805 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509327.714 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 6, 4.77 s
+1795509328.212 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509328.140 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 29, 6.00 s
+1795509331.359 WAITING FOR TILE READINESS 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509331.312 uploaded to 192.168.1.97: 60 of 60 chunks ACKed, resent 50, 8.27 s
+1795509331.664 READY 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509331.312 uploaded to 192.168.1.97: 60 of 60 chunks ACKed, resent 50, 8.27 s
+1795509335.116 READY 3x3 session=228 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509335.100 uploaded to 192.168.1.14: 60 of 60 chunks ACKed, resent 101, 12.06 s
+1795509337.757 READY 3x3 session=228 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509337.676 all tiles ready
+1795509339.694 READY 3x3 session=228 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509339.684 video play
+1795509339.897 COORDINATING PLAYBACK 3x3 session=228 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509339.684 video play
+1795509366.607 COORDINATING PLAYBACK 3x3 session=228 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509366.597 video play
+1795509370.378 COORDINATING PLAYBACK 3x3 session=228 job=None orient=(1, 1, 3, 0, 2, 3, 1, 3, 3) | 1795509366.597 video play
+1795509370.479 COORDINATING PLAYBACK 3x3 session=228 job=None orient=(1, 1, 3, 1, 2, 3, 1, 0, 3) | 1795509366.597 video play
+1795509370.581 COORDINATING PLAYBACK 3x3 session=228 job=None orient=(2, 2, 3, 1, 2, 3, 1, 0, 3) | 1795509366.597 video play
+1795509370.683 COORDINATING PLAYBACK 3x3 session=228 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509366.597 video play
+1795509372.109 READY 3x3 session=228 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509372.102 wall turned 90 degrees clockwise: grid 3x3, re-cutting the video
+1795509372.364 READY 3x3 session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509372.362 session 207
+1795509372.670 WAITING FOR TILE READINESS 3x3 session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509372.362 session 207
+1795509375.219 WAITING FOR TILE READINESS 3x3 session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.132 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 2.67 s
+1795509375.321 WAITING FOR TILE READINESS 3x3 session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.245 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 0, 2.58 s
+1795509375.933 WAITING FOR TILE READINESS 3x3 session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.840 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 0, 3.37 s
+1795509376.034 WAITING FOR TILE READINESS 3x3 session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.963 uploaded to 192.168.1.130: 60 of 60 chunks ACKed, resent 0, 2.64 s
+1795509376.544 WAITING FOR TILE READINESS 3x3 session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509376.474 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.96 s
+1795509377.664 WAITING FOR TILE READINESS 3x3 session=207 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509377.617 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 4, 5.10 s
+1795509377.868 COORDINATING PLAYBACK 3x3 session=207 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509377.838 all tiles ready
+1795509385.411 COORDINATING PLAYBACK 3x3 session=207 job=None orient=(2, 2, 3, 1, 2, 3, 1, 0, 3) | 1795509377.838 all tiles ready
+1795509385.513 COORDINATING PLAYBACK 3x3 session=207 job=None orient=(1, 1, 3, 1, 2, 3, 1, 0, 3) | 1795509377.838 all tiles ready
+1795509385.615 COORDINATING PLAYBACK 3x3 session=207 job=None orient=(1, 1, 2, 0, 2, 3, 1, 3, 3) | 1795509377.838 all tiles ready
+1795509385.717 COORDINATING PLAYBACK 3x3 session=207 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509377.838 all tiles ready
+1795509387.146 READY 3x3 session=207 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509387.107 wall turned 270 degrees clockwise: grid 3x3, re-cutting the video
+1795509387.474 READY 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509387.373 session 75
+1795509387.678 WAITING FOR TILE READINESS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509387.373 session 75
+1795509390.942 WAITING FOR TILE READINESS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509390.894 uploaded to 192.168.1.14: 60 of 60 chunks ACKed, resent 0, 3.17 s
+1795509391.451 WAITING FOR TILE READINESS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509391.405 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 0, 3.78 s
+1795509391.959 WAITING FOR TILE READINESS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509391.887 uploaded to 192.168.1.130: 60 of 60 chunks ACKed, resent 1, 4.16 s
+1795509392.163 WAITING FOR TILE READINESS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509392.118 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 1, 3.54 s
+1795509392.469 WAITING FOR TILE READINESS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509392.449 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.92 s
+1795509392.877 NO STATUS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509392.449 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.92 s
+1795509393.081 NO STATUS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509393.054 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 0, 4.67 s
+1795509398.177 NO STATUS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509398.164 uploaded to 192.168.1.97: 60 of 60 chunks ACKed, resent 74, 10.54 s
+1795509399.810 NO STATUS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509399.803 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 69, 11.28 s
+1795509403.789 NO STATUS 3x3 session=75 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509403.705 uploaded to 192.168.1.219: 60 of 60 chunks ACKed, resent 167, 15.98 s
+1795509419.098 WAITING FOR TILE READINESS 3x3 session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509419.058 Pico back: publishing again
+1795509419.378 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509419.324 session 206
+1795509422.420 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509422.341 uploaded to 192.168.1.14: 60 of 60 chunks ACKed, resent 0, 2.57 s
+1795509422.825 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509422.758 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.23 s
+1795509423.130 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509423.050 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 0, 3.53 s
+1795509423.333 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509423.276 uploaded to 192.168.1.97: 60 of 60 chunks ACKed, resent 0, 3.65 s
+1795509423.839 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509423.784 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 4.21 s
+1795509424.042 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509424.018 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 7, 4.39 s
+1795509424.143 WAITING FOR TILE READINESS 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509424.121 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 3, 3.74 s
+1795509428.808 READY 3x3 session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509424.121 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 3, 3.74 s
+1795509434.689 READY 3x3 session=206 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509434.645 all tiles ready
+1795509443.710 READY 3x3 session=206 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509443.611 video play
+1795509443.913 COORDINATING PLAYBACK 3x3 session=206 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509443.611 video play

@@ -74,3 +74,22 @@ Two rounds with the Pico logged (`pico_round_echo.log`; round 1 at 300 mg: 20 hi
 Fix (user's choice of 150 ms; `game_rules.h`/`.c`): `GAME_COLLECT_MS` 20 to 150, the last `GAME_WINDOWS` = 8 closed groups checked for late duplicates, `GAME_TAP_SLOTS` 16 to 32. After a hit the next mole shows about 50 ms later (MOLE_ON keeps its 200 ms lead after the later verdict). Host test C18d (fails on the old rules); C18 and C27 now state their waits by the constants. Host tests 39 of 39 (also ASan), barr_check 0 findings, firmware builds.
 
 Wall round (15:28, hard, 620 mg, `pico_round_fix.log`): **34 of 34 moles, 0 wrong, 0 missed, 3 stars.** On the same data the old rules would have judged 8 of 35 taps on an echo. The radio was calmer than at 15:20 (95th percentile delivery 160 ms), so not all of the gain is the fix.
+
+## Whole-wall rotation, first wall test (16:36, D-17)
+
+Firmware: Pico at `690f2de` plus the UDP pcb fix (below); tiles 1 to 9 at `690f2de` (TELEMETRY at once on a turn). Website at `bf6affd`. 3x3, `frog_ripple_64x64.gif`, playing. Tile orientations upright: 1 1 2 0 1 2 1 3 2 (mount offsets differ). Logs `turn2_monitor.log` (website state every 0.1 s), `pico_turn2.log`.
+
+First try (16:27, `turn1_monitor.log`): the tiles reported the turn, but the Pico did nothing: `COORDINATOR: cannot open port 4215`. lwIP's default `MEMP_NUM_UDP_PCB` 4 was used up by DHCP, DNS and the three existing pcbs. Fixed with `MEMP_NUM_UDP_PCB 6` in `lwipopts.h` and a compile-time check; CL_STATS now prints `tel_rx`, `wt_known` and `wall_turn`. After the fix `tel_rx` rose about 9 per second and `wt_known=0x1ff`. The Pico restarts for the flash left the tiles playing, and they refused uploads (BUSY) until the user power-cycled them: **a Pico restart during video leaves the wall stuck** (open bug).
+
+Second try:
+
+| Step | Time (s from the first tile's change) | Requirement |
+|---|---|---|
+| First tile reports the turn | 0 | |
+| All 9 tiles report +1 | 0.3 | E3 window 1.5 s |
+| Pico WALL_TURN 1, STOP, READY; website shows the turned map (7 4 1 / 8 5 2 / 9 6 3) | 1.8 | E5 correct map; E8 within 2 s: met |
+| Re-cut, new session, 9 parallel uploads | 2.0 to 7.5 | |
+| COORDINATING PLAYBACK again (Pico resumed at its saved frame) | 7.6 | E6 within 10 s: met |
+| Turned back: WALL_TURN 3, map back to 1 2 3 / 4 5 6 / 7 8 9 | 1.7 after that turn | E3, E5 |
+
+During the re-upload after the turn back, **the Pico froze** (website NO STATUS 16:36:33 to 16:36:59): `wd_boot=1 wd_step=0x0000000a wd_prev=0x80000002`, that is a freeze inside a UDP send in the beacon step, then a second watchdog reset while rejoining (step 10). The watchdog and the website recovered it (new session 206, all tiles ready), but the restart lost the pending resume, so the video stayed stopped until started again. The freeze is the same CYW43 hang as on the Asus, here under the burst of nine parallel uploads plus beacons.
