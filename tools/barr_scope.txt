@@ -39,10 +39,14 @@ ledwall_sync/test/test_join_backoff.h
 ledwall_sync/test/test_join_backoff.c
 ledwall_sync/game_rules.h
 ledwall_sync/game_rules.c
+ledwall_sync/wall_turn.h
+ledwall_sync/wall_turn.c
 ledwall_sync/score_font.h
 ledwall_sync/score_font.c
 ledwall_sync/test/test_game_rules.h
 ledwall_sync/test/test_game_rules.c
+ledwall_sync/test/test_wall_turn.h
+ledwall_sync/test/test_wall_turn.c
 ledwall_sync/test/test_score_font.h
 ledwall_sync/test/test_score_font.c
 ledwall_sync/test/test_ack_outbox.h
