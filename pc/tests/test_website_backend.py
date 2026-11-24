@@ -492,6 +492,50 @@ def test_website_publish_runs_in_the_background(tmp_path) -> None:  # type: igno
     assert shell.model.pending_uploads(7) == []
 
 
+def _wait_job(shell) -> None:  # type: ignore[no-untyped-def]
+    deadline = time.monotonic() + 5
+    while shell.model.job is not None:
+        assert time.monotonic() < deadline, "the job never finished"
+        time.sleep(0.01)
+
+
+def test_a_failed_upload_is_tried_again_once_the_tile_is_heard(tmp_path) -> None:  # type: ignore
+    # Bench 24 Nov 2026: tile 2 refused (BUSY); the wall waited for its
+    # asset until the GIF was chosen again.
+    shell = _three_tile_shell(tmp_path)
+    fail = {"10.0.0.2"}
+    shell.new_uploader = lambda: FakeUploader(shell.uploads_log, fail=fail)
+    assert set(shell.publish()) == {2}
+    shell.background = True
+    fail.clear()  # The tile can take it now.
+    shell.pump()
+    _wait_job(shell)
+    assert shell.model.pending_uploads(shell.session_id) == []
+    assert sorted(shell.uploads_log) == sorted(
+        ["10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.2"])  # Only tile 2.
+    assert any("retrying the upload to tile 2" in m
+               for m in shell.model.messages)
+
+
+def test_a_retry_waits_its_period_and_for_a_tile_that_is_heard(tmp_path) -> None:  # type: ignore
+    shell = _three_tile_shell(tmp_path)
+    shell.new_uploader = lambda: FakeUploader(shell.uploads_log,
+                                              fail={"10.0.0.2"})
+    shell.publish()
+    shell.background = True
+    shell.pump()  # Tried again, fails again.
+    _wait_job(shell)
+    assert shell.uploads_log.count("10.0.0.2") == 2
+    shell.pump()  # Within UPLOAD_RETRY_S: not yet.
+    assert shell.model.job is None and shell.uploads_log.count("10.0.0.2") == 2
+    shell.upload_retried -= db.UPLOAD_RETRY_S
+    shell.telemetry.tiles[2] = telemetry.TileRow(
+        node_id=2, address="10.0.0.2", last_seen=time.monotonic() - 60.0,
+        seq=1, fault_word=0, orientation=0, display_state=1)
+    shell.pump()  # Silent for 60 s: no address, no retry.
+    assert shell.model.job is None and shell.uploads_log.count("10.0.0.2") == 2
+
+
 def test_a_failing_job_becomes_a_message_and_frees_the_shell() -> None:
     shell = _shell(background=True)
     finished = threading.Event()

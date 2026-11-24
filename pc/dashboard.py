@@ -132,6 +132,11 @@ MESSAGE_KEEP = 200
 #: Tiles uploaded at the same time (DS-14: all of them).
 UPLOAD_WORKERS = pl.NODE_MAX
 
+#: Tiles whose upload failed are tried again this often, seconds, once one
+#: of them sends TELEMETRY again (bench 24 Nov 2026: a failed upload was
+#: never retried, so the Pico waited for that tile's asset forever).
+UPLOAD_RETRY_S = 5.0
+
 #: Taps kept for the website's tap test (A11), and how many it shows.
 TAP_KEEP = 24
 TAP_SHOW = 12
@@ -814,6 +819,8 @@ class DashboardShell(cmd.Cmd):
     mode_unsent = False
     #: The session whose wall turn (STATUS wall_turn) was acted on.
     turned_session: Optional[int] = None
+    #: When failed uploads were last tried again (time.monotonic()).
+    upload_retried = 0.0
 
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
@@ -1040,6 +1047,7 @@ class DashboardShell(cmd.Cmd):
             self._republish_after_silence()
         self._restore_mode_when_ready()
         self._follow_wall_turn()
+        self._retry_failed_uploads()
         with self.lock:
             if self.model.armed is None:
                 return
@@ -1102,6 +1110,35 @@ class DashboardShell(cmd.Cmd):
         except Refused as err:  # A job runs; it publishes anyway.
             with self.lock:
                 self.model._say("Pico back: %s" % err)
+
+    def _retry_failed_uploads(self) -> None:
+        """Upload again to tiles whose upload failed in this session, at
+        most every UPLOAD_RETRY_S and only once one of them is heard again
+        (it has an address). Website only, while stopped and idle; tiles
+        already ACKed are not sent again (``upload_pending``). Bench 24 Nov
+        2026: tiles refused an upload as BUSY while still playing for a
+        restarted Pico, and the wall waited for their assets until the GIF
+        was chosen again."""
+        with self.lock:
+            model = self.model
+            if (not self.background) or (model.job is not None) or \
+                    (model.gif is None) or (not model.stopped()):
+                return
+            now = time.monotonic()
+            if now - self.upload_retried < UPLOAD_RETRY_S:
+                return
+            failed = [node for node in model.pending_uploads(self.session_id)
+                      if model.uploads.get(node, {}).get("state") == "failed"]
+            if not any(self._address_of(node) for node in failed):
+                return
+            self.upload_retried = now
+            model._say("retrying the upload to tile%s %s"
+                       % ("s" if len(failed) > 1 else "",
+                          ", ".join(str(node) for node in failed)))
+        try:
+            self.run_job("upload", self.upload_pending)
+        except Refused:
+            pass  # Another job started meanwhile; it uploads anyway.
 
     def _follow_wall_turn(self) -> None:
         """The Pico decides wall turns (D-17): when its STATUS for this
