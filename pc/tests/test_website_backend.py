@@ -285,6 +285,56 @@ def test_a_pico_back_from_silence_gets_a_fresh_publish(tmp_path) -> None:  # typ
     assert len(shell.link.configs) == 2  # Once only.
 
 
+def test_a_quarter_turn_moves_cells_as_the_pico_does() -> None:
+    # D-17: the same 2x3 case as the Pico's host test C35.
+    rows, cols, slots = db.turn_slots(2, 3, {0: 1, 2: 2, 4: 3}, 1)
+    assert (rows, cols) == (3, 2)
+    assert slots == {1: 1, 5: 2, 2: 3}  # (0,1), (2,1), (1,0)
+    assert db.turn_slots(2, 3, {0: 1, 2: 2, 4: 3}, 2) == \
+        (2, 3, {5: 1, 3: 2, 1: 3})
+    assert db.turn_slots(1, 9, {8: 4}, 1) == (9, 1, {8: 4})
+    for rows in range(1, 10):
+        for cols in range(1, 10):
+            slots = {slot: slot + 1 for slot in range(0, rows * cols, 5)}
+            assert db.turn_slots(rows, cols, slots, 4) == (rows, cols, slots)
+
+
+def _turned_shell(tmp_path):  # type: ignore[no-untyped-def]
+    shell = _three_tile_shell(tmp_path)
+    shell.publish()
+    shell.model.mode = "video"
+    shell.link.status = _status(wall_turn=1, session_id=shell.session_id)
+    return shell
+
+
+def test_a_wall_turn_from_the_pico_turns_and_republishes(tmp_path) -> None:  # type: ignore
+    # D-17: the Pico decides; the PC turns its layout once and publishes the
+    # re-cut video in a new session.
+    shell = _turned_shell(tmp_path)
+    shell.model.parked = {2: 3}
+    shell.model.node_map = [1, 2, 0]
+    shell.pump()
+    assert shell.model.layout == "3x1"
+    assert shell.model.node_map == [1, 2, 0]
+    assert shell.model.parked == {2: 3}
+    assert len(shell.link.configs) == 2
+    assert shell.link.configs[1][0] != shell.link.configs[0][0]
+    shell.pump()  # The same STATUS again: not turned twice.
+    assert shell.model.layout == "3x1" and len(shell.link.configs) == 2
+
+
+def test_a_wall_turn_waits_for_its_session_and_video_mode(tmp_path) -> None:  # type: ignore
+    shell = _turned_shell(tmp_path)
+    shell.link.status = _status(wall_turn=1,
+                                session_id=shell.session_id + 1)
+    shell.pump()  # STATUS of an older session: wait.
+    assert shell.model.layout == "1x3" and len(shell.link.configs) == 1
+    shell.model.mode = "game"
+    shell.link.status = _status(wall_turn=1, session_id=shell.session_id)
+    shell.pump()  # Game mode: turns are ignored (D-17).
+    assert shell.model.layout == "1x3" and len(shell.link.configs) == 1
+
+
 def test_a_pico_back_gets_the_mode_only_once_ready(tmp_path) -> None:  # type: ignore
     # Wall test 24 Nov 2026: the Pico restarted, the mode went out while it
     # was SYNCHRONISING (refused there, but ACKed), so it stayed in video

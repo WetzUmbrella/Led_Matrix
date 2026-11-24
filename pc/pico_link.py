@@ -103,6 +103,10 @@ class Status:
     shown: int = 0
     time_left_s: int = 0
     reaction_ms: int = 0
+    #: Quarter turns clockwise of the whole wall since the layout of the
+    #: Pico's session (D-17), and that session (the STATUS header's).
+    wall_turn: int = 0
+    session_id: int = 0
 
     def state_name(self) -> str:
         """Coordinator state name."""
@@ -348,7 +352,9 @@ class PicoLink:
                 wrong=int(msg["wrong"]),  # type: ignore
                 shown=int(msg["shown"]),  # type: ignore
                 time_left_s=int(msg["time_left_s"]),  # type: ignore
-                reaction_ms=int(msg["reaction_ms"]))  # type: ignore
+                reaction_ms=int(msg["reaction_ms"]),  # type: ignore
+                wall_turn=int(msg["wall_turn"]),  # type: ignore
+                session_id=int(msg["session_id"]))  # type: ignore
 
     def next_tap(self, timeout_s: float) -> Optional[int]:
         """Wait up to ``timeout_s`` for the next TAP; returns its board

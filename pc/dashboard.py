@@ -145,6 +145,22 @@ class Refused(RuntimeError):
     """A change the current state does not allow (the website answers 409)."""
 
 
+def turn_slots(rows: int, cols: int, slots: Dict[int, int],
+               quarters: int) -> Tuple[int, int, Dict[int, int]]:
+    """Turn a grid clockwise by quarter turns (D-17, E5), as the Pico does
+    (``wall_turn_rotate``): each quarter turn moves the cell at row r,
+    column c of a rows x cols grid to row c, column rows - 1 - r, and the
+    grid becomes cols x rows. ``slots`` maps row-major slots to anything
+    (board numbers); returns the new rows, cols and slots."""
+    for _ in range(quarters % 4):
+        turned = {}
+        for slot, value in slots.items():
+            row, col = divmod(slot, cols)
+            turned[col * rows + (rows - 1 - row)] = value
+        rows, cols, slots = cols, rows, turned
+    return rows, cols, slots
+
+
 def pick_session_id(last: Optional[int],
                     rng: random.Random = random.Random()) -> int:
     """A fresh session id: random, 1 to 255, not ``last``."""
@@ -350,6 +366,26 @@ class DashboardModel:
         if not 0 <= slot < rows * cols:
             raise ab.AssetError("slot %d is outside the %s layout"
                                 % (slot, self.layout))
+
+    def turn_wall(self, quarters: int) -> None:
+        """The Pico saw the whole wall turn (STATUS wall_turn, D-17): turn
+        the grid, the map and the tiles switched off with it, so the next
+        publish re-cuts the GIF for the turned wall. No tap-to-place is
+        needed again (E5)."""
+        self.check_idle()
+        rows, cols = self.shape()
+        placed = {slot: node for slot, node in enumerate(self.node_map)
+                  if node}
+        new_rows, new_cols, placed = turn_slots(rows, cols, placed, quarters)
+        _, _, parked = turn_slots(rows, cols, dict(self.parked), quarters)
+        new_map = [0] * (new_rows * new_cols)
+        for slot, node in placed.items():
+            new_map[slot] = node
+        self.layout = "%dx%d" % (new_rows, new_cols)
+        self.node_map, self.parked = new_map, parked
+        self._drop_assets()
+        self._say("wall turned %d degrees clockwise: grid %s, re-cutting the "
+                  "video" % (90 * (quarters % 4), self.layout))
 
     def _drop_assets(self) -> None:
         """A change of GIF, layout, map or brightness: assets are rebuilt."""
@@ -776,6 +812,8 @@ class DashboardShell(cmd.Cmd):
     pico_was_silent = False
     #: The Pico came back and has not been sent the website's mode yet.
     mode_unsent = False
+    #: The session whose wall turn (STATUS wall_turn) was acted on.
+    turned_session: Optional[int] = None
 
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
@@ -1001,6 +1039,7 @@ class DashboardShell(cmd.Cmd):
         if back:
             self._republish_after_silence()
         self._restore_mode_when_ready()
+        self._follow_wall_turn()
         with self.lock:
             if self.model.armed is None:
                 return
@@ -1063,6 +1102,29 @@ class DashboardShell(cmd.Cmd):
         except Refused as err:  # A job runs; it publishes anyway.
             with self.lock:
                 self.model._say("Pico back: %s" % err)
+
+    def _follow_wall_turn(self) -> None:
+        """The Pico decides wall turns (D-17): when its STATUS for this
+        website's session shows wall_turn, turn the layout by it once and
+        publish again (re-cut, upload, a new session). The Pico then resumes
+        the video at the frame it saved. Video mode only; while an upload
+        runs, the turn waits for it."""
+        with self.lock:
+            status = self.model.status
+            if (status is None) or (status.wall_turn == 0):
+                return
+            if (self.model.mode != "video") or (self.model.job is not None):
+                return
+            if (status.session_id != self.session_id) or \
+                    (self.turned_session == self.session_id):
+                return
+            self.turned_session = self.session_id
+            try:
+                self.model.turn_wall(status.wall_turn)
+            except Refused as err:
+                self.model._say("wall turn: %s" % err)
+                return
+        self._republish()
 
     def _restore_mode_when_ready(self) -> None:
         """Send the website's mode to a Pico that came back, once its STATUS
