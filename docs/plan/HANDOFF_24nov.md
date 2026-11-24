@@ -34,7 +34,7 @@ Read before acting, in this order:
 
 ## 3. Next, in order
 
-1. **Measure video sync skew (NR-07)**: wire `pico_tap` (Pico `…3B6838`) to two tiles' GPIO4 and GND and run `pc/tools/skew_analyse.py` (rig: `docs/week10/skew_2tile/RIG.md`). Never measured; it is the brief's core claim.
+1. **Measure video sync skew (NR-07)**: by slow-motion camera, see section 5. Wiring `pico_tap` to the tiles' GPIO4 is impossible (no header or pad on the tiles, soldering not allowed). Never measured; it is the brief's core claim.
 2. **Week 13 change-requirement evidence**: game rows and the new STATUS `wall_turn` in `docs/week13/data_representation.md`, re-measure the "after" sizes on head, fill the `[NEEDS MEASUREMENT]` cells, run or explicitly drop the five hardware tests (`requirements_check_24nov.md` section 4.2).
 3. **Defence docs** (NR-14): each buddy's game part, now including `wall_turn` (Benjamin), the TELEMETRY-on-turn and restart stop (Cheston, Ahsanul for playback), the website turn and retry (Jolyn).
 4. Smaller: the Pico's `stale` counter after restarts (not checked); 10 rounds in a row for NR-06; time A6, A7, A8; whether turns while paused behave (built, not wall-tested).

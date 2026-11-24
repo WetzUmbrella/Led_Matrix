@@ -132,3 +132,17 @@ Video playing; the user turned the board cw, cw, ccw, ccw, 180, 180, cw, ccw, 18
 ## NR-08 part B: 10 single-tile turns (17:15 to 17:16)
 
 The user turned one tile a quarter and back, ten times: tiles 1, 6, 8, 3, 9, 1, 9, 2, 8, 6. The website saw each tile's orientation change and return 3 to 5 s later; **no WALL_TURN, no "wall turned" message, and the video played throughout** (COORDINATING PLAYBACK the whole time). **NR-08 passes: 10 of 10 wall turns, 0 of 10 single-tile turns read as a wall turn.**
+
+## Camera reader validation (NR-07 by camera, synthetic videos)
+
+`docs/bench/24nov/tools/sync_video.py` checked on synthetic videos of two tiles with a known skew (`synth_sync_video.py SKEW_MS 4 OUT.mp4 FPS`), boxes A `50,70,115,115`, B `190,70,115,115`, before any real video. The 3 ms row is from the first session (240 fps); the others were run at 239.7 fps (the camera phase drifting against the 60 Hz ticks), 4 s each, 199 or 200 paired steps.
+
+| True skew | Measured median | Max step error | Reader verdict | Right? |
+|---|---|---|---|---|
+| 3.0 ms (240 fps) | 3.15 ms | max skew 3.34 ms | PASS | yes |
+| 0 ms | 0.00 ms | 0.18 ms | PASS | yes |
+| -7 ms (B ahead by more than a frame) | -6.86 ms | 0.48 ms | FAIL | yes |
+| 12 ms | 12.02 ms | 0.58 ms | FAIL | yes |
+| 20 ms (more than one 16.7 ms tick) | 19.86 ms | 0.46 ms | FAIL | yes, read as 20 ms, not 3.3 ms |
+
+Every median is within 0.15 ms of the true skew, and no step is off by more than 0.58 ms (one frame is 4.17 ms). The counter's implied frame rate came out at 238.9 fps against 239.7: the counter steps on the 60 Hz tick grid, so the first and last steps of a 4 s clip can each shift by part of a 16.7 ms tick (up to about 0.4 %); a 10 s recording halves that. The reader is ready for a real video.

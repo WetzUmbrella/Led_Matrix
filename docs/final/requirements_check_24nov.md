@@ -151,4 +151,4 @@ None of the three meets 100 ms and keeps accuracy without a design change; the r
 
 ## 6. What the demo can claim today
 
-A full child round on a 3x3 wall from the website, with level choice, tap tuning, start sprite, countdown, scoring without penalties, results and `/score`; video of any GIF on any layout up to 9x9 sparse; recovery from a Pico restart by itself; 34 of 34 hits with 0 wrong on the old router after the echo fix. It cannot yet claim a measured sync skew, a measured tap latency, or whole-wall rotation.
+A full child round on a 3x3 wall from the website, with level choice, tap tuning, start sprite, countdown, scoring without penalties, results and `/score`; video of any GIF on any layout up to 9x9 sparse; recovery from a Pico restart by itself; 34 of 34 hits with 0 wrong on the old router after the echo fix; whole-wall rotation in video mode (E3 to E6 and E8; NR-08: 10 of 10 wall turns, 0 of 10 single-tile turns). It cannot yet claim a measured sync skew (NR-07) or a measured tap latency (NR-03), and rotation during a round (E7) is deferred.
