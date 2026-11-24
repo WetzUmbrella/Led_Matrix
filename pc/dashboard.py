@@ -774,6 +774,8 @@ class DashboardShell(cmd.Cmd):
     #: whether it did since the Pico was last heard.
     config_resent = 0.0
     pico_was_silent = False
+    #: The Pico came back and has not been sent the website's mode yet.
+    mode_unsent = False
 
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
@@ -998,6 +1000,7 @@ class DashboardShell(cmd.Cmd):
             back = self._pico_back()
         if back:
             self._republish_after_silence()
+        self._restore_mode_when_ready()
         with self.lock:
             if self.model.armed is None:
                 return
@@ -1050,15 +1053,30 @@ class DashboardShell(cmd.Cmd):
         so tiles that hold the asset already were never counted ready.
         Publishing again (a fresh session) has every tile confirm it; a tile
         that holds it ACKs without writing (DS-12 B). A restarted Pico also
-        starts in video mode, so the website's mode is sent again."""
+        starts in video mode, so the website's mode is sent again once the
+        Pico is READY (_restore_mode_when_ready)."""
         with self.lock:
             self.model._say("Pico back: publishing again")
+            self.mode_unsent = True
         try:
-            self._restore_mode()
             self._republish()
         except Refused as err:  # A job runs; it publishes anyway.
             with self.lock:
                 self.model._say("Pico back: %s" % err)
+
+    def _restore_mode_when_ready(self) -> None:
+        """Send the website's mode to a Pico that came back, once its STATUS
+        shows READY. Right after a restart the Pico passes SYNCHRONISING, where
+        it refuses a mode change but still ACKs it, so a mode sent at once
+        was lost and every ARM was then refused (wall test 24 Nov 2026)."""
+        with self.lock:
+            if (not self.mode_unsent) or (self.model.pico_state() != "READY"):
+                return
+            age = self.status_age()
+            if (age is None) or (age >= STATUS_STALE_S):
+                return
+            self.mode_unsent = False
+            self._restore_mode()
 
     def _restore_mode(self) -> None:
         """Send the website's mode to the Pico again (a restarted Pico is in
@@ -1245,6 +1263,7 @@ class DashboardShell(cmd.Cmd):
         if not self.link.send_game_control(code):
             self.model.mode = previous
             raise OSError("the Pico did not acknowledge the mode change")
+        self.mode_unsent = False  # Sent now, while stopped.
         return self.snapshot()
 
     def start_game(self) -> Dict[str, object]:

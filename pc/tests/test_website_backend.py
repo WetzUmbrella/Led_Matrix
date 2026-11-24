@@ -23,6 +23,7 @@ import telemetry  # noqa: E402
 import uploader  # noqa: E402
 import web  # noqa: E402
 
+WAITING_FOR_SESSION, SYNCHRONISING = 2, 6
 READY, PLAYBACK, PAUSED, GAME = 7, 8, 9, 12
 PLAYING_ROUND, RESULTS = 3, 4
 
@@ -282,6 +283,43 @@ def test_a_pico_back_from_silence_gets_a_fresh_publish(tmp_path) -> None:  # typ
     assert shell.link.commands == [("game", plink.MODE_VIDEO)]  # Mode again.
     shell.pump()
     assert len(shell.link.configs) == 2  # Once only.
+
+
+def test_a_pico_back_gets_the_mode_only_once_ready(tmp_path) -> None:  # type: ignore
+    # Wall test 24 Nov 2026: the Pico restarted, the mode went out while it
+    # was SYNCHRONISING (refused there, but ACKed), so it stayed in video
+    # mode and refused every ARM of the game-mode website.
+    shell = _three_tile_shell(tmp_path)
+    shell.publish()
+    shell.model.mode = "game"
+    shell.link.resend_config = lambda: True
+    shell.link.status = plink.Status(0b111, 0b111, READY,
+                                     time.monotonic() - 5.0)
+    shell.pump()  # Silent.
+    shell.link.status = _status(state=SYNCHRONISING)  # Back, not READY.
+    shell.pump()
+    shell.pump()
+    assert shell.link.commands == []
+    shell.link.status = _status()  # READY.
+    shell.pump()
+    assert shell.link.commands == [("game", plink.MODE_GAME)]
+    shell.pump()
+    assert shell.link.commands == [("game", plink.MODE_GAME)]  # Once only.
+
+
+def test_a_mode_switch_after_a_pico_restart_is_not_sent_twice(tmp_path) -> None:  # type: ignore
+    shell = _three_tile_shell(tmp_path)
+    shell.publish()
+    shell.link.resend_config = lambda: True
+    shell.link.status = plink.Status(0b111, 0b111, READY,
+                                     time.monotonic() - 5.0)
+    shell.pump()
+    shell.link.status = _status(state=WAITING_FOR_SESSION)  # Back.
+    shell.pump()
+    shell.set_mode("game")  # The user's switch reaches the Pico itself.
+    shell.link.status = _status()
+    shell.pump()
+    assert shell.link.commands == [("game", plink.MODE_GAME)]
 
 
 def test_a_pico_that_never_answered_gets_the_layout_again(tmp_path) -> None:  # type: ignore
