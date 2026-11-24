@@ -99,3 +99,7 @@ During the re-upload after the turn back, **the Pico froze** (website NO STATUS 
 All 9 tiles reflashed with the fix (tile 1's display check printed nothing over serial, but its TELEMETRY was fresh with no faults). Before the test, the website's last upload had failed on 8 tiles as BUSY (taken while they still ran the old firmware) and was never retried, so the Pico waited in WAITING FOR TILE READINESS until the GIF was chosen again (open: retry failed uploads).
 
 Video playing from 16:52:53; `picotool reboot -f` at 16:52:58 (`restart_stop_monitor.log`, `pico_restart_stop.log`). The website saw NO STATUS, then "Pico back: publishing again" 6 s later; **all 9 uploads succeeded, none BUSY** (3.0 to 4.5 s), READY with every tile ready at 16:53:10, 12 s after the restart, with no power cycle. Before the fix the same restart left the tiles playing and refusing uploads until power-cycled.
+
+## Failed uploads retried (17:00, website `a18bce7`)
+
+Tile 9 unplugged, the GIF chosen again at 16:57:12: 8 tiles uploaded, tile 9 failed ("no TELEMETRY yet, address unknown"), the Pico waited (WAITING FOR NODES). Replugging tile 9 knocked tile 8 off as well; the user reseated both (tiles 8 and 9 share a power run; keep it in mind for the demo). Tile 9 was heard again at 17:00:41; the website logged "retrying the upload to tile 9" 1.0 s later and the wall was READY with every tile ready 4.3 s after the tile rejoined, with nothing done on the dashboard (`retry_monitor.log`).
