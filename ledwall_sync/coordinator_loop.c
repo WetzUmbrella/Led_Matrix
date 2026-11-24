@@ -343,6 +343,7 @@ typedef struct
     uint32_t send_fail;       /**< Beacons whose udp_sendto failed. */
     uint32_t tx_drop;         /**< Sends dropped: the send queue was full. */
     uint32_t tx_fail;         /**< Queued sends lwIP refused. */
+    uint32_t tel_rx;          /**< TELEMETRY broadcasts heard (D-17). */
     uint32_t skipped;         /**< Beacon slots skipped after a stall. */
     uint16_t first_seq;       /**< seq of the first beacon in the window. */
     uint16_t last_seq;        /**< seq of the last beacon sent. */
@@ -518,6 +519,7 @@ static void     cl_save_frame (uint64_t now);
 static void     cl_on_telemetry (cl_rx_entry_t const * p_entry);
 static void     cl_turn_routine (uint64_t now);
 static void     cl_turn_after (void);
+static uint16_t cl_turn_known (void);
 static void     cl_turn_new_layout (proto_session_config_t const * p_cfg);
 static void cl_triple_send (proto_type_t type, uint16_t frame, uint32_t addr);
 static void cl_send_copy (cl_send_slot_t * p_slot, uint64_t now);
@@ -1574,6 +1576,7 @@ static void cl_on_telemetry (cl_rx_entry_t const * p_entry)
 
     if (proto_decode_telemetry(p_entry->bytes, p_entry->len, &msg))
     {
+        g_stats.tel_rx++;
         wall_turn_report(&g_turn, msg.node_id, msg.orientation,
                          p_entry->t_rx_us);
     }
@@ -1626,6 +1629,26 @@ static void cl_turn_routine (uint64_t now)
             cl_evaluate();
         }
     }
+}
+
+/**
+ * @brief  Tiles whose reference orientation the wall-turn detector holds
+ *         (CL_STATS wt_known).
+ * @return Bit n - 1 for Node ID n.
+ */
+static uint16_t cl_turn_known (void)
+{
+    uint16_t known = 0u;
+
+    for (uint32_t index = 0u; index < PROTO_NODE_MAX; index++)
+    {
+        if (g_turn.b_known[index])
+        {
+            known |= (uint16_t)(UINT16_C(1) << index); /* Bits 0 to 8 fit. */
+        }
+    }
+
+    return known;
 }
 
 /**
@@ -2131,13 +2154,15 @@ static void cl_print_stats (void)
            " cb_max_us=%" PRIu32 " dispatch_max_us=%" PRIu32
            " online=0x%03" PRIx16 " ready=0x%03" PRIx16 " sync=0x%03" PRIx16
            " wd_boot=%u wd_step=0x%08" PRIx32 " wd_prev=0x%08" PRIx32
-           " tx_drop=%" PRIu32 " tx_fail=%" PRIu32 "\n",
+           " tx_drop=%" PRIu32 " tx_fail=%" PRIu32 " tel_rx=%" PRIu32
+           " wt_known=0x%03" PRIx16 " wall_turn=%" PRIu8 "\n",
            cl_state_code(), g_stats.sent, g_stats.first_seq, g_stats.last_seq,
            g_stats.send_fail, g_stats.skipped, g_stats.rx_dropped,
            g_stats.rx_bad, g_stats.stale, g_stats.cmd_fail, g_stats.events_lost,
            g_stats.exc_max, g_stats.cb_max_us, g_stats.dispatch_max_us,
            cl_online_bits(), g_readiness, g_sync, g_b_watchdog_boot ? 1u : 0u,
-           g_watchdog_step, g_watchdog_prev, g_stats.tx_drop, g_stats.tx_fail);
+           g_watchdog_step, g_watchdog_prev, g_stats.tx_drop, g_stats.tx_fail,
+           g_stats.tel_rx, cl_turn_known(), g_wall_turn);
 
     printf("LATE_HIST");
 
@@ -3621,6 +3646,9 @@ static bool cl_connect_router (void)
 
     return b_joined;
 }
+
+/* One send and three receive pcbs plus DHCP's and DNS's (lwipopts.h). */
+_Static_assert(MEMP_NUM_UDP_PCB >= 6, "UDP pcbs for the coordinator");
 
 /**
  * @brief  One send pcb and the three receive pcbs (tiles, PC, and the tiles'
