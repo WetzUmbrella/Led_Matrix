@@ -50,3 +50,57 @@ Read before acting, in this order:
 - After any layout change by hand, check the website's map against the tiles' orientations before a turn test.
 - Host tests inject datagrams without opening sockets, so a port that fails to open (lwIP pcb limit) passes them; read the Pico's boot lines after adding a port.
 - A restarted Pico passes SYNCHRONISING, where it refuses a mode change but ACKs it.
+
+## 5. Where the session stopped (24 Nov, about 17:40): NR-07 by camera, in progress
+
+**Read this section first if you take over now.** Everything above is done and pushed. This part is half done.
+
+### 5.1 Why a camera
+
+NR-07 (video sync skew under 5 ms) has never been measured. The planned method (`tools/pico_tap` Pico recording each tile's GPIO4 tick pulse, `pc/tools/pico_tap_capture.py` + `pc/tools/skew_analyse.py`, see `tools/pico_tap/README.md` and `docs/week10/skew_2tile/RIG.md`) is **impossible: the Waveshare tiles have no header or pad for GPIO4 and soldering is not allowed** (user, 24 Nov). The `pico_tap` firmware is built (`tools/pico_tap/build/pico_tap.uf2`) but not needed now.
+
+Replacement (agreed with the user): a **slow-motion phone video** of two tiles playing a counter GIF. The phone is a teammate's **iPhone 17 Pro Max** (true 240 fps slow motion at 1080p). The file comes to the laptop by **LocalSend**. The teammate holds the phone (asked to brace it).
+
+### 5.2 Tools (in `docs/bench/24nov/tools/`, committed)
+
+| File | What it does |
+|---|---|
+| `sync_gif.py ROWS COLS OUT.gif` | Writes the counter GIF: every 8x8 cell shows the same 6-bit Gray-code counter, one step every 20 ms (500 frames, 10 s, 50 steps/s; exactly one 2x2 block changes per step). Layout of the 4x4 block grid: row 0 = anchor, bit0, bit1, anchor; row 1 = bit2 to bit5; row 2 = dark; row 3 = all anchors. Anchors give each video frame the tile outline (hand-held drift) and the lit level; row 2 the dark level. Made: `pc/gifs/sync_3x3.gif` (gitignored folder: regenerate with `.venv/bin/python -I docs/bench/24nov/tools/sync_gif.py 3 3 pc/gifs/sync_3x3.gif`). Checked: the website pipeline (`asset_builder.load_gif`, `resample_60fps`) keeps the pattern pixel-exact and steps on 5 of every 6 ticks. |
+| `sync_video.py VIDEO --preview p.png` | Writes the brightest pixels of the first second at 480 px wide, to pick each tile's box (look at the PNG). |
+| `sync_video.py VIDEO --box-a X,Y,W,H --box-b X,Y,W,H [--fps F]` | Reads both tiles in every frame (outline from lit pixels inside the box, 4x4 block levels normalised between the dark row and the anchors), times every counter step of each tile to a fraction of a frame (straddling frame: change at f + 1 - b when a block brightens to level b, f + b when it darkens; exposure taken as the whole frame period), pairs A and B steps by counter value, prints median, mean, p95, max of B - A and the NR-07 verdict. Also prints the frame rate implied by the counter (50 steps/s), as a check on the slow-motion file's timing. |
+| `synth_sync_video.py SKEW_MS SECONDS OUT.mp4 [FPS]` | Renders a synthetic video of two tiles with a known skew (8 sub-samples per frame for the exposure, noise, slow drift), to test the reader. Slow: about 90 s for 4 s of video. |
+
+### 5.3 Reader validation so far
+
+- Synthetic 3.0 ms at 240 fps: first version gave 4.17 ms (whole-frame rounding: a slightly lit straddling frame read as clean "old value" and the search started after it). **Fixed** (search starts at the last old-value frame). Now **3.15 ms median, max 3.34 ms** (error about 0.15 ms). Boxes used: A `50,70,115,115`, B `190,70,115,115`.
+- **Not yet run** (interrupted): synthetic 0 ms, -7 ms (B ahead by more than a frame) and 12 ms (must FAIL) at 239.7 fps (camera phase drifting against the 60 Hz ticks, like a real phone). Command:
+  ```
+  S=<scratch dir>; T=docs/bench/24nov/tools
+  for k in 0 -7 12; do .venv/bin/python -I $T/synth_sync_video.py $k 4 $S/synth_$k.mp4 239.7; done
+  for k in 0 -7 12; do .venv/bin/python -I $T/sync_video.py $S/synth_$k.mp4 --box-a 50,70,115,115 --box-b 190,70,115,115 --fps 239.7 | tail -5; done
+  ```
+  Expect about 0, -7 and 12 ms (12 ms: FAIL). Fix the reader if not, before any real video.
+- Known limits to state in the report: the camera measures light, which includes the LEDs' 2 ms WS2812 update (the same for both tiles); tiles must be on the **same row** of the picture (the iPhone sensor reads row by row, so a vertical offset between tiles would add a rolling-shutter delay); a whole-frame slip (16.7 ms) shows as a skew of about 16.7 ms (pairing is by counter value within 0.6 s).
+
+### 5.4 Next steps, in order
+
+1. Run the three synthetic checks above.
+2. Website: upload `sync_3x3.gif` (website GIF library, or POST `/api/gif {"name": "sync_3x3.gif"}` after copying it to `pc/gifs`), wait for READY, play (`/api/video/play`). Video mode, no turns during the recording.
+3. Recording (user's teammate): two tiles **side by side in the same row** (for example 4 and 5), filling most of the picture, phone braced, a fairly dark room, **240 fps slow motion, 10 s or more**. Send the **original** file by LocalSend (not a re-edited export). Ask for several recordings if possible: tiles 4-5, 7-8, and a far pair on one row (1-3).
+4. `ffprobe` the file (check `r_frame_rate`, `avg_frame_rate`, `nb_frames`; iPhone slow motion may carry a time remap), `--preview`, look at the PNG, pick boxes, run `sync_video.py`. Use `--fps 240` if the stream says otherwise; the "implied frame rate" line must come out near 240.
+5. **NR-03 by camera (tap to flash, target under 300 ms, user decision 24 Nov):** in game mode, film one tile in slow motion while tapping moles; count frames from the finger's contact to the green burst (by eye or a small script). Write both results into `docs/bench/24nov/freeze_old_router.md` (or a new `docs/bench/25nov/` record) and into `docs/final/requirements_check_24nov.md` (NR-07, NR-03 rows).
+
+### 5.5 State of the bench when the session stopped
+
+- Website running: `.venv/bin/python pc/web.py --pico 192.168.1.154 --layout 3x3 --gif frog_ripple_64x64.gif` (log `docs/bench/24nov/web5.log`), map upright 1..9, all 9 tiles ready, video was playing after NR-08.
+- Background captures may still be writing `docs/bench/24nov/pico_nr08.log` and `nr08_monitor.log` (they stop by themselves about 17:50). **Do not commit their later growth** (`git checkout --` them), as done for the other logs today.
+- Tile 5 and tile 3 were also seen plugged into the laptop's USB earlier; check the board before tests.
+- Untracked and not to commit: `docs/bench/24nov/web2.log` to `web5.log`, `docs/bench/19nov/web_end.log` change.
+
+### 5.6 The full test method used today (follow it)
+
+- **One hardware step per user request** ("flash the tiles connected now": `bash docs/bench/12nov/tools/flash_tiles.sh <done tile numbers>` each time, report flash exit and the `DE ticks` line; a tile whose serial line is empty is judged by website TELEMETRY instead). No automatic watchers on hardware. Start rounds and turn tests only when the user says "go".
+- **Before a wall test:** website READY, `readiness` 0x1FF, faults none, Pico CL_STATS (`tel_rx` rising about 9/s, `wt_known=0x1ff`, `wall_turn=0`, `wd_boot`), and the website's `node_map` agrees with the tiles' orientations (upright: 1 1 2 0 1 2 1 3 2).
+- **During a wall test:** Pico serial capture (`nohup bash -c "... cat /dev/ttyACM0 >> LOG"` loop that reopens after a reboot) plus a website state monitor (Python polling `/api/state` every 0.1 s, logging only changes) into `docs/bench/24nov/*_monitor.log`. Analyse from those logs (timelines, WALL_TURN events, STATUS gaps), not from memory.
+- **Every fix:** host test first that fails on the old code (mutation check: revert or break the fix, confirm the test fails, restore), then the gate: `clang-format` 18.1.8 from `.venv/bin/clang-format` on `tools/barr_scope.txt` (the system clang-format 23 differs), `tools/barr_check.py` (read every line), `make` and `make asan` in `panel_sync/test`, `common/proto/test`, `ledwall_sync/test`, `pytest tools/tests pc/tests`, both firmware builds (`idf.py build` in `panel_sync` after `. ~/esp/esp-idf/export.sh`; `cmake --build ledwall_sync/build`). Add new C files to `tools/barr_scope.txt` (missed once today). Then commit, flash, wall test, record in the bench file, commit, push.
+- **Records:** every result with times, numbers and log file names goes into `docs/bench/24nov/freeze_old_router.md`; requirement verdicts into `docs/final/requirements_check_24nov.md`.
