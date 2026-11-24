@@ -65,3 +65,29 @@ Read before acting, in this order:
 Nothing half done. NR-07 is recorded as met, the fix is on tiles 4 to 9 and committed, the records and this file are committed. The wall was left playing `sync_3x3.gif` on tiles 4 to 9 with the website running on the laptop.
 
 Untracked on the laptop, not to commit: `docs/tribunal1/` (the user's), `panel_syncmainwifi_secrets.h` (empty, from a Git Bash command that dropped backslashes; delete), `tools/pico_tap/test/test_tap_ring` and `test_tap_ring_asan` (test build output; delete or add to `.gitignore`). In `C:\Users\ahsan\Downloads`, `IMG_4536.MOV` and `IMG_4537.MOV` are truncated copies (the `(2)` files are complete). The videos themselves (`IMG_3429` to `IMG_3437`, `IMG_4536` to `IMG_4538`) are in the user's Downloads, not in the repo.
+
+## 6. Late evening, Linux bench machine (24 Nov, 21:00 to 22:15): supersedes sections 1 and 3 where they differ
+
+Pulled the four laptop commits (`2f47d49`) and re-ran the whole gate on Linux: green (clang-format 18.1.8, barr_check 104 files 0 findings, every host suite plain and ASan, pytest 511 passed 1 skipped, both firmwares build). The drift-limit test prints "(not counted)" but is in the exit status (`panel_sync/test/test_main.c`).
+
+### 6.1 Done tonight (all pushed, origin at `857bcd5` or later)
+
+| Commit | What |
+|---|---|
+| `630c390` | **Re-seed only on a Pico restart.** The 19:06:50 jump was a 0.65 s WiFi stall (beacon seq unbroken), not a restart: the 500 ms rule re-seeded on late beacons. `tile_net` now calls `timesync_pico_restart()` from `tn_game_new_pico` (Pico restart or new Pico, the same detection that stops playback); the next sample starts a new window. `TIMESYNC_RESEED_US` 500 ms to **5 s** (fallback only). Host tests "24 Nov WiFi stall" (the logged burst) and "24 Nov Pico restart" (each fails without its part); the R1-2 case now uses a clock 17 s off; 600 ms late samples are kept, not dropped. `ts_replay.py` takes `RESEED_US` from the environment (default 5 s). Replay of tiles 7 to 9: skew max 665 ms before, 1.26 ms after. User chose this over slewing (slewing toward the false offset would have moved the video about 650 ms off and back). |
+| `e667c76` | All 9 tiles flashed with `630c390` from this machine (WiFi `MATRIX`). **Tile 9 now reads MAC `B8:B8:22:98:0E:98`** (bit 6 lost in four bytes; USB serial and `esptool read_mac` agree) instead of `B8:F8:62:D8:0E:D8`; it boots as `ESP-9, node 9` (NVS), which also explains its new IP (.5). `flash_tiles.sh` maps both MACs to 9. A chip whose eFuse reads change may be failing: keep a spare. |
+| `7f500c7` | **Website re-uploads a tile that lost its video**: a tile that ACKed its asset in this session but is online and not ready for 5 s (`LOST_ASSET_S`) while the Pico waits for readiness is uploaded again (tiles 1, 2, 6 had lost theirs after a reflash and the wall waited). Host tests; full pytest 513. |
+| `857bcd5` | **Wall check of the re-seed fix**: 9 min of playback, all tiles online, tile 8 no re-seed and no clock jump, Pico no restart; no WiFi stall happened (max beacon delay 338 ms), so the stall case rests on the replay and the host test. **Pico restart during playback**: tile 8 re-seeded on the first new beacon, all 9 re-uploaded, READY 27 s later, nothing touched. |
+
+### 6.2 State of the bench when the session stopped (22:15)
+
+- All 9 tiles on `630c390`, assembled on the board; Pico `…595138` on `f9d313c` at .154 (watchdog restart about 21:28 while rejoining; recovered). Website running on the Linux laptop: `.venv/bin/python pc/web.py --pico 192.168.1.154 --layout 3x3 --gif frog_ripple_64x64.gif` (log `docs/bench/24nov/web6.log`), wall READY after the restart test.
+- Tile 8 may still be on the laptop's USB. **On Linux, opening a tile's serial port resets it** (`tile_capture.py` does not prevent it): log a tile only before playback starts, or not at all.
+- Untracked, not to commit: `docs/bench/24nov/web*.log`. A local `git stash` holds old log growth (drop it).
+
+### 6.3 Next, in order
+
+1. **Power:** short tile dropouts are now the wall's main weak spot (tile 5 once tonight for 2.5 s, which paused the video under the pause policy; earlier 3 and 6, 8 and 9). Tiles 1 to 3 need their replacement adapter. Check the power bank and cables before the demo. Consider whether the demo should use the continue policy instead of pause (a dropout would then not stop the video; decide with the user).
+2. **NR-03 by camera** (tap to flash under 300 ms): film a tile in slow motion during a round, count frames from contact to the green burst.
+3. **Week 13 evidence** for the Tribunal 1 change requirement (`requirements_check_24nov.md` section 4.2), **defence docs** (NR-14, now also the drift limit, the restart-only re-seed, the lost-video re-upload), and the smaller list (Pico `rx_dropped=24` seen tonight, stale counter after restarts, turns while paused, A6 to A8 timings).
+4. Optional: film a top-row pair (1-2) for NR-07 so all nine tiles are covered.
