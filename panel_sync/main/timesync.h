@@ -86,6 +86,14 @@
  *  beacons (about 200 ms) later. */
 #define TIMESYNC_RESEED_SAMPLES 3u
 
+/** Largest drift estimate kept: the 50 ppm worst case of VA-4.7, in ppb.
+ *  The two half-window minima are only 0.8 s apart, so a change of beacon
+ *  delay between them reads as a clock rate: on the old Matrix router (bench
+ *  24 Nov 2026) the estimates had a median of 1,500 ppm and put neighbouring
+ *  tiles up to 10 ms apart (NR-07). The crystals cannot drift faster than
+ *  this, so a larger estimate is limited to it (owner Ahsanul). */
+#define TIMESYNC_DRIFT_MAX_PPB INT32_C(50000)
+
 /** Snapshot flag: a published set was copied at least once. */
 #define TIMESYNC_SNAP_VALID 0x1u
 

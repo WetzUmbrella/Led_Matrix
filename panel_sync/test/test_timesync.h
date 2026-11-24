@@ -55,6 +55,15 @@ bool test_timesync_sync_ready (void);
 bool test_timesync_reseed (void);
 
 /**
+ * @brief  Drift limit (not counted): a beacon delay change between the two
+ *         half-windows gives at most the 50 ppm worst case (VA-4.7), a real
+ *         20 ppm drift passes, and the published offset stays within 80 us
+ *         of the estimate (bench 24 Nov 2026, NR-07).
+ * @return true when every check passed.
+ */
+bool test_timesync_drift_limit (void);
+
+/**
  * @brief  Supplementary arithmetic checks (not counted in Pass = N of 4).
  * @return true when every check passed.
  */

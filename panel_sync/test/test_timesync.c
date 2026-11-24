@@ -42,6 +42,13 @@
 #define LCG_ADD          12345u
 #define LCG_SHIFT        16u
 #define LCG_ONE_IN       4u
+#define DRIFT_START_US   INT64_C(2000000)
+#define DRIFT_BASE_US    INT64_C(7000000)
+#define DRIFT_FLOOR_US   INT64_C(2000)
+#define DRIFT_JUMP_US    INT64_C(5000)
+#define DRIFT_TRUE_STEP  INT64_C(2)
+#define DRIFT_TRUE_PPB   INT32_C(19999)
+#define DRIFT_AGE_MAX_US INT64_C(80)
 
 static timesync_snapshot_t set_k (uint32_t set_number);
 static int64_t             set_id (timesync_snapshot_t const * p_snap);
@@ -56,9 +63,11 @@ static bool                supp_frame_and_deadline (void);
 static bool                supp_range_and_round_trip (void);
 static bool                supp_next_tick (void);
 static bool                reseed_late_cases (void);
-static void                hook_publish_new (timesync_hook_point_t point);
-static void hook_read_inside_writer (timesync_hook_point_t point);
-static void hook_random (timesync_hook_point_t point);
+static int32_t drift_after_window (int64_t old_delay_us, int64_t new_delay_us,
+                                   int64_t step_us);
+static void    hook_publish_new (timesync_hook_point_t point);
+static void    hook_read_inside_writer (timesync_hook_point_t point);
+static void    hook_random (timesync_hook_point_t point);
 
 /* Hook state for test 4. */
 static timesync_hook_point_t g_point;  /* Where the hook acts. */
@@ -382,6 +391,110 @@ bool test_timesync_reseed (void)
     timesync_init();
 
     return b_ok;
+}
+
+/**
+ * @brief  Drift limit (not counted; bench 24 Nov 2026, NR-07): a beacon
+ *         delay that changes between the two half-windows is not a clock
+ *         rate. On the old router the two half-window minima differed by
+ *         milliseconds, so the estimate reached thousands of ppm, and the
+ *         published offset, extrapolated over the age of the minimum sample,
+ *         was off by milliseconds on one tile and not its neighbour. The
+ *         estimate is limited to the 50 ppm worst case (VA-4.7):
+ *         1. newer half 5 ms later than the older half: +50,000 ppb (6,211,180
+ *            ppb without the limit);
+ *         2. older half 5 ms later: -50,000 ppb (-6,289,309 without);
+ *         3. a real 20 ppm drift (2 us per 100 ms beacon) passes unchanged:
+ *            floor(16 x 10^9 / 800,016) = 19,999 ppb;
+ *         4. after case 1, the first publication at the newest sample is
+ *            within 80 us of the filter estimate (50 ppm over the 1.6 s
+ *            window); without the limit it is 9,347 us out.
+ * @return true when every check passed.
+ */
+bool test_timesync_drift_limit (void)
+{
+    bool b_ok = true;
+
+    int32_t const rising =
+        drift_after_window(DRIFT_FLOOR_US, DRIFT_FLOOR_US + DRIFT_JUMP_US, 0);
+
+    b_ok =
+        (test_main_check(TIMESYNC_DRIFT_MAX_PPB == rising, __LINE__)) && b_ok;
+    printf("    newer half 5 ms late: drift %" PRId32 " ppb\n", rising);
+
+    /* The published offset after case 1: the window is still loaded. */
+    int64_t est = 0;
+    int64_t ref = 0;
+
+    b_ok = (test_main_check(timesync_filter_estimate(&est, &ref), __LINE__)) &&
+           b_ok;
+
+    int64_t const newest = beacon_time(DRIFT_START_US, TIMESYNC_WINDOW - 1u) +
+                           DRIFT_BASE_US + DRIFT_FLOOR_US + DRIFT_JUMP_US;
+    timesync_reader_t reader = {0};
+
+    timesync_tick(newest); /* First publication: the target itself. */
+    b_ok = (test_main_check(timesync_read_snapshot(&reader), __LINE__)) && b_ok;
+
+    int64_t const error = reader.snap.offset_us - est;
+
+    b_ok = (test_main_check((error >= -DRIFT_AGE_MAX_US) &&
+                                (error <= DRIFT_AGE_MAX_US),
+                            __LINE__)) &&
+           b_ok;
+    printf("    published offset - estimate: %+" PRId64 " us\n", error);
+
+    int32_t const falling =
+        drift_after_window(DRIFT_FLOOR_US + DRIFT_JUMP_US, DRIFT_FLOOR_US, 0);
+
+    b_ok =
+        (test_main_check(-TIMESYNC_DRIFT_MAX_PPB == falling, __LINE__)) && b_ok;
+    printf("    older half 5 ms late: drift %" PRId32 " ppb\n", falling);
+
+    int32_t const real =
+        drift_after_window(DRIFT_FLOOR_US, DRIFT_FLOOR_US, DRIFT_TRUE_STEP);
+
+    b_ok = (test_main_check(DRIFT_TRUE_PPB == real, __LINE__)) && b_ok;
+    printf("    real 20 ppm: drift %" PRId32 " ppb\n", real);
+
+    timesync_init();
+
+    return b_ok;
+}
+
+/**
+ * @brief  Fill a fresh window and return its drift estimate. Samples 0 to 7
+ *         have old_delay_us of beacon delay, 8 to 15 new_delay_us, and the
+ *         offset grows by step_us per beacon (a real clock rate).
+ * @param  old_delay_us  Delay of the older half, microseconds.
+ * @param  new_delay_us  Delay of the newer half, microseconds.
+ * @param  step_us       Offset change per beacon, microseconds.
+ * @return The drift estimate in ppb, or 0 when none is available.
+ */
+static int32_t drift_after_window (int64_t old_delay_us, int64_t new_delay_us,
+                                   int64_t step_us)
+{
+    int32_t drift = 0;
+
+    timesync_init();
+
+    for (uint32_t idx = 0u; idx < TIMESYNC_WINDOW; idx++)
+    {
+        int64_t const t_p = beacon_time(DRIFT_START_US, idx);
+        int64_t const delay =
+            (idx < TIMESYNC_HALF) ? old_delay_us : new_delay_us;
+
+        /* idx is below 16, so idx x step_us is small. */
+        timesync_add_sample(t_p, t_p + DRIFT_BASE_US + delay +
+                                     ((int64_t)idx * step_us));
+    }
+
+    if (!timesync_drift_estimate(&drift))
+    {
+        drift = 0;
+    }
+
+    return drift;
 }
 
 /**

@@ -528,14 +528,24 @@ static void window_add (int64_t t_p, int64_t t_l)
 
         if ((span > 0) && (diff <= limit) && (diff >= -limit))
         {
-            int64_t const ppb = floor_div(diff * PPB_PER_S64, span);
+            int64_t       ppb       = floor_div(diff * PPB_PER_S64, span);
+            int64_t const ppb_limit = TIMESYNC_DRIFT_MAX_PPB; /* Widens. */
 
-            if ((ppb >= INT32_MIN) && (ppb <= INT32_MAX))
+            /* A larger rate is beacon delay changing between the halves,
+             * not the crystals (TIMESYNC_DRIFT_MAX_PPB, bench 24 Nov). */
+            if (ppb > ppb_limit)
             {
-                /* Range checked on the line above. */
-                g_writer.drift_ppb     = (int32_t)ppb;
-                g_writer.b_drift_valid = true;
+                ppb = ppb_limit;
             }
+
+            if (ppb < -ppb_limit)
+            {
+                ppb = -ppb_limit;
+            }
+
+            /* ppb is now in -50,000 to +50,000, which fits int32_t. */
+            g_writer.drift_ppb     = (int32_t)ppb;
+            g_writer.b_drift_valid = true;
         }
     }
 

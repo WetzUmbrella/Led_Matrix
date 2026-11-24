@@ -278,6 +278,8 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     bool const b_reseed =
         test_main_run("R1-2 re-seed on another Pico clock (not counted)",
                       test_timesync_reseed);
+    bool const b_drift = test_main_run(
+        "24 Nov drift limit, 50 ppm (not counted)", test_timesync_drift_limit);
 
     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
 
@@ -318,7 +320,7 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
-    if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed &&
+    if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed && b_drift &&
         (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
         (TELEMETRY_COUNT == telemetry_passed) &&
         (ASSET_COUNT == asset_passed) && (COORD_COUNT == coord_passed) &&
