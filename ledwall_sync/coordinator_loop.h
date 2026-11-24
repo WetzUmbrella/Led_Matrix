@@ -81,6 +81,9 @@
 #define CL_PORT_TILE_RX   4210u /**< Tiles listen: beacons and commands. */
 #define CL_PORT_FROM_TILE 4211u /**< Pico listens: tile messages. */
 #define CL_PORT_FROM_PC   4212u /**< Pico listens: SESSION_CONFIG, commands. */
+#define CL_PORT_TELEMETRY                                                      \
+    4215u /**< Pico listens: tiles' TELEMETRY broadcast
+                                      (orientation, D-17). */
 
 /**
  * @brief  Join the router and run the coordinator forever. Never returns.

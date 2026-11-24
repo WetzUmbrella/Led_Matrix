@@ -73,6 +73,11 @@ static uint32_t tst_find (proto_type_t type, uint32_t from, uint32_t * p_index);
 static uint32_t tst_addr (uint8_t node_id);
 static uint16_t tst_seq_of (uint32_t index);
 static uint64_t tst_deadline (uint64_t origin, uint64_t tick);
+static void     tst_telemetry (uint8_t node_id, uint8_t orientation);
+static void     tst_turn_both (uint8_t orientation);
+static bool     tst_last_status (proto_status_t * p_msg);
+static bool     tst_resume_frame (uint32_t from, uint16_t * p_frame);
+static void     tst_mode (uint8_t command);
 
 /**
  * @brief  C1 (T-B2-02): every beacon on origin + k x 100 ms, t_p equal to
@@ -1149,6 +1154,240 @@ static uint16_t tst_seq_of (uint32_t index)
 static uint64_t tst_deadline (uint64_t origin, uint64_t tick)
 {
     return origin + (((tick * UINT64_C(1000000)) + 59u) / 60u);
+}
+
+/**
+ * @brief  C37 (D-17): the whole wall turns a quarter clockwise while a 2x2
+ *         video plays: nothing until the 1.5 s window closes, then STOP,
+ *         READY and STATUS wall_turn 1; the PC's turned layout (tile 1 to
+ *         the top right, tile 2 to the bottom right) clears it, and once
+ *         both tiles are ready again RESUME_AT carries the saved frame.
+ * @return true when every check passed.
+ */
+bool test_coord_wall_turn_play (void)
+{
+    uint8_t const  turned[9] = {0u, 1u, 0u, 2u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t status;
+    uint16_t       frame = 0u;
+    bool           b_ok  = tst_to_playing(PROTO_POLICY_PAUSE);
+
+    tst_turn_both(0u); /* References. */
+    tst_advance(UINT64_C(100000));
+    tst_turn_both(1u);
+    tst_advance(UINT64_C(1300000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_PLAYBACK ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    uint32_t const mark = coordinator_port_count();
+
+    tst_advance(UINT64_C(500000));
+    b_ok = (test_main_check(PROTO_COORD_READY == coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+    uint32_t stop = 0u;
+
+    b_ok = (test_main_check(0u != tst_find(PROTO_TYPE_STOP, mark, &stop),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (1u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* The PC re-lays out: session 8 with the turned map, both tiles ready. */
+    uint32_t const before = coordinator_port_count();
+
+    tst_session(TST_SESSION + 1u, TST_ROWS_2X2, TST_COLS_2X2,
+                PROTO_POLICY_PAUSE, turned);
+    g_beat_sess = TST_SESSION + 1u;
+    tst_asset_ready(1u, TST_SESSION + 1u, TST_CRC_1);
+    tst_asset_ready(2u, TST_SESSION + 1u, TST_CRC_2);
+    tst_sync_ready(1u, TST_SESSION + 1u);
+    tst_sync_ready(2u, TST_SESSION + 1u);
+    tst_advance(UINT64_C(300000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_PLAYBACK ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+    /* Playing for about 1.8 s at 60 fps before the turn stopped it. */
+    b_ok = (test_main_check((tst_resume_frame(before, &frame)) &&
+                                (frame >= 60u) && (frame <= 150u),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C38 (D-17): what is not a wall turn, or is undone: one tile
+ *         turned alone keeps the video playing; a wall turned and turned
+ *         back before the PC re-lays out resumes at once with wall_turn 0;
+ *         in game mode a wall turn is ignored; a layout that is no turn of
+ *         the last one (a new grid from the user) clears wall_turn.
+ * @return true when every check passed.
+ */
+bool test_coord_wall_turn_not (void)
+{
+    uint8_t const  other[9] = {2u, 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t status;
+    uint16_t       frame = 0u;
+    bool           b_ok  = tst_to_playing(PROTO_POLICY_PAUSE);
+
+    tst_turn_both(0u);
+    tst_advance(UINT64_C(100000));
+    tst_telemetry(1u, 1u); /* One tile alone. */
+    tst_advance(UINT64_C(2000000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_PLAYBACK ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+    tst_telemetry(1u, 0u); /* Back: the window closes with no turn. */
+    tst_advance(UINT64_C(2000000));
+
+    /* Turned and turned back: the session's layout fits again. */
+    tst_turn_both(2u);
+    tst_advance(UINT64_C(1700000));
+    b_ok = (test_main_check(PROTO_COORD_READY == coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    uint32_t const mark = coordinator_port_count();
+
+    tst_turn_both(0u);
+    tst_advance(UINT64_C(1700000));
+    b_ok = (test_main_check((PROTO_COORD_COORDINATING_PLAYBACK ==
+                             coordinator_loop_test_state()) &&
+                                (tst_resume_frame(mark, &frame)),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* Game mode: a wall turn changes nothing. */
+    tst_pc_command(PROTO_TYPE_STOP, TST_SESSION);
+    tst_advance(UINT64_C(100000));
+    tst_mode((uint8_t)PROTO_GAME_MODE_GAME); /* Codes 0 to 7 fit. */
+    tst_turn_both(1u);
+    tst_advance(UINT64_C(1700000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* Video again; a wall turn while stopped, then a new grid from the
+     * user (tiles swapped, no turn of the last layout): wall_turn 0. */
+    tst_mode((uint8_t)PROTO_GAME_MODE_VIDEO); /* Codes 0 to 7 fit. */
+    tst_turn_both(2u);
+    tst_advance(UINT64_C(1700000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (1u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+    tst_session(TST_SESSION + 1u, TST_ROWS_2X2, TST_COLS_2X2,
+                PROTO_POLICY_PAUSE, other);
+    tst_advance(UINT64_C(300000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  A tile's TELEMETRY broadcast arrives now (D-17).
+ * @param  node_id      1 to 9.
+ * @param  orientation  0 to 3.
+ */
+static void tst_telemetry (uint8_t node_id, uint8_t orientation)
+{
+    uint8_t                 buf[PROTO_TELEMETRY_BYTES];
+    proto_telemetry_t const msg = {
+        {PROTO_TYPE_TELEMETRY, g_beat_sess, 0u}, node_id, 0u, orientation, 0u};
+
+    coordinator_loop_test_rx(CL_PORT_TELEMETRY, tst_addr(node_id), 4215u, buf,
+                             proto_encode_telemetry(&msg, buf, sizeof(buf)));
+}
+
+/**
+ * @brief  Tiles 1 and 2 both report an orientation.
+ * @param  orientation  0 to 3.
+ */
+static void tst_turn_both (uint8_t orientation)
+{
+    tst_telemetry(1u, orientation);
+    tst_telemetry(2u, orientation);
+}
+
+/**
+ * @brief  The last STATUS sent.
+ * @param  p_msg  Receives it.
+ * @return true when one was found and decoded.
+ */
+static bool tst_last_status (proto_status_t * p_msg)
+{
+    uint32_t index = 0u;
+    uint32_t last  = 0u;
+    bool     b_any = false;
+
+    while (0u != tst_find(PROTO_TYPE_STATUS, index, &index))
+    {
+        b_any = true;
+        last  = index;
+        index++;
+    }
+
+    return (b_any) &&
+           (proto_decode_status(coordinator_port_get(last)->bytes,
+                                coordinator_port_get(last)->len, p_msg));
+}
+
+/**
+ * @brief  The frame of the first RESUME_AT sent from an index.
+ * @param  from     First index.
+ * @param  p_frame  Receives frame_index.
+ * @return true when one was found and decoded.
+ */
+static bool tst_resume_frame (uint32_t from, uint16_t * p_frame)
+{
+    uint32_t          index = 0u;
+    proto_resume_at_t msg;
+    bool              b_ok = false;
+
+    if (0u != tst_find(PROTO_TYPE_RESUME_AT, from, &index))
+    {
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        b_ok     = proto_decode_resume_at(p_send->bytes, p_send->len, &msg);
+        *p_frame = msg.frame_index;
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  GAME_CONTROL with a mode from the PC.
+ * @param  command  PROTO_GAME_MODE_VIDEO or PROTO_GAME_MODE_GAME.
+ */
+static void tst_mode (uint8_t command)
+{
+    uint8_t                    buf[PROTO_GAME_CONTROL_BYTES];
+    proto_game_control_t const msg = {
+        {PROTO_TYPE_GAME_CONTROL, TST_SESSION, g_pc_seq}, 0u, command, 0u, 0u};
+
+    g_pc_seq++;
+    coordinator_loop_test_rx(CL_PORT_FROM_PC, TST_PC_ADDR, TST_PC_PORT, buf,
+                             proto_encode_game_control(&msg, buf, sizeof(buf)));
+    tst_advance(UINT64_C(100000));
 }
 
 /*** end of file ***/

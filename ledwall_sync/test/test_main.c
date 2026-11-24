@@ -19,6 +19,7 @@
 #include "test_game_rules.h"
 #include "test_join_backoff.h"
 #include "test_score_font.h"
+#include "test_wall_turn.h"
 
 /** One test. */
 typedef struct
@@ -73,6 +74,18 @@ static test_case_t const g_cases[] = {
     {"C18d 24 Nov: a real tap 140 ms behind its echoes wins, a 1 s late "
      "echo is a duplicate",
      test_game_rules_slow_echo},
+    {"C35 24 Nov: a wall turn turns the layout, 4 turns give it back, "
+     "the match finds the turn",
+     test_wall_turn_layout},
+    {"C36 24 Nov: wall turn when every tile turns alike within 1.5 s; "
+     "partial, mixed and unheard tiles are not",
+     test_wall_turn_detect},
+    {"C37 24 Nov: a wall turn while playing stops, then resumes at the saved "
+     "frame in the turned layout",
+     test_coord_wall_turn_play},
+    {"C38 24 Nov: one tile turned, a turn undone, game mode and a new grid "
+     "leave no wall turn",
+     test_coord_wall_turn_not},
     {"C19 re-plan: score font pixel counts, centring and tile slices",
      test_score_font_slices},
     {"C19b step 3: wall pictures at the largest scale per shape, sparse",

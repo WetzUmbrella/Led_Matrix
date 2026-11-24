@@ -64,6 +64,7 @@
 #include "game_rules.h"
 #include "join_backoff.h"
 #include "score_font.h"
+#include "wall_turn.h"
 
 #ifdef CL_HOST_TEST
 #include "coordinator_port.h"
@@ -322,6 +323,7 @@ typedef enum
                           * (a 32-bit two's complement: above 2^31 means the
                           * tap is stamped after it arrived). */
     CL_EV_GAME_FEEDBACK, /* DS-13: node, value 1 hit or 0 miss. */
+    CL_EV_WALL_TURN,     /* D-17: value the quarter turns clockwise. */
     CL_EV_COUNT
 } cl_event_code_t;
 
@@ -375,6 +377,17 @@ static uint64_t            g_origin_us         = 0u; /* Pico time of frame 0. */
 static uint16_t            g_saved_frame       = 0u;
 static uint64_t            g_recover_until_us  = 0u;
 static uint64_t            g_playing_since_us  = 0u;
+
+/* Whole-wall rotation (D-17, video mode only): the detector, the layout of
+ * the session, the turn not yet re-laid out by the PC (STATUS wall_turn),
+ * and what to do once it is: resume at the saved frame, or return to
+ * PAUSED. */
+static wall_turn_t        g_turn;
+static wall_turn_layout_t g_turn_base;
+static bool               g_b_turn_base   = false;
+static uint8_t            g_wall_turn     = 0u;
+static bool               g_b_turn_resume = false;
+static bool               g_b_turn_pause  = false;
 
 /* Schedules (absolute, microseconds). */
 static uint64_t g_next_beacon_us = 0u;
@@ -501,6 +514,11 @@ static void     cl_cmd_pause (void);
 static void     cl_cmd_resume_at (void);
 static void     cl_cmd_stop (void);
 static void     cl_issue_resume (void);
+static void     cl_save_frame (uint64_t now);
+static void     cl_on_telemetry (cl_rx_entry_t const * p_entry);
+static void     cl_turn_routine (uint64_t now);
+static void     cl_turn_after (void);
+static void     cl_turn_new_layout (proto_session_config_t const * p_cfg);
 static void cl_triple_send (proto_type_t type, uint16_t frame, uint32_t addr);
 static void cl_send_copy (cl_send_slot_t * p_slot, uint64_t now);
 static void cl_issue_timeline (cl_send_slot_t * p_slot);
@@ -596,10 +614,15 @@ static void cl_reset_state (uint32_t bcast_addr, uint64_t now)
     g_sync              = 0u;
     g_b_resume_pending  = false;
     g_b_return_to_pause = false;
-    g_b_pc_known        = false;
-    g_b_pc_seq_known    = false;
-    g_b_suppress_done   = false;
-    g_bcast_addr        = bcast_addr;
+    g_b_turn_base       = false;
+    g_wall_turn         = 0u;
+    g_b_turn_resume     = false;
+    g_b_turn_pause      = false;
+    wall_turn_init(&g_turn);
+    g_b_pc_known      = false;
+    g_b_pc_seq_known  = false;
+    g_b_suppress_done = false;
+    g_bcast_addr      = bcast_addr;
     /* Video mode, no round (the game state of steps 1 to 4). */
     g_b_game_mode     = false;
     g_round           = PROTO_ROUND_IDLE;
@@ -780,6 +803,8 @@ static void cl_scan_heartbeats (uint64_t now)
     {
         cl_set_state(PROTO_COORD_FAULT);
     }
+
+    cl_turn_routine(now);
 
 #ifndef CL_HOST_TEST
     if (CYW43_LINK_UP != cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA))
@@ -1019,6 +1044,7 @@ static void cl_send_status (uint64_t now)
             /* At most 30 s: fits uint8_t. */
             .time_left_s = (uint8_t)game_rules_time_left_s(&g_game, now),
             .reaction_ms = cl_reaction11(game_rules_reaction_ms(&g_game)),
+            .wall_turn   = g_wall_turn,
         };
         uint32_t const len = proto_encode_status(&msg, buf, sizeof(buf));
 
@@ -1073,6 +1099,10 @@ static void cl_dispatch_entry (cl_rx_entry_t const * p_entry)
     else if (CL_PORT_FROM_PC == p_entry->listen_port)
     {
         cl_from_pc(p_entry, &header);
+    }
+    else if (CL_PORT_TELEMETRY == p_entry->listen_port)
+    {
+        cl_on_telemetry(p_entry);
     }
     else
     {
@@ -1377,6 +1407,7 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
         g_b_return_to_pause = false;
         g_b_pc_seq_known    = true;
         g_pc_seq            = cfg.header.seq;
+        cl_turn_new_layout(&cfg);
 
         if (g_b_tap_test)
         {
@@ -1415,6 +1446,13 @@ static bool cl_session_valid (proto_session_config_t const * p_cfg)
  */
 static void cl_pc_command (proto_type_t type)
 {
+    if ((PROTO_TYPE_START_AT == type) || (PROTO_TYPE_STOP == type))
+    {
+        /* The user's Start or Stop replaces a resume after a wall turn. */
+        g_b_turn_resume = false;
+        g_b_turn_pause  = false;
+    }
+
     if (PROTO_TYPE_START_AT == type)
     {
         cl_cmd_start_at();
@@ -1470,10 +1508,7 @@ static void cl_cmd_pause (void)
 {
     if (PROTO_COORD_COORDINATING_PLAYBACK == g_state)
     {
-        uint64_t const tick = cl_ticks_since(g_origin_us, cl_now_us());
-
-        /* frame_count is 1 to 1023, so the remainder fits uint16_t. */
-        g_saved_frame = (uint16_t)(tick % (uint64_t)g_session.frame_count);
+        cl_save_frame(cl_now_us());
         cl_triple_send(PROTO_TYPE_PAUSE, 0u, g_bcast_addr);
     }
 }
@@ -1513,6 +1548,140 @@ static void cl_cmd_stop (void)
 
         cl_set_state(PROTO_COORD_READY);
         cl_evaluate();
+    }
+}
+
+/**
+ * @brief  Save the frame shown now, which a later RESUME_AT carries.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_save_frame (uint64_t now)
+{
+    uint64_t const tick = cl_ticks_since(g_origin_us, now);
+
+    /* frame_count is 1 to 1023, so the remainder fits uint16_t. */
+    g_saved_frame = (uint16_t)(tick % (uint64_t)g_session.frame_count);
+}
+
+/**
+ * @brief  A tile's TELEMETRY broadcast (D-17): only its orientation is read,
+ *         for the wall-turn detector; the PC still ACKs it.
+ * @param  p_entry  The datagram.
+ */
+static void cl_on_telemetry (cl_rx_entry_t const * p_entry)
+{
+    proto_telemetry_t msg;
+
+    if (proto_decode_telemetry(p_entry->bytes, p_entry->len, &msg))
+    {
+        wall_turn_report(&g_turn, msg.node_id, msg.orientation,
+                         p_entry->t_rx_us);
+    }
+    else
+    {
+        g_stats.rx_bad++;
+    }
+}
+
+/**
+ * @brief  Close a due wall-turn window (D-17, every scan). In video mode a
+ *         turn of the whole wall adds to STATUS wall_turn; playing, the
+ *         frame is saved and the tiles stop until the PC sends the turned
+ *         layout; paused, the tiles stop and return to PAUSED after it.
+ *         Turned back before that, the session's layout fits again and the
+ *         wall goes on at once. Turns are ignored in game mode.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_turn_routine (uint64_t now)
+{
+    /* Bits 0 to 8, so the narrowing keeps them. */
+    uint16_t const active = (uint16_t)(g_session.required & cl_online_bits());
+    uint8_t const  turn   = wall_turn_poll(&g_turn, active, now);
+
+    if ((0u != turn) && (g_session.b_active) && (!g_b_game_mode))
+    {
+        cl_log_event(CL_EV_WALL_TURN, 0u, turn, now);
+        /* Both are 0 to 3, so the remainder fits uint8_t. */
+        g_wall_turn = (uint8_t)((g_wall_turn + turn) % WALL_TURN_QUARTERS);
+
+        if (PROTO_COORD_COORDINATING_PLAYBACK == g_state)
+        {
+            cl_save_frame(now);
+            cl_cmd_stop();
+            g_b_turn_resume = true;
+        }
+        else if (PROTO_COORD_PAUSED == g_state)
+        {
+            cl_cmd_stop(); /* The paused frame stays saved. */
+            g_b_turn_pause = true;
+        }
+        else
+        {
+            /* Stopped: only the layout changes. */
+        }
+
+        if (0u == g_wall_turn)
+        {
+            cl_turn_after();
+            cl_evaluate();
+        }
+    }
+}
+
+/**
+ * @brief  The layout fits the wall again: hand a pending resume or return
+ *         to PAUSED to the automatic path (cl_evaluate).
+ */
+static void cl_turn_after (void)
+{
+    g_b_resume_pending  = g_b_turn_resume;
+    g_b_return_to_pause = g_b_turn_pause;
+    g_b_turn_resume     = false;
+    g_b_turn_pause      = false;
+}
+
+/**
+ * @brief  A new session's layout (D-17): the turn j that maps the previous
+ *         layout onto it was re-laid out by the PC and leaves wall_turn;
+ *         when no turn fits, it is a new layout and every tile's reference
+ *         is taken again. Once wall_turn is 0, a pending resume goes on.
+ * @param  p_cfg  The SESSION_CONFIG being applied.
+ */
+static void cl_turn_new_layout (proto_session_config_t const * p_cfg)
+{
+    wall_turn_layout_t layout;
+    uint8_t            quarters = 0u;
+
+    layout.rows = p_cfg->rows;
+    layout.cols = p_cfg->cols;
+    (void)memcpy(layout.cell, p_cfg->cell, sizeof(layout.cell)); /* Same. */
+
+    if ((g_b_turn_base) &&
+        (wall_turn_match(&g_turn_base, &layout, g_wall_turn, &quarters)))
+    {
+        /* Both are 0 to 3: adding 4 keeps it positive; fits uint8_t. */
+        g_wall_turn = (uint8_t)((g_wall_turn + WALL_TURN_QUARTERS - quarters) %
+                                WALL_TURN_QUARTERS);
+    }
+    else
+    {
+        g_wall_turn     = 0u;
+        g_b_turn_resume = false;
+        g_b_turn_pause  = false;
+        wall_turn_init(&g_turn);
+    }
+
+    g_turn_base   = layout;
+    g_b_turn_base = true;
+
+    if (g_saved_frame >= p_cfg->frame_count)
+    {
+        g_saved_frame = 0u;
+    }
+
+    if (0u == g_wall_turn)
+    {
+        cl_turn_after();
     }
 }
 
@@ -1919,7 +2088,8 @@ static void cl_log_routine (uint64_t now)
                                                       "GAME_REFUSED",
                                                       "GAME_MOLE",
                                                       "GAME_TAP",
-                                                      "GAME_FEEDBACK"};
+                                                      "GAME_FEEDBACK",
+                                                      "WALL_TURN"};
 
     if (0u != g_event_count)
     {
@@ -2228,8 +2398,10 @@ static void cl_game_command (proto_game_control_t const * p_msg)
         /* The mode changes only while stopped (layout_table.md 5.10). */
         if (cl_stopped())
         {
-            g_b_game_mode = (PROTO_GAME_MODE_GAME == command);
-            g_b_tap_test  = false;
+            g_b_game_mode   = (PROTO_GAME_MODE_GAME == command);
+            g_b_tap_test    = false;
+            g_b_turn_resume = false; /* Turns are video only (D-17). */
+            g_b_turn_pause  = false;
             cl_results_end(now);
             cl_evaluate(); /* Readiness depends on the mode (A14). */
         }
@@ -3451,15 +3623,17 @@ static bool cl_connect_router (void)
 }
 
 /**
- * @brief  One send pcb and the two receive pcbs (tiles and PC).
+ * @brief  One send pcb and the three receive pcbs (tiles, PC, and the tiles'
+ *         TELEMETRY broadcast for the wall turn, D-17).
  */
 static void cl_open_pcbs (void)
 {
-    static uint16_t const ports[2] = {CL_PORT_FROM_TILE, CL_PORT_FROM_PC};
+    static uint16_t const ports[3] = {CL_PORT_FROM_TILE, CL_PORT_FROM_PC,
+                                      CL_PORT_TELEMETRY};
 
     g_p_tx_pcb = udp_new();
 
-    for (uint32_t index = 0u; index < 2u; index++)
+    for (uint32_t index = 0u; index < 3u; index++)
     {
         struct udp_pcb * const p_pcb = udp_new();
 
