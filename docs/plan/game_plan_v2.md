@@ -49,6 +49,7 @@ Fixed dates that are not agent work: UDE2222 A2 (submit Thu 12 Nov), INF2004 Wee
 | D-15 | 10 Nov: **prototype first.** The rotate sprite (G1 to G9) moves to stretch (Cheston consults the professor on a workaround on Thu 12 Nov). Scoring is tap-the-mole only, highest peak wins (DS-03). Whole-wall rotation (E3 to E8) stays a Must but is built after the prototype. |
 | D-16 | 10 Nov: **website phase must follow the brief's video path:** the PC decodes the GIF the user selects, divides each frame into sections and sends each section to its panel; tiles never parse GIFs. The bench used synthetic GIFs through `asset_builder`; A13 adds choosing a real GIF on the website. **Conflict to settle then:** D-09 (every tile stores the whole wall) sends each tile more than its section, which departs from the brief's "send each section to the microcontroller responsible". Options: keep D-09 and justify it in the report, or keep per-tile sections and re-split and re-upload after a wall rotation. |
 | D-14 | A13 and A14 added 9 Nov: on `12f2f8d` the website cannot pick a GIF or control video, and a round needs the Pico READY, which needs an uploaded video, so the website alone cannot run a game. |
+| D-17 | 24 Nov (Cheston): **whole-wall rotation is built for video mode only, and the Pico decides it.** The Pico listens to the tiles' broadcast TELEMETRY (orientation), detects a wall turn (E3, E4), turns its own map (E5), saves the frame, stops the tiles and reports the turn in STATUS; the PC re-cuts the GIF for the turned layout and re-uploads (E6), and the Pico resumes at the saved frame. The PC shows health only. In game mode turns are ignored; E7 and game-mode rotation wait for a justification. Tiles send TELEMETRY as soon as their orientation changes (E8). Revises DS-01 and DS-06 accordingly; DS-04, DS-05 and the DS-02 spin check stay parked. |
 | D-13 | Cheston's 5 Nov colour order (R, G, B), mount offset and 90/270 remap fixes (`b3/showcase-5nov`, `f11e403`, `a7c4b10`) are brought into this branch. They are measured bench fixes, not mockup code. |
 
 ## 4. Functional requirements
@@ -124,8 +125,8 @@ All drawn by the tile itself, with channel values 0 to 8 (brightness cap, NR-09)
 | E3 | Whole-wall rotation: when every active tile reports the same turn (+90, -90 or 180) within 1.5 s (p) of the first tile's change, the Pico rotates the grid map. Each tile's final orientation at the window's close decides, so a 180 turn that passes through 90 counts once. | NR-08 | M | H, B |
 | E4 | A partial or mixed turn (not every tile, or different amounts) changes nothing for the wall; each turned tile only redraws upright (E2) | NR-08 | M | H, B |
 | E5 | The map rotation also turns the shape: 2x3 becomes 3x2, 1x9 becomes 9x1. Tap-to-place is not needed again. | Host test for every shape in A1 | M | H |
-| E6 | In video, after a wall rotation the PC re-cuts the GIF for the new shape and re-uploads each tile's section (in parallel); the video resumes upright on every tile together (revised 11 Nov, DS-14) | Video resumes upright and in sync within 10 s of the board settling (p, set in step 4); NR-07 holds | M | B |
-| E7 | In a round, a wall rotation does not stop the game; targets stay on their tiles, and wall drawings (B1, B5) redraw upright | Seen in a round; host test | M | H, B |
+| E6 | In video, after a wall rotation (detected by the Pico, D-17) the PC re-cuts the GIF for the new shape and re-uploads each tile's section (in parallel); the video resumes upright on every tile together (revised 11 Nov, DS-14) | Video resumes upright and in sync within 10 s of the board settling (p, set in step 4); NR-07 holds | M | B |
+| E7 | **Deferred 24 Nov (D-17): turns are ignored in game mode.** In a round, a wall rotation does not stop the game; targets stay on their tiles, and wall drawings (B1, B5) redraw upright | Seen in a round; host test | M | H, B |
 | E8 | The website shows the new shape and map after a wall rotation | Within 2 s | M | B |
 | E9 | A tile that drops out mid-round is skipped; the round continues; the tile rejoins after | Unplug and replug during a round | M | H, B |
 | E10 | Video mode keeps working as on master | F5 bench card | M | B |
@@ -164,7 +165,7 @@ If time runs out, stretch goes first, then the S rows in this order: B8, A10, D6
 |---|---|---|---|
 | NR-01 | Taps detected | At least 95% of 50 deliberate taps, soft fingertip and open palm, on every tile (p, set by F-05) | B |
 | NR-02 | False taps | At most 1 false tap on a neighbour per round, including hard slaps; 0 false taps from turning a tile over 20 turns | B |
-| NR-03 | Hit feedback latency | Tap to hit burst under 100 ms, measured with GPIO4 event pulses and pico_tap | B |
+| NR-03 | Hit feedback latency | Tap to hit burst under 100 ms, measured with GPIO4 event pulses and pico_tap. **Revised 24 Nov 2026 (Cheston): accuracy over latency.** The Pico waits 150 ms for a tap's reports before judging it (`GAME_COLLECT_MS`), so tap to burst is about 250 ms; target: under 300 ms. At the 20 ms wait, 25 of 84 bench taps were judged on an echo; at 150 ms, 5 (`docs/bench/24nov/freeze_old_router.md`). | B |
 | NR-04 | Rotate feedback latency | Success shown within 500 ms of the tile settling | B |
 | NR-05 | No double counts | Each of 50 deliberate hits scores exactly once | B |
 | NR-06 | Reliability | 10 rounds in a row with no reboot; a tile unplugged mid-round does not stop the round | B |

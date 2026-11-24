@@ -98,7 +98,7 @@ Stretch since D-15 (10 Nov): not built. The professor consult on a workaround (1
 |---|---|---|
 | NR-01 taps detected (95% of 50) | Built, not measured | Soft taps at 370 to 1,348 mg all registered (19 Nov, 8 taps); the 50-tap card was never run |
 | NR-02 false taps | Built, not measured | 24 Nov round 0 wrong at 620 mg; the 300 mg default had echoes; no formal card |
-| NR-03 tap to burst under 100 ms | **Not met** | Never measured (GPIO4 pulses not wired); now about 240 ms by design (section 5) |
+| NR-03 tap to burst | Built, not measured | Revised 24 Nov (user): under 300 ms, accuracy over latency (about 240 ms by design); never measured (GPIO4 pulses not wired) |
 | NR-04 rotate feedback | n/a | Rotate sprite is stretch |
 | NR-05 no double counts (50 hits) | Partly | 24 Nov: 34 of 34 hits, 0 wrong after the echo fix; not the 50-hit card |
 | NR-06 10 rounds without reboot | Partly | 24 Nov: 6 rounds and 2 x 6 min reproducer runs without a freeze on the old router; not 10 in a row; the watchdog recovers a freeze in about 20 s |
@@ -134,7 +134,7 @@ Stretch since D-15 (10 Nov): not built. The professor consult on a workaround (1
 | Message size before and after | `docs/week13/message_sizes.md`: encoded sizes derived; on-air bytes `[NEEDS MEASUREMENT]` |
 | Correctness and performance | Packed round trip, fault-word stress, tick timing 8-bit vs packed, re-upload beacon lateness, torn-read stress: **all NOT RUN on hardware**; their logs (`docs/week13/round_trip_tile.log`, `fault_stress.log`, `prep_profile_*.log`, `reupload_lateness.log`) do not exist. Host tests cover the logic (timesync seqlock, fault word, proto vectors). |
 
-## 5. Decision needed: NR-03 against the echo fix
+## 5. NR-03 against the echo fix (decided 24 Nov: keep 150 ms, NR-03 restated to under 300 ms)
 
 The tile flashes only when the Pico's FEEDBACK arrives, so the Pico's collect wait adds directly to tap-to-flash. Replay of 24 Nov (84 taps, `docs/bench/24nov/tools/echo_sim.py`):
 
