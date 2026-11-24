@@ -93,3 +93,9 @@ Second try:
 | Turned back: WALL_TURN 3, map back to 1 2 3 / 4 5 6 / 7 8 9 | 1.7 after that turn | E3, E5 |
 
 During the re-upload after the turn back, **the Pico froze** (website NO STATUS 16:36:33 to 16:36:59): `wd_boot=1 wd_step=0x0000000a wd_prev=0x80000002`, that is a freeze inside a UDP send in the beacon step, then a second watchdog reset while rejoining (step 10). The watchdog and the website recovered it (new session 206, all tiles ready), but the restart lost the pending resume, so the video stayed stopped until started again. The freeze is the same CYW43 hang as on the Asus, here under the burst of nine parallel uploads plus beacons.
+
+## A Pico restart during video (16:52, tile fix `6b1e446`)
+
+All 9 tiles reflashed with the fix (tile 1's display check printed nothing over serial, but its TELEMETRY was fresh with no faults). Before the test, the website's last upload had failed on 8 tiles as BUSY (taken while they still ran the old firmware) and was never retried, so the Pico waited in WAITING FOR TILE READINESS until the GIF was chosen again (open: retry failed uploads).
+
+Video playing from 16:52:53; `picotool reboot -f` at 16:52:58 (`restart_stop_monitor.log`, `pico_restart_stop.log`). The website saw NO STATUS, then "Pico back: publishing again" 6 s later; **all 9 uploads succeeded, none BUSY** (3.0 to 4.5 s), READY with every tile ready at 16:53:10, 12 s after the restart, with no power cycle. Before the fix the same restart left the tiles playing and refusing uploads until power-cycled.
