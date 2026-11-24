@@ -267,3 +267,14 @@ Fix (`timesync.c`/`.h`, `tile_net.c`): `tile_net` calls `timesync_pico_restart()
 Replay of tiles 7, 8, 9 (19 min, `tools/ts_replay.py`, `DRIFT_MODE=clamp50`, now with `RESEED_US` from the environment, default 5 s): old rule clock error max 666 ms, skew max 665 ms, 40 ticks over 5 ms; new rule no re-seed, skew max 1.26 ms, p99 0.35 ms, 0 ticks over 5 ms. Gate green (format, barr 104 files 0 findings, every host suite plain and ASan, pytest 511), tile firmware builds. **Not yet on the tiles.**
 
 All nine tiles flashed with `630c390` (21:3x, this laptop, WiFi name `MATRIX`): tiles 1 to 8 by `flash_tiles.sh`, each `DE ticks` with missed=0. **Tile 9 now reports MAC `B8:B8:22:98:0E:98`** (USB serial and `esptool read_mac` agree) instead of `B8:F8:62:D8:0E:D8`: bit 6 is missing from four bytes. It still boots as `ESP-9, node 9` (the board number is in NVS, not the MAC), so it was flashed by port and registered as node 9. This explains its new IP (.219 to .5) in the evening: the router's DHCP reservation follows the MAC. `flash_tiles.sh` now maps both MACs to tile 9. Worth watching: a chip whose eFuse reads change may be failing; if it gets worse, keep a spare tile ready.
+
+## The re-seed fix on the wall (21:48 to 22:10, all tiles on `630c390`, website `7f500c7`)
+
+First try (21:48, `long_*_try1.log`): opening tile 8's USB serial for logging reset it (`rst:0x15 USB_UART_CHIP_RESET`; on Linux `tile_capture.py` does not avoid the reset), the Pico paused the video (pause policy) and returned to PAUSED. Discarded.
+
+Second try (21:58:38 to 22:08:40, `long_monitor.log`, `long_pico.log`, `long_tile8.log`):
+- Tile 5 dropped off once (21:59:19, heartbeat silence 2.5 s, back 3 s later); the pause policy paused the video and the user resumed it at 21:59:34. Then **9 minutes of playback with all 9 tiles online**, no STATUS gap, no "zero online" blip, no Pico restart; Pico `send_fail=0 tx_drop=0`, `rx_dropped=24` (not looked into).
+- Tile 8: **no re-seed and no display clock jump during playback** (`jumps=0`; its one re-seed was its own boot), 1 missed tick in 36,000, 20 of 6,159 beacons lost.
+- **No WiFi stall happened**: the longest beacon delay was 338 ms (`ts_replay.py` on tile 8's log gives the same result with the old and the new rule). The stall case therefore rests on the replay of the 19:06:50 logs and the host test.
+
+Pico restart (22:09:05, `picotool reboot -f`, video playing): tile 8 **re-seeded on the restarted Pico's first beacon** (`TS reseed n=2 t_p=5575386`, the new clock 5.6 s after boot) and took the new clock (`jumps=1`, expected: the old timeline is gone and playback stopped); the website republished, all 9 uploads succeeded, **READY with every tile ready 27 s after the restart** with nothing touched.

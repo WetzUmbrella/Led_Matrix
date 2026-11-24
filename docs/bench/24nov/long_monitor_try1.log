@@ -1,0 +1,6 @@
+21:48:44 1795528124.784 READY | 0x1ff | 0x1ff | 113 | None | False | 1795528107.872 all tiles ready
+21:48:45 1795528125.198 READY | 0x1ff | 0x1ff | 113 | None | False | 1795528125.133 video play
+21:48:45 1795528125.403 COORDINATING PLAYBACK | 0x1ff | 0x1ff | 113 | None | False | 1795528125.133 video play
+21:48:47 1795528127.454 RECOVERING | 0x17f | 0x1ff | 113 | None | False | 1795528127.378 tile 8 lost (Pico STATUS online bit cleared)
+21:48:49 1795528129.198 SYNCHRONISING | 0x1ff | 0x1ff | 113 | None | False | 1795528127.378 tile 8 lost (Pico STATUS online bit cleared)
+21:48:50 1795528130.942 PAUSED | 0x1ff | 0x1ff | 113 | None | False | 1795528127.378 tile 8 lost (Pico STATUS online bit cleared)
