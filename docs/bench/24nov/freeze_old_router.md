@@ -64,7 +64,7 @@ Wall check (15:12:21, website in game mode, `picotool reboot -f`, serial from bo
 
 ## Echo grouping (15:15 to 15:28)
 
-Two rounds with the Pico logged (`pico_round_echo.log`; round 1 at 300 mg: 20 hits, 38 wrong; round 2 hard at 620 mg: 16 of 29, 19 wrong). Tiles 3 and 6 dropped off together at 15:13 and came back on a replug (likely their power feed). Analysis joins the Pico's GAME_TAP events (arrival, delivery time) with the website tap log's peaks (`echo_sim.py` in the session scratchpad; logic below):
+Two rounds with the Pico logged (`pico_round_echo.log`; round 1 at 300 mg: 20 hits, 38 wrong; round 2 hard at 620 mg: 16 of 29, 19 wrong). Tiles 3 and 6 dropped off together at 15:13 and came back on a replug (likely their power feed). Analysis joins the Pico's GAME_TAP events (arrival, delivery time) with the website tap log's peaks (`tools/echo_sim.py`):
 
 - Tile stamps of one tap are tight (90% within about 20 ms): the 30 ms dedupe window is right.
 - Delivery to the Pico: median 50 to 64 ms, 95th percentile 285 to 385 ms, worst 1 s.
