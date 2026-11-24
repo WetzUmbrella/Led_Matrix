@@ -21,7 +21,8 @@
  *   final orientations decide (a 180 degree turn that passes through 90
  *   counts once): when every active tile is known and has turned by the
  *   same k (1 to 3) from its reference, the wall turned by k and every
- *   active tile's reference moves on by k. Otherwise nothing changes for
+ *   known tile's reference moves on by k (an offline tile turned with the
+ *   board too). Otherwise nothing changes for
  *   the wall (E4); a later window can still complete a slow turn.
  * - A quarter turn clockwise moves the cell at row r, column c of a rows x
  *   cols grid to row c, column rows - 1 - r, and the grid becomes cols x

@@ -1664,10 +1664,12 @@ static void cl_turn_after (void)
 }
 
 /**
- * @brief  A new session's layout (D-17): the turn j that maps the previous
- *         layout onto it was re-laid out by the PC and leaves wall_turn;
- *         when no turn fits, it is a new layout and every tile's reference
- *         is taken again. Once wall_turn is 0, a pending resume goes on.
+ * @brief  A new session's layout (D-17). With a turn pending, the turn j
+ *         that maps the previous layout onto it was re-laid out by the PC
+ *         and leaves wall_turn. With none pending, only the same layout
+ *         keeps the references. Any other layout is new: every tile's
+ *         reference is taken again. Once wall_turn is 0, a pending resume
+ *         goes on.
  * @param  p_cfg  The SESSION_CONFIG being applied.
  */
 static void cl_turn_new_layout (proto_session_config_t const * p_cfg)
@@ -1679,19 +1681,43 @@ static void cl_turn_new_layout (proto_session_config_t const * p_cfg)
     layout.cols = p_cfg->cols;
     (void)memcpy(layout.cell, p_cfg->cell, sizeof(layout.cell)); /* Same. */
 
-    if ((g_b_turn_base) &&
-        (wall_turn_match(&g_turn_base, &layout, g_wall_turn, &quarters)))
+    bool b_same   = false;
+    bool b_turned = false;
+
+    if ((g_b_turn_base) && (0u != g_wall_turn))
+    {
+        b_turned =
+            wall_turn_match(&g_turn_base, &layout, g_wall_turn, &quarters);
+    }
+    else if (g_b_turn_base)
+    {
+        /* No turn pending: only the same layout keeps the references; a
+         * turned one is the user's new layout, not a re-layout (bench 24
+         * Nov 2026). */
+        b_same = (wall_turn_match(&g_turn_base, &layout, 0u, &quarters)) &&
+                 (0u == quarters);
+    }
+    else
+    {
+        /* The first layout since boot. */
+    }
+
+    if (b_turned)
     {
         /* Both are 0 to 3: adding 4 keeps it positive; fits uint8_t. */
         g_wall_turn = (uint8_t)((g_wall_turn + WALL_TURN_QUARTERS - quarters) %
                                 WALL_TURN_QUARTERS);
     }
-    else
+    else if (!b_same)
     {
         g_wall_turn     = 0u;
         g_b_turn_resume = false;
         g_b_turn_pause  = false;
         wall_turn_init(&g_turn);
+    }
+    else
+    {
+        /* The same layout again (a republish): the references stay. */
     }
 
     g_turn_base   = layout;

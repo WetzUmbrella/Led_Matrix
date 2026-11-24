@@ -51,6 +51,9 @@
 #define TST_ROWS_2X2 2u
 #define TST_COLS_2X2 2u
 
+/* A quarter turn clockwise of the 2x2 map {2, 1, 0, 0} (C38). */
+static uint8_t const g_turned_other[9] = {0u, 2u, 0u, 1u, 0u, 0u, 0u, 0u, 0u};
+
 static uint16_t g_tile_seq[CL_MAX_NODES + 1u];
 static uint64_t g_last_beat[CL_MAX_NODES + 1u];
 static uint16_t g_live      = 0u; /* Tiles that send heartbeats. */
@@ -1293,6 +1296,18 @@ bool test_coord_wall_turn_not (void)
         b_ok;
     tst_session(TST_SESSION + 1u, TST_ROWS_2X2, TST_COLS_2X2,
                 PROTO_POLICY_PAUSE, other);
+    tst_advance(UINT64_C(300000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* With no turn pending, a user's layout that happens to be a quarter
+     * turn of the last one is a new layout, not a re-layout: wall_turn
+     * stays 0 (bench 24 Nov 2026: it became 3 and the website turned its
+     * map with the wall upright). */
+    tst_session(TST_SESSION + 2u, TST_ROWS_2X2, TST_COLS_2X2,
+                PROTO_POLICY_PAUSE, g_turned_other);
     tst_advance(UINT64_C(300000));
     b_ok =
         (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),

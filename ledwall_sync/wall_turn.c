@@ -83,10 +83,13 @@ uint8_t wall_turn_poll (wall_turn_t * p_turn, uint16_t active_mask,
         p_turn->b_window = false;
         turn             = wt_turned(p_turn, active_mask);
 
+        /* Every tile on the board turned with it, also one that is offline
+         * now: its reference moves on too, so when it is heard again its
+         * orientation agrees with the rest (bench 24 Nov 2026). */
         for (uint32_t index = 0u; (0u != turn) && (index < PROTO_NODE_MAX);
              index++)
         {
-            if (0u != (active_mask & (UINT16_C(1) << index)))
+            if (p_turn->b_known[index])
             {
                 /* Both are 0 to 3, so the masked sum fits uint8_t. */
                 p_turn->ref[index] =

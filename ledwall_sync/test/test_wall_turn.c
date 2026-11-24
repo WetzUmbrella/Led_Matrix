@@ -27,6 +27,7 @@ static void tst_place (wall_turn_layout_t * p_layout, uint8_t node_id,
 static bool tst_cell (wall_turn_layout_t const * p_layout, uint8_t node_id,
                       uint8_t row, uint8_t col);
 static bool tst_full_turns (void);
+static bool tst_offline_turn (wall_turn_t * p_turn, uint64_t * p_now);
 static void tst_report_all (wall_turn_t * p_turn, uint16_t mask,
                             uint8_t orientation, uint64_t now_us);
 
@@ -196,6 +197,8 @@ bool test_wall_turn_detect (void)
                __LINE__)) &&
            b_ok;
 
+    b_ok = (test_main_check(tst_offline_turn(&turn, &now), __LINE__)) && b_ok;
+
     /* A tile never heard blocks the turn. */
     wall_turn_init(&turn);
     tst_report_all(&turn, TST_TWO, 0u, now);
@@ -203,6 +206,45 @@ bool test_wall_turn_detect (void)
     b_ok = (test_main_check(0u == wall_turn_poll(&turn, TST_THREE,
                                                  now + TST_WINDOW + TST_MS),
                             __LINE__)) &&
+           b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  An offline tile during a wall turn (bench 24 Nov 2026; see the
+ *         comment inside).
+ * @param  p_turn  Detector.
+ * @param  p_now   Time, advanced.
+ * @return true when every check passed.
+ */
+static bool tst_offline_turn (wall_turn_t * p_turn, uint64_t * p_now)
+{
+    bool b_ok = true;
+
+    /* Bench 24 Nov 2026: tile 3 is offline (not active) while tiles 1 and
+     * 2 turn the wall by 1; its reference moves on too, so when it is heard
+     * again at its turned orientation, and the wall is turned back, all
+     * three agree (a turn of 3). */
+    *p_now += 5000u * TST_MS;
+    wall_turn_init(p_turn);
+    tst_report_all(p_turn, TST_THREE, 0u, *p_now);
+    tst_report_all(p_turn, TST_TWO, 1u, *p_now + TST_MS);
+    b_ok = (test_main_check(1u == wall_turn_poll(p_turn, TST_TWO,
+                                                 *p_now + TST_WINDOW + TST_MS),
+                            __LINE__)) &&
+           b_ok;
+    *p_now += 5000u * TST_MS;
+    wall_turn_report(p_turn, 3u, 1u, *p_now); /* Back online, turned. */
+    b_ok = (test_main_check(
+               0u == wall_turn_poll(p_turn, TST_THREE, *p_now + TST_WINDOW),
+               __LINE__)) &&
+           b_ok;
+    *p_now += 5000u * TST_MS;
+    tst_report_all(p_turn, TST_THREE, 0u, *p_now);
+    b_ok = (test_main_check(
+               3u == wall_turn_poll(p_turn, TST_THREE, *p_now + TST_WINDOW),
+               __LINE__)) &&
            b_ok;
 
     return b_ok;
