@@ -1636,7 +1636,9 @@ bool test_coord_game_status (void)
     /* The mole is tile 1 or 2, so the other tile fits uint8_t. */
     gt_tap((uint8_t)(3u - mole.node_id), 1000u, coordinator_port_now_us(),
            ++g_tap_seq);
-    gt_advance(300u * GT_MS);
+    /* Judged GAME_COLLECT_MS after it arrived, then a STATUS (every 250 ms)
+     * must follow. */
+    gt_advance((GAME_COLLECT_MS + 300u) * GT_MS);
     b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_ROUND_PLAYING == status.round_state) &&
                                 (PROTO_LEVEL_HARD == status.level) &&

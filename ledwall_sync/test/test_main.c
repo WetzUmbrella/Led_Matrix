@@ -70,6 +70,9 @@ static test_case_t const g_cases[] = {
      test_game_rules_grace},
     {"C18c re-plan: a late tap and its late echo are one group, one HIT",
      test_game_rules_late_echo},
+    {"C18d 24 Nov: a real tap 140 ms behind its echoes wins, a 1 s late "
+     "echo is a duplicate",
+     test_game_rules_slow_echo},
     {"C19 re-plan: score font pixel counts, centring and tile slices",
      test_score_font_slices},
     {"C19b step 3: wall pictures at the largest scale per shape, sparse",

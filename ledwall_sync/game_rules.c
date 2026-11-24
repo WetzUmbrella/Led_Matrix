@@ -53,6 +53,7 @@ static uint8_t  game_pick_node (game_t * p_game);
 static uint64_t game_earliest_tap (game_t const * p_game);
 static uint64_t game_group_due (game_t const * p_game);
 static bool     game_window_due (game_t const * p_game, uint64_t now_us);
+static bool     game_late_duplicate (game_t const * p_game, uint64_t t_tap_us);
 static bool     game_resolve_window (game_t * p_game, game_event_t * p_event);
 static bool     game_tap_better (game_tap_t const * p_a,
                                  game_tap_t const * p_b);
@@ -100,7 +101,8 @@ void game_rules_start (game_t * p_game, uint64_t now_us, uint16_t active_mask,
     p_game->b_mole_up      = false;
     p_game->next_show_us   = now_us + GAME_GAP_US; /* First mole after a gap. */
     p_game->tap_count      = 0u;
-    p_game->b_window_seen  = false;
+    p_game->window_count   = 0u;
+    p_game->window_next    = 0u;
 }
 
 /**
@@ -157,8 +159,9 @@ void game_rules_tap (game_t * p_game, uint8_t node_id, uint16_t peak,
 
 /**
  * @brief  A tap with its arrival time (see game_rules.h). A tap stamped
- *         within GAME_DEDUPE_MS either side of a closed group's first tap is
- *         a late duplicate and is dropped (counted).
+ *         within GAME_DEDUPE_MS either side of the first tap of one of the
+ *         last GAME_WINDOWS closed groups is a late duplicate and is dropped
+ *         (counted).
  * @param  p_game    Engine; must not be NULL.
  * @param  node_id   Tapped tile, 1 to 9.
  * @param  peak      tap_detect peak, mg.
@@ -171,13 +174,7 @@ void game_rules_tap_rx (game_t * p_game, uint8_t node_id, uint16_t peak,
     if ((p_game->b_running) && (0u != game_bit(node_id)) &&
         (0u != (p_game->active & game_bit(node_id))))
     {
-        /* Either side of the closed group's first tap (bench 11 Nov: an
-         * echo stamped 3 ms before the real tap arrived after it). */
-        bool const b_dup = (p_game->b_window_seen) &&
-                           ((t_tap_us + GAME_DEDUPE_US) > p_game->window_us) &&
-                           (t_tap_us < (p_game->window_us + GAME_DEDUPE_US));
-
-        if (b_dup)
+        if (game_late_duplicate(p_game, t_tap_us))
         {
             p_game->dedupe_drops++;
         }
@@ -568,6 +565,34 @@ static bool game_window_due (game_t const * p_game, uint64_t now_us)
 }
 
 /**
+ * @brief  Whether a tap is a late duplicate: stamped within GAME_DEDUPE_MS
+ *         either side of the first tap of one of the last GAME_WINDOWS
+ *         closed groups (bench 11 Nov: an echo stamped 3 ms before the real
+ *         tap arrived after it; bench 24 Nov: an echo can arrive after the
+ *         next group closed).
+ * @param  p_game    Engine; must not be NULL.
+ * @param  t_tap_us  Tap time, Pico corrected clock, microseconds.
+ * @return true when the tap belongs to a closed group.
+ */
+static bool game_late_duplicate (game_t const * p_game, uint64_t t_tap_us)
+{
+    bool b_dup = false;
+
+    for (uint32_t index = 0u; index < p_game->window_count; index++)
+    {
+        uint64_t const start = p_game->windows_us[index];
+
+        if (((t_tap_us + GAME_DEDUPE_US) > start) &&
+            (t_tap_us < (start + GAME_DEDUPE_US)))
+        {
+            b_dup = true;
+        }
+    }
+
+    return b_dup;
+}
+
+/**
  * @brief  Resolve the window that has closed: the best tap of the group wins
  *         and is judged; the other taps of the group are dropped.
  * @param  p_game   Engine; must not be NULL.
@@ -606,9 +631,13 @@ static bool game_resolve_window (game_t * p_game, game_event_t * p_event)
         }
     }
 
-    p_game->tap_count     = kept;
-    p_game->b_window_seen = true;
-    p_game->window_us     = start;
+    p_game->tap_count = kept;
+    p_game->windows_us[p_game->window_next] = start;
+    p_game->window_next = (p_game->window_next + 1u) % GAME_WINDOWS;
+    if (p_game->window_count < GAME_WINDOWS)
+    {
+        p_game->window_count++;
+    }
 
     b_hit = (p_game->b_mole_up) && (win.node_id == p_game->mole_node) &&
             (win.t_tap_us >= p_game->show_us) &&

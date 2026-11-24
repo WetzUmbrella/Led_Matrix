@@ -79,12 +79,22 @@
 /** Least time a group waits after its first TAP arrives, milliseconds
  *  (bench 11 Nov 2026, round 11: WiFi delivered a tap and its echo 61 and 75
  *  ms after their stamps, 10 ms apart; judging the group 30 ms after the
- *  stamp scored the echo alone as a miss, then the real tap as a hit). */
-#define GAME_COLLECT_MS 20u
+ *  stamp scored the echo alone as a miss, then the real tap as a hit).
+ *  150 ms from bench 24 Nov 2026 (two rounds, 84 taps, the Pico's own
+ *  arrival times): the strongest TAP of a hard tap came up to 494 ms after
+ *  its first echo; at 20 ms 25 of 84 taps were judged on an echo, at 150 ms
+ *  5 (user's choice; the hit flash comes about 200 ms after the tap). */
+#define GAME_COLLECT_MS 150u
 
-/** Taps waiting for their dedupe window, at most (plan choice; 9 tiles tap
- *  at most once or twice per window). */
-#define GAME_TAP_SLOTS 16u
+/** Taps waiting for their dedupe window, at most (plan choice: a hard tap
+ *  reaches all 9 tiles, and two can wait inside one GAME_COLLECT_MS). */
+#define GAME_TAP_SLOTS 32u
+
+/** Closed groups remembered for the late-duplicate check (bench 24 Nov
+ *  2026: a TAP can arrive up to 1 s late, after the next group closed, and
+ *  was then judged as a tap of its own; 8 groups span at least 2 s of
+ *  play). */
+#define GAME_WINDOWS 8u
 
 /** Output of game_rules_poll(): at most one per call. */
 typedef enum
@@ -132,8 +142,10 @@ typedef struct
     uint64_t    next_show_us;   /**< Earliest show of the next mole. */
     uint32_t    tap_count;      /**< Taps waiting in taps[]. */
     game_tap_t  taps[GAME_TAP_SLOTS];
-    bool        b_window_seen;  /**< A dedupe window has closed. */
-    uint64_t    window_us;      /**< Start of the last closed window. */
+    uint32_t    window_count;   /**< Closed windows held, up to GAME_WINDOWS. */
+    uint32_t    window_next;    /**< Slot of windows_us[] written next. */
+    uint64_t    windows_us[GAME_WINDOWS]; /**< Starts of the last closed
+                                           *   windows. */
     uint32_t    dedupe_drops;   /**< Taps dropped as duplicates. */
     uint32_t    tap_drops;      /**< Taps dropped: no room to wait. */
     uint8_t     level;          /**< proto_level_t of the round. */

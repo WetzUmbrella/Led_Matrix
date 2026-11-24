@@ -44,6 +44,14 @@ bool test_game_rules_grace (void);
  */
 bool test_game_rules_late_echo (void);
 
+/**
+ * @brief  C18d: a real tap arriving 140 ms after its echoes still wins; two
+ *         9-tile taps wait at once; an echo arriving after later groups
+ *         closed is a duplicate (bench 24 Nov 2026).
+ * @return true when every check passed.
+ */
+bool test_game_rules_slow_echo (void);
+
 #endif /* TEST_GAME_RULES_H */
 
 /*** end of file ***/

@@ -306,14 +306,26 @@ static bool tst_scenario_hit (game_t * p_game, uint64_t * p_now,
     b_ok = (test_main_check((*p_mole == evt.node_id) &&
                                 (PROTO_FEEDBACK_HIT == evt.result) &&
                                 (1 == evt.score), __LINE__)) && b_ok;
-    /* The verdict comes when the 10 ms tap's dedupe window closes. */
-    uint64_t const verdict = *p_show + ((10u + GAME_DEDUPE_MS) * TST_MS);
+    /* The verdict comes when the 10 ms tap's group closes: its dedupe
+     * window, or GAME_COLLECT_MS after it arrived (here at its stamp),
+     * whichever is later. */
+    uint32_t const wait_ms = (GAME_COLLECT_MS > GAME_DEDUPE_MS) ?
+                             GAME_COLLECT_MS : GAME_DEDUPE_MS;
+    uint64_t const verdict = *p_show + ((10u + wait_ms) * TST_MS);
 
     b_ok = (test_main_check(verdict == *p_now, __LINE__)) && b_ok;
     b_ok = (test_main_check(tst_next_kind(p_game, p_now, GAME_EV_MOLE_ON,
                                           &evt), __LINE__)) && b_ok;
-    b_ok = (test_main_check((*p_show + (310u * TST_MS)) == evt.t_show_us,
-                            __LINE__)) && b_ok;
+    /* The gap runs from the tap, but MOLE_ON still needs its lead after
+     * the verdict. */
+    uint64_t next_show = *p_show + ((10u + GAME_GAP_MS) * TST_MS);
+
+    if (next_show < (verdict + (GAME_LEAD_MS * TST_MS)))
+    {
+        next_show = verdict + (GAME_LEAD_MS * TST_MS);
+    }
+
+    b_ok = (test_main_check(next_show == evt.t_show_us, __LINE__)) && b_ok;
     b_ok = (test_main_check(evt.node_id != *p_mole, __LINE__)) && b_ok;
 
     return b_ok;
@@ -583,6 +595,113 @@ bool test_game_rules_late_echo (void)
                                 (GAME_EV_FEEDBACK != evt.kind),
                             __LINE__)) && b_ok;
     b_ok = (test_main_check(1 == game_rules_score(&game), __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  Count the FEEDBACK events up to limit.
+ * @param  p_game  Engine.
+ * @param  p_now   Time, advanced to limit.
+ * @param  limit   Last time.
+ * @return The FEEDBACK count.
+ */
+static uint32_t tst_count_feedback (game_t * p_game, uint64_t * p_now,
+                                    uint64_t limit)
+{
+    game_event_t evt;
+    uint32_t     count = 0u;
+
+    while (tst_next_event(p_game, p_now, limit, &evt))
+    {
+        if (GAME_EV_FEEDBACK == evt.kind)
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+/**
+ * @brief  C18d (bench 24 Nov 2026, two rounds on the Pico's own arrival
+ *         times): a hard tap felt by all 9 tiles whose real TAP arrives
+ *         140 ms after its first echo is one HIT; two such taps waiting at
+ *         once all fit; an echo of the first tap that arrives after two
+ *         more groups closed is still a duplicate, not a wrong tap.
+ * @return true when every check passed.
+ */
+bool test_game_rules_slow_echo (void)
+{
+    static game_t game;
+    game_event_t  evt;
+    uint64_t      now  = TST_T0;
+    bool          b_ok = true;
+
+    game_rules_init(&game, TST_SEED);
+    game_rules_start(&game, TST_T0, UINT16_C(0x01FF), TST_HARD);
+    b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_MOLE_ON,
+                                          &evt), __LINE__)) && b_ok;
+
+    uint64_t const show  = evt.t_show_us;
+    uint8_t const  mole  = evt.node_id;
+    uint64_t const t_a   = show + (40u * TST_MS);
+    uint64_t const rx_a  = t_a + (50u * TST_MS);
+
+    /* Tap A: the 8 echoes (stamped up to 8 ms apart) arrive first. */
+    for (uint8_t node = 1u; node <= 9u; node++)
+    {
+        if (node != mole)
+        {
+            game_rules_tap_rx(&game, node, 900u, t_a + (node * TST_MS), rx_a);
+        }
+    }
+
+    now = rx_a + (139u * TST_MS);
+    b_ok = (test_main_check((!game_rules_poll(&game, now, &evt)) ||
+                                (GAME_EV_FEEDBACK != evt.kind),
+                            __LINE__)) && b_ok;
+    now = rx_a + (140u * TST_MS);
+    game_rules_tap_rx(&game, mole, 15000u, t_a, now);
+    b_ok = (test_main_check(tst_next_kind(&game, &now, GAME_EV_FEEDBACK,
+                                          &evt), __LINE__)) && b_ok;
+    b_ok = (test_main_check((PROTO_FEEDBACK_HIT == evt.result) &&
+                                (mole == evt.node_id) && (1 == evt.score),
+                            __LINE__)) && b_ok;
+
+    /* Taps B and C, 60 ms apart, 9 reports each, waiting at once. */
+    uint64_t const t_b = now + (100u * TST_MS);
+    uint64_t const t_c = t_b + (60u * TST_MS);
+    uint64_t const t_rx = t_c + (20u * TST_MS);
+
+    for (uint8_t node = 1u; node <= 9u; node++)
+    {
+        /* 501 to 509 fit uint16_t. */
+        uint16_t const peak = (uint16_t)(500u + node);
+
+        game_rules_tap_rx(&game, node, peak, t_b, t_rx);
+        game_rules_tap_rx(&game, node, peak, t_c, t_rx);
+    }
+
+    b_ok = (test_main_check(0u == game.tap_drops, __LINE__)) && b_ok;
+    now = t_rx;
+    b_ok = (test_main_check(2u == tst_count_feedback(&game, &now,
+                                                     t_rx + (400u * TST_MS)),
+                            __LINE__)) && b_ok;
+
+    /* An echo of tap A, 1 s late: two groups closed since, still a
+     * duplicate. */
+    uint32_t const wrong = game.wrong;
+    uint32_t const drops = game.dedupe_drops;
+
+    game_rules_tap_rx(&game, (1u == mole) ? 2u : 1u, 400u,
+                      t_a + (2u * TST_MS), now);
+    b_ok = (test_main_check((drops + 1u) == game.dedupe_drops, __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(0u == tst_count_feedback(&game, &now,
+                                                     now + (400u * TST_MS)),
+                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(wrong == game.wrong, __LINE__)) && b_ok;
 
     return b_ok;
 }
