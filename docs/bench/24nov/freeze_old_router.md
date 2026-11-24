@@ -146,3 +146,55 @@ The user turned one tile a quarter and back, ten times: tiles 1, 6, 8, 3, 9, 1, 
 | 20 ms (more than one 16.7 ms tick) | 19.86 ms | 0.46 ms | FAIL | yes, read as 20 ms, not 3.3 ms |
 
 Every median is within 0.15 ms of the true skew, and no step is off by more than 0.58 ms (one frame is 4.17 ms). The counter's implied frame rate came out at 238.9 fps against 239.7: the counter steps on the 60 Hz tick grid, so the first and last steps of a 4 s clip can each shift by part of a 16.7 ms tick (up to about 0.4 %); a 10 s recording halves that. The reader is ready for a real video.
+
+## NR-07 by camera: two recordings (18:11 and 18:12)
+
+Wall: 3x3 upright, `sync_3x3.gif` in video mode (website session 135; READY, readiness 0x1FF, no faults, map 1..9, all 9 uploads first try). Recorded by a teammate on an iPhone 17 Pro Max in slow motion, hand-held, and sent as the phone's own files (HEVC 1920x1080, Apple tags). Tile A is the left tile in the picture, B the right one.
+
+| Video | Tiles (A, B) | Stream | Frames, length |
+|---|---|---|---|
+| `IMG_3429.mov` | 4, 5 | 30 fps | 3532, 117.7 s |
+| `IMG_3430.mov` | 7, 8 | 30 fps | 3638, 121.3 s |
+
+The phone stored the slow motion in the frames: every frame is a 240 fps capture played at 30 fps, except for the normal-speed start and end. A first export of the same videos (848x464, re-encoded, no Apple tags) was dropped for the originals.
+
+Method: each video cut into 10 s pieces (about 300 frames, 1.25 s of real time, about 63 counter steps); boxes per piece from the LED extent (pixels of 240 and up, every 10th frame) plus 8 px; `sync_video.py --width 960 --fps 240 --threshold 200`. **Threshold 200** instead of the default (half the brightest pixel, about 127): the cards behind the tiles reach about 156 and the LEDs 240 and up, so the default counts the card as LEDs. A piece is used only when its implied frame rate is within 2 % of 240.
+
+Excluded pieces: 3429 at 0 s (189.3 fps, normal-speed start), 30 s (245.1), 110 s (183.8, normal-speed end); 3430 at 0 s (195.5, start), 40 s (246.0), 110 s (207.7, end), 120 s (146.1, only 38 frames). 245.1 and 246.0 are probably the 60 Hz tick rounding over a 1.25 s span (up to about 1.3 %), but they are outside the rule.
+
+Usable pieces (skew B - A, ms; missed counter steps per tile):
+
+| Video | Piece | Implied fps | Median | Max | Missed A / B | Pairs over 4 ms |
+|---|---|---|---|---|---|---|
+| 3429 | 10 s | 240.3 | -0.43 | 3.84 | 0 / 0 | 0 |
+| 3429 | 20 s | 238.6 | -0.12 | 4.86 | 0 / 0 | 2 |
+| 3429 | 40 s | 237.2 | -0.23 | 6.23 | 0 / 2 | 1 |
+| 3429 | 50 s | 237.6 | -0.09 | 25.99 | 0 / 8 | 3 |
+| 3429 | 60 s | 243.6 | +1.84 | 9.87 | 0 / 2 | 3 |
+| 3429 | 70 s | 237.8 | 0.00 | 4.66 | 0 / 0 | 3 |
+| 3429 | 80 s | 239.3 | -0.20 | 1.21 | 0 / 0 | 0 |
+| 3429 | 90 s | 238.6 | -0.16 | 1.27 | 0 / 0 | 0 |
+| 3429 | 100 s | 239.4 | -0.36 | 29.79 | 0 / 4 | 1 |
+| 3430 | 10 s | 240.5 | +0.05 | 4.34 | 0 / 0 | 4 |
+| 3430 | 20 s | 241.2 | +0.11 | 4.20 | 0 / 0 | 3 |
+| 3430 | 30 s | 236.3 | +0.29 | 4.50 | 0 / 0 | 6 |
+| 3430 | 50 s | 239.4 | -0.67 | 4.81 | 0 / 0 | 1 |
+| 3430 | 60 s | 241.9 | -0.87 | 4.75 | 0 / 0 | 5 |
+| 3430 | 70 s | 238.2 | -0.34 | 4.82 | 0 / 0 | 5 |
+| 3430 | 80 s | 242.0 | -0.22 | 4.80 | 0 / 0 | 7 |
+| 3430 | 90 s | 244.3 | -1.41 | 4.81 | 0 / 0 | 11 |
+| 3430 | 100 s | 236.5 | -2.81 | 8.64 | 0 / 0 | 20 |
+
+(3429 at 60 s: both tiles also jump 13 values at the GIF's loop point, since 500 frames is not a multiple of the 64-value counter; not counted as missed.)
+
+Every pair over 4 ms was checked from both tiles' decoded values over frames f-3 to f+4; the 13 over 5 ms also by eye on crops of both tiles:
+
+| Pairs | Measured | Classification |
+|---|---|---|
+| 3429: 40 s (value 1), 50 s (17, 25, 57), 60 s (25), 100 s (9) | -6.2, -26.0, -15.7, -8.9, -9.9, -29.8 ms | **Misread** (excluded): both tiles show the new value on the same frame, or B one frame later; B was blurred over several frames and its step was timed too early |
+| 3430 at 100 s: values 19, 23, 27, 31, 35, 38, 39 | -5.0, -5.0, -5.5, -8.6, -8.2, -5.3, -7.6 ms | **Real**: B (tile 8) shows each new value one whole frame before A (tile 7); true skew 4.2 to 8.3 ms per step |
+| The other 62 (both videos) | 4.00 to 4.86 ms | One-frame timing granularity: one tile has a part-changed frame, both reach the new value within one frame; under 5 ms |
+
+Each step is timed to about one frame (4.17 ms), not the 0.15 ms of the synthetic check: the iPhone's exposure was much shorter than the frame period, so the reader's sub-frame interpolation does not apply. The medians (55 to 64 steps per piece) are the finer figure.
+
+**NR-07: FAIL on tiles 7 and 8** (rule: every real step in the usable pieces under 5 ms; misreads shown by eye excluded; a one-tick slip of about 16.7 ms fails). Tiles 4 and 5: every real step under 5 ms, medians -0.4 to +1.8 ms. Tiles 7 and 8: no one-tick slip, but tile 8 drifts ahead of tile 7 at the end of the recording (median 0.0 to -0.9 ms over 10 to 80 s, then -1.4, -2.8, and -4.1 ms in the excluded end piece, about the last 2 s of 15 s real), with 7 real steps of 5.0 to 8.6 ms. Rolling shutter does not explain it: tile 8 is lower in the picture, so it is read later, which would show it later, not earlier. Next: look at the time sync between tiles 7 and 8 (offset and drift corrections around 18:12).

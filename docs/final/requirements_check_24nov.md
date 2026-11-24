@@ -105,7 +105,7 @@ Stretch since D-15 (10 Nov): not built. The professor consult on a workaround (1
 | NR-04 rotate feedback | n/a | Rotate sprite is stretch |
 | NR-05 no double counts (50 hits) | Partly | 24 Nov: 34 of 34 hits, 0 wrong after the echo fix; not the 50-hit card |
 | NR-06 10 rounds without reboot | Partly | 24 Nov: 6 rounds and 2 x 6 min reproducer runs without a freeze on the old router; not 10 in a row; the watchdog recovers a freeze in about 20 s |
-| NR-07 video sync under 5 ms | **Not measured** | No skew capture ever ran (section 1, gap 1) |
+| NR-07 video sync under 5 ms | **Not met** (24 Nov evening, by camera) | 240 fps slow-motion video, threshold 200, normal-speed pieces excluded (`docs/bench/24nov/freeze_old_router.md`, "NR-07 by camera"). Tiles 4 and 5: every real step under 5 ms (medians -0.4 to +1.8 ms; 6 misreads up to 30 ms shown by eye and excluded). Tiles 7 and 8: no one-tick slip, but tile 8 drifts about 3 ms ahead in the last 2 s, with 7 real steps of 5.0 to 8.6 ms. Steps timed to about one frame (4.17 ms). Next: the time sync between tiles 7 and 8 |
 | NR-08 rotation detection | Met (24 Nov) | 10 of 10 board turns, 0 of 10 single-tile turns |
 | NR-09 brightness cap and 4-bit packing | Met | `check_assets` host test; `docs/week13/check_assets.log` |
 | NR-10 code standard, CI green | Met from 24 Nov | barr_check 0 findings on 104 files; CI green from `263d5c4` (red 9 to 24 Nov) |
