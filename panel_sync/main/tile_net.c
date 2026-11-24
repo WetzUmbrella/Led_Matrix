@@ -1506,10 +1506,20 @@ static void tn_on_new_ip (void)
 static void tn_telemetry_service (int64_t now)
 {
     tn_status_item_t item;
+    bool             b_turned = false;
 
     while (pdTRUE == xQueueReceive(g_p_q_telemetry, &item, 0))
     {
+        b_turned = (b_turned) ||
+                   (item.status.orientation != g_tel_status.status.orientation);
         g_tel_status = item;
+    }
+
+    if (b_turned)
+    {
+        /* A new orientation goes out at once (D-17: the Pico decides a wall
+         * turn within 1.5 s of the first tile's change). */
+        g_next_tel_us = now;
     }
 
     tn_poll_pc();

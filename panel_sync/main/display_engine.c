@@ -155,10 +155,11 @@ static uint32_t     g_missed    = 0u;
 static uint32_t     g_jumps     = 0u;
 static uint32_t     g_rmt_busy  = 0u;
 static uint32_t     g_hist[DE_HIST_BINS];
-static int64_t      g_prep_max_us = 0;
-static uint32_t     g_state       = PROTO_DISPLAY_COUNT; /* None reported. */
-static uint8_t      g_orient      = PROTO_ORIENT_0;
-static bool         g_b_rmt_fault = false;
+static int64_t      g_prep_max_us   = 0;
+static uint32_t     g_state         = PROTO_DISPLAY_COUNT; /* None reported. */
+static uint8_t      g_orient        = PROTO_ORIENT_0;
+static uint8_t      g_posted_orient = PROTO_ORIENT_0; /* In TELEMETRY. */
+static bool         g_b_rmt_fault   = false;
 
 /* Game-mode event pulses (DS-13). The frame prepared next is the game's
  * (g_b_game_frame) with this pulse width (0: none); the previous game frame's
@@ -173,6 +174,7 @@ static esp_timer_handle_t g_p_tap_timer     = NULL;
 
 static void     de_task (void * p_arg);
 static void     de_report (proto_display_state_t state);
+static void     de_report_orient (void);
 static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
                              timesync_reader_t * p_reader, uint64_t tick);
 static void     de_present (de_rmt_t const * p_rmt, int64_t deadline);
@@ -303,6 +305,23 @@ static void de_task (void * p_arg)
 }
 
 /**
+ * @brief  A turn of the tile: TELEMETRY carries the new orientation at once
+ *         (D-17, the Pico's wall-turn window), once a display state has been
+ *         reported. Never blocks.
+ */
+static void de_report_orient (void)
+{
+    if ((g_orient != g_posted_orient) && (g_state < PROTO_DISPLAY_COUNT))
+    {
+        /* A display state is 0 to 6, so it fits uint8_t. */
+        uint8_t const state = (uint8_t)g_state;
+
+        g_posted_orient = g_orient;
+        (void)tile_net_post_status(g_orient, state); /* Drops oldest. */
+    }
+}
+
+/**
  * @brief  Report a display state change to the Network Task for TELEMETRY
  *         (T-B3-06), with the orientation in use. Never blocks; only a
  *         change is posted.
@@ -313,7 +332,8 @@ static void de_report (proto_display_state_t state)
     /* A display state is 0 to 6, so it fits uint32_t. */
     if ((uint32_t)state != g_state)
     {
-        g_state = (uint32_t)state; /* Same range. */
+        g_state         = (uint32_t)state; /* Same range. */
+        g_posted_orient = g_orient;
         /* A full queue drops its oldest item and counts it (tile_net). The
          * state is 0 to 6, so it fits uint8_t. */
         (void)tile_net_post_status(g_orient, (uint8_t)state);
@@ -508,6 +528,7 @@ static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
     bool                        b_frame     = false;
 
     g_orient = orientation_current();
+    de_report_orient();
 
     bool const b_timeline = playback_control_read_timeline(&timeline);
     bool const b_asset    = asset_store_get(&p_payload, &len, &frame_count);
