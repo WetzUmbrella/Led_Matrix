@@ -77,6 +77,9 @@ static test_case_t const g_playback[] = {
      test_playback_resume_frame},
     {"Test P6: 0.9 s without beacons keeps playing, 1.1 s pauses, 10 of 10",
      test_playback_holdover},
+    {"Playback 24 Nov: a coordinator restart stops a playing tile; its first "
+     "START_AT is taken",
+     test_playback_pico_restart},
 };
 
 static test_case_t const g_telemetry[] = {

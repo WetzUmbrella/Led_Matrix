@@ -253,6 +253,42 @@ bool test_playback_holdover (void)
 }
 
 /**
+ * @brief  Bench 24 Nov 2026: a coordinator restart while playing. At the
+ *         next step the tile is READY (it played on before and refused
+ *         uploads as BUSY), and the restarted coordinator's first START_AT,
+ *         seq 1, is accepted although seq 7 came before.
+ * @return true when every check passed.
+ */
+bool test_playback_pico_restart (void)
+{
+    bool b_ok = tp_to_playing();
+
+    playback_control_inputs_t const later = tp_inputs(TP_START + 2000000, 0);
+
+    playback_control_pico_restart();
+    playback_control_step(&later);
+    b_ok = (test_main_check(PLAYBACK_READY == playback_control_state(),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check(tp_command(PROTO_TYPE_START_AT, TP_SESSION, 1u,
+                                    TP_START + 3000000, 0u, TP_START + 2400000),
+                         __LINE__)) &&
+        b_ok;
+    b_ok = (test_main_check(PLAYBACK_ARMED == playback_control_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    /* Taken once: a later step in READY changes nothing. */
+    playback_control_step(&later);
+    b_ok = (test_main_check(PLAYBACK_ARMED == playback_control_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    return b_ok;
+}
+
+/**
  * @brief  Inputs: WiFi, the test asset, sync ready, the given time and age.
  * @param  now_us  Corrected Pico time.
  * @param  age_us  Age of the newest beacon.

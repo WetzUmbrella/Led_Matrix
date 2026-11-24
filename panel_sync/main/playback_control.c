@@ -68,17 +68,19 @@ static playback_control_state_t g_state = PLAYBACK_INITIALISING;
 
 /* Copy of g_state for other tasks (asset_store, tile_net): written with
  * release only where g_state changes, read with acquire (DEVIATION D-1). */
-static _Atomic uint32_t g_state_pub   = PLAYBACK_INITIALISING;
-static bool             g_b_seq_known = false;
-static uint16_t         g_last_seq    = 0u;
-static uint8_t          g_session     = 0u;
-static bool             g_b_session   = false;
-static int64_t          g_origin_us   = 0;
-static int64_t          g_target_us   = 0;
-static uint16_t         g_frames      = 1u;
-static uint16_t         g_hold_frame  = 0u;
-static bool             g_b_lost_set  = false;
-static uint32_t         g_rejected    = 0u;
+static _Atomic uint32_t g_state_pub = PLAYBACK_INITIALISING;
+/* Set by tile_net on a coordinator restart, taken by the next step. */
+static _Atomic bool g_b_restart_pub = false;
+static bool         g_b_seq_known   = false;
+static uint16_t     g_last_seq      = 0u;
+static uint8_t      g_session       = 0u;
+static bool         g_b_session     = false;
+static int64_t      g_origin_us     = 0;
+static int64_t      g_target_us     = 0;
+static uint16_t     g_frames        = 1u;
+static uint16_t     g_hold_frame    = 0u;
+static bool         g_b_lost_set    = false;
+static uint32_t     g_rejected      = 0u;
 
 /* Written by the Playback Control Task, read by any task. */
 static pb_timeline_lock_t g_timeline;
@@ -107,12 +109,13 @@ void playback_control_init (void)
                           memory_order_release);
     g_b_seq_known = false;
     g_b_session   = false;
-    g_origin_us   = 0;
-    g_target_us   = 0;
-    g_frames      = 1u;
-    g_hold_frame  = 0u;
-    g_b_lost_set  = false;
-    g_rejected    = 0u;
+    atomic_store_explicit(&g_b_restart_pub, false, memory_order_release);
+    g_origin_us  = 0;
+    g_target_us  = 0;
+    g_frames     = 1u;
+    g_hold_frame = 0u;
+    g_b_lost_set = false;
+    g_rejected   = 0u;
     atomic_store_explicit(&g_timeline.seq, 0u, memory_order_relaxed);
 
     for (uint32_t word = 0u; word < PB_WORD_COUNT; word++)
@@ -129,10 +132,23 @@ void playback_control_init (void)
 void playback_control_step (playback_control_inputs_t const * p_in)
 {
     bool const b_inputs = (p_in->b_wifi) && (p_in->b_asset);
+    bool const b_restart =
+        atomic_exchange_explicit(&g_b_restart_pub, false, memory_order_acq_rel);
 
     pb_check_session(p_in);
 
-    if (PLAYBACK_INITIALISING == g_state)
+    if (b_restart)
+    {
+        g_b_seq_known = false; /* The new coordinator counts from 0. */
+    }
+
+    if ((b_restart) &&
+        ((PLAYBACK_ARMED == g_state) || (PLAYBACK_PLAYING == g_state) ||
+         (PLAYBACK_CLOCK_HOLDOVER == g_state) || (PLAYBACK_PAUSED == g_state)))
+    {
+        pb_set_state(PLAYBACK_READY); /* As a STOP (W6D-2e). */
+    }
+    else if (PLAYBACK_INITIALISING == g_state)
     {
         pb_set_state(PLAYBACK_WAITING_FOR_READINESS);
     }
@@ -163,6 +179,14 @@ void playback_control_step (playback_control_inputs_t const * p_in)
     {
         pb_holdover(p_in);
     }
+}
+
+/**
+ * @brief  The coordinator restarted (see playback_control.h).
+ */
+void playback_control_pico_restart (void)
+{
+    atomic_store_explicit(&g_b_restart_pub, true, memory_order_release);
 }
 
 /**
