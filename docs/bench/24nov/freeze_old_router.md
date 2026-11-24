@@ -103,3 +103,7 @@ Video playing from 16:52:53; `picotool reboot -f` at 16:52:58 (`restart_stop_mon
 ## Failed uploads retried (17:00, website `a18bce7`)
 
 Tile 9 unplugged, the GIF chosen again at 16:57:12: 8 tiles uploaded, tile 9 failed ("no TELEMETRY yet, address unknown"), the Pico waited (WAITING FOR NODES). Replugging tile 9 knocked tile 8 off as well; the user reseated both (tiles 8 and 9 share a power run; keep it in mind for the demo). Tile 9 was heard again at 17:00:41; the website logged "retrying the upload to tile 9" 1.0 s later and the wall was READY with every tile ready 4.3 s after the tile rejoined, with nothing done on the dashboard (`retry_monitor.log`).
+
+## Upload soak (17:01 to 17:05)
+
+`.venv/bin/python -I docs/bench/24nov/tools/upload_soak.py 30 docs/bench/24nov/soak_w9.log`: the website re-uploads the whole 3x3 wall 30 times (9 tiles at once, video stopped). **0 freezes in 30**; READY 6 to 7 s after each start, slowest tile about 5.5 s, longest STATUS gap 0.3 s. Parallel uploads alone do not freeze the Pico, so pacing them is not justified by this. The 16:36 freeze came during the re-upload after a wall turn back (STOP x3, new session, 9 uploads); the NR-08 turn card will show whether turn re-uploads freeze more often.
