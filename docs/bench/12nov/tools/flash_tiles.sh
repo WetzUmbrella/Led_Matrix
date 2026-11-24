@@ -12,7 +12,8 @@ cd "$(dirname "$0")/../../../.." || exit 1
 declare -A NODE=(
   [9C:13:9E:F1:30:70]=1 [B8:F8:62:D8:09:F8]=2 [B8:F8:62:D8:05:EC]=3
   [9C:13:9E:F1:2E:B0]=4 [9C:13:9E:F1:2F:70]=5 [9C:13:9E:F1:2F:E4]=6
-  [9C:13:9E:F1:2C:70]=7 [9C:13:9E:F1:2B:D0]=8 [B8:F8:62:D8:0E:D8]=9)
+  [9C:13:9E:F1:2C:70]=7 [9C:13:9E:F1:2B:D0]=8 [B8:F8:62:D8:0E:D8]=9
+  [B8:B8:22:98:0E:98]=9)  # Tile 9 reads this MAC since 24 Nov evening (bit 6 of four bytes lost; boots as node 9)
 
 dry=0
 skip=" "
