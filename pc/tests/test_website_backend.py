@@ -24,6 +24,7 @@ import uploader  # noqa: E402
 import web  # noqa: E402
 
 WAITING_FOR_SESSION, SYNCHRONISING = 2, 6
+WAITING_FOR_READINESS = 5
 READY, PLAYBACK, PAUSED, GAME = 7, 8, 9, 12
 PLAYING_ROUND, RESULTS = 3, 4
 
@@ -534,6 +535,48 @@ def test_a_retry_waits_its_period_and_for_a_tile_that_is_heard(tmp_path) -> None
         seq=1, fault_word=0, orientation=0, display_state=1)
     shell.pump()  # Silent for 60 s: no address, no retry.
     assert shell.model.job is None and shell.uploads_log.count("10.0.0.2") == 2
+
+
+def _lost_shell(tmp_path):  # type: ignore[no-untyped-def]
+    """Three tiles uploaded in this session; the Pico then waits for tile
+    readiness with tile 3 online but not ready (its asset was lost)."""
+    shell = _three_tile_shell(tmp_path)
+    shell.publish()
+    shell.background = True
+    shell.link.status = _status(state=WAITING_FOR_READINESS, online=0b111,
+                                readiness=0b011,
+                                session_id=shell.session_id)
+    return shell
+
+
+def test_a_tile_that_lost_its_video_is_uploaded_again(tmp_path) -> None:  # type: ignore
+    # Bench 24 Nov 2026: tiles 1, 2 and 6 lost their asset after a reflash;
+    # the website counted them uploaded and the wall waited.
+    shell = _lost_shell(tmp_path)
+    assert len(shell.uploads_log) == 3
+    shell.pump()  # Not ready only just now: wait LOST_ASSET_S.
+    assert shell.model.job is None and len(shell.uploads_log) == 3
+    shell.unready_since[3] -= db.LOST_ASSET_S
+    shell.pump()
+    _wait_job(shell)
+    assert shell.uploads_log[3:] == ["10.0.0.3"]  # Only tile 3.
+    assert any("tile 3 is online but not ready" in m
+               for m in shell.model.messages)
+
+
+def test_no_upload_again_when_ready_or_another_session(tmp_path) -> None:  # type: ignore
+    shell = _lost_shell(tmp_path)
+    shell.link.status = _status(state=READY, online=0b111, readiness=0b111,
+                                session_id=shell.session_id)
+    shell.pump()
+    shell.link.status = _status(state=WAITING_FOR_READINESS, online=0b111,
+                                readiness=0b011,
+                                session_id=shell.session_id + 1)
+    shell.pump()
+    assert shell.unready_since == {}
+    shell.upload_retried -= db.UPLOAD_RETRY_S
+    shell.pump()
+    assert shell.model.job is None and len(shell.uploads_log) == 3
 
 
 def test_a_failing_job_becomes_a_message_and_frees_the_shell() -> None:

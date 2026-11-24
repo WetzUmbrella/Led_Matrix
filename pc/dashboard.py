@@ -137,6 +137,13 @@ UPLOAD_WORKERS = pl.NODE_MAX
 #: never retried, so the Pico waited for that tile's asset forever).
 UPLOAD_RETRY_S = 5.0
 
+#: A tile on the map that is online but not ready this long, while the Pico
+#: waits for tile readiness in this session, is uploaded again although it
+#: ACKed its asset (bench 24 Nov 2026: tiles reflashed or power-cycled after
+#: their upload lost the asset, and the wall waited until the GIF was chosen
+#: again).
+LOST_ASSET_S = 5.0
+
 #: Taps kept for the website's tap test (A11), and how many it shows.
 TAP_KEEP = 24
 TAP_SHOW = 12
@@ -821,6 +828,9 @@ class DashboardShell(cmd.Cmd):
     turned_session: Optional[int] = None
     #: When failed uploads were last tried again (time.monotonic()).
     upload_retried = 0.0
+    #: Since when each tile has been online but not ready while the Pico
+    #: waited for tile readiness (LOST_ASSET_S).
+    unready_since: Optional[Dict[int, float]] = None
 
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
@@ -1125,10 +1135,16 @@ class DashboardShell(cmd.Cmd):
                     (model.gif is None) or (not model.stopped()):
                 return
             now = time.monotonic()
+            lost = self._lost_assets(now)
             if now - self.upload_retried < UPLOAD_RETRY_S:
                 return
+            for node in lost:
+                model.acked.pop(node, None)  # Its ACK no longer holds.
+                model._say("tile %d is online but not ready: uploading its "
+                           "video again" % node)
             failed = [node for node in model.pending_uploads(self.session_id)
-                      if model.uploads.get(node, {}).get("state") == "failed"]
+                      if node in lost or
+                      model.uploads.get(node, {}).get("state") == "failed"]
             if not any(self._address_of(node) for node in failed):
                 return
             self.upload_retried = now
@@ -1139,6 +1155,30 @@ class DashboardShell(cmd.Cmd):
             self.run_job("upload", self.upload_pending)
         except Refused:
             pass  # Another job started meanwhile; it uploads anyway.
+
+    def _lost_assets(self, now: float) -> List[int]:
+        """Tiles on the map that ACKed their asset in this session but have
+        been online and not ready for LOST_ASSET_S while the Pico waits for
+        tile readiness in this session (called with the lock held)."""
+        status = self.model.status
+        if self.unready_since is None:
+            self.unready_since = {}
+        if (status is None) or (status.session_id != self.session_id) or \
+                (status.state_name() != "WAITING FOR TILE READINESS"):
+            self.unready_since.clear()
+            return []
+        lost = []
+        for node in [n for n in self.model.node_map if n]:
+            bit = 1 << (node - 1)
+            acked = self.model.acked.get(node, (None,))[0] == self.session_id
+            if acked and (status.online & bit) and \
+                    not (status.readiness & bit):
+                since = self.unready_since.setdefault(node, now)
+                if now - since >= LOST_ASSET_S:
+                    lost.append(node)
+            else:
+                self.unready_since.pop(node, None)
+        return lost
 
     def _follow_wall_turn(self) -> None:
         """The Pico decides wall turns (D-17): when its STATUS for this
