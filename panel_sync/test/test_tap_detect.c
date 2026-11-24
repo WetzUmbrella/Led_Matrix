@@ -45,9 +45,9 @@ typedef struct
     int64_t            t_report[TST_MAX_TAPS]; /**< Sample that reported it. */
 } tst_run_t;
 
-static void tst_start (tst_run_t * p_run);
-static void tst_feed (tst_run_t * p_run, uint32_t samples, int16_t accel_x,
-                      int16_t accel_y, int16_t accel_z);
+static void    tst_start (tst_run_t * p_run);
+static void    tst_feed (tst_run_t * p_run, uint32_t samples, int16_t accel_x,
+                         int16_t accel_y, int16_t accel_z);
 static int16_t tst_square (uint32_t sample, int32_t amplitude);
 
 /**
@@ -74,7 +74,8 @@ bool test_tap_detect_threshold (void)
     b_ok = (test_main_check(1u == run.tap[0].count, __LINE__)) && b_ok;
     b_ok = (test_main_check((t_spike + TAP_DETECT_PEAK_WINDOW_US) ==
                                 run.t_report[0],
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -121,8 +122,7 @@ bool test_tap_detect_ringing (void)
     {
         /* sample is below 500: it fits int32_t, and the amplitude falls
          * from 6 g to 0, so the sum stays inside int16_t. */
-        int32_t const amplitude =
-            ((6 * TST_G) * (500 - (int32_t)sample)) / 500;
+        int32_t const amplitude = ((6 * TST_G) * (500 - (int32_t)sample)) / 500;
 
         tst_feed(&run, 1u, 0, 0,
                  (int16_t)(TST_G + tst_square(sample, amplitude))); /* Fits. */
@@ -196,10 +196,11 @@ bool test_tap_detect_rearm_cap (void)
     {
         int64_t const gap = run.tap[1].t_us - run.tap[0].t_us;
 
-        b_ok = (test_main_check((gap >= TAP_DETECT_REARM_MAX_US) &&
-                                    (gap <= (TAP_DETECT_REARM_MAX_US +
-                                             (20 * TST_DT_US))),
-                                __LINE__)) && b_ok;
+        b_ok = (test_main_check(
+                   (gap >= TAP_DETECT_REARM_MAX_US) &&
+                       (gap <= (TAP_DETECT_REARM_MAX_US + (20 * TST_DT_US))),
+                   __LINE__)) &&
+               b_ok;
     }
 
     return b_ok;
@@ -217,13 +218,13 @@ bool test_tap_detect_reseed (void)
     /* Seed from a 16 g X reading, then still gravity on Z for 1.5 s. */
     tap_detect_init(&run.detect);
     tap_detect_set_threshold(&run.detect, TAP_DETECT_TEST_THRESHOLD_MG);
-    run.t_us   = TST_T0;
-    run.taps   = 0u;
+    run.t_us = TST_T0;
+    run.taps = 0u;
     tst_feed(&run, 1u, INT16_MAX, 0, 0);
     tst_feed(&run, 1500u, 0, 0, TST_G);
     b_ok = (test_main_check(run.taps <= 2u, __LINE__)) && b_ok;
-    b_ok = (test_main_check(0u == tap_detect_last_mg(&run.detect),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(0u == tap_detect_last_mg(&run.detect), __LINE__)) &&
+           b_ok;
 
     uint32_t const before = run.taps;
 
@@ -243,8 +244,8 @@ bool test_tap_detect_reseed (void)
 bool test_tap_detect_gravity (void)
 {
     static int16_t const dirs[6][3] = {
-        {TST_G, 0, 0}, {-TST_G, 0, 0}, {0, TST_G, 0},
-        {0, -TST_G, 0}, {0, 0, TST_G}, {0, 0, -TST_G},
+        {TST_G, 0, 0},  {-TST_G, 0, 0}, {0, TST_G, 0},
+        {0, -TST_G, 0}, {0, 0, TST_G},  {0, 0, -TST_G},
     };
     bool b_ok = true;
 
@@ -259,7 +260,8 @@ bool test_tap_detect_gravity (void)
         tst_feed(&run, 1000u, dirs[dir][0], dirs[dir][1], dirs[dir][2]);
         b_ok = (test_main_check(0u == run.taps, __LINE__)) && b_ok;
         b_ok = (test_main_check(0u == tap_detect_last_mg(&run.detect),
-                                __LINE__)) && b_ok;
+                                __LINE__)) &&
+               b_ok;
     }
 
     return b_ok;
@@ -276,18 +278,19 @@ bool test_tap_detect_set_threshold (void)
 
     /* The default (12 Nov 2026): 300 mg. */
     tap_detect_init(&run.detect);
-    b_ok = (test_main_check(300u == run.detect.threshold_mg, __LINE__)) &&
-           b_ok;
+    b_ok = (test_main_check(300u == run.detect.threshold_mg, __LINE__)) && b_ok;
 
     tst_start(&run);
     tap_detect_set_threshold(&run.detect, 10u);
-    b_ok = (test_main_check(TAP_DETECT_THRESHOLD_MIN_MG ==
-                                run.detect.threshold_mg,
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(TAP_DETECT_THRESHOLD_MIN_MG == run.detect.threshold_mg,
+                         __LINE__)) &&
+        b_ok;
     tap_detect_set_threshold(&run.detect, 9000u);
-    b_ok = (test_main_check(TAP_DETECT_THRESHOLD_MAX_MG ==
-                                run.detect.threshold_mg,
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(TAP_DETECT_THRESHOLD_MAX_MG == run.detect.threshold_mg,
+                         __LINE__)) &&
+        b_ok;
 
     tap_detect_set_threshold(&run.detect, 500u);
     tst_feed(&run, 1u, 0, 0, TST_G + TST_200_MG);

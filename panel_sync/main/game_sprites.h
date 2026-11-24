@@ -103,7 +103,7 @@ void game_sprites_start (game_canvas_t * p_canvas, int64_t t_us);
  *                     tap test).
  */
 void game_sprites_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
-                      bool b_squash);
+                       bool b_squash);
 
 /**
  * @brief  The wrong tap, elapsed_us after it was judged: a red X over the
@@ -121,7 +121,7 @@ void game_sprites_wrong (game_canvas_t * p_canvas, int64_t elapsed_us);
  * @param  colour    proto_colour_t value.
  */
 void game_sprites_picture (game_canvas_t * p_canvas, uint64_t mask,
-                          uint8_t colour);
+                           uint8_t colour);
 
 /**
  * @brief  The sparkle (the end of round animation): about one pixel in six
@@ -131,7 +131,7 @@ void game_sprites_picture (game_canvas_t * p_canvas, uint64_t mask,
  * @param  t_us      Shared time, microseconds.
  */
 void game_sprites_sparkle (game_canvas_t * p_canvas, uint8_t colour,
-                          int64_t t_us);
+                           int64_t t_us);
 
 /**
  * @brief  The channels of a wall picture colour (layout_table.md 5.13).

@@ -185,7 +185,7 @@ typedef struct
     uint32_t dropped;
     uint32_t lost;
     uint32_t log_dropped;
-    uint32_t foreign; /**< Beacons from another coordinator (lock). */
+    uint32_t foreign;  /**< Beacons from another coordinator (lock). */
     uint32_t game_len; /**< Game: datagram length. */
     uint8_t  game[TN_GAME_MAX_BYTES]; /**< Game: the datagram. */
 } tn_record_t;
@@ -709,8 +709,7 @@ static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
         else if ((PROTO_TYPE_MOLE_ON == type) ||
                  (PROTO_TYPE_FEEDBACK == type) ||
                  (PROTO_TYPE_GAME_CONTROL == type) ||
-                 (PROTO_TYPE_WALL_PICTURE == type) ||
-                 (PROTO_TYPE_ACK == type))
+                 (PROTO_TYPE_WALL_PICTURE == type) || (PROTO_TYPE_ACK == type))
         {
             tn_post_game(p_buf, len, t_l);
         }
@@ -768,8 +767,7 @@ static void tn_on_game (uint8_t const * p_buf, uint32_t len, int64_t t_l,
     {
         proto_ack_t msg;
 
-        if ((proto_decode_ack(p_buf, len, &msg)) &&
-            (g_node_id == msg.node_id))
+        if ((proto_decode_ack(p_buf, len, &msg)) && (g_node_id == msg.node_id))
         {
             /* Freed, or nothing waited: either way the ACK is done. */
             (void)ack_outbox_ack(&g_tap_box, g_node_id, msg.acked_seq);
@@ -779,8 +777,7 @@ static void tn_on_game (uint8_t const * p_buf, uint32_t len, int64_t t_l,
     {
         uint16_t acked_seq = 0u;
 
-        if (game_tile_on_pico(&g_game, g_node_id, p_buf, len, t_l,
-                              &acked_seq))
+        if (game_tile_on_pico(&g_game, g_node_id, p_buf, len, t_l, &acked_seq))
         {
             tn_send_game_ack(acked_seq);
         }
@@ -834,9 +831,8 @@ static void tn_game_service (int64_t now)
         {
             int64_t const t_pico =
                 timesync_pico_from_local(&g_game_reader.snap, event.t_us);
-            uint32_t const len = game_tile_encode_tap(buf, g_session,
-                                                      g_tap_seq, g_node_id,
-                                                      event.peak, t_pico);
+            uint32_t const len = game_tile_encode_tap(
+                buf, g_session, g_tap_seq, g_node_id, event.peak, t_pico);
 
             if ((0u != len) && (g_b_pico_known))
             {
@@ -846,8 +842,8 @@ static void tn_game_service (int64_t now)
                                      len, (uint64_t)now,
                                      (uint64_t)(now + TN_TAP_LIFE_US));
                 /* DS-13 event log: the TAP and its time in the Pico clock. */
-                printf("TN_TAP seq=%" PRIu16 " peak=%" PRIu16
-                       " t_pico=%" PRId64 "\n",
+                printf("TN_TAP seq=%" PRIu16 " peak=%" PRIu16 " t_pico=%" PRId64
+                       "\n",
                        g_tap_seq, event.peak, t_pico);
             }
         }
@@ -1208,8 +1204,7 @@ static void tn_handle_record (tn_record_t const * p_record)
         {
             /* DS-13 event log: every game datagram the tile handles. */
             printf("TN_GAME type=%" PRIu32 " seq=%" PRIu32 " t_l=%" PRId64 "\n",
-                   (uint32_t)header.type, (uint32_t)header.seq,
-                   p_record->t_l);
+                   (uint32_t)header.type, (uint32_t)header.seq, p_record->t_l);
             /* Posted only for game types, below 24: a valid proto_type_t. */
             tn_on_game(p_record->game, p_record->game_len, p_record->t_l,
                        (proto_type_t)header.type);

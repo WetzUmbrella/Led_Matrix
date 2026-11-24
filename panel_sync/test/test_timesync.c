@@ -335,8 +335,8 @@ bool test_timesync_reseed (void)
         }
 
         t_local += BEACON_PERIOD_US;
-        b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) &&
-               b_ok;
+        b_ok =
+            (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
         timesync_add_sample(t_p2, t_local);
     }
 
@@ -430,11 +430,10 @@ static bool reseed_late_cases (void)
 
     b_ok = (test_main_check(0u == timesync_reseed_count(), __LINE__)) && b_ok;
     b_ok = (test_main_check(4u == timesync_dropped_count(), __LINE__)) && b_ok;
-    b_ok =
-        (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
-                             (before == offset),
-                         __LINE__)) &&
-        b_ok;
+    b_ok = (test_main_check((timesync_filter_estimate(&offset, &ref)) &&
+                                (before == offset),
+                            __LINE__)) &&
+           b_ok;
     printf("    600 ms late samples, never 3 in a row: reseeds %" PRIu32
            ", dropped %" PRIu32 "\n",
            timesync_reseed_count(), timesync_dropped_count());

@@ -99,28 +99,28 @@
 /** Output of game_rules_poll(): at most one per call. */
 typedef enum
 {
-    GAME_EV_NONE = 0,  /**< Nothing to send. */
-    GAME_EV_MOLE_ON,   /**< Send MOLE_ON to node_id: t_show_us, up_ms. */
-    GAME_EV_FEEDBACK,  /**< Send FEEDBACK to node_id: result. */
-    GAME_EV_ROUND_END  /**< The round is over: send END, then WALL_PICTURE. */
+    GAME_EV_NONE = 0, /**< Nothing to send. */
+    GAME_EV_MOLE_ON,  /**< Send MOLE_ON to node_id: t_show_us, up_ms. */
+    GAME_EV_FEEDBACK, /**< Send FEEDBACK to node_id: result. */
+    GAME_EV_ROUND_END /**< The round is over: send END, then WALL_PICTURE. */
 } game_event_kind_t;
 
 /** One output event. */
 typedef struct
 {
     game_event_kind_t kind;
-    uint8_t           node_id;  /**< Addressed tile, 1 to 9. */
+    uint8_t           node_id;   /**< Addressed tile, 1 to 9. */
     uint64_t          t_show_us; /**< MOLE_ON: show time, Pico clock. */
-    uint16_t          up_ms;    /**< MOLE_ON: how long it stays up. */
-    uint8_t           result;   /**< FEEDBACK: proto_feedback_t. */
-    int32_t           score;    /**< Score after the event. */
+    uint16_t          up_ms;     /**< MOLE_ON: how long it stays up. */
+    uint8_t           result;    /**< FEEDBACK: proto_feedback_t. */
+    int32_t           score;     /**< Score after the event. */
 } game_event_t;
 
 /** One tap waiting for its dedupe window. */
 typedef struct
 {
-    uint8_t  node_id; /**< Tapped tile, 1 to 9. */
-    uint16_t peak;    /**< tap_detect peak, mg. */
+    uint8_t  node_id;  /**< Tapped tile, 1 to 9. */
+    uint16_t peak;     /**< tap_detect peak, mg. */
     uint64_t t_tap_us; /**< Tap time, Pico corrected clock. */
     uint64_t t_rx_us;  /**< Arrival at the Pico, Pico clock. */
 } game_tap_t;
@@ -128,32 +128,32 @@ typedef struct
 /** The engine. Zero it with game_rules_init(). */
 typedef struct
 {
-    bool        b_running;      /**< A round is in progress. */
-    uint32_t    rng;            /**< xorshift32 state, never 0. */
-    uint64_t    round_start_us; /**< Round start, Pico clock. */
-    uint64_t    round_end_us;   /**< Round end, Pico clock. */
-    int32_t     score;          /**< -99 to 99. */
-    uint16_t    active;         /**< Bit n - 1: Node ID n is in the wall. */
-    uint8_t     last_node;      /**< Last mole tile, 0 before the first. */
-    bool        b_mole_up;      /**< A mole is planned or up, not yet hit. */
-    uint8_t     mole_node;      /**< Its tile. */
-    uint64_t    show_us;        /**< Its show time. */
-    uint64_t    hide_us;        /**< Its hide time. */
-    uint64_t    next_show_us;   /**< Earliest show of the next mole. */
-    uint32_t    tap_count;      /**< Taps waiting in taps[]. */
-    game_tap_t  taps[GAME_TAP_SLOTS];
-    uint32_t    window_count;   /**< Closed windows held, up to GAME_WINDOWS. */
-    uint32_t    window_next;    /**< Slot of windows_us[] written next. */
-    uint64_t    windows_us[GAME_WINDOWS]; /**< Starts of the last closed
+    bool       b_running;      /**< A round is in progress. */
+    uint32_t   rng;            /**< xorshift32 state, never 0. */
+    uint64_t   round_start_us; /**< Round start, Pico clock. */
+    uint64_t   round_end_us;   /**< Round end, Pico clock. */
+    int32_t    score;          /**< -99 to 99. */
+    uint16_t   active;         /**< Bit n - 1: Node ID n is in the wall. */
+    uint8_t    last_node;      /**< Last mole tile, 0 before the first. */
+    bool       b_mole_up;      /**< A mole is planned or up, not yet hit. */
+    uint8_t    mole_node;      /**< Its tile. */
+    uint64_t   show_us;        /**< Its show time. */
+    uint64_t   hide_us;        /**< Its hide time. */
+    uint64_t   next_show_us;   /**< Earliest show of the next mole. */
+    uint32_t   tap_count;      /**< Taps waiting in taps[]. */
+    game_tap_t taps[GAME_TAP_SLOTS];
+    uint32_t   window_count; /**< Closed windows held, up to GAME_WINDOWS. */
+    uint32_t   window_next;  /**< Slot of windows_us[] written next. */
+    uint64_t   windows_us[GAME_WINDOWS]; /**< Starts of the last closed
                                            *   windows. */
-    uint32_t    dedupe_drops;   /**< Taps dropped as duplicates. */
-    uint32_t    tap_drops;      /**< Taps dropped: no room to wait. */
-    uint8_t     level;          /**< proto_level_t of the round. */
-    uint32_t    hits;           /**< Hits this round. */
-    uint32_t    missed;         /**< Moles that timed out this round. */
-    uint32_t    wrong;          /**< Wrong taps this round. */
-    uint32_t    shown;          /**< Moles planned (shown) this round. */
-    uint64_t    reaction_us;    /**< Sum of show-to-tap times of the hits. */
+    uint32_t   dedupe_drops;             /**< Taps dropped as duplicates. */
+    uint32_t   tap_drops;                /**< Taps dropped: no room to wait. */
+    uint8_t    level;                    /**< proto_level_t of the round. */
+    uint32_t   hits;                     /**< Hits this round. */
+    uint32_t   missed;      /**< Moles that timed out this round. */
+    uint32_t   wrong;       /**< Wrong taps this round. */
+    uint32_t   shown;       /**< Moles planned (shown) this round. */
+    uint64_t   reaction_us; /**< Sum of show-to-tap times of the hits. */
 } game_t;
 
 /**
@@ -205,7 +205,7 @@ void game_rules_set_active (game_t * p_game, uint16_t active_mask);
  * @param  t_tap_us  Tap time, Pico corrected clock, microseconds.
  */
 void game_rules_tap (game_t * p_game, uint8_t node_id, uint16_t peak,
-               uint64_t t_tap_us);
+                     uint64_t t_tap_us);
 
 /**
  * @brief  A tap from a tile with its arrival time (the coordinator's call): a

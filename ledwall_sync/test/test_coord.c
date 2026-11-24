@@ -781,9 +781,13 @@ bool test_coord_continue_rejoin (void)
 bool test_coord_full_config (void)
 {
     uint8_t                buf[PROTO_SESSION_CONFIG_BYTES + 1u];
-    proto_session_config_t msg = {
-        {PROTO_TYPE_SESSION_CONFIG, TST_SESSION, 0u},
-        3u, 3u, PROTO_POLICY_PAUSE, {{0u, 0u, 0u}}, TST_FRAMES, {0u}};
+    proto_session_config_t msg  = {{PROTO_TYPE_SESSION_CONFIG, TST_SESSION, 0u},
+                                   3u,
+                                   3u,
+                                   PROTO_POLICY_PAUSE,
+                                   {{0u, 0u, 0u}},
+                                   TST_FRAMES,
+                                   {0u}};
     bool                   b_ok = true;
 
     tst_reset();
@@ -828,10 +832,10 @@ bool test_coord_full_config (void)
     }
 
     tst_advance(UINT64_C(100000));
-    b_ok = (test_main_check(UINT16_C(0x01FF) ==
-                                coordinator_loop_test_readiness(),
-                            __LINE__)) &&
-           b_ok;
+    b_ok =
+        (test_main_check(UINT16_C(0x01FF) == coordinator_loop_test_readiness(),
+                         __LINE__)) &&
+        b_ok;
 
     return b_ok;
 }
@@ -985,9 +989,9 @@ static void tst_session (uint8_t session, uint8_t rows, uint8_t cols,
         {
             proto_cell_t * const p_cell = &msg.cell[node_id - 1u];
 
-            p_cell->b_placed = 1u;
-            p_cell->row      = (uint8_t)(slot / cols); /* < 9: fits. */
-            p_cell->col      = (uint8_t)(slot % cols); /* < 9: fits. */
+            p_cell->b_placed        = 1u;
+            p_cell->row             = (uint8_t)(slot / cols); /* < 9: fits. */
+            p_cell->col             = (uint8_t)(slot % cols); /* < 9: fits. */
             msg.crc32[node_id - 1u] = (1u == node_id)   ? TST_CRC_1
                                       : (2u == node_id) ? TST_CRC_2
                                                         : 0u;

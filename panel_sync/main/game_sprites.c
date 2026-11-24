@@ -14,14 +14,8 @@
 
 /** The mole: B body, W eyes, P nose. */
 static char const * const g_mole_rows[GAME_SPRITE_SIDE] = {
-    "..BBBB..",
-    ".BBBBBB.",
-    ".BWBBWB.",
-    ".BBPPBB.",
-    "BBBBBBBB",
-    "BBBBBBBB",
-    "BBBBBBBB",
-    "BBBBBBBB",
+    "..BBBB..", ".BBBBBB.", ".BWBBWB.", ".BBPPBB.",
+    "BBBBBBBB", "BBBBBBBB", "BBBBBBBB", "BBBBBBBB",
 };
 
 /** The hole: H on the bottom two rows. */
@@ -109,9 +103,9 @@ void game_sprites_hole (game_canvas_t * p_canvas)
  */
 void game_sprites_mole (game_canvas_t * p_canvas, uint32_t rows_up)
 {
-    uint32_t const shown = (rows_up > GAME_SPRITE_SIDE) ? GAME_SPRITE_SIDE
-                                                        : rows_up;
-    uint32_t const drop  = GAME_SPRITE_SIDE - shown;
+    uint32_t const shown =
+        (rows_up > GAME_SPRITE_SIDE) ? GAME_SPRITE_SIDE : rows_up;
+    uint32_t const drop = GAME_SPRITE_SIDE - shown;
 
     for (uint32_t row = 0u; row < shown; row++)
     {
@@ -172,15 +166,16 @@ uint32_t game_sprites_rows_up (int64_t elapsed_us)
  */
 void game_sprites_start (game_canvas_t * p_canvas, int64_t t_us)
 {
-    int64_t const  half  = GAME_SPRITE_PULSE_US / 2;
-    int64_t const  phase = ((t_us % GAME_SPRITE_PULSE_US) +
-                            GAME_SPRITE_PULSE_US) % GAME_SPRITE_PULSE_US;
-    int64_t const  rise  = (phase < half) ? phase
-                                          : (GAME_SPRITE_PULSE_US - phase);
-    int64_t const  span  = (int64_t)(GS_START_HIGH - GS_START_LOW); /* 4. */
+    int64_t const half = GAME_SPRITE_PULSE_US / 2;
+    int64_t const phase =
+        ((t_us % GAME_SPRITE_PULSE_US) + GAME_SPRITE_PULSE_US) %
+        GAME_SPRITE_PULSE_US;
+    int64_t const rise =
+        (phase < half) ? phase : (GAME_SPRITE_PULSE_US - phase);
+    int64_t const span = (int64_t)(GS_START_HIGH - GS_START_LOW); /* 4. */
     /* 0 <= rise <= half, so the step is 0 to 4 and the level 4 to 8. */
-    uint32_t const step = (uint32_t)((rise * span) / half); /* 0 to 4. */
-    uint8_t const  level = (uint8_t)(GS_START_LOW + step); /* 4 to 8. */
+    uint32_t const   step   = (uint32_t)((rise * span) / half); /* 0 to 4. */
+    uint8_t const    level  = (uint8_t)(GS_START_LOW + step);   /* 4 to 8. */
     game_rgb_t const colour = {0u, level, 0u};
 
     for (uint32_t row = 0u; row < GAME_SPRITE_SIDE; row++)
@@ -207,22 +202,21 @@ void game_sprites_start (game_canvas_t * p_canvas, int64_t t_us)
  * @param  b_squash    true when a mole was hit.
  */
 void game_sprites_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
-                      bool b_squash)
+                       bool b_squash)
 {
     game_sprites_clear(p_canvas);
 
     if ((b_squash) && (elapsed_us < GAME_SPRITE_SQUASH_US))
     {
         /* Two frames: 5 rows up, then 3, the mole pressed into its hole. */
-        uint32_t const rows =
-            (elapsed_us < GAME_SPRITE_ROW_STEP_US) ? 5u : 3u;
+        uint32_t const rows = (elapsed_us < GAME_SPRITE_ROW_STEP_US) ? 5u : 3u;
 
         game_sprites_hole(p_canvas);
         game_sprites_mole(p_canvas, rows);
     }
     else
     {
-        int64_t const start = b_squash ? GAME_SPRITE_SQUASH_US : 0;
+        int64_t const start  = b_squash ? GAME_SPRITE_SQUASH_US : 0;
         int64_t const length = GAME_SPRITE_HIT_US - start;
         int64_t const since  = (elapsed_us > start) ? (elapsed_us - start) : 0;
         int64_t const raw    = (since * GS_BURST_FRAMES) / length;
@@ -239,8 +233,7 @@ void game_sprites_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
                 uint32_t const d_c  = gs_abs_offset(col);
                 uint32_t const far  = (d_r > d_c) ? d_r : d_c;
                 uint32_t const ring = (far - 1u) / 2u; /* 0 to 3. */
-                bool const     b_ray = (d_r == d_c) || (1u == d_r) ||
-                                       (1u == d_c);
+                bool const b_ray = (d_r == d_c) || (1u == d_r) || (1u == d_c);
 
                 if (0u == ring)
                 {
@@ -266,8 +259,8 @@ void game_sprites_hit (game_canvas_t * p_canvas, int64_t elapsed_us,
  */
 void game_sprites_wrong (game_canvas_t * p_canvas, int64_t elapsed_us)
 {
-    bool const b_on = (elapsed_us >= 0) &&
-                      (0 == ((elapsed_us / GS_BLINK_US) % 2));
+    bool const b_on =
+        (elapsed_us >= 0) && (0 == ((elapsed_us / GS_BLINK_US) % 2));
 
     if (b_on)
     {
@@ -286,7 +279,7 @@ void game_sprites_wrong (game_canvas_t * p_canvas, int64_t elapsed_us)
  * @param  colour    proto_colour_t value.
  */
 void game_sprites_picture (game_canvas_t * p_canvas, uint64_t mask,
-                          uint8_t colour)
+                           uint8_t colour)
 {
     game_rgb_t const lit = game_sprites_colour(colour);
 
@@ -309,18 +302,18 @@ void game_sprites_picture (game_canvas_t * p_canvas, uint64_t mask,
  * @param  t_us      Shared time.
  */
 void game_sprites_sparkle (game_canvas_t * p_canvas, uint8_t colour,
-                          int64_t t_us)
+                           int64_t t_us)
 {
-    game_rgb_t const lit  = game_sprites_colour(colour);
+    game_rgb_t const lit = game_sprites_colour(colour);
     /* Modulo 2^32 on purpose: only the change from step to step matters. */
-    uint32_t const   step = (uint32_t)(t_us / GAME_SPRITE_TWINKLE_US);
+    uint32_t const step = (uint32_t)(t_us / GAME_SPRITE_TWINKLE_US);
 
     game_sprites_clear(p_canvas);
 
     for (uint32_t pixel = 0u; pixel < GAME_SPRITE_PIXELS; pixel++)
     {
-        if (0u == (gs_hash((step * GAME_SPRITE_PIXELS) + pixel) %
-                   GS_SPARKLE_ONE_IN))
+        if (0u ==
+            (gs_hash((step * GAME_SPRITE_PIXELS) + pixel) % GS_SPARKLE_ONE_IN))
         {
             p_canvas->px[pixel] = lit;
         }

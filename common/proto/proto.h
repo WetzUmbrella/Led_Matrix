@@ -300,7 +300,7 @@ typedef enum
     PROTO_TYPE_MOLE_ON,      /**< 19. */
     PROTO_TYPE_FEEDBACK,     /**< 20. */
     PROTO_TYPE_GAME_CONTROL, /**< 21. */
-    PROTO_TYPE_WALL_PICTURE,   /**< 22. */
+    PROTO_TYPE_WALL_PICTURE, /**< 22. */
     PROTO_TYPE_ACK,          /**< 23. */
     PROTO_TYPE_COUNT
 } proto_type_t;
@@ -498,12 +498,12 @@ typedef struct
 typedef struct
 {
     proto_header_t header;
-    uint8_t        rows;                    /**< 1 to 9. */
-    uint8_t        cols;                    /**< 1 to 9. */
-    uint8_t        policy;                  /**< proto_policy_t. */
-    proto_cell_t   cell[PROTO_NODE_MAX];    /**< Node ID n at cell[n - 1]. */
-    uint16_t       frame_count;             /**< 1 to 1023, every tile. */
-    uint32_t       crc32[PROTO_NODE_MAX];   /**< Manifest CRC32 of Node ID
+    uint8_t        rows;                  /**< 1 to 9. */
+    uint8_t        cols;                  /**< 1 to 9. */
+    uint8_t        policy;                /**< proto_policy_t. */
+    proto_cell_t   cell[PROTO_NODE_MAX];  /**< Node ID n at cell[n - 1]. */
+    uint16_t       frame_count;           /**< 1 to 1023, every tile. */
+    uint32_t       crc32[PROTO_NODE_MAX]; /**< Manifest CRC32 of Node ID
                                                  n at crc32[n - 1]; 0 for a
                                                  tile not placed. */
 } proto_session_config_t;
@@ -599,10 +599,10 @@ typedef struct
 typedef struct
 {
     proto_header_t header;
-    uint16_t       readiness; /**< Bit n-1 = Node ID n ready, 9 bits. */
-    uint16_t       online;    /**< Bit n-1 = Node ID n online, 9 bits. */
-    uint8_t        state;     /**< proto_coord_state_t. */
-    int8_t         score;     /**< Game score, -99 to 99; 0 outside a game. */
+    uint16_t       readiness;   /**< Bit n-1 = Node ID n ready, 9 bits. */
+    uint16_t       online;      /**< Bit n-1 = Node ID n online, 9 bits. */
+    uint8_t        state;       /**< proto_coord_state_t. */
+    int8_t         score;       /**< Game score, -99 to 99; 0 outside a game. */
     uint8_t        round_state; /**< proto_round_state_t. */
     uint8_t        level;       /**< proto_level_t. */
     uint8_t        missed;      /**< Targets that timed out, 0 to 127. */
@@ -666,10 +666,10 @@ typedef struct
 typedef struct
 {
     proto_header_t header;
-    uint8_t        node_id; /**< 0 = PC to Pico; 1 to 9 = the addressed
+    uint8_t        node_id;   /**< 0 = PC to Pico; 1 to 9 = the addressed
                                  tile. */
-    uint8_t        command; /**< proto_game_cmd_t. */
-    uint8_t        level;   /**< proto_level_t; used with ARM. */
+    uint8_t        command;   /**< proto_game_cmd_t. */
+    uint8_t        level;     /**< proto_level_t; used with ARM. */
     uint8_t        threshold; /**< Tap threshold in 20 mg steps, 0 = the
                                    tile's default; used with ARM. */
 } proto_game_control_t;
@@ -681,15 +681,15 @@ typedef struct
 typedef struct
 {
     proto_header_t header;
-    uint8_t        node_id; /**< 1 to 9, the addressed tile. */
-    uint8_t        slot;    /**< List entry, 0 to 3. */
-    uint8_t        effect;  /**< proto_pic_effect_t. */
-    uint8_t        colour;  /**< proto_colour_t. */
+    uint8_t        node_id;  /**< 1 to 9, the addressed tile. */
+    uint8_t        slot;     /**< List entry, 0 to 3. */
+    uint8_t        effect;   /**< proto_pic_effect_t. */
+    uint8_t        colour;   /**< proto_colour_t. */
     uint8_t        b_repeat; /**< 1 = after this entry, start the list again
                                   from slot 1 (results loop). */
-    uint64_t       t_show;  /**< Show time, Pico corrected clock, us. */
-    uint16_t       dur_ms;  /**< 0 to 8,191 ms; 0 = until replaced. */
-    uint64_t       mask;    /**< Bit n = pixel n lit, pixels in asset frame
+    uint64_t       t_show;   /**< Show time, Pico corrected clock, us. */
+    uint16_t       dur_ms;   /**< 0 to 8,191 ms; 0 = until replaced. */
+    uint64_t       mask;     /**< Bit n = pixel n lit, pixels in asset frame
                                  order (layout_table.md section 6), before
                                  the tile's rotation. */
 } proto_wall_picture_t;
@@ -877,9 +877,9 @@ uint32_t proto_encode_game_control (proto_game_control_t const * p_msg,
 bool     proto_decode_game_control (uint8_t const * p_buf, uint32_t len,
                                     proto_game_control_t * p_msg);
 uint32_t proto_encode_wall_picture (proto_wall_picture_t const * p_msg,
-                                  uint8_t * p_buf, uint32_t buf_len);
+                                    uint8_t * p_buf, uint32_t buf_len);
 bool     proto_decode_wall_picture (uint8_t const * p_buf, uint32_t len,
-                                  proto_wall_picture_t * p_msg);
+                                    proto_wall_picture_t * p_msg);
 uint32_t proto_encode_ack (proto_ack_t const * p_msg, uint8_t * p_buf,
                            uint32_t buf_len);
 bool     proto_decode_ack (uint8_t const * p_buf, uint32_t len,

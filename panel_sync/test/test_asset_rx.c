@@ -206,7 +206,8 @@ bool test_asset_rx_held (void)
     b_ok = (test_main_check((upload.b_open) && (upload.b_held) &&
                                 (A_CHUNKS == upload.chunk_count) &&
                                 (A_CHUNKS == upload.received_count),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(!asset_rx_complete(&upload), __LINE__)) && b_ok;
 
     for (uint32_t step = 0u; step < A_CHUNKS; step++)
@@ -217,34 +218,38 @@ bool test_asset_rx_held (void)
                    ASSET_RX_CHUNK_REPEAT ==
                        asset_rx_chunk(&upload, A_SESSION, index,
                                       asset_rx_chunk_len(&upload, index)),
-                   __LINE__)) && b_ok;
+                   __LINE__)) &&
+               b_ok;
     }
 
     b_ok = (test_main_check(!asset_rx_complete(&upload), __LINE__)) && b_ok;
-    b_ok = (test_main_check(A_CHUNKS == upload.received_count, __LINE__)) &&
-           b_ok;
+    b_ok =
+        (test_main_check(A_CHUNKS == upload.received_count, __LINE__)) && b_ok;
     /* Chunk 57 does not exist; another session is not this upload. */
-    uint8_t const past  = (uint8_t)A_CHUNKS;          /* 57 fits. */
-    uint8_t const other = (uint8_t)(A_SESSION + 1u);  /* 8 fits. */
+    uint8_t const past  = (uint8_t)A_CHUNKS;         /* 57 fits. */
+    uint8_t const other = (uint8_t)(A_SESSION + 1u); /* 8 fits. */
 
-    b_ok = (test_main_check(
-               ASSET_RX_CHUNK_BAD_LENGTH ==
-                   asset_rx_chunk(&upload, A_SESSION, past,
-                                  ASSET_RX_CHUNK_BYTES),
-               __LINE__)) && b_ok;
+    b_ok = (test_main_check(ASSET_RX_CHUNK_BAD_LENGTH ==
+                                asset_rx_chunk(&upload, A_SESSION, past,
+                                               ASSET_RX_CHUNK_BYTES),
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(
                ASSET_RX_CHUNK_IGNORED ==
                    asset_rx_chunk(&upload, other, 0u, ASSET_RX_CHUNK_BYTES),
-               __LINE__)) && b_ok;
+               __LINE__)) &&
+           b_ok;
 
     /* A real manifest afterwards opens a normal upload: nothing held. */
     asset_rx_open(&upload, A_SESSION, A_FMT_PACKED, A_FRAMES, 1u);
     b_ok = (test_main_check((!upload.b_held) && (0u == upload.received_count),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(
-               ASSET_RX_CHUNK_NEW == asset_rx_chunk(&upload, A_SESSION, 0u,
-                                                    ASSET_RX_CHUNK_BYTES),
-               __LINE__)) && b_ok;
+               ASSET_RX_CHUNK_NEW ==
+                   asset_rx_chunk(&upload, A_SESSION, 0u, ASSET_RX_CHUNK_BYTES),
+               __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }

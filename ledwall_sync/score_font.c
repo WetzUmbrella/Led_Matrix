@@ -76,12 +76,12 @@ typedef struct
     bool          b_sparse; /**< Each tile shows the whole small picture. */
     uint8_t       rows;
     uint8_t       cols;
-    score_cells_t cells;    /**< The cells that hold a tile. */
-    score_box_t   box;      /**< Active tiles (dense grids). */
-    score_src_t   src;      /**< The picture drawn small. */
-    uint32_t      scale;    /**< Each source pixel is scale x scale LEDs. */
-    uint32_t      left;     /**< First wall column (tile column if sparse). */
-    uint32_t      top;      /**< First wall row (tile row if sparse). */
+    score_cells_t cells; /**< The cells that hold a tile. */
+    score_box_t   box;   /**< Active tiles (dense grids). */
+    score_src_t   src;   /**< The picture drawn small. */
+    uint32_t      scale; /**< Each source pixel is scale x scale LEDs. */
+    uint32_t      left;  /**< First wall column (tile column if sparse). */
+    uint32_t      top;   /**< First wall row (tile row if sparse). */
 } score_layout_t;
 
 /** The font: 11 glyphs of 5 rows of 3 pixels. */
@@ -122,22 +122,20 @@ static bool     score_cell_on (score_cells_t const * p_cells, uint32_t row,
 static void     score_src_clear (score_src_t * p_src, uint32_t width,
                                  uint32_t height);
 static void     score_src_stamp (score_src_t * p_src, uint8_t const * p_rows,
-                                 uint32_t side, uint32_t pos_x,
-                                 uint32_t pos_y);
+                                 uint32_t side, uint32_t pos_x, uint32_t pos_y);
 static void     score_src_number (int32_t value, score_src_t * p_src);
-static void     score_src_stars (uint32_t count, uint32_t side,
-                                 bool b_pyramid, score_src_t * p_src);
+static void     score_src_stars (uint32_t count, uint32_t side, bool b_pyramid,
+                                 score_src_t * p_src);
 static uint32_t score_src_fit (score_src_t const * p_src, uint32_t box_w,
                                uint32_t box_h);
-static void     score_src_choose (score_pic_t pic, int32_t value,
-                                  uint32_t box_w, uint32_t box_h,
-                                  score_src_t * p_src, uint32_t * p_scale);
-static void     score_layout_make (score_pic_t pic, int32_t value,
-                                   uint8_t rows, uint8_t cols,
-                                   score_cells_t const * p_cells,
-                                   score_layout_t * p_layout);
-static bool     score_layout_lit (score_layout_t const * p_layout,
-                                  uint32_t pixel_x, uint32_t pixel_y);
+static void score_src_choose (score_pic_t pic, int32_t value, uint32_t box_w,
+                              uint32_t box_h, score_src_t * p_src,
+                              uint32_t * p_scale);
+static void score_layout_make (score_pic_t pic, int32_t value, uint8_t rows,
+                               uint8_t cols, score_cells_t const * p_cells,
+                               score_layout_t * p_layout);
+static bool score_layout_lit (score_layout_t const * p_layout, uint32_t pixel_x,
+                              uint32_t pixel_y);
 static uint32_t score_popcount (uint16_t bits);
 
 /**
@@ -194,10 +192,8 @@ uint64_t score_font_picture_mask (score_pic_t pic, int32_t value, uint8_t rows,
 
         for (uint32_t led = 0u; led < SCORE_FONT_TILE_LEDS; led++)
         {
-            uint32_t const pixel_x =
-                origin_x + (led % SCORE_FONT_TILE_SIDE);
-            uint32_t const pixel_y =
-                origin_y + (led / SCORE_FONT_TILE_SIDE);
+            uint32_t const pixel_x = origin_x + (led % SCORE_FONT_TILE_SIDE);
+            uint32_t const pixel_y = origin_y + (led / SCORE_FONT_TILE_SIDE);
 
             if (score_layout_lit(&layout, pixel_x, pixel_y))
             {
@@ -226,8 +222,7 @@ bool score_font_sparse (uint8_t rows, uint8_t cols,
     /* Only the grid's own cells count: cols < 10, so the mask fits. */
     uint16_t const own = (uint16_t)((UINT16_C(1) << cols) - 1u);
 
-    for (uint32_t row = 0u; (row < rows) && (row < SCORE_FONT_GRID_MAX);
-         row++)
+    for (uint32_t row = 0u; (row < rows) && (row < SCORE_FONT_GRID_MAX); row++)
     {
         /* Both operands are uint16_t: the narrowing keeps the value. */
         held += score_popcount((uint16_t)(p_cells->row_bits[row] & own));
@@ -291,12 +286,12 @@ static void score_layout_make (score_pic_t pic, int32_t value, uint8_t rows,
     p_layout->b_valid = (rows >= 1u) && (rows <= SCORE_FONT_GRID_MAX) &&
                         (cols >= 1u) && (cols <= SCORE_FONT_GRID_MAX) &&
                         (score_font_box(p_cells, rows, cols, &p_layout->box));
-    p_layout->rows   = rows;
-    p_layout->cols   = cols;
-    p_layout->cells  = *p_cells;
-    p_layout->scale  = 1u;
-    p_layout->left   = 0u;
-    p_layout->top    = 0u;
+    p_layout->rows  = rows;
+    p_layout->cols  = cols;
+    p_layout->cells = *p_cells;
+    p_layout->scale = 1u;
+    p_layout->left  = 0u;
+    p_layout->top   = 0u;
     score_src_clear(&p_layout->src, 1u, 1u);
 
     if (p_layout->b_valid)
@@ -329,10 +324,10 @@ static void score_layout_make (score_pic_t pic, int32_t value, uint8_t rows,
             uint32_t const width  = p_layout->src.width * p_layout->scale;
             uint32_t const height = p_layout->src.height * p_layout->scale;
 
-            p_layout->left = origin_x +
-                             ((box_w > width) ? ((box_w - width) / 2u) : 0u);
-            p_layout->top  = origin_y +
-                             ((box_h > height) ? ((box_h - height) / 2u) : 0u);
+            p_layout->left =
+                origin_x + ((box_w > width) ? ((box_w - width) / 2u) : 0u);
+            p_layout->top =
+                origin_y + ((box_h > height) ? ((box_h - height) / 2u) : 0u);
         }
     }
     else
@@ -348,8 +343,8 @@ static void score_layout_make (score_pic_t pic, int32_t value, uint8_t rows,
  * @param  pixel_y   Row of the pixel on the wall.
  * @return true when the pixel is lit.
  */
-static bool score_layout_lit (score_layout_t const * p_layout,
-                              uint32_t pixel_x, uint32_t pixel_y)
+static bool score_layout_lit (score_layout_t const * p_layout, uint32_t pixel_x,
+                              uint32_t pixel_y)
 {
     uint32_t const tile_x = pixel_x / SCORE_FONT_TILE_SIDE;
     uint32_t const tile_y = pixel_y / SCORE_FONT_TILE_SIDE;
@@ -377,8 +372,7 @@ static bool score_layout_lit (score_layout_t const * p_layout,
             uint32_t const src_x = (pos_x - p_layout->left) / p_layout->scale;
             uint32_t const src_y = (pos_y - p_layout->top) / p_layout->scale;
 
-            if ((src_x < p_layout->src.width) &&
-                (src_y < p_layout->src.height))
+            if ((src_x < p_layout->src.width) && (src_y < p_layout->src.height))
             {
                 uint32_t const shift = p_layout->src.width - 1u - src_x;
 
@@ -411,11 +405,11 @@ static void score_src_choose (score_pic_t pic, int32_t value, uint32_t box_w,
     if (SCORE_PIC_STARS == pic)
     {
         /* 1 to 3 stars; value is clamped first, so the narrowing keeps it. */
-        uint32_t const count =
-            (value < 1) ? 1u
-                        : ((value > (int32_t)SCORE_FONT_STARS_MAX)
-                               ? SCORE_FONT_STARS_MAX
-                               : (uint32_t)value);
+        uint32_t const count    = (value < 1)
+                                      ? 1u
+                                      : ((value > (int32_t)SCORE_FONT_STARS_MAX)
+                                             ? SCORE_FONT_STARS_MAX
+                                             : (uint32_t)value);
         uint32_t const sides[2] = {SCORE_STAR_BIG, SCORE_STAR_SMALL};
         uint32_t       best     = 0u; /* Drawn area of the best so far. */
 
@@ -423,10 +417,10 @@ static void score_src_choose (score_pic_t pic, int32_t value, uint32_t box_w,
         {
             for (uint32_t kind = 0u; kind < SCORE_STAR_LAYOUTS; kind++)
             {
-                score_src_t    candidate;
-                bool const     b_pyramid = (1u == kind);
-                uint32_t       fit       = 0u;
-                uint32_t       area      = 0u;
+                score_src_t candidate;
+                bool const  b_pyramid = (1u == kind);
+                uint32_t    fit       = 0u;
+                uint32_t    area      = 0u;
 
                 score_src_stars(count, sides[size], b_pyramid, &candidate);
                 fit  = score_src_fit(&candidate, box_w, box_h);
@@ -524,8 +518,8 @@ static void score_src_number (int32_t value, score_src_t * p_src)
 
     for (uint32_t glyph = 0u; glyph < text.count; glyph++)
     {
-        uint32_t const shift = p_src->width - SCORE_FONT_GLYPH_W -
-                               (glyph * SCORE_FONT_PERIOD);
+        uint32_t const shift =
+            p_src->width - SCORE_FONT_GLYPH_W - (glyph * SCORE_FONT_PERIOD);
 
         for (uint32_t row = 0u; row < SCORE_FONT_GLYPH_H; row++)
         {
@@ -547,9 +541,9 @@ static void score_src_number (int32_t value, score_src_t * p_src)
 static void score_src_stars (uint32_t count, uint32_t side, bool b_pyramid,
                              score_src_t * p_src)
 {
-    uint8_t const * const p_rows = (SCORE_STAR_BIG == side) ? g_star_big
-                                                            : g_star_small;
-    uint32_t const        period = side + SCORE_STAR_GAP;
+    uint8_t const * const p_rows =
+        (SCORE_STAR_BIG == side) ? g_star_big : g_star_small;
+    uint32_t const period = side + SCORE_STAR_GAP;
 
     if ((b_pyramid) && (SCORE_FONT_STARS_MAX == count))
     {
@@ -578,7 +572,7 @@ static void score_src_stars (uint32_t count, uint32_t side, bool b_pyramid,
  */
 static void score_font_text (int32_t score, score_text_t * p_text)
 {
-    int32_t  clamped = score;
+    int32_t  clamped   = score;
     uint32_t magnitude = 0u;
 
     if (clamped > SCORE_FONT_LIMIT)
@@ -662,7 +656,6 @@ static bool score_font_box (score_cells_t const * p_cells, uint8_t rows,
 
         if (score_cell_on(p_cells, row, col))
         {
-
             if (!b_any)
             {
                 p_box->min_row = row;

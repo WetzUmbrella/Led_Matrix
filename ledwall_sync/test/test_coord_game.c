@@ -49,14 +49,14 @@
 #define GT_ROUND_US (GT_MS * (uint64_t)GAME_ROUND_MS)
 
 /** Tile state of the simulation. */
-static uint16_t g_pc_seq         = 0u;
+static uint16_t g_pc_seq = 0u;
 static uint16_t g_tile_seq[CL_MAX_NODES + 1u];
-static uint16_t g_ack_seq        = 0u; /* Tile's ACK header seq. */
-static uint16_t g_tap_seq        = 0u;
+static uint16_t g_ack_seq = 0u; /* Tile's ACK header seq. */
+static uint16_t g_tap_seq = 0u;
 static uint64_t g_last_beat[CL_MAX_NODES + 1u];
-static uint16_t g_live           = 0u;
-static uint32_t g_ack_scan       = 0u; /* Sends already answered by ACK. */
-static uint32_t g_score_tiles    = 0u; /* Tiles given a WALL_PICTURE. */
+static uint16_t g_live        = 0u;
+static uint32_t g_ack_scan    = 0u; /* Sends already answered by ACK. */
+static uint32_t g_score_tiles = 0u; /* Tiles given a WALL_PICTURE. */
 /* Every tile was given the same score picture. */
 static bool g_b_score_same = false;
 
@@ -79,28 +79,29 @@ static gt_grid_t const g_grid_2x2 = {2u, 2u, {{1u, 0u, 0u}, {1u, 0u, 1u}}};
 
 static gt_grid_t g_grid = {2u, 2u, {{1u, 0u, 0u}, {1u, 0u, 1u}}};
 
-static void gt_to_ready (void);
-static void gt_to_layout (bool b_assets);
-static void gt_pc_start (void);
-static void gt_pc_command (uint8_t command, uint8_t level, uint8_t threshold,
-                           uint16_t seq);
-static void gt_pc_control (uint8_t command, uint16_t seq);
-static void gt_pc (uint8_t command, uint8_t level, uint8_t threshold);
-static bool gt_status (proto_status_t * p_msg);
+static void    gt_to_ready (void);
+static void    gt_to_layout (bool b_assets);
+static void    gt_pc_start (void);
+static void    gt_pc_command (uint8_t command, uint8_t level, uint8_t threshold,
+                              uint16_t seq);
+static void    gt_pc_control (uint8_t command, uint16_t seq);
+static void    gt_pc (uint8_t command, uint8_t level, uint8_t threshold);
+static bool    gt_status (proto_status_t * p_msg);
 static uint8_t gt_round_state (void);
-static bool gt_last_cmd (uint8_t node_id, uint8_t command,
-                         proto_game_control_t * p_msg);
+static bool    gt_last_cmd (uint8_t node_id, uint8_t command,
+                            proto_game_control_t * p_msg);
 static uint32_t gt_count_to (proto_type_t type, uint8_t node_id);
-static bool gt_last_target (uint8_t node_id, proto_mole_on_t * p_msg);
-static bool gt_newest_mole (proto_mole_on_t * p_msg);
-static bool gt_check_countdown (uint8_t node_id, uint64_t t_first);
-static void gt_arm (uint8_t level, uint8_t threshold);
-static bool gt_check_results (uint8_t node_id);
+static bool     gt_last_target (uint8_t node_id, proto_mole_on_t * p_msg);
+static bool     gt_newest_mole (proto_mole_on_t * p_msg);
+static bool     gt_check_countdown (uint8_t node_id, uint64_t t_first);
+static bool     gt_check_normal_mole (void);
+static void     gt_arm (uint8_t level, uint8_t threshold);
+static bool     gt_check_results (uint8_t node_id);
 static uint32_t gt_count_clear (uint8_t node_id);
-static void gt_tile_ack (uint8_t node_id, uint16_t acked_seq);
-static void gt_ack_type (proto_type_t type);
-static void gt_tap (uint8_t node_id, uint16_t peak, uint64_t t_tap_us,
-                    uint16_t seq);
+static void     gt_tile_ack (uint8_t node_id, uint16_t acked_seq);
+static void     gt_ack_type (proto_type_t type);
+static void     gt_tap (uint8_t node_id, uint16_t peak, uint64_t t_tap_us,
+                        uint16_t seq);
 static uint32_t gt_addr (uint8_t node_id);
 static uint32_t gt_find (proto_type_t type, uint16_t port, uint32_t from,
                          uint32_t * p_index);
@@ -108,15 +109,15 @@ static uint32_t gt_count_seq (proto_type_t type, uint16_t port, uint16_t seq);
 static uint32_t gt_count_start (uint8_t node_id);
 static uint32_t gt_count_cmd (uint8_t node_id, uint8_t command);
 static uint32_t gt_ack_count (uint8_t node_id, uint16_t acked_seq);
-static void gt_session_config (uint8_t session);
-static bool gt_pc_acked (uint16_t seq);
-static bool gt_node_seq (coordinator_port_send_t const * p_send,
-                         proto_type_t type, uint8_t * p_node,
-                         uint16_t * p_seq);
-static bool gt_last_status (int32_t * p_score, uint8_t * p_state);
+static void     gt_session_config (uint8_t session);
+static bool     gt_pc_acked (uint16_t seq);
+static bool     gt_last_status (int32_t * p_score, uint8_t * p_state);
 static uint32_t gt_popcount (uint64_t value);
 static uint32_t gt_score_pixels (void);
 static uint64_t gt_one_tile_score (int32_t score);
+
+static bool gt_node_seq (coordinator_port_send_t const * p_send,
+                         proto_type_t type, uint8_t * p_node, uint16_t * p_seq);
 
 /**
  * @brief  Run passes for a duration in 50 us steps; live tiles heartbeat
@@ -221,10 +222,13 @@ static void gt_to_layout (bool b_assets)
 {
     /* Node 1 and node 2 in the cells of g_grid (step 4d). */
     uint8_t                buf[PROTO_SESSION_CONFIG_BYTES];
-    proto_session_config_t msg = {
-        {PROTO_TYPE_SESSION_CONFIG, GT_SESSION, 0u},
-        g_grid.rows, g_grid.cols, PROTO_POLICY_PAUSE,
-        {g_grid.cell[0], g_grid.cell[1]}, GT_FRAMES, {GT_CRC_1, GT_CRC_2}};
+    proto_session_config_t msg = {{PROTO_TYPE_SESSION_CONFIG, GT_SESSION, 0u},
+                                  g_grid.rows,
+                                  g_grid.cols,
+                                  PROTO_POLICY_PAUSE,
+                                  {g_grid.cell[0], g_grid.cell[1]},
+                                  GT_FRAMES,
+                                  {GT_CRC_1, GT_CRC_2}};
 
     gt_reset();
     msg.header.seq = g_pc_seq; /* After the reset, which zeroes it. */
@@ -234,8 +238,8 @@ static void gt_to_layout (bool b_assets)
 
     for (uint8_t node_id = 1u; node_id <= 2u; node_id++)
     {
-        uint8_t                 reg[PROTO_REGISTER_BYTES];
-        proto_register_t const  reg_msg = {
+        uint8_t                reg[PROTO_REGISTER_BYTES];
+        proto_register_t const reg_msg = {
             {PROTO_TYPE_REGISTER, 0u, 0u}, node_id, 0u, 0u};
 
         g_tile_seq[node_id]  = 1u;
@@ -252,7 +256,8 @@ static void gt_to_layout (bool b_assets)
         uint8_t                   ready_buf[PROTO_ASSET_READY_BYTES];
         proto_asset_ready_t const ar_msg = {
             {PROTO_TYPE_ASSET_READY, GT_SESSION, g_tile_seq[node_id]},
-            node_id, (1u == node_id) ? GT_CRC_1 : GT_CRC_2};
+            node_id,
+            (1u == node_id) ? GT_CRC_1 : GT_CRC_2};
         uint8_t                  sync_buf[PROTO_SYNC_READY_BYTES];
         proto_sync_ready_t const sr_msg = {
             {PROTO_TYPE_SYNC_READY, GT_SESSION, g_tile_seq[node_id] + 1u},
@@ -267,9 +272,9 @@ static void gt_to_layout (bool b_assets)
                                                 sizeof(ready_buf)));
         }
 
-        gt_rx_tile(node_id, sync_buf,
-                   proto_encode_sync_ready(&sr_msg, sync_buf,
-                                           sizeof(sync_buf)));
+        gt_rx_tile(
+            node_id, sync_buf,
+            proto_encode_sync_ready(&sr_msg, sync_buf, sizeof(sync_buf)));
     }
 
     gt_advance(GT_MS * 100u);
@@ -286,9 +291,12 @@ static void gt_to_layout (bool b_assets)
 static void gt_pc_command (uint8_t command, uint8_t level, uint8_t threshold,
                            uint16_t seq)
 {
-    uint8_t                      buf[PROTO_GAME_CONTROL_BYTES];
-    proto_game_control_t const   msg = {
-        {PROTO_TYPE_GAME_CONTROL, GT_SESSION, seq}, 0u, command, level,
+    uint8_t                    buf[PROTO_GAME_CONTROL_BYTES];
+    proto_game_control_t const msg = {
+        {PROTO_TYPE_GAME_CONTROL, GT_SESSION, seq},
+        0u,
+        command,
+        level,
         threshold};
 
     gt_rx_pc(buf, proto_encode_game_control(&msg, buf, sizeof(buf)));
@@ -312,8 +320,8 @@ static void gt_pc_control (uint8_t command, uint16_t seq)
  */
 static void gt_tile_ack (uint8_t node_id, uint16_t acked_seq)
 {
-    uint8_t              buf[PROTO_ACK_BYTES];
-    proto_ack_t const    msg = {
+    uint8_t           buf[PROTO_ACK_BYTES];
+    proto_ack_t const msg = {
         {PROTO_TYPE_ACK, GT_SESSION, g_ack_seq}, node_id, acked_seq};
 
     g_ack_seq++;
@@ -355,8 +363,8 @@ static void gt_ack_type (proto_type_t type)
 static void gt_tap (uint8_t node_id, uint16_t peak, uint64_t t_tap_us,
                     uint16_t seq)
 {
-    uint8_t              buf[PROTO_TAP_BYTES];
-    proto_tap_t const    msg = {
+    uint8_t           buf[PROTO_TAP_BYTES];
+    proto_tap_t const msg = {
         {PROTO_TYPE_TAP, GT_SESSION, seq}, node_id, peak, t_tap_us};
 
     gt_rx_tile(node_id, buf, proto_encode_tap(&msg, buf, sizeof(buf)));
@@ -378,13 +386,12 @@ static uint32_t gt_find (proto_type_t type, uint16_t port, uint32_t from,
     for (uint32_t index = from;
          (index < coordinator_port_count()) && (0u == found); index++)
     {
-        proto_header_t header;
+        proto_header_t                        header;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
         if ((proto_decode_header(p_send->bytes, p_send->len, &header)) &&
-            (type == header.type) &&
-            ((0u == port) || (port == p_send->port)))
+            (type == header.type) && ((0u == port) || (port == p_send->port)))
         {
             *p_index = index;
             found    = 1u;
@@ -407,7 +414,7 @@ static uint32_t gt_count_seq (proto_type_t type, uint16_t port, uint16_t seq)
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_header_t header;
+        proto_header_t                        header;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
@@ -433,7 +440,7 @@ static uint32_t gt_count_start (uint8_t node_id)
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_game_control_t msg;
+        proto_game_control_t                  msg;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
@@ -460,7 +467,7 @@ static uint32_t gt_count_cmd (uint8_t node_id, uint8_t command)
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_game_control_t msg;
+        proto_game_control_t                  msg;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
@@ -487,7 +494,7 @@ static uint32_t gt_ack_count (uint8_t node_id, uint16_t acked_seq)
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_ack_t msg;
+        proto_ack_t                           msg;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
@@ -511,8 +518,12 @@ static void gt_session_config (uint8_t session)
     uint8_t                buf[PROTO_SESSION_CONFIG_BYTES];
     proto_session_config_t msg = {
         {PROTO_TYPE_SESSION_CONFIG, session, g_pc_seq},
-        2u, 2u, PROTO_POLICY_PAUSE,
-        {{1u, 0u, 0u}, {1u, 0u, 1u}}, GT_FRAMES, {GT_CRC_1, GT_CRC_2}};
+        2u,
+        2u,
+        PROTO_POLICY_PAUSE,
+        {{1u, 0u, 0u}, {1u, 0u, 1u}},
+        GT_FRAMES,
+        {GT_CRC_1, GT_CRC_2}};
 
     g_pc_seq++;
     gt_rx_pc(buf, proto_encode_session_config(&msg, buf, sizeof(buf)));
@@ -529,7 +540,7 @@ static bool gt_pc_acked (uint16_t seq)
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_ack_t          msg;
+        proto_ack_t                           msg;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
@@ -555,13 +566,13 @@ static bool gt_pc_acked (uint16_t seq)
 static bool gt_node_seq (coordinator_port_send_t const * p_send,
                          proto_type_t type, uint8_t * p_node, uint16_t * p_seq)
 {
-    bool b_ok = false;
+    bool           b_ok = false;
     proto_header_t header;
 
     if ((proto_decode_header(p_send->bytes, p_send->len, &header)) &&
         (type == header.type))
     {
-        b_ok = true;
+        b_ok   = true;
         *p_seq = header.seq;
 
         if (PROTO_TYPE_GAME_CONTROL == type)
@@ -573,13 +584,13 @@ static bool gt_node_seq (coordinator_port_send_t const * p_send,
         else if (PROTO_TYPE_MOLE_ON == type)
         {
             proto_mole_on_t msg;
-            b_ok = proto_decode_mole_on(p_send->bytes, p_send->len, &msg);
+            b_ok    = proto_decode_mole_on(p_send->bytes, p_send->len, &msg);
             *p_node = msg.node_id;
         }
         else if (PROTO_TYPE_FEEDBACK == type)
         {
             proto_feedback_msg_t msg;
-            b_ok = proto_decode_feedback(p_send->bytes, p_send->len, &msg);
+            b_ok    = proto_decode_feedback(p_send->bytes, p_send->len, &msg);
             *p_node = msg.node_id;
         }
         else
@@ -605,7 +616,7 @@ static bool gt_last_status (int32_t * p_score, uint8_t * p_state)
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_status_t       msg;
+        proto_status_t                        msg;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
@@ -655,13 +666,13 @@ static uint32_t gt_score_pixels (void)
     bool     b_seen[CL_MAX_NODES + 1u];
     uint32_t total = 0u;
 
-    (void)memset(b_seen, 0, sizeof(b_seen)); /* Returns b_seen. */
+    (void)memset(b_seen, 0, sizeof(b_seen));       /* Returns b_seen. */
     (void)memset(seen_mask, 0, sizeof(seen_mask)); /* Returns seen_mask. */
     g_score_tiles = 0u;
 
     for (uint32_t index = 0u; index < coordinator_port_count(); index++)
     {
-        proto_wall_picture_t msg;
+        proto_wall_picture_t                  msg;
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
@@ -669,7 +680,7 @@ static uint32_t gt_score_pixels (void)
             (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
             (1u == msg.slot) && (!b_seen[msg.node_id]))
         {
-            b_seen[msg.node_id]      = true;
+            b_seen[msg.node_id]    = true;
             seen_mask[msg.node_id] = msg.mask;
             g_score_tiles++;
         }
@@ -726,17 +737,20 @@ bool test_coord_game_mode_and_start (void)
 
     gt_to_ready();
     b_ok = (test_main_check(PROTO_COORD_READY == coordinator_loop_test_state(),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* START in video mode: refused, the wall stays READY, no START goes out. */
     gt_pc_control(PROTO_GAME_START, g_pc_seq);
     g_pc_seq++;
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(PROTO_COORD_READY == coordinator_loop_test_state(),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(0u == gt_find(PROTO_TYPE_GAME_CONTROL,
                                           GT_TILE_SRC_PORT, 0u, &index),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* The mode switch is ACKed to the PC with the command's seq. */
     seq = g_pc_seq;
@@ -752,16 +766,18 @@ bool test_coord_game_mode_and_start (void)
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(gt_pc_acked(seq), __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(1u == gt_find(PROTO_TYPE_GAME_CONTROL,
                                           GT_TILE_SRC_PORT, 0u, &index),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     gt_ack_type(PROTO_TYPE_GAME_CONTROL);
     gt_advance(10u * GT_MS);
     count = gt_count_start(1u);
-    b_ok = (test_main_check(1u == count, __LINE__)) && b_ok; /* ACKed: once. */
-    b_ok = (test_main_check(1u == gt_count_start(2u), __LINE__)) && b_ok;
+    b_ok  = (test_main_check(1u == count, __LINE__)) && b_ok; /* ACKed: once. */
+    b_ok  = (test_main_check(1u == gt_count_start(2u), __LINE__)) && b_ok;
 
     /* The same START again (a retry of the PC): ACKed, nothing new sent. */
     gt_pc_control(PROTO_GAME_START, seq);
@@ -769,7 +785,8 @@ bool test_coord_game_mode_and_start (void)
     b_ok = (test_main_check(gt_pc_acked(seq), __LINE__)) && b_ok;
     b_ok = (test_main_check(count == gt_count_start(1u), __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -825,41 +842,47 @@ static bool gt_begin_round (gt_round_t * p_round)
  */
 static bool gt_find_first_mole (gt_round_t * p_round)
 {
-    uint32_t          index = 0u;
-    proto_mole_on_t   msg;
-    proto_header_t    header;
-    bool              b_ok  = true;
+    uint32_t        index = 0u;
+    proto_mole_on_t msg;
+    proto_header_t  header;
+    bool            b_ok = true;
 
     gt_advance(150u * GT_MS);
-    b_ok = (test_main_check(1u == gt_find(PROTO_TYPE_MOLE_ON,
-                                          GT_TILE_SRC_PORT, 0u, &index),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               1u == gt_find(PROTO_TYPE_MOLE_ON, GT_TILE_SRC_PORT, 0u, &index),
+               __LINE__)) &&
+           b_ok;
     if (1u == gt_find(PROTO_TYPE_MOLE_ON, GT_TILE_SRC_PORT, 0u, &index))
     {
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
-        b_ok = (test_main_check(proto_decode_mole_on(p_send->bytes,
-                                                     p_send->len, &msg),
-                                __LINE__)) && b_ok;
-        b_ok = (test_main_check(proto_decode_header(p_send->bytes,
-                                                    p_send->len, &header),
-                                __LINE__)) && b_ok;
+        b_ok = (test_main_check(
+                   proto_decode_mole_on(p_send->bytes, p_send->len, &msg),
+                   __LINE__)) &&
+               b_ok;
+        b_ok = (test_main_check(
+                   proto_decode_header(p_send->bytes, p_send->len, &header),
+                   __LINE__)) &&
+               b_ok;
         p_round->mole   = msg.node_id;
         p_round->show   = msg.t_show;
         p_round->up_ms  = msg.up_ms;
         p_round->ms_seq = header.seq;
     }
 
-    b_ok = (test_main_check((p_round->show >=
-                                 (p_round->t_round + (300u * GT_MS))) &&
-                                (p_round->show <=
-                                 (p_round->t_round + (301u * GT_MS))),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check((p_round->up_ms >= 1193u) &&
-                                (p_round->up_ms <= 1194u), __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               (p_round->show >= (p_round->t_round + (300u * GT_MS))) &&
+                   (p_round->show <= (p_round->t_round + (301u * GT_MS))),
+               __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check((p_round->up_ms >= 1193u) && (p_round->up_ms <= 1194u),
+                         __LINE__)) &&
+        b_ok;
     b_ok = (test_main_check((1u == p_round->mole) || (2u == p_round->mole),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -880,19 +903,18 @@ static bool gt_check_mole_resend (gt_round_t const * p_round)
         gt_advance(p_round->show - (50u * GT_MS) - coordinator_port_now_us());
     }
 
-    sends = gt_count_seq(PROTO_TYPE_MOLE_ON, GT_TILE_SRC_PORT,
-                         p_round->ms_seq);
-    b_ok = (test_main_check(sends >= 3u, __LINE__)) && b_ok;
+    sends = gt_count_seq(PROTO_TYPE_MOLE_ON, GT_TILE_SRC_PORT, p_round->ms_seq);
+    b_ok  = (test_main_check(sends >= 3u, __LINE__)) && b_ok;
 
     gt_tile_ack(p_round->mole, p_round->ms_seq);
     gt_advance(5u * GT_MS);
-    sends = gt_count_seq(PROTO_TYPE_MOLE_ON, GT_TILE_SRC_PORT,
-                         p_round->ms_seq);
+    sends = gt_count_seq(PROTO_TYPE_MOLE_ON, GT_TILE_SRC_PORT, p_round->ms_seq);
     gt_advance(200u * GT_MS);
     b_ok = (test_main_check(sends == gt_count_seq(PROTO_TYPE_MOLE_ON,
                                                   GT_TILE_SRC_PORT,
                                                   p_round->ms_seq),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -905,36 +927,41 @@ static bool gt_check_mole_resend (gt_round_t const * p_round)
  */
 static bool gt_check_hit (gt_round_t * p_round)
 {
-    uint32_t         index = 0u;
+    uint32_t             index = 0u;
     proto_feedback_msg_t feedback;
-    int32_t          score = 0;
-    uint8_t          state = 0u;
-    bool             b_ok  = true;
+    int32_t              score = 0;
+    uint8_t              state = 0u;
+    bool                 b_ok  = true;
 
     p_round->tap_seq = ++g_tap_seq;
     gt_tap(p_round->mole, 1000u, p_round->show + (20u * GT_MS),
            p_round->tap_seq);
     gt_advance(200u * GT_MS);
     b_ok = (test_main_check(gt_ack_count(p_round->mole, p_round->tap_seq) >= 1u,
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT,
-                                               p_round->tap_seq),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(
+               1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT, p_round->tap_seq),
+               __LINE__)) &&
+           b_ok;
 
-    b_ok = (test_main_check(1u == gt_find(PROTO_TYPE_FEEDBACK,
-                                          GT_TILE_SRC_PORT, 0u, &index),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               1u == gt_find(PROTO_TYPE_FEEDBACK, GT_TILE_SRC_PORT, 0u, &index),
+               __LINE__)) &&
+           b_ok;
     if (1u == gt_find(PROTO_TYPE_FEEDBACK, GT_TILE_SRC_PORT, 0u, &index))
     {
         coordinator_port_send_t const * const p_send =
             coordinator_port_get(index);
 
-        b_ok = (test_main_check(proto_decode_feedback(p_send->bytes,
-                                                      p_send->len, &feedback),
-                                __LINE__)) && b_ok;
+        b_ok = (test_main_check(
+                   proto_decode_feedback(p_send->bytes, p_send->len, &feedback),
+                   __LINE__)) &&
+               b_ok;
         b_ok = (test_main_check((p_round->mole == feedback.node_id) &&
                                     (PROTO_FEEDBACK_HIT == feedback.result),
-                                __LINE__)) && b_ok;
+                                __LINE__)) &&
+               b_ok;
     }
 
     gt_ack_type(PROTO_TYPE_FEEDBACK);
@@ -942,7 +969,8 @@ static bool gt_check_hit (gt_round_t * p_round)
     b_ok = (test_main_check(gt_last_status(&score, &state), __LINE__)) && b_ok;
     b_ok = (test_main_check((1 == score) &&
                                 (PROTO_COORD_COORDINATING_GAME == state),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -967,25 +995,29 @@ static bool gt_check_round_end (gt_round_t const * p_round)
     }
 
     /* END is resent until ACKed; the tiles here never ACK, so it repeats. */
-    b_ok = (test_main_check(gt_count_cmd(1u, PROTO_GAME_END) >= 1u,
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(gt_count_cmd(2u, PROTO_GAME_END) >= 1u,
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(gt_count_cmd(1u, PROTO_GAME_END) >= 1u, __LINE__)) &&
+        b_ok;
+    b_ok =
+        (test_main_check(gt_count_cmd(2u, PROTO_GAME_END) >= 1u, __LINE__)) &&
+        b_ok;
 
     /* Each tile shows the whole score (decided 18 Nov 2026): the same
      * picture on both tiles, each the one-tile drawing of the 1. */
-    lit = gt_score_pixels();
+    lit  = gt_score_pixels();
     b_ok = (test_main_check(2u == g_score_tiles, __LINE__)) && b_ok;
     b_ok = (test_main_check(g_b_score_same, __LINE__)) && b_ok;
     b_ok = (test_main_check((2u * gt_popcount(gt_one_tile_score(1))) == lit,
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
 
     gt_advance(300u * GT_MS);
     b_ok = (test_main_check(gt_last_status(&score, &state), __LINE__)) && b_ok;
     /* RESULTS: READY, and the final score stays on STATUS (DS-08). */
     b_ok = (test_main_check((1 == score) && (PROTO_COORD_READY == state),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -1021,9 +1053,9 @@ bool test_coord_game_round (void)
  */
 bool test_coord_game_taps (void)
 {
-    bool     b_ok = true;
-    uint16_t seq  = 0u;
-    uint16_t tap  = 0u;
+    bool     b_ok  = true;
+    uint16_t seq   = 0u;
+    uint16_t tap   = 0u;
     int32_t  score = 0;
     uint8_t  state = 0u;
 
@@ -1035,14 +1067,16 @@ bool test_coord_game_taps (void)
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(1u == gt_ack_count(1u, tap), __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT, tap),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* A repeat (the tile did not see the ACK): ACKed again, not relayed. */
     gt_tap(1u, 900u, coordinator_port_now_us(), tap);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(2u == gt_ack_count(1u, tap), __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT, tap),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* SESSION_CONFIG during a round is refused: the state stays COORDINATING
      * GAME and the new session is not applied (no ACK path to check). */
@@ -1054,14 +1088,17 @@ bool test_coord_game_taps (void)
     g_pc_seq++;
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     gt_session_config(9u);
     gt_advance(200u * GT_MS);
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(gt_last_status(&score, &state), __LINE__)) && b_ok;
-    b_ok = (test_main_check(PROTO_COORD_COORDINATING_GAME == state,
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(PROTO_COORD_COORDINATING_GAME == state, __LINE__)) &&
+        b_ok;
 
     /* A TAP during the round is ACKed, and relayed once like any other. */
     tap = ++g_tap_seq;
@@ -1069,11 +1106,11 @@ bool test_coord_game_taps (void)
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(1u == gt_ack_count(2u, tap), __LINE__)) && b_ok;
     b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT, tap),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
-
 
 /**
  * @brief  C23: a tile that restarts (REGISTER) starts its TAP seq again at a
@@ -1096,9 +1133,10 @@ bool test_coord_game_tap_restart (void)
 
     gt_tap(1u, 900u, coordinator_port_now_us(), before);
     gt_advance(10u * GT_MS);
-    b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT,
-                                               before),
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT, before),
+                         __LINE__)) &&
+        b_ok;
 
     /* The tile restarts: REGISTER, then TAPs from a low seq. */
     gt_rx_tile(1u, reg, proto_encode_register(&reg_msg, reg, sizeof(reg)));
@@ -1106,9 +1144,10 @@ bool test_coord_game_tap_restart (void)
     gt_tap(1u, 900u, coordinator_port_now_us(), after);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(1u == gt_ack_count(1u, after), __LINE__)) && b_ok;
-    b_ok = (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT,
-                                               after),
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check(1u == gt_count_seq(PROTO_TYPE_TAP, GT_PC_PORT, after),
+                         __LINE__)) &&
+        b_ok;
 
     return b_ok;
 }
@@ -1312,13 +1351,13 @@ static bool gt_check_countdown (uint8_t node_id, uint64_t t_first)
             uint64_t const t_want = t_first + (msg.slot * (1000u * GT_MS));
 
             seen |= (UINT32_C(1) << msg.slot); /* slot < 4. */
-            b_ok = (test_main_check((PROTO_PIC_PICTURE == msg.effect) &&
-                                        (PROTO_COLOUR_YELLOW == msg.colour) &&
-                                        (0u == msg.b_repeat) &&
-                                        (1000u == msg.dur_ms) &&
-                                        (t_want == msg.t_show) &&
-                                        (0u != msg.mask),
-                                    __LINE__)) && b_ok;
+            b_ok = (test_main_check(
+                       (PROTO_PIC_PICTURE == msg.effect) &&
+                           (PROTO_COLOUR_YELLOW == msg.colour) &&
+                           (0u == msg.b_repeat) && (1000u == msg.dur_ms) &&
+                           (t_want == msg.t_show) && (0u != msg.mask),
+                       __LINE__)) &&
+                   b_ok;
         }
     }
 
@@ -1352,27 +1391,26 @@ static bool gt_check_results (uint8_t node_id)
             (PROTO_PIC_CLEAR != msg.effect))
         {
             bool const b_good =
-                (0u == msg.slot)
-                    ? ((PROTO_PIC_SPARKLE == msg.effect) &&
-                       (0u == msg.b_repeat))
-                : (1u == msg.slot)
-                    ? ((PROTO_PIC_PICTURE == msg.effect) &&
-                       (PROTO_COLOUR_WHITE == msg.colour) &&
-                       (0u == msg.b_repeat) && (0u != msg.mask))
-                    : ((PROTO_PIC_PICTURE == msg.effect) &&
-                       (PROTO_COLOUR_YELLOW == msg.colour) &&
-                       (1u == msg.b_repeat) && (0u != msg.mask));
+                (0u == msg.slot)   ? ((PROTO_PIC_SPARKLE == msg.effect) &&
+                                    (0u == msg.b_repeat))
+                : (1u == msg.slot) ? ((PROTO_PIC_PICTURE == msg.effect) &&
+                                      (PROTO_COLOUR_WHITE == msg.colour) &&
+                                      (0u == msg.b_repeat) && (0u != msg.mask))
+                                   : ((PROTO_PIC_PICTURE == msg.effect) &&
+                                      (PROTO_COLOUR_YELLOW == msg.colour) &&
+                                      (1u == msg.b_repeat) && (0u != msg.mask));
 
             seen |= (UINT32_C(1) << msg.slot); /* slot < 3. */
             t_show[msg.slot] = msg.t_show;
-            b_ok = (test_main_check(b_good, __LINE__)) && b_ok;
+            b_ok             = (test_main_check(b_good, __LINE__)) && b_ok;
         }
     }
 
     b_ok = (test_main_check(UINT32_C(0x7) == seen, __LINE__)) && b_ok;
     b_ok = (test_main_check(((t_show[0] + (1500u * GT_MS)) == t_show[1]) &&
                                 ((t_show[1] + (2500u * GT_MS)) == t_show[2]),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -1435,24 +1473,29 @@ bool test_coord_game_arm (void)
     (void)memset(&target, 0, sizeof(target)); /* Returns it. */
     gt_arm((uint8_t)PROTO_LEVEL_NORMAL, 15u); /* 3 levels fit uint8_t. */
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     for (uint8_t node_id = 1u; node_id <= 2u; node_id++)
     {
         b_ok = (test_main_check(gt_last_cmd(node_id, PROTO_GAME_ARM, &ctl),
-                                __LINE__)) && b_ok;
+                                __LINE__)) &&
+               b_ok;
         b_ok = (test_main_check((PROTO_LEVEL_NORMAL == ctl.level) &&
                                     (15u == ctl.threshold),
-                                __LINE__)) && b_ok;
+                                __LINE__)) &&
+               b_ok;
     }
 
     /* A 2 x 2 wall: both tiles are as near the centre; the lower slot wins. */
     b_ok = (test_main_check(gt_last_target(1u, &target), __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_TARGET_START == target.kind) &&
                                 (0u == target.up_ms),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_MOLE_ON, 2u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* A tap on the sprite's tile within 400 ms of its show time (a tap
      * left over from the tap test, bench 12 Nov round 2): ignored. */
@@ -1460,43 +1503,66 @@ bool test_coord_game_arm (void)
     b_ok = (test_main_check(PROTO_ROUND_ARMED == gt_round_state(), __LINE__)) &&
            b_ok;
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check((gt_status(&status)) &&
                                 (PROTO_LEVEL_NORMAL == status.level),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* A tap on the other tile: no feedback, still armed. */
     gt_tap(2u, 900u, coordinator_port_now_us(), ++g_tap_seq);
     b_ok = (test_main_check(PROTO_ROUND_ARMED == gt_round_state(), __LINE__)) &&
            b_ok;
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 2u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* The tap on the start sprite: green, then the countdown. */
     t_tap = coordinator_port_now_us();
     gt_tap(1u, 900u, t_tap, ++g_tap_seq);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(1u <= gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(gt_check_countdown(1u, t_tap + (500u * GT_MS)),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(gt_check_countdown(2u, t_tap + (500u * GT_MS)),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(PROTO_ROUND_COUNTDOWN == gt_round_state(),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(0u == gt_count_start(1u), __LINE__)) && b_ok;
 
     /* 3.5 s after the tap (0.5 s lead, 3 s of digits): the round plays. */
     gt_advance((t_tap + (3510u * GT_MS)) - coordinator_port_now_us());
     b_ok = (test_main_check((1u <= gt_count_start(1u)) &&
                                 (1u <= gt_count_start(2u)),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check(PROTO_ROUND_PLAYING == gt_round_state(), __LINE__))
-           && b_ok;
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check(PROTO_ROUND_PLAYING == gt_round_state(), __LINE__)) &&
+        b_ok;
 
-    /* Normal: 1500 ms at the start, so about 1493 ms 300 ms in. */
-    if ((!gt_last_target(2u, &target)) ||
-        (PROTO_TARGET_MOLE != target.kind))
+    b_ok = (test_main_check(gt_check_normal_mole(), __LINE__)) && b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  The first mole of a Normal round on tile 1 or 2: 1500 ms at the
+ *         start, so about 1493 ms 300 ms in (C24).
+ * @return true when the mole's up time fits.
+ */
+static bool gt_check_normal_mole (void)
+{
+    proto_mole_on_t target;
+
+    (void)memset(&target, 0, sizeof(target)); /* Returns it. */
+
+    if ((!gt_last_target(2u, &target)) || (PROTO_TARGET_MOLE != target.kind))
     {
         (void)gt_last_target(1u, &target); /* The mole is on tile 1. */
     }
@@ -1505,12 +1571,8 @@ bool test_coord_game_arm (void)
         /* The mole is on tile 2. */
     }
 
-    b_ok = (test_main_check((PROTO_TARGET_MOLE == target.kind) &&
-                                (target.up_ms >= 1480u) &&
-                                (target.up_ms <= 1500u),
-                            __LINE__)) && b_ok;
-
-    return b_ok;
+    return (PROTO_TARGET_MOLE == target.kind) && (target.up_ms >= 1480u) &&
+           (target.up_ms <= 1500u);
 }
 
 /**
@@ -1527,11 +1589,13 @@ bool test_coord_game_abort (void)
     gt_arm((uint8_t)PROTO_LEVEL_EASY, 0u); /* 3 levels fit uint8_t. */
     gt_pc(PROTO_GAME_START_NOW, 0u, 0u);
     b_ok = (test_main_check(PROTO_ROUND_COUNTDOWN == gt_round_state(),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     gt_pc(PROTO_GAME_END, 0u, 0u);
     b_ok = (test_main_check((1u <= gt_count_cmd(1u, PROTO_GAME_END)) &&
                                 (1u <= gt_count_cmd(2u, PROTO_GAME_END)),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
     b_ok = (test_main_check(PROTO_ROUND_IDLE == gt_round_state(), __LINE__)) &&
            b_ok;
@@ -1547,7 +1611,8 @@ bool test_coord_game_abort (void)
     t_arm = coordinator_port_now_us() - (10u * GT_MS);
     gt_advance((t_arm + (59900u * GT_MS)) - coordinator_port_now_us());
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     gt_advance(200u * GT_MS);
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
     b_ok = (test_main_check(PROTO_ROUND_IDLE == gt_round_state(), __LINE__)) &&
@@ -1577,26 +1642,31 @@ bool test_coord_game_tap_test (void)
     gt_pc(PROTO_GAME_TAP_TEST_ON, 0u, 0u);
     /* The tap test starts on a blank wall: the pictures are cleared. */
     b_ok = (test_main_check(clears < gt_count_clear(2u), __LINE__)) && b_ok;
-    b_ok = (test_main_check((1u <= gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON)) &&
-                                (1u <= gt_count_cmd(2u,
-                                                    PROTO_GAME_TAP_TEST_ON)),
-                            __LINE__)) && b_ok;
+    b_ok =
+        (test_main_check((1u <= gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON)) &&
+                             (1u <= gt_count_cmd(2u, PROTO_GAME_TAP_TEST_ON)),
+                         __LINE__)) &&
+        b_ok;
 
     gt_tap(2u, 900u, coordinator_port_now_us(), ++g_tap_seq);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(1u <= gt_count_to(PROTO_TYPE_FEEDBACK, 2u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
 
     gt_pc(PROTO_GAME_TAP_TEST_OFF, 0u, 0u);
     b_ok = (test_main_check(1u <= gt_count_cmd(1u, PROTO_GAME_TAP_TEST_OFF),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     gt_tap(1u, 900u, coordinator_port_now_us(), ++g_tap_seq);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* Armed: refused (after the earlier TAP_TEST_ON stops its resends). */
     gt_advance(1100u * GT_MS);
@@ -1604,7 +1674,8 @@ bool test_coord_game_tap_test (void)
     sends = gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON);
     gt_pc(PROTO_GAME_TAP_TEST_ON, 0u, 0u);
     b_ok = (test_main_check(sends == gt_count_cmd(1u, PROTO_GAME_TAP_TEST_ON),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -1640,24 +1711,24 @@ bool test_coord_game_status (void)
      * must follow. */
     gt_advance((GAME_COLLECT_MS + 300u) * GT_MS);
     b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
-    b_ok = (test_main_check((PROTO_ROUND_PLAYING == status.round_state) &&
-                                (PROTO_LEVEL_HARD == status.level) &&
-                                (1u == status.wrong) &&
-                                (status.time_left_s >= 28u) &&
-                                (status.time_left_s <= 30u),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               (PROTO_ROUND_PLAYING == status.round_state) &&
+                   (PROTO_LEVEL_HARD == status.level) && (1u == status.wrong) &&
+                   (status.time_left_s >= 28u) && (status.time_left_s <= 30u),
+               __LINE__)) &&
+           b_ok;
 
     gt_advance((round.t_round + GT_ROUND_US + (400u * GT_MS)) -
                coordinator_port_now_us());
     b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
-    b_ok = (test_main_check((PROTO_ROUND_RESULTS == status.round_state) &&
-                                (PROTO_COORD_READY == status.state) &&
-                                (1 == status.score) && (1u == status.wrong) &&
-                                (status.shown > 10u) &&
-                                ((status.shown - 1u) == status.missed) &&
-                                (0u == status.time_left_s) &&
-                                (20u == status.reaction_ms),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               (PROTO_ROUND_RESULTS == status.round_state) &&
+                   (PROTO_COORD_READY == status.state) && (1 == status.score) &&
+                   (1u == status.wrong) && (status.shown > 10u) &&
+                   ((status.shown - 1u) == status.missed) &&
+                   (0u == status.time_left_s) && (20u == status.reaction_ms),
+               __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(gt_check_results(1u), __LINE__)) && b_ok;
     b_ok = (test_main_check(gt_check_results(2u), __LINE__)) && b_ok;
 
@@ -1670,13 +1741,14 @@ bool test_coord_game_status (void)
     b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_ROUND_IDLE == status.round_state) &&
                                 (0 == status.score) && (0u == status.wrong) &&
-                                (0u == status.shown) &&
-                                (0u == status.missed) &&
+                                (0u == status.shown) && (0u == status.missed) &&
                                 (0u == status.reaction_ms),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check((clears[0] < gt_count_clear(1u)) &&
                                 (clears[1] < gt_count_clear(2u)),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* The next ARM clears the counts: STATUS shows none of this round. */
     gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
@@ -1684,10 +1756,10 @@ bool test_coord_game_status (void)
     b_ok = (test_main_check(gt_status(&status), __LINE__)) && b_ok;
     b_ok = (test_main_check((PROTO_ROUND_ARMED == status.round_state) &&
                                 (0 == status.score) && (0u == status.wrong) &&
-                                (0u == status.shown) &&
-                                (0u == status.missed) &&
+                                (0u == status.shown) && (0u == status.missed) &&
                                 (0u == status.reaction_ms),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -1698,8 +1770,8 @@ bool test_coord_game_status (void)
 static void gt_pc_start (void)
 {
     uint8_t                buf[PROTO_START_AT_BYTES];
-    proto_start_at_t const msg = {
-        {PROTO_TYPE_START_AT, GT_SESSION, g_pc_seq}, 0u};
+    proto_start_at_t const msg = {{PROTO_TYPE_START_AT, GT_SESSION, g_pc_seq},
+                                  0u};
 
     g_pc_seq++;
     gt_rx_pc(buf, proto_encode_start_at(&msg, buf, sizeof(buf)));
@@ -1717,9 +1789,9 @@ bool test_coord_game_no_video (void)
     bool b_ok = true;
 
     gt_to_layout(false);
-    b_ok = (test_main_check(
-                gt_in_state(PROTO_COORD_WAITING_FOR_TILE_READINESS),
-                __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_WAITING_FOR_TILE_READINESS),
+                            __LINE__)) &&
+           b_ok;
 
     gt_pc(PROTO_GAME_MODE_GAME, 0u, 0u);
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
@@ -1732,15 +1804,16 @@ bool test_coord_game_no_video (void)
     /* A round arms with no video. */
     gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_COORDINATING_GAME),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     gt_pc(PROTO_GAME_END, 0u, 0u);
     b_ok = (test_main_check(gt_in_state(PROTO_COORD_READY), __LINE__)) && b_ok;
 
     /* Back to video: the videos are needed again. */
     gt_pc(PROTO_GAME_MODE_VIDEO, 0u, 0u);
-    b_ok = (test_main_check(
-                gt_in_state(PROTO_COORD_WAITING_FOR_TILE_READINESS),
-                __LINE__)) && b_ok;
+    b_ok = (test_main_check(gt_in_state(PROTO_COORD_WAITING_FOR_TILE_READINESS),
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -1762,23 +1835,25 @@ bool test_coord_game_new_session (void)
     gt_tap(1u, 900u, coordinator_port_now_us(), ++g_tap_seq);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(1u <= gt_count_to(PROTO_TYPE_FEEDBACK, 1u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     offs[0] = gt_count_cmd(1u, PROTO_GAME_TAP_TEST_OFF);
     offs[1] = gt_count_cmd(2u, PROTO_GAME_TAP_TEST_OFF);
     gt_session_config(9u);
     gt_advance(10u * GT_MS);
-    b_ok = (test_main_check((offs[0] < gt_count_cmd(1u,
-                                                    PROTO_GAME_TAP_TEST_OFF)) &&
-                                (offs[1] < gt_count_cmd(
-                                               2u, PROTO_GAME_TAP_TEST_OFF)),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               (offs[0] < gt_count_cmd(1u, PROTO_GAME_TAP_TEST_OFF)) &&
+                   (offs[1] < gt_count_cmd(2u, PROTO_GAME_TAP_TEST_OFF)),
+               __LINE__)) &&
+           b_ok;
 
     /* The tap test is off: a tap on tile 2 gets no FEEDBACK. */
     gt_tap(2u, 900u, coordinator_port_now_us(), ++g_tap_seq);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_FEEDBACK, 2u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
@@ -1807,14 +1882,16 @@ bool test_coord_game_sparse (void)
     gt_pc(PROTO_GAME_ARM, (uint8_t)PROTO_LEVEL_EASY, 0u); /* Fits. */
     b_ok = (test_main_check(gt_last_target(1u, &target), __LINE__)) && b_ok;
     b_ok = (test_main_check(0u == gt_count_to(PROTO_TYPE_MOLE_ON, 2u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     t_tap = target.t_show + (500u * GT_MS);
     coordinator_port_set_now(t_tap);
     gt_tap(1u, 900u, t_tap, ++g_tap_seq);
     gt_advance(10u * GT_MS);
     b_ok = (test_main_check(PROTO_ROUND_COUNTDOWN == gt_round_state(),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     for (uint8_t node_id = 1u; node_id <= 2u; node_id++)
     {
@@ -1827,8 +1904,7 @@ bool test_coord_game_sparse (void)
                 coordinator_port_get(index);
 
             if ((GT_TILE_SRC_PORT == p_send->port) &&
-                (proto_decode_wall_picture(p_send->bytes, p_send->len,
-                                           &msg)) &&
+                (proto_decode_wall_picture(p_send->bytes, p_send->len, &msg)) &&
                 (node_id == msg.node_id) && (0u == msg.slot) &&
                 (PROTO_PIC_PICTURE == msg.effect))
             {
@@ -1854,10 +1930,10 @@ bool test_coord_game_sparse (void)
 bool test_coord_game_unplaced_clear (void)
 {
     uint8_t                reg[PROTO_REGISTER_BYTES];
-    proto_register_t const reg_msg = {{PROTO_TYPE_REGISTER, 0u, 0u}, 3u, 0u,
-                                      0u};
-    uint32_t               before = 0u;
-    bool                   b_ok   = true;
+    proto_register_t const reg_msg = {
+        {PROTO_TYPE_REGISTER, 0u, 0u}, 3u, 0u, 0u};
+    uint32_t before = 0u;
+    bool     b_ok   = true;
 
     gt_to_ready(); /* Nodes 1 and 2 placed. */
 

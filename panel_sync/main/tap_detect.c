@@ -23,11 +23,11 @@
 #define TD_MG_PER_G 1000
 
 static uint32_t td_deviation_mg (tap_detect_t const * p_detect,
-                                 int16_t const * p_raw);
+                                 int16_t const *      p_raw);
 static bool     td_baseline (tap_detect_t * p_detect, int16_t const * p_raw,
                              uint32_t dev_mg);
-static bool     td_phase (tap_detect_t * p_detect, int64_t t_us,
-                          uint32_t dev_mg, tap_detect_event_t * p_event);
+static bool td_phase (tap_detect_t * p_detect, int64_t t_us, uint32_t dev_mg,
+                      tap_detect_event_t * p_event);
 static uint32_t td_isqrt (uint64_t value);
 static int64_t  td_q (int16_t raw);
 
@@ -142,7 +142,7 @@ uint32_t tap_detect_last_mg (tap_detect_t const * p_detect)
  * @return mg.
  */
 static uint32_t td_deviation_mg (tap_detect_t const * p_detect,
-                                 int16_t const * p_raw)
+                                 int16_t const *      p_raw)
 {
     uint64_t sum_sq = 0u;
 
@@ -173,9 +173,9 @@ static uint32_t td_deviation_mg (tap_detect_t const * p_detect,
 static bool td_baseline (tap_detect_t * p_detect, int16_t const * p_raw,
                          uint32_t dev_mg)
 {
-    bool const b_hold = (TAP_DETECT_ARMED != p_detect->phase) ||
-                        (dev_mg > TAP_DETECT_HOLD_MG);
-    bool       b_reseed = false;
+    bool const b_hold =
+        (TAP_DETECT_ARMED != p_detect->phase) || (dev_mg > TAP_DETECT_HOLD_MG);
+    bool b_reseed = false;
 
     if (b_hold)
     {
@@ -243,9 +243,9 @@ static bool td_phase (tap_detect_t * p_detect, int64_t t_us, uint32_t dev_mg,
             p_event->t_us  = p_detect->t_first_us;
             p_event->count = p_detect->count;
             /* The TAP peak field is 16 bits: clamp (65 g is never reached). */
-            p_event->peak  = (p_detect->peak_mg > UINT16_MAX)
-                                 ? UINT16_MAX
-                                 : (uint16_t)p_detect->peak_mg;
+            p_event->peak     = (p_detect->peak_mg > UINT16_MAX)
+                                    ? UINT16_MAX
+                                    : (uint16_t)p_detect->peak_mg;
             p_detect->phase   = TAP_DETECT_SETTLING;
             p_detect->b_quiet = false;
             b_tap             = true;

@@ -55,14 +55,13 @@ static uint64_t game_group_due (game_t const * p_game);
 static bool     game_window_due (game_t const * p_game, uint64_t now_us);
 static bool     game_late_duplicate (game_t const * p_game, uint64_t t_tap_us);
 static bool     game_resolve_window (game_t * p_game, game_event_t * p_event);
-static bool     game_tap_better (game_tap_t const * p_a,
-                                 game_tap_t const * p_b);
-static bool     game_mole_expired (game_t const * p_game, uint64_t now_us);
-static bool     game_plan_due (game_t const * p_game, uint64_t now_us);
-static bool     game_plan_mole (game_t * p_game, uint64_t now_us,
-                                game_event_t * p_event);
-static bool     game_round_over (game_t const * p_game, uint64_t now_us);
-static int32_t  game_clamp (int32_t score);
+static bool    game_tap_better (game_tap_t const * p_a, game_tap_t const * p_b);
+static bool    game_mole_expired (game_t const * p_game, uint64_t now_us);
+static bool    game_plan_due (game_t const * p_game, uint64_t now_us);
+static bool    game_plan_mole (game_t * p_game, uint64_t now_us,
+                               game_event_t * p_event);
+static bool    game_round_over (game_t const * p_game, uint64_t now_us);
+static int32_t game_clamp (int32_t score);
 
 /**
  * @brief  Reset the engine: no round, score 0, the RNG seeded.
@@ -72,7 +71,7 @@ static int32_t  game_clamp (int32_t score);
 void game_rules_init (game_t * p_game, uint32_t seed)
 {
     (void)memset(p_game, 0, sizeof(*p_game)); /* Returns the engine. */
-    p_game->rng = (0u != seed) ? seed : 1u;
+    p_game->rng          = (0u != seed) ? seed : 1u;
     p_game->next_show_us = GAME_NO_MOLE_US;
 }
 
@@ -111,10 +110,10 @@ void game_rules_start (game_t * p_game, uint64_t now_us, uint16_t active_mask,
  */
 void game_rules_stop (game_t * p_game)
 {
-    p_game->b_running   = false;
-    p_game->b_mole_up   = false;
+    p_game->b_running    = false;
+    p_game->b_mole_up    = false;
     p_game->next_show_us = GAME_NO_MOLE_US;
-    p_game->tap_count   = 0u;
+    p_game->tap_count    = 0u;
 }
 
 /**
@@ -151,7 +150,7 @@ void game_rules_set_active (game_t * p_game, uint16_t active_mask)
  * @param  t_tap_us  Tap time, Pico corrected clock, microseconds.
  */
 void game_rules_tap (game_t * p_game, uint8_t node_id, uint16_t peak,
-               uint64_t t_tap_us)
+                     uint64_t t_tap_us)
 {
     /* No arrival time: taken as arriving at its stamp (host tests). */
     game_rules_tap_rx(p_game, node_id, peak, t_tap_us, t_tap_us);
@@ -186,10 +185,10 @@ void game_rules_tap_rx (game_t * p_game, uint8_t node_id, uint16_t peak,
         {
             game_tap_t * const p_tap = &p_game->taps[p_game->tap_count];
 
-            p_tap->node_id   = node_id;
-            p_tap->peak      = peak;
-            p_tap->t_tap_us  = t_tap_us;
-            p_tap->t_rx_us   = t_rx_us;
+            p_tap->node_id  = node_id;
+            p_tap->peak     = peak;
+            p_tap->t_tap_us = t_tap_us;
+            p_tap->t_rx_us  = t_rx_us;
             p_game->tap_count++;
         }
     }
@@ -206,12 +205,12 @@ bool game_rules_poll (game_t * p_game, uint64_t now_us, game_event_t * p_event)
 {
     bool b_event = false;
 
-    p_event->kind       = GAME_EV_NONE;
-    p_event->node_id    = 0u;
-    p_event->t_show_us  = 0u;
-    p_event->up_ms      = 0u;
-    p_event->result     = PROTO_FEEDBACK_MISS;
-    p_event->score      = p_game->score;
+    p_event->kind      = GAME_EV_NONE;
+    p_event->node_id   = 0u;
+    p_event->t_show_us = 0u;
+    p_event->up_ms     = 0u;
+    p_event->result    = PROTO_FEEDBACK_MISS;
+    p_event->score     = p_game->score;
 
     if (p_game->b_running)
     {
@@ -301,10 +300,10 @@ uint64_t game_rules_next_due (game_t const * p_game)
         {
             if (GAME_NO_MOLE_US != p_game->next_show_us)
             {
-                uint64_t const plan_us = (p_game->next_show_us > GAME_LEAD_US)
-                                             ? (p_game->next_show_us -
-                                                GAME_LEAD_US)
-                                             : 0u;
+                uint64_t const plan_us =
+                    (p_game->next_show_us > GAME_LEAD_US)
+                        ? (p_game->next_show_us - GAME_LEAD_US)
+                        : 0u;
 
                 if (plan_us < due)
                 {
@@ -330,10 +329,9 @@ uint64_t game_rules_next_due (game_t const * p_game)
  */
 uint16_t game_rules_up_ms (uint8_t level, uint64_t elapsed_us)
 {
-    uint8_t const  lvl        = (level < GAME_LEVELS) ? level
-                                                      : (GAME_LEVELS - 1u);
-    uint64_t const first      = g_up_first_ms[lvl];
-    uint64_t const last       = g_up_last_ms[lvl];
+    uint8_t const  lvl   = (level < GAME_LEVELS) ? level : (GAME_LEVELS - 1u);
+    uint64_t const first = g_up_first_ms[lvl];
+    uint64_t const last  = g_up_last_ms[lvl];
     uint64_t       elapsed_ms = elapsed_us / GAME_US_PER_MS;
 
     if (elapsed_ms > GAME_ROUND_MS)
@@ -390,8 +388,7 @@ uint32_t game_rules_reaction_ms (game_t const * p_game)
     if (0u != p_game->hits)
     {
         /* A round's hits sum to at most 30 s: the quotient fits 32 bits. */
-        avg = (uint32_t)((p_game->reaction_us / p_game->hits) /
-                         GAME_US_PER_MS);
+        avg = (uint32_t)((p_game->reaction_us / p_game->hits) / GAME_US_PER_MS);
     }
 
     return avg;
@@ -631,7 +628,7 @@ static bool game_resolve_window (game_t * p_game, game_event_t * p_event)
         }
     }
 
-    p_game->tap_count = kept;
+    p_game->tap_count                       = kept;
     p_game->windows_us[p_game->window_next] = start;
     p_game->window_next = (p_game->window_next + 1u) % GAME_WINDOWS;
     if (p_game->window_count < GAME_WINDOWS)
@@ -653,7 +650,7 @@ static bool game_resolve_window (game_t * p_game, game_event_t * p_event)
         p_game->score        = game_clamp(p_game->score + 1);
         p_game->hits++;
         p_game->reaction_us += win.t_tap_us - p_game->show_us; /* tap >= show */
-        p_event->result      = PROTO_FEEDBACK_HIT;
+        p_event->result = PROTO_FEEDBACK_HIT;
     }
     else
     {
@@ -680,9 +677,9 @@ static bool game_tap_better (game_tap_t const * p_a, game_tap_t const * p_b)
 
     if (p_a->peak == p_b->peak)
     {
-        b_better = (p_a->t_tap_us < p_b->t_tap_us) ||
-                   ((p_a->t_tap_us == p_b->t_tap_us) &&
-                    (p_a->node_id < p_b->node_id));
+        b_better =
+            (p_a->t_tap_us < p_b->t_tap_us) ||
+            ((p_a->t_tap_us == p_b->t_tap_us) && (p_a->node_id < p_b->node_id));
     }
 
     return b_better;
@@ -697,8 +694,8 @@ static bool game_tap_better (game_tap_t const * p_a, game_tap_t const * p_b)
  */
 static bool game_mole_expired (game_t const * p_game, uint64_t now_us)
 {
-    bool b_expired = (p_game->b_mole_up) &&
-                     (now_us >= (p_game->hide_us + GAME_GRACE_US));
+    bool b_expired =
+        (p_game->b_mole_up) && (now_us >= (p_game->hide_us + GAME_GRACE_US));
 
     for (uint32_t index = 0u; (b_expired) && (index < p_game->tap_count);
          index++)
@@ -737,10 +734,10 @@ static bool game_plan_due (game_t const * p_game, uint64_t now_us)
 static bool game_plan_mole (game_t * p_game, uint64_t now_us,
                             game_event_t * p_event)
 {
-    uint64_t show    = p_game->next_show_us;
-    uint64_t hide    = 0u;
-    uint16_t up_ms   = 0u;
-    uint8_t  node_id = 0u;
+    uint64_t show      = p_game->next_show_us;
+    uint64_t hide      = 0u;
+    uint16_t up_ms     = 0u;
+    uint8_t  node_id   = 0u;
     bool     b_planned = false;
 
     if (show < (now_us + GAME_LEAD_US))
@@ -748,8 +745,8 @@ static bool game_plan_mole (game_t * p_game, uint64_t now_us,
         show = now_us + GAME_LEAD_US;
     }
 
-    up_ms = game_rules_up_ms(p_game->level, show - p_game->round_start_us);
-    hide  = show + (GAME_US_PER_MS * up_ms);
+    up_ms   = game_rules_up_ms(p_game->level, show - p_game->round_start_us);
+    hide    = show + (GAME_US_PER_MS * up_ms);
     node_id = game_pick_node(p_game);
 
     if ((hide > p_game->round_end_us) || (0u == node_id))
@@ -758,19 +755,19 @@ static bool game_plan_mole (game_t * p_game, uint64_t now_us,
     }
     else
     {
-        p_game->b_mole_up    = true;
+        p_game->b_mole_up = true;
         p_game->shown++;
-        p_game->mole_node    = node_id;
-        p_game->show_us      = show;
-        p_game->hide_us      = hide;
-        p_game->last_node    = node_id;
+        p_game->mole_node = node_id;
+        p_game->show_us   = show;
+        p_game->hide_us   = hide;
+        p_game->last_node = node_id;
 
-        p_event->kind       = GAME_EV_MOLE_ON;
-        p_event->node_id    = node_id;
-        p_event->t_show_us  = show;
-        p_event->up_ms      = up_ms;
-        p_event->score      = p_game->score;
-        b_planned           = true;
+        p_event->kind      = GAME_EV_MOLE_ON;
+        p_event->node_id   = node_id;
+        p_event->t_show_us = show;
+        p_event->up_ms     = up_ms;
+        p_event->score     = p_game->score;
+        b_planned          = true;
     }
 
     return b_planned;

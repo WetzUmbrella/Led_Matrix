@@ -47,7 +47,7 @@
 #include "proto.h"
 
 /** LEDs on one tile and wire bytes per tile (R, G, B, 3 per LED). */
-#define GAME_TILE_LEDS 64u
+#define GAME_TILE_LEDS       64u
 #define GAME_TILE_WIRE_BYTES 192u
 
 /** Entries of the picture list (WALL_PICTURE slot, 2 bits). */
@@ -77,25 +77,25 @@ typedef struct
  *  number of 32-bit words for the seqlock. */
 typedef struct
 {
-    uint32_t b_game;        /**< 1 while a round plays (START, no END). */
-    uint32_t b_round;       /**< 1 from ARM or START to END: holes shown. */
-    uint32_t b_tap_test;    /**< 1 while the tap test is on (A11). */
-    uint32_t b_mole;        /**< 1 when this tile has a target. */
-    uint32_t kind;          /**< proto_target_kind_t of the target. */
-    uint32_t target_seq;    /**< Header seq of the target. */
-    uint32_t b_flash;       /**< 1 once a FEEDBACK was shown. */
-    uint32_t flash_result;  /**< proto_feedback_t of the flash. */
-    uint32_t b_squash;      /**< 1 when the hit was on an up mole. */
-    uint32_t b_seq_known;   /**< 1 once a message seq was accepted. */
-    uint32_t seq;           /**< Newest accepted message seq. */
-    uint32_t b_ctl_known;   /**< 1 once a GAME_CONTROL was accepted. */
-    uint32_t ctl_seq;       /**< Newest accepted GAME_CONTROL seq. */
-    uint32_t b_clear_known; /**< 1 once ARM or START cleared the list. */
-    uint32_t clear_seq;     /**< Seq of that ARM or START. */
-    uint32_t threshold;     /**< ARM's tap threshold, 20 mg steps; 0 = the
+    uint32_t b_game;         /**< 1 while a round plays (START, no END). */
+    uint32_t b_round;        /**< 1 from ARM or START to END: holes shown. */
+    uint32_t b_tap_test;     /**< 1 while the tap test is on (A11). */
+    uint32_t b_mole;         /**< 1 when this tile has a target. */
+    uint32_t kind;           /**< proto_target_kind_t of the target. */
+    uint32_t target_seq;     /**< Header seq of the target. */
+    uint32_t b_flash;        /**< 1 once a FEEDBACK was shown. */
+    uint32_t flash_result;   /**< proto_feedback_t of the flash. */
+    uint32_t b_squash;       /**< 1 when the hit was on an up mole. */
+    uint32_t b_seq_known;    /**< 1 once a message seq was accepted. */
+    uint32_t seq;            /**< Newest accepted message seq. */
+    uint32_t b_ctl_known;    /**< 1 once a GAME_CONTROL was accepted. */
+    uint32_t ctl_seq;        /**< Newest accepted GAME_CONTROL seq. */
+    uint32_t b_clear_known;  /**< 1 once ARM or START cleared the list. */
+    uint32_t clear_seq;      /**< Seq of that ARM or START. */
+    uint32_t threshold;      /**< ARM's tap threshold, 20 mg steps; 0 = the
                                  tile's default. */
-    int64_t  show_us;       /**< Target show time, Pico corrected clock. */
-    int64_t  hide_us;       /**< Target hide time, Pico corrected clock;
+    int64_t  show_us;        /**< Target show time, Pico corrected clock. */
+    int64_t  hide_us;        /**< Target hide time, Pico corrected clock;
                                  INT64_MAX until tapped (start sprite). */
     int64_t  flash_start_us; /**< FEEDBACK shown from, tile local clock. */
     game_tile_pic_t pic[GAME_TILE_PICS]; /**< The picture list. */
@@ -142,8 +142,7 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
  * @param  now_local_us  Tile local time, microseconds (the flash clock).
  * @return true when game_tile_fill_wire() should draw the tile.
  */
-bool game_tile_active (game_tile_state_t const * p_state,
-                       int64_t now_local_us);
+bool game_tile_active (game_tile_state_t const * p_state, int64_t now_local_us);
 
 /**
  * @brief  Fill the 64 LEDs of the tile for one moment, in the panel's order

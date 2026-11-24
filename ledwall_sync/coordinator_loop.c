@@ -143,7 +143,7 @@ _Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
  *  apart) go at once as well, since they carry times read just before. */
 #define CL_TXQ_LEN      32u
 #define CL_TX_MAX_BYTES CL_RX_MAX_BYTES
-#define CL_STEP_IN_SEND  UINT32_C(0x80000000)
+#define CL_STEP_IN_SEND UINT32_C(0x80000000)
 
 /** Recovery timeout 5 s (proposed, W6D-2c). */
 #define CL_RECOVERY_TIMEOUT_US 5000000u
@@ -218,7 +218,7 @@ _Static_assert(PROTO_STOP_BYTES <= CL_RX_MAX_BYTES, "STOP");
  *  child reacts faster, and a tap left over from the tap test or from
  *  handling the board does not start the round (bench 12 Nov 2026, round 2:
  *  a tap 0.4 s after the sprite showed started it unseen). */
-#define CL_START_MIN_US    400000u
+#define CL_START_MIN_US 400000u
 
 /** Results (DS-09): the sparkle, then the score and the stars in turn. */
 #define CL_SPARKLE_MS 1500u
@@ -277,11 +277,11 @@ typedef struct
 {
     bool           b_active;
     uint8_t        session_id;
-    uint8_t        rows;        /**< Grid rows, 1 to 9. */
-    uint8_t        cols;        /**< Grid columns, 1 to 9. */
+    uint8_t        rows; /**< Grid rows, 1 to 9. */
+    uint8_t        cols; /**< Grid columns, 1 to 9. */
     proto_policy_t policy;
-    uint16_t       required;    /**< Node IDs placed, bit n - 1. */
-    uint16_t       frame_count; /**< 1 to 1023. */
+    uint16_t       required;              /**< Node IDs placed, bit n - 1. */
+    uint16_t       frame_count;           /**< 1 to 1023. */
     proto_cell_t   cell[PROTO_NODE_MAX];  /**< Node ID n at cell[n - 1]
                                                (step 4d, DS-15). */
     uint32_t       crc32[PROTO_NODE_MAX]; /**< Node ID n at crc32[n - 1]. */
@@ -395,17 +395,17 @@ static bool         g_b_game_mode = false; /* false video, true game. */
 
 /* Round phases (DS-08, build step 3). ARMED, COUNTDOWN and PLAYING run in
  * COORDINATING GAME; IDLE and RESULTS in READY. */
-static proto_round_state_t g_round      = PROTO_ROUND_IDLE;
-static uint8_t             g_level      = (uint8_t)PROTO_LEVEL_EASY; /* 3. */
-static uint8_t             g_threshold  = 0u; /* 20 mg steps; 0 default. */
-static uint8_t             g_start_node = 0u; /* Tile of the start sprite. */
+static proto_round_state_t g_round         = PROTO_ROUND_IDLE;
+static uint8_t             g_level         = (uint8_t)PROTO_LEVEL_EASY; /* 3. */
+static uint8_t             g_threshold     = 0u; /* 20 mg steps; 0 default. */
+static uint8_t             g_start_node    = 0u; /* Tile of the start sprite. */
 static uint64_t            g_start_show_us = 0u; /* Its show time. */
 static uint64_t            g_arm_deadline_us = 0u;
 static uint64_t            g_play_at_us      = 0u;
 static uint16_t            g_round_mask      = 0u; /* Tiles of the round. */
 static bool                g_b_tap_test      = false;
-static uint16_t     g_tap_seq[CL_MAX_NODES];
-static bool         g_b_tap_seen[CL_MAX_NODES];
+static uint16_t            g_tap_seq[CL_MAX_NODES];
+static bool                g_b_tap_seen[CL_MAX_NODES];
 
 /* PC address, from the last valid datagram on CL_PORT_FROM_PC. */
 static bool     g_b_pc_known     = false;
@@ -427,88 +427,80 @@ static uint32_t      g_txq_count = 0u;
 
 /** The watchdog caused this boot (CL_STATS wd_boot: a freeze happened),
  *  and the breadcrumb the frozen run left (CL_STATS wd_step). */
-static bool       g_b_watchdog_boot = false;
-static uint32_t   g_watchdog_step   = 0u;
+static bool     g_b_watchdog_boot = false;
+static uint32_t g_watchdog_step   = 0u;
 /** The breadcrumb of the watchdog boot before (CL_STATS wd_prev): a second
  *  freeze while rejoining no longer hides where the first one was. */
-static uint32_t   g_watchdog_prev   = 0u;
+static uint32_t g_watchdog_prev = 0u;
 #ifndef CL_HOST_TEST
 /** scratch[4] as watchdog_enable() left it (see cl_watchdog_feed), and
  *  the current breadcrumb step (see cl_crumb). */
-static uint32_t   g_watchdog_mark = 0u;
-static uint32_t   g_crumb         = 0u;
+static uint32_t g_watchdog_mark = 0u;
+static uint32_t g_crumb         = 0u;
 #endif
 
 static void cl_reset_state (uint32_t bcast_addr, uint64_t now);
 #ifndef CL_HOST_TEST
 static void cl_on_link_lost (uint64_t now);
 #endif
-static void cl_pass (void);
-static void cl_beacon_routine (uint64_t now);
-static void cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
-                         uint16_t acked_seq, uint8_t session_id);
-static void cl_on_tap (cl_rx_entry_t const * p_entry,
-                       proto_header_t const * p_header);
-static void cl_on_tile_ack (cl_rx_entry_t const * p_entry);
-static void cl_on_game_control (cl_rx_entry_t const * p_entry,
-                                proto_header_t const * p_header);
-static void cl_game_command (proto_game_control_t const * p_msg);
-static void cl_round_arm (uint64_t now);
-static void cl_round_countdown (uint64_t now);
-static void cl_round_play (uint64_t now);
-static void cl_round_abort (uint64_t now);
-static void cl_round_to_tiles (uint8_t command, uint64_t now);
+static void     cl_pass (void);
+static void     cl_beacon_routine (uint64_t now);
+static void     cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
+                             uint16_t acked_seq, uint8_t session_id);
+static void     cl_on_tap (cl_rx_entry_t const *  p_entry,
+                           proto_header_t const * p_header);
+static void     cl_on_tile_ack (cl_rx_entry_t const * p_entry);
+static void     cl_on_game_control (cl_rx_entry_t const *  p_entry,
+                                    proto_header_t const * p_header);
+static void     cl_game_command (proto_game_control_t const * p_msg);
+static void     cl_round_arm (uint64_t now);
+static void     cl_round_countdown (uint64_t now);
+static void     cl_round_play (uint64_t now);
+static void     cl_round_abort (uint64_t now);
+static void     cl_round_to_tiles (uint8_t command, uint64_t now);
 static uint8_t  cl_centre_node (uint16_t mask);
 static uint64_t cl_round_next_due (void);
-static void cl_send_countdown (uint64_t t_first);
-static void cl_send_results (uint64_t t_first);
-static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
-                              uint8_t colour, uint8_t b_repeat, uint64_t t_show,
-                              uint16_t dur_ms, uint64_t mask);
-static void cl_results_end (uint64_t now);
+static void     cl_send_countdown (uint64_t t_first);
+static void     cl_send_results (uint64_t t_first);
+static void     cl_results_end (uint64_t now);
 static uint8_t  cl_count7 (uint32_t count);
 static uint16_t cl_reaction11 (uint32_t reaction_ms);
-static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
-                             uint8_t kind, uint64_t now, uint64_t deadline_us);
-static void cl_game_start (uint64_t now);
-static void cl_game_end (uint64_t now);
-static void cl_game_routine (uint64_t now);
-static void cl_outbox_routine (uint64_t now);
-static void cl_queue_tile (uint8_t node_id, proto_type_t type, uint16_t seq,
-                           uint8_t const * p_buf, uint32_t len, uint64_t now,
-                           uint64_t deadline_us);
-static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
-                              uint64_t life_us);
-static void cl_queue_mole (game_event_t const * p_event, uint64_t now);
-static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now);
-static void cl_game_sync_active (void);
-static bool cl_stopped (void);
+static void     cl_game_start (uint64_t now);
+static void     cl_game_end (uint64_t now);
+static void     cl_game_routine (uint64_t now);
+static void     cl_outbox_routine (uint64_t now);
+static void   cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
+                                uint64_t life_us);
+static void   cl_queue_mole (game_event_t const * p_event, uint64_t now);
+static void   cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now);
+static void   cl_game_sync_active (void);
+static bool   cl_stopped (void);
 static int8_t cl_status_score (void);
 static uint16_t cl_next_cmd_seq (void);
 static uint64_t cl_tile_picture (score_pic_t pic, int32_t value);
-static void cl_clear_unplaced (uint64_t now);
-static void cl_scan_heartbeats (uint64_t now);
-static void cl_scan_one (uint32_t index, uint64_t now);
-static void cl_send_due_copy (uint64_t now);
-static void cl_send_status (uint64_t now);
-static void cl_dispatch_one (uint64_t now);
-static void cl_dispatch_entry (cl_rx_entry_t const * p_entry);
-static void cl_from_tile (cl_rx_entry_t const *  p_entry,
-                          proto_header_t const * p_header);
-static void cl_on_register (cl_rx_entry_t const * p_entry);
-static void cl_on_tile_report (cl_rx_entry_t const *  p_entry,
-                               proto_header_t const * p_header);
-static void cl_on_asset_ready (cl_rx_entry_t const * p_entry);
-static void cl_from_pc (cl_rx_entry_t const *  p_entry,
-                        proto_header_t const * p_header);
-static void cl_session_apply (cl_rx_entry_t const * p_entry);
-static bool cl_session_valid (proto_session_config_t const * p_cfg);
-static void cl_pc_command (proto_type_t type);
-static void cl_cmd_start_at (void);
-static void cl_cmd_pause (void);
-static void cl_cmd_resume_at (void);
-static void cl_cmd_stop (void);
-static void cl_issue_resume (void);
+static void     cl_clear_unplaced (uint64_t now);
+static void     cl_scan_heartbeats (uint64_t now);
+static void     cl_scan_one (uint32_t index, uint64_t now);
+static void     cl_send_due_copy (uint64_t now);
+static void     cl_send_status (uint64_t now);
+static void     cl_dispatch_one (uint64_t now);
+static void     cl_dispatch_entry (cl_rx_entry_t const * p_entry);
+static void     cl_from_tile (cl_rx_entry_t const *  p_entry,
+                              proto_header_t const * p_header);
+static void     cl_on_register (cl_rx_entry_t const * p_entry);
+static void     cl_on_tile_report (cl_rx_entry_t const *  p_entry,
+                                   proto_header_t const * p_header);
+static void     cl_on_asset_ready (cl_rx_entry_t const * p_entry);
+static void     cl_from_pc (cl_rx_entry_t const *  p_entry,
+                            proto_header_t const * p_header);
+static void     cl_session_apply (cl_rx_entry_t const * p_entry);
+static bool     cl_session_valid (proto_session_config_t const * p_cfg);
+static void     cl_pc_command (proto_type_t type);
+static void     cl_cmd_start_at (void);
+static void     cl_cmd_pause (void);
+static void     cl_cmd_resume_at (void);
+static void     cl_cmd_stop (void);
+static void     cl_issue_resume (void);
 static void cl_triple_send (proto_type_t type, uint16_t frame, uint32_t addr);
 static void cl_send_copy (cl_send_slot_t * p_slot, uint64_t now);
 static void cl_issue_timeline (cl_send_slot_t * p_slot);
@@ -540,15 +532,26 @@ static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
                         uint64_t t_rx);
 static uint64_t cl_now_us (void);
 static void     cl_crumb (uint32_t step);
-static bool     cl_port_send (uint32_t addr, uint16_t port,
-                              uint8_t const * p_buf, uint32_t len);
-static void     cl_tx_routine (void);
+static bool cl_port_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                          uint32_t len);
+static void cl_tx_routine (void);
 #ifndef CL_HOST_TEST
-static void     cl_crumb_send (bool b_in);
+static void cl_crumb_send (bool b_in);
 #endif
 static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
                          uint32_t len);
 static bool cl_send_beacon_bytes (uint8_t * p_buf, uint64_t * p_t_p);
+
+static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
+                              uint8_t colour, uint8_t b_repeat, uint64_t t_show,
+                              uint16_t dur_ms, uint64_t mask);
+
+static void cl_queue_tile (uint8_t node_id, proto_type_t type, uint16_t seq,
+                           uint8_t const * p_buf, uint32_t len, uint64_t now,
+                           uint64_t deadline_us);
+
+static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
+                             uint8_t kind, uint64_t now, uint64_t deadline_us);
 
 /**
  * @brief  Count in one lateness bin.
@@ -598,26 +601,26 @@ static void cl_reset_state (uint32_t bcast_addr, uint64_t now)
     g_b_suppress_done   = false;
     g_bcast_addr        = bcast_addr;
     /* Video mode, no round (the game state of steps 1 to 4). */
-    g_b_game_mode       = false;
-    g_round             = PROTO_ROUND_IDLE;
-    g_level             = (uint8_t)PROTO_LEVEL_EASY; /* 3 levels fit. */
-    g_threshold         = 0u;
-    g_start_node        = 0u;
-    g_start_show_us     = 0u;
-    g_arm_deadline_us   = 0u;
-    g_play_at_us        = 0u;
-    g_round_mask        = 0u;
-    g_b_tap_test        = false;
+    g_b_game_mode     = false;
+    g_round           = PROTO_ROUND_IDLE;
+    g_level           = (uint8_t)PROTO_LEVEL_EASY; /* 3 levels fit. */
+    g_threshold       = 0u;
+    g_start_node      = 0u;
+    g_start_show_us   = 0u;
+    g_arm_deadline_us = 0u;
+    g_play_at_us      = 0u;
+    g_round_mask      = 0u;
+    g_b_tap_test      = false;
     /* No round yet; the RNG is seeded from the clock. */
     game_rules_init(&g_game, (uint32_t)now);
     ack_outbox_init(&g_outbox);
     (void)memset(g_b_tap_seen, 0, sizeof(g_b_tap_seen)); /* Returns it. */
     (void)memset(g_tap_seq, 0, sizeof(g_tap_seq));       /* Returns it. */
-    g_next_beacon_us    = now;
-    g_next_scan_us      = now + CL_SCAN_PERIOD_US;
-    g_next_status_us    = now + CL_STATUS_PERIOD_US;
-    g_next_log_us       = now + CL_LOG_PERIOD_US;
-    g_state             = PROTO_COORD_WAITING_FOR_SESSION;
+    g_next_beacon_us = now;
+    g_next_scan_us   = now + CL_SCAN_PERIOD_US;
+    g_next_status_us = now + CL_STATUS_PERIOD_US;
+    g_next_log_us    = now + CL_LOG_PERIOD_US;
+    g_state          = PROTO_COORD_WAITING_FOR_SESSION;
 }
 
 /**
@@ -628,9 +631,8 @@ static void cl_pass (void)
 {
     uint64_t const now     = cl_now_us();
     uint64_t const cmd_due = cl_earliest_due();
-    bool     const b_room  =
-        ((now + CL_DISPATCH_GUARD_US) <= g_next_beacon_us) &&
-        ((now + CL_DISPATCH_GUARD_US) <= cmd_due);
+    bool const b_room = ((now + CL_DISPATCH_GUARD_US) <= g_next_beacon_us) &&
+                        ((now + CL_DISPATCH_GUARD_US) <= cmd_due);
 
     if (now >= g_next_beacon_us)
     {
@@ -804,7 +806,7 @@ static void cl_scan_one (uint32_t index, uint64_t now)
     {
         /* index < 9, so index + 1 is a Node ID that fits uint8_t. */
         /* index < 9. */
-            /* index < 9. */
+        /* index < 9. */
         uint8_t const node_id = (uint8_t)(index + 1u);
 
         p_node->b_online     = false;
@@ -1002,13 +1004,13 @@ static void cl_send_status (uint64_t now)
     {
         uint8_t              buf[PROTO_STATUS_BYTES];
         proto_status_t const msg = {
-            .header    = {.type       = PROTO_TYPE_STATUS,
-                          .session_id = g_session.session_id,
-                          .seq        = g_status_seq},
-            .readiness = g_readiness,
-            .online    = cl_online_bits(),
-            .state     = (uint8_t)g_state, /* 13 states fit uint8_t. */
-            .score     = cl_status_score(),
+            .header      = {.type       = PROTO_TYPE_STATUS,
+                            .session_id = g_session.session_id,
+                            .seq        = g_status_seq},
+            .readiness   = g_readiness,
+            .online      = cl_online_bits(),
+            .state       = (uint8_t)g_state, /* 13 states fit uint8_t. */
+            .score       = cl_status_score(),
             .round_state = (uint8_t)g_round, /* 5 states fit uint8_t. */
             .level       = g_level,
             .missed      = cl_count7(g_game.missed),
@@ -1964,9 +1966,8 @@ static void cl_print_stats (void)
            g_stats.send_fail, g_stats.skipped, g_stats.rx_dropped,
            g_stats.rx_bad, g_stats.stale, g_stats.cmd_fail, g_stats.events_lost,
            g_stats.exc_max, g_stats.cb_max_us, g_stats.dispatch_max_us,
-           cl_online_bits(), g_readiness, g_sync,
-           g_b_watchdog_boot ? 1u : 0u, g_watchdog_step, g_watchdog_prev,
-           g_stats.tx_drop, g_stats.tx_fail);
+           cl_online_bits(), g_readiness, g_sync, g_b_watchdog_boot ? 1u : 0u,
+           g_watchdog_step, g_watchdog_prev, g_stats.tx_drop, g_stats.tx_fail);
 
     printf("LATE_HIST");
 
@@ -2063,8 +2064,8 @@ static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
 static void cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
                          uint16_t acked_seq, uint8_t session_id)
 {
-    uint8_t              buf[PROTO_ACK_BYTES];
-    proto_ack_t const    msg = {
+    uint8_t           buf[PROTO_ACK_BYTES];
+    proto_ack_t const msg = {
         .header    = {.type       = PROTO_TYPE_ACK,
                       .session_id = session_id,
                       .seq        = g_ack_seq},
@@ -2085,7 +2086,7 @@ static void cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
  * @param  p_entry   The datagram.
  * @param  p_header  Its decoded header.
  */
-static void cl_on_tap (cl_rx_entry_t const * p_entry,
+static void cl_on_tap (cl_rx_entry_t const *  p_entry,
                        proto_header_t const * p_header)
 {
     proto_tap_t msg;
@@ -2179,7 +2180,7 @@ static void cl_on_tile_ack (cl_rx_entry_t const * p_entry)
  * @param  p_entry   The datagram.
  * @param  p_header  Its decoded header.
  */
-static void cl_on_game_control (cl_rx_entry_t const * p_entry,
+static void cl_on_game_control (cl_rx_entry_t const *  p_entry,
                                 proto_header_t const * p_header)
 {
     proto_game_control_t msg;
@@ -2191,8 +2192,8 @@ static void cl_on_game_control (cl_rx_entry_t const * p_entry,
     }
     else
     {
-        bool const b_new = (!g_b_pc_seq_known) ||
-                           (cl_seq_newer(p_header->seq, g_pc_seq));
+        bool const b_new =
+            (!g_b_pc_seq_known) || (cl_seq_newer(p_header->seq, g_pc_seq));
 
         if (b_new)
         {
@@ -2383,10 +2384,10 @@ static void cl_round_arm (uint64_t now)
     if ((PROTO_COORD_READY == g_state) && (g_b_game_mode) &&
         (g_session.b_active) && (0u != start))
     {
-        g_round_mask      = mask;
-        g_start_node      = start;
-        g_start_show_us   = now + (UINT64_C(1000) * GAME_LEAD_MS);
-        g_round           = PROTO_ROUND_ARMED;
+        g_round_mask    = mask;
+        g_start_node    = start;
+        g_start_show_us = now + (UINT64_C(1000) * GAME_LEAD_MS);
+        g_round         = PROTO_ROUND_ARMED;
         game_rules_clear(&g_game); /* STATUS: no counts of the last round. */
         g_arm_deadline_us = now + CL_ARM_TIMEOUT_US;
         g_b_tap_test      = false;
@@ -2394,8 +2395,9 @@ static void cl_round_arm (uint64_t now)
         cl_clear_unplaced(now);
         cl_set_state(PROTO_COORD_COORDINATING_GAME);
         cl_round_to_tiles(PROTO_GAME_ARM, now);
-        cl_queue_target(start, g_start_show_us, 0u,
-                        (uint8_t)PROTO_TARGET_START, now, /* 5 kinds fit. */
+        uint8_t const kind = (uint8_t)PROTO_TARGET_START; /* 5 kinds fit. */
+
+        cl_queue_target(start, g_start_show_us, 0u, kind, now,
                         now + CL_CONTROL_LIFE_US);
     }
     else
@@ -2460,10 +2462,10 @@ static void cl_round_abort (uint64_t now)
 static void cl_round_to_tiles (uint8_t command, uint64_t now)
 {
     /* Bits 0 to 8, so the narrowing keeps them. */
-    uint16_t const mask = (0u != g_round_mask)
-                              ? g_round_mask
-                              : (uint16_t)(g_session.required &
-                                           cl_online_bits());
+    uint16_t const mask =
+        (0u != g_round_mask)
+            ? g_round_mask
+            : (uint16_t)(g_session.required & cl_online_bits());
 
     for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
     {
@@ -2501,16 +2503,16 @@ static uint8_t cl_centre_node (uint16_t mask)
         {
             /* Doubled coordinates, so the centre is a whole number; row,
              * col, rows and cols are below 10. */
-            int32_t const  row  = (int32_t)cell_r; /* 0 to 8. */
-            int32_t const  col  = (int32_t)cell_c; /* 0 to 8. */
-            int32_t const  rows = (int32_t)g_session.rows; /* 1 to 9. */
-            int32_t const  cols = (int32_t)g_session.cols; /* 1 to 9. */
-            int32_t const  d_r  = (2 * row) - (rows - 1);
-            int32_t const  d_c  = (2 * col) - (cols - 1);
+            int32_t const row  = (int32_t)cell_r;         /* 0 to 8. */
+            int32_t const col  = (int32_t)cell_c;         /* 0 to 8. */
+            int32_t const rows = (int32_t)g_session.rows; /* 1 to 9. */
+            int32_t const cols = (int32_t)g_session.cols; /* 1 to 9. */
+            int32_t const d_r  = (2 * row) - (rows - 1);
+            int32_t const d_c  = (2 * col) - (cols - 1);
             /* A sum of squares: non-negative and below 400. */
             uint32_t const dist = (uint32_t)((d_r * d_r) + (d_c * d_c));
             /* Widened: row-major position, below 81. */
-            uint32_t const pos  = ((uint32_t)cell_r * g_session.cols) + cell_c;
+            uint32_t const pos = ((uint32_t)cell_r * g_session.cols) + cell_c;
 
             if ((dist < best_dist) || ((dist == best_dist) && (pos < best_pos)))
             {
@@ -2609,11 +2611,11 @@ static void cl_send_countdown (uint64_t t_first)
                 int32_t const  digit = (int32_t)(CL_COUNTDOWN_STEPS - step);
                 uint64_t const mask  = cl_tile_picture(SCORE_PIC_NUMBER, digit);
 
-                cl_queue_picture(node_id, (uint8_t)step, /* step < 3. */
+                cl_queue_picture(node_id, (uint8_t)step,       /* step < 3. */
                                  (uint8_t)PROTO_PIC_PICTURE,   /* 3 fit. */
                                  (uint8_t)PROTO_COLOUR_YELLOW, /* 7 fit. */
-                                 0u, t_first + (step * CL_STEP_US),
-                                 CL_STEP_MS, mask);
+                                 0u, t_first + (step * CL_STEP_US), CL_STEP_MS,
+                                 mask);
             }
         }
     }
@@ -2629,9 +2631,9 @@ static void cl_send_countdown (uint64_t t_first)
  */
 static void cl_send_results (uint64_t t_first)
 {
-    int32_t const  score = game_rules_score(&g_game);
+    int32_t const score = game_rules_score(&g_game);
     /* 1 to 3 stars: fits int32_t. */
-    int32_t const  stars = (int32_t)game_rules_stars(&g_game);
+    int32_t const  stars   = (int32_t)game_rules_stars(&g_game);
     uint64_t const t_score = t_first + (UINT64_C(1000) * CL_SPARKLE_MS);
     uint64_t const t_stars = t_score + (UINT64_C(1000) * CL_RESULT_MS);
 
@@ -2684,7 +2686,7 @@ static void cl_results_end (uint64_t now)
         {
             /* Resent until ACKed or the control life ends. */
             cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_CLEAR, /* 3. */
-                             (uint8_t)PROTO_COLOUR_WHITE, /* 8 fit. */
+                             (uint8_t)PROTO_COLOUR_WHITE,           /* 8 fit. */
                              0u, now + CL_CONTROL_LIFE_US, 0u, 0u);
         }
     }
@@ -2711,7 +2713,7 @@ static void cl_clear_unplaced (uint64_t now)
         {
             /* Resent until ACKed or the control life ends. */
             cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_CLEAR, /* 3. */
-                             (uint8_t)PROTO_COLOUR_WHITE, /* 8 fit. */
+                             (uint8_t)PROTO_COLOUR_WHITE,           /* 8 fit. */
                              0u, now + CL_CONTROL_LIFE_US, 0u, 0u);
         }
     }
@@ -2769,8 +2771,7 @@ static void cl_game_routine (uint64_t now)
         else if (GAME_EV_FEEDBACK == event.kind)
         {
             cl_queue_feedback(event.node_id, event.result, now);
-            cl_log_event(CL_EV_GAME_FEEDBACK, event.node_id, event.result,
-                         now);
+            cl_log_event(CL_EV_GAME_FEEDBACK, event.node_id, event.result, now);
         }
         else if (GAME_EV_ROUND_END == event.kind)
         {
@@ -2847,17 +2848,17 @@ static void cl_queue_tile (uint8_t node_id, proto_type_t type, uint16_t seq,
 static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
                               uint64_t life_us)
 {
-    uint16_t const seq = cl_next_cmd_seq();
+    uint16_t const             seq = cl_next_cmd_seq();
     proto_game_control_t const msg = {
-        .header  = {.type       = PROTO_TYPE_GAME_CONTROL,
-                    .session_id = g_session.session_id,
-                    .seq        = seq},
+        .header    = {.type       = PROTO_TYPE_GAME_CONTROL,
+                      .session_id = g_session.session_id,
+                      .seq        = seq},
         .node_id   = node_id,
         .command   = command,
         .level     = g_level,
         .threshold = g_threshold,
     };
-    uint8_t  buf[PROTO_GAME_CONTROL_BYTES];
+    uint8_t        buf[PROTO_GAME_CONTROL_BYTES];
     uint32_t const len = proto_encode_game_control(&msg, buf, sizeof(buf));
 
     cl_queue_tile(node_id, PROTO_TYPE_GAME_CONTROL, seq, buf, len, now,
@@ -2889,7 +2890,7 @@ static void cl_queue_mole (game_event_t const * p_event, uint64_t now)
 static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
                              uint8_t kind, uint64_t now, uint64_t deadline_us)
 {
-    uint16_t const seq = cl_next_cmd_seq();
+    uint16_t const        seq = cl_next_cmd_seq();
     proto_mole_on_t const msg = {
         .header  = {.type       = PROTO_TYPE_MOLE_ON,
                     .session_id = g_session.session_id,
@@ -2899,11 +2900,10 @@ static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
         .up_ms   = up_ms,
         .kind    = kind,
     };
-    uint8_t  buf[PROTO_MOLE_ON_BYTES];
+    uint8_t        buf[PROTO_MOLE_ON_BYTES];
     uint32_t const len = proto_encode_mole_on(&msg, buf, sizeof(buf));
 
-    cl_queue_tile(node_id, PROTO_TYPE_MOLE_ON, seq, buf, len, now,
-                  deadline_us);
+    cl_queue_tile(node_id, PROTO_TYPE_MOLE_ON, seq, buf, len, now, deadline_us);
 }
 
 /**
@@ -2914,7 +2914,7 @@ static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
  */
 static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now)
 {
-    uint16_t const seq = cl_next_cmd_seq();
+    uint16_t const             seq = cl_next_cmd_seq();
     proto_feedback_msg_t const msg = {
         .header  = {.type       = PROTO_TYPE_FEEDBACK,
                     .session_id = g_session.session_id,
@@ -2922,7 +2922,7 @@ static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now)
         .node_id = node_id,
         .result  = result,
     };
-    uint8_t  buf[PROTO_FEEDBACK_BYTES];
+    uint8_t        buf[PROTO_FEEDBACK_BYTES];
     uint32_t const len = proto_encode_feedback(&msg, buf, sizeof(buf));
 
     cl_queue_tile(node_id, PROTO_TYPE_FEEDBACK, seq, buf, len, now,
@@ -3216,7 +3216,7 @@ void coordinator_loop_test_set_state (proto_coord_state_t state)
     g_state = state;
 }
 #else
-static struct udp_pcb * g_p_tx_pcb = NULL;
+static struct udp_pcb * g_p_tx_pcb      = NULL;
 static uint32_t         g_join_failures = 0u; /* Retries scheduled so far. */
 static uint64_t         g_next_join_us  = 0u; /* Next join attempt, us. */
 static bool             g_b_pcbs_open   = false;
@@ -3246,12 +3246,12 @@ void coordinator_loop_run (void)
     {
         /* The evidence of a freeze: the loop had stopped for 8 s, at the
          * step the breadcrumb names. */
-        g_watchdog_step = watchdog_hw->scratch[0];
-        g_watchdog_prev = watchdog_hw->scratch[1];
+        g_watchdog_step         = watchdog_hw->scratch[0];
+        g_watchdog_prev         = watchdog_hw->scratch[1];
         watchdog_hw->scratch[1] = g_watchdog_step; /* For the next one. */
         printf("COORDINATOR: restarted by the watchdog, step 0x%08" PRIx32
-               ", the one before 0x%08" PRIx32 "\n", g_watchdog_step,
-               g_watchdog_prev);
+               ", the one before 0x%08" PRIx32 "\n",
+               g_watchdog_step, g_watchdog_prev);
     }
 
     watchdog_enable(CL_WATCHDOG_MS, true); /* Paused under a debugger. */
@@ -3398,7 +3398,7 @@ static bool cl_connect_router (void)
 {
     uint32_t const auth =
         ('\0' != ROUTER_PASS[0]) ? CYW43_AUTH_WPA2_AES_PSK : CYW43_AUTH_OPEN;
-    char const * const p_pass = ('\0' != ROUTER_PASS[0]) ? ROUTER_PASS : NULL;
+    char const * const p_pass   = ('\0' != ROUTER_PASS[0]) ? ROUTER_PASS : NULL;
     absolute_time_t const until = make_timeout_time_ms(CL_CONNECT_TIMEOUT_MS);
     int32_t               status = CYW43_LINK_JOIN;
 
@@ -3412,8 +3412,7 @@ static bool cl_connect_router (void)
         status = CYW43_LINK_FAIL;
     }
 
-    while ((status >= 0) && (CYW43_LINK_UP != status) &&
-           (!time_reached(until)))
+    while ((status >= 0) && (CYW43_LINK_UP != status) && (!time_reached(until)))
     {
         absolute_time_t const step = make_timeout_time_ms(CL_JOIN_FEED_MS);
 
@@ -3429,10 +3428,10 @@ static bool cl_connect_router (void)
         {
             /* No network yet: join again. */
             cl_crumb(CL_STEP_CONNECT);
-            status = (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass,
-                                                         auth))
-                         ? CYW43_LINK_FAIL
-                         : CYW43_LINK_JOIN;
+            status =
+                (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass, auth))
+                    ? CYW43_LINK_FAIL
+                    : CYW43_LINK_JOIN;
         }
         else
         {

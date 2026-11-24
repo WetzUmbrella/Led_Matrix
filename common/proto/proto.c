@@ -1020,10 +1020,10 @@ bool proto_decode_status (uint8_t const * p_buf, uint32_t len,
     if (begin_decode(p_buf, len, PROTO_STATUS_BYTES, PROTO_TYPE_STATUS,
                      &p_msg->header, &reader))
     {
-        p_msg->readiness = take_u16(&reader, PROTO_BITMAP_BITS);
-        p_msg->online    = take_u16(&reader, PROTO_BITMAP_BITS);
-        p_msg->state     = take_u8(&reader, PROTO_COORD_STATE_BITS);
-        p_msg->score     = take_s8(&reader, PROTO_SCORE_BITS);
+        p_msg->readiness   = take_u16(&reader, PROTO_BITMAP_BITS);
+        p_msg->online      = take_u16(&reader, PROTO_BITMAP_BITS);
+        p_msg->state       = take_u8(&reader, PROTO_COORD_STATE_BITS);
+        p_msg->score       = take_s8(&reader, PROTO_SCORE_BITS);
         p_msg->round_state = take_u8(&reader, PROTO_ROUND_STATE_BITS);
         p_msg->level       = take_u8(&reader, PROTO_LEVEL_BITS);
         p_msg->missed      = take_u8(&reader, PROTO_COUNT_BITS);
@@ -1331,7 +1331,7 @@ bool proto_decode_game_control (uint8_t const * p_buf, uint32_t len,
     if (begin_decode(p_buf, len, PROTO_GAME_CONTROL_BYTES,
                      PROTO_TYPE_GAME_CONTROL, &p_msg->header, &reader))
     {
-        p_msg->node_id = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->node_id   = take_u8(&reader, PROTO_NODE_BITS);
         p_msg->command   = take_u8(&reader, PROTO_GAME_CMD_BITS);
         p_msg->level     = take_u8(&reader, PROTO_LEVEL_BITS);
         p_msg->threshold = take_u8(&reader, PROTO_THRESHOLD_BITS);
@@ -1349,7 +1349,7 @@ bool proto_decode_game_control (uint8_t const * p_buf, uint32_t len,
  * @return Bytes written, or 0.
  */
 uint32_t proto_encode_wall_picture (proto_wall_picture_t const * p_msg,
-                                  uint8_t * p_buf, uint32_t buf_len)
+                                    uint8_t * p_buf, uint32_t buf_len)
 {
     uint32_t written = 0u;
     writer_t writer;
@@ -1380,14 +1380,13 @@ uint32_t proto_encode_wall_picture (proto_wall_picture_t const * p_msg,
  * @return true when valid.
  */
 bool proto_decode_wall_picture (uint8_t const * p_buf, uint32_t len,
-                              proto_wall_picture_t * p_msg)
+                                proto_wall_picture_t * p_msg)
 {
     bool     b_ok = false;
     reader_t reader;
 
     if (begin_decode(p_buf, len, PROTO_WALL_PICTURE_BYTES,
-                     PROTO_TYPE_WALL_PICTURE,
-                     &p_msg->header, &reader))
+                     PROTO_TYPE_WALL_PICTURE, &p_msg->header, &reader))
     {
         p_msg->node_id  = take_u8(&reader, PROTO_NODE_BITS);
         p_msg->slot     = take_u8(&reader, PROTO_PIC_SLOT_BITS);
@@ -1854,7 +1853,7 @@ static bool feedback_ok (proto_feedback_msg_t const * p_msg)
  */
 static bool game_control_ok (proto_game_control_t const * p_msg)
 {
-    return (p_msg->node_id <= PROTO_NODE_MAX) &&             /* 0 allowed */
+    return (p_msg->node_id <= PROTO_NODE_MAX) &&               /* 0 allowed */
            (p_msg->command < (uint8_t)PROTO_GAME_CMD_COUNT) && /* Code < 8. */
            (p_msg->level < (uint8_t)PROTO_LEVEL_COUNT) &&      /* Code < 3. */
            (p_msg->threshold <= PROTO_THRESHOLD_MAX);

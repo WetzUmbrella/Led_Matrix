@@ -44,24 +44,24 @@ static _Atomic uint32_t g_pub_words[GAME_TILE_WORDS];
 static bool game_tile_ahead (uint16_t seq, uint32_t than);
 static bool game_tile_newer (game_tile_state_t const * p_state, uint16_t seq);
 static void game_tile_accept (game_tile_state_t * p_state, uint16_t seq);
-static void game_tile_control (game_tile_state_t * p_state,
+static void game_tile_control (game_tile_state_t *          p_state,
                                proto_game_control_t const * p_msg,
-                               uint16_t seq);
+                               uint16_t                     seq);
 static void game_tile_clear_older (game_tile_state_t * p_state, uint16_t seq);
-static void game_tile_picture (game_tile_state_t * p_state,
+static void game_tile_picture (game_tile_state_t *          p_state,
                                proto_wall_picture_t const * p_msg,
-                               uint16_t seq);
-static void game_tile_mole_on (game_tile_state_t * p_state,
+                               uint16_t                     seq);
+static void game_tile_mole_on (game_tile_state_t *     p_state,
                                proto_mole_on_t const * p_msg, uint16_t seq);
 static void game_tile_feedback (game_tile_state_t * p_state, uint8_t result,
                                 int64_t now_local_us);
-static game_tile_pic_t const * game_tile_showing (
-    game_tile_state_t const * p_state, int64_t now_pico_us);
+static game_tile_pic_t const *
+game_tile_showing (game_tile_state_t const * p_state, int64_t now_pico_us);
 static void game_tile_draw_target (game_tile_state_t const * p_state,
-                                   int64_t now_pico_us,
-                                   game_canvas_t * p_canvas);
+                                   int64_t                   now_pico_us,
+                                   game_canvas_t *           p_canvas);
 static bool game_tile_flash_on (game_tile_state_t const * p_state,
-                                int64_t now_local_us);
+                                int64_t                   now_local_us);
 
 /**
  * @brief  Clear the game state.
@@ -95,11 +95,11 @@ void game_tile_new_pico (game_tile_state_t * p_state)
 static bool game_tile_on_mole (game_tile_state_t * p_state, uint8_t node_id,
                                uint8_t const * p_buf, uint32_t len,
                                proto_header_t const * p_header,
-                               uint16_t * p_acked_seq)
+                               uint16_t *             p_acked_seq)
 {
     proto_mole_on_t msg;
-    bool            b_mine = (proto_decode_mole_on(p_buf, len, &msg)) &&
-                             (msg.node_id == node_id);
+    bool            b_mine =
+        (proto_decode_mole_on(p_buf, len, &msg)) && (msg.node_id == node_id);
 
     if ((b_mine) && (game_tile_newer(p_state, p_header->seq)))
     {
@@ -126,16 +126,14 @@ static bool game_tile_on_mole (game_tile_state_t * p_state, uint8_t node_id,
  * @param  p_acked_seq   Receives the seq to ACK.
  * @return true when it is for this tile.
  */
-static bool game_tile_on_feedback (game_tile_state_t * p_state,
-                                   uint8_t node_id, uint8_t const * p_buf,
-                                   uint32_t len,
+static bool game_tile_on_feedback (game_tile_state_t * p_state, uint8_t node_id,
+                                   uint8_t const * p_buf, uint32_t len,
                                    proto_header_t const * p_header,
-                                   int64_t now_local_us,
-                                   uint16_t * p_acked_seq)
+                                   int64_t now_local_us, uint16_t * p_acked_seq)
 {
     proto_feedback_msg_t msg;
-    bool                 b_mine = (proto_decode_feedback(p_buf, len, &msg)) &&
-                                  (msg.node_id == node_id);
+    bool                 b_mine =
+        (proto_decode_feedback(p_buf, len, &msg)) && (msg.node_id == node_id);
 
     if ((b_mine) && (game_tile_newer(p_state, p_header->seq)))
     {
@@ -165,12 +163,11 @@ static bool game_tile_on_feedback (game_tile_state_t * p_state,
 static bool game_tile_on_control (game_tile_state_t * p_state, uint8_t node_id,
                                   uint8_t const * p_buf, uint32_t len,
                                   proto_header_t const * p_header,
-                                  uint16_t * p_acked_seq)
+                                  uint16_t *             p_acked_seq)
 {
     proto_game_control_t msg;
-    bool                 b_mine =
-        (proto_decode_game_control(p_buf, len, &msg)) &&
-        (msg.node_id == node_id);
+    bool b_mine = (proto_decode_game_control(p_buf, len, &msg)) &&
+                  (msg.node_id == node_id);
 
     if ((b_mine) && ((0u == p_state->b_ctl_known) ||
                      (game_tile_ahead(p_header->seq, p_state->ctl_seq))))
@@ -208,12 +205,11 @@ static bool game_tile_on_control (game_tile_state_t * p_state, uint8_t node_id,
 static bool game_tile_on_picture (game_tile_state_t * p_state, uint8_t node_id,
                                   uint8_t const * p_buf, uint32_t len,
                                   proto_header_t const * p_header,
-                                  uint16_t * p_acked_seq)
+                                  uint16_t *             p_acked_seq)
 {
     proto_wall_picture_t msg;
-    bool                 b_mine =
-        (proto_decode_wall_picture(p_buf, len, &msg)) &&
-        (msg.node_id == node_id);
+    bool b_mine = (proto_decode_wall_picture(p_buf, len, &msg)) &&
+                  (msg.node_id == node_id);
 
     if (b_mine)
     {
@@ -259,8 +255,8 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
         }
         else if (PROTO_TYPE_FEEDBACK == type)
         {
-            b_ack = game_tile_on_feedback(p_state, node_id, p_buf, len,
-                                          &header, now_local_us, p_acked_seq);
+            b_ack = game_tile_on_feedback(p_state, node_id, p_buf, len, &header,
+                                          now_local_us, p_acked_seq);
         }
         else if (PROTO_TYPE_GAME_CONTROL == type)
         {
@@ -269,8 +265,8 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
         }
         else if (PROTO_TYPE_WALL_PICTURE == type)
         {
-            b_ack = game_tile_on_picture(p_state, node_id, p_buf, len,
-                                         &header, p_acked_seq);
+            b_ack = game_tile_on_picture(p_state, node_id, p_buf, len, &header,
+                                         p_acked_seq);
         }
         else
         {
@@ -287,8 +283,7 @@ bool game_tile_on_pico (game_tile_state_t * p_state, uint8_t node_id,
  * @param  now_local_us  Tile local time.
  * @return true when the game draws the tile.
  */
-bool game_tile_active (game_tile_state_t const * p_state,
-                       int64_t now_local_us)
+bool game_tile_active (game_tile_state_t const * p_state, int64_t now_local_us)
 {
     bool b_pics = false;
 
@@ -327,8 +322,7 @@ void game_tile_fill_wire (game_tile_state_t const * p_state,
 
     game_sprites_clear(&canvas);
 
-    if (((0u != p_state->b_round) || (0u != p_state->b_tap_test)) &&
-        (!b_start))
+    if (((0u != p_state->b_round) || (0u != p_state->b_tap_test)) && (!b_start))
     {
         game_sprites_hole(&canvas);
     }
@@ -392,11 +386,10 @@ uint32_t game_tile_pulse_us (game_tile_state_t const * p_state,
     bool const b_mole =
         (0u != p_state->b_mole) && (GAME_TILE_KIND_MOLE == p_state->kind) &&
         (p_state->show_us > prev_pico_us) && (p_state->show_us <= now_pico_us);
-    bool const b_hit =
-        (0u != p_state->b_flash) &&
-        (GAME_TILE_RESULT_HIT == p_state->flash_result) &&
-        (p_state->flash_start_us > prev_local_us) &&
-        (p_state->flash_start_us <= now_local_us);
+    bool const b_hit = (0u != p_state->b_flash) &&
+                       (GAME_TILE_RESULT_HIT == p_state->flash_result) &&
+                       (p_state->flash_start_us > prev_local_us) &&
+                       (p_state->flash_start_us <= now_local_us);
 
     if (b_mole)
     {
@@ -487,9 +480,8 @@ uint32_t game_tile_encode_ack (uint8_t * p_buf, uint8_t session_id,
  */
 void game_tile_publish (game_tile_state_t const * p_state)
 {
-    uint32_t words[GAME_TILE_WORDS];
-    uint32_t const seq = atomic_load_explicit(&g_pub_seq,
-                                              memory_order_relaxed);
+    uint32_t       words[GAME_TILE_WORDS];
+    uint32_t const seq = atomic_load_explicit(&g_pub_seq, memory_order_relaxed);
 
     (void)memcpy(words, p_state, sizeof(words)); /* Returns words. */
 
@@ -521,8 +513,8 @@ void game_tile_read (game_tile_state_t * p_state)
 
         for (uint32_t word = 0u; word < GAME_TILE_WORDS; word++)
         {
-            words[word] = atomic_load_explicit(&g_pub_words[word],
-                                               memory_order_relaxed);
+            words[word] =
+                atomic_load_explicit(&g_pub_words[word], memory_order_relaxed);
         }
 
         atomic_thread_fence(memory_order_acquire);
@@ -554,8 +546,7 @@ static bool game_tile_ahead (uint16_t seq, uint32_t than)
  */
 static bool game_tile_newer (game_tile_state_t const * p_state, uint16_t seq)
 {
-    return (0u == p_state->b_seq_known) ||
-           (game_tile_ahead(seq, p_state->seq));
+    return (0u == p_state->b_seq_known) || (game_tile_ahead(seq, p_state->seq));
 }
 
 /**
@@ -575,9 +566,8 @@ static void game_tile_accept (game_tile_state_t * p_state, uint16_t seq)
  * @param  p_msg    The command.
  * @param  seq      Its header seq.
  */
-static void game_tile_control (game_tile_state_t * p_state,
-                               proto_game_control_t const * p_msg,
-                               uint16_t seq)
+static void game_tile_control (game_tile_state_t *          p_state,
+                               proto_game_control_t const * p_msg, uint16_t seq)
 {
     if (PROTO_GAME_ARM == p_msg->command)
     {
@@ -661,13 +651,12 @@ static void game_tile_clear_older (game_tile_state_t * p_state, uint16_t seq)
  * @param  p_msg    The entry.
  * @param  seq      Its header seq.
  */
-static void game_tile_picture (game_tile_state_t * p_state,
-                               proto_wall_picture_t const * p_msg,
-                               uint16_t seq)
+static void game_tile_picture (game_tile_state_t *          p_state,
+                               proto_wall_picture_t const * p_msg, uint16_t seq)
 {
     /* The decoder checked slot 0 to 3. */
     game_tile_pic_t * const p_pic = &p_state->pic[p_msg->slot];
-    bool const b_fresh =
+    bool const              b_fresh =
         ((0u == p_state->b_clear_known) ||
          (game_tile_ahead(seq, p_state->clear_seq))) &&
         ((0u == p_pic->b_valid) || (game_tile_ahead(seq, p_pic->seq)));
@@ -691,8 +680,8 @@ static void game_tile_picture (game_tile_state_t * p_state,
         p_pic->b_repeat = p_msg->b_repeat;
         p_pic->dur_ms   = p_msg->dur_ms;
         /* Pico times fit int64_t (about 292,000 years of us). */
-        p_pic->t_show   = (int64_t)p_msg->t_show;
-        p_pic->mask     = p_msg->mask;
+        p_pic->t_show = (int64_t)p_msg->t_show;
+        p_pic->mask   = p_msg->mask;
     }
     else
     {
@@ -707,19 +696,19 @@ static void game_tile_picture (game_tile_state_t * p_state,
  * @param  p_msg    The target.
  * @param  seq      Its header seq.
  */
-static void game_tile_mole_on (game_tile_state_t * p_state,
+static void game_tile_mole_on (game_tile_state_t *     p_state,
                                proto_mole_on_t const * p_msg, uint16_t seq)
 {
     p_state->b_mole     = 1u;
     p_state->kind       = p_msg->kind;
     p_state->target_seq = seq;
     /* Pico times fit int64_t (about 292,000 years of us). */
-    p_state->show_us    = (int64_t)p_msg->t_show;
+    p_state->show_us = (int64_t)p_msg->t_show;
     /* up_ms is at most 4,000, so the product fits int64_t. */
-    p_state->hide_us    = (0u == p_msg->up_ms)
-                              ? INT64_MAX
-                              : (p_state->show_us +
-                                 ((int64_t)p_msg->up_ms * GAME_TILE_US_PER_MS));
+    p_state->hide_us = (0u == p_msg->up_ms)
+                           ? INT64_MAX
+                           : (p_state->show_us +
+                              ((int64_t)p_msg->up_ms * GAME_TILE_US_PER_MS));
 }
 
 /**
@@ -758,19 +747,19 @@ static void game_tile_feedback (game_tile_state_t * p_state, uint8_t result,
  * @param  now_pico_us  Pico corrected time.
  * @return The entry, or NULL when none shows.
  */
-static game_tile_pic_t const * game_tile_showing (
-    game_tile_state_t const * p_state, int64_t now_pico_us)
+static game_tile_pic_t const *
+game_tile_showing (game_tile_state_t const * p_state, int64_t now_pico_us)
 {
-    game_tile_pic_t const * p_best = NULL;
+    game_tile_pic_t const *       p_best  = NULL;
     game_tile_pic_t const * const p_first = &p_state->pic[1];
-    int64_t                 when   = now_pico_us;
+    int64_t                       when    = now_pico_us;
 
     for (uint32_t index = 0u; index < GAME_TILE_PICS; index++)
     {
         game_tile_pic_t const * const p_pic = &p_state->pic[index];
         /* dur_ms is at most 8,191, so the product fits int64_t. */
-        int64_t const end = p_pic->t_show +
-                            ((int64_t)p_pic->dur_ms * GAME_TILE_US_PER_MS);
+        int64_t const end =
+            p_pic->t_show + ((int64_t)p_pic->dur_ms * GAME_TILE_US_PER_MS);
 
         /* The loop runs from entry 1's start to the repeat entry's end. */
         if ((0u != p_pic->b_valid) && (0u != p_pic->b_repeat) &&
@@ -789,12 +778,10 @@ static game_tile_pic_t const * game_tile_showing (
         /* dur_ms is at most 8,191, so the product fits int64_t. */
         int64_t const end = (0u == p_pic->dur_ms)
                                 ? INT64_MAX
-                                : (p_pic->t_show +
-                                   ((int64_t)p_pic->dur_ms *
-                                    GAME_TILE_US_PER_MS));
+                                : (p_pic->t_show + ((int64_t)p_pic->dur_ms *
+                                                    GAME_TILE_US_PER_MS));
 
-        if ((0u != p_pic->b_valid) && (when >= p_pic->t_show) &&
-            (when < end) &&
+        if ((0u != p_pic->b_valid) && (when >= p_pic->t_show) && (when < end) &&
             ((NULL == p_best) || (p_pic->t_show > p_best->t_show)))
         {
             p_best = p_pic;
@@ -812,8 +799,8 @@ static game_tile_pic_t const * game_tile_showing (
  * @param  p_canvas     Canvas drawn on.
  */
 static void game_tile_draw_target (game_tile_state_t const * p_state,
-                                   int64_t now_pico_us,
-                                   game_canvas_t * p_canvas)
+                                   int64_t                   now_pico_us,
+                                   game_canvas_t *           p_canvas)
 {
     if ((0u == p_state->b_mole) || (now_pico_us < p_state->show_us))
     {
@@ -830,7 +817,7 @@ static void game_tile_draw_target (game_tile_state_t const * p_state,
     else if (now_pico_us < p_state->hide_us)
     {
         game_sprites_mole(p_canvas,
-                         game_sprites_rows_up(now_pico_us - p_state->show_us));
+                          game_sprites_rows_up(now_pico_us - p_state->show_us));
     }
     else
     {
@@ -849,7 +836,7 @@ static void game_tile_draw_target (game_tile_state_t const * p_state,
  * @return true while the hit burst or the red X shows.
  */
 static bool game_tile_flash_on (game_tile_state_t const * p_state,
-                                int64_t now_local_us)
+                                int64_t                   now_local_us)
 {
     int64_t const length = (GAME_TILE_RESULT_HIT == p_state->flash_result)
                                ? GAME_SPRITE_HIT_US

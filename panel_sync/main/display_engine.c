@@ -164,12 +164,12 @@ static bool         g_b_rmt_fault = false;
  * (g_b_game_frame) with this pulse width (0: none); the previous game frame's
  * times find the events that start in it. g_b_game_shown is read by the
  * Orientation Task for the tap pulse. */
-static bool           g_b_game_frame   = false;
-static uint32_t       g_game_pulse_us  = 0u;
-static int64_t        g_game_prev_pico = 0;
-static int64_t        g_game_prev_local = 0;
-static _Atomic bool   g_b_game_shown   = false;
-static esp_timer_handle_t g_p_tap_timer = NULL;
+static bool               g_b_game_frame    = false;
+static uint32_t           g_game_pulse_us   = 0u;
+static int64_t            g_game_prev_pico  = 0;
+static int64_t            g_game_prev_local = 0;
+static _Atomic bool       g_b_game_shown    = false;
+static esp_timer_handle_t g_p_tap_timer     = NULL;
 
 static void     de_task (void * p_arg);
 static void     de_report (proto_display_state_t state);
@@ -529,12 +529,11 @@ static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
         game_tile_fill_wire(&game, now_pico, now_local,
                             display_frame_mounted(g_orient), g_p_back);
         /* The first game frame has no previous one: no event pulse. */
-        g_game_pulse_us   = g_b_game_frame
-                                ? game_tile_pulse_us(&game, g_game_prev_pico,
-                                                     now_pico,
-                                                     g_game_prev_local,
-                                                     now_local)
-                                : 0u;
+        g_game_pulse_us =
+            g_b_game_frame
+                ? game_tile_pulse_us(&game, g_game_prev_pico, now_pico,
+                                     g_game_prev_local, now_local)
+                : 0u;
         g_b_game_frame    = true;
         g_game_prev_pico  = now_pico;
         g_game_prev_local = now_local;

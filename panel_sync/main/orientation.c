@@ -238,8 +238,8 @@ static void orientation_task (void * p_arg)
         {
             settle--; /* The IMU is still settling: no taps yet. */
         }
-        else if ((b_read) && (tap_detect_sample(&detect, t_us, accel_x,
-                                                accel_y, accel_z, &event)))
+        else if ((b_read) && (tap_detect_sample(&detect, t_us, accel_x, accel_y,
+                                                accel_z, &event)))
         {
             display_engine_tap_pulse(); /* DS-13: first, for timing. */
             or_tap_publish(&event);
@@ -266,7 +266,7 @@ static void orientation_task (void * p_arg)
 
         if ((0u != failures) && (0u == (failures % OR_REINIT_EVERY)))
         {
-            b_imu = or_imu_init(); /* Monitoring retries (T-B5-05 row). */
+            b_imu  = or_imu_init(); /* Monitoring retries (T-B5-05 row). */
             settle = OR_SETTLE_SAMPLES;
             tap_detect_init(&detect); /* A fresh baseline after settling. */
         }

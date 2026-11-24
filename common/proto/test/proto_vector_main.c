@@ -54,7 +54,7 @@ static char const * const g_names[PROTO_TYPE_COUNT] = {
     "CHUNK_ACK", "NACK",         "BUSY",           "ASSET_READY", "SYNC_READY",
     "BEACON",    "START_AT",     "RESUME_AT",      "PAUSE",       "STOP",
     "STATUS",    "TELEMETRY",    "TELEMETRY_ACK",  "TAP",         "MOLE_ON",
-    "FEEDBACK",  "GAME_CONTROL", "WALL_PICTURE",     "ACK"};
+    "FEEDBACK",  "GAME_CONTROL", "WALL_PICTURE",   "ACK"};
 
 static uint8_t g_in[READ_MAX];
 static uint8_t g_out[FILE_MAX];
@@ -63,9 +63,9 @@ static uint8_t g_payload[PROTO_CHUNK_PAYLOAD_MAX];
 static bool         read_file (char const * p_path, uint32_t * p_len);
 static char const * find_arg (vector_args_t const * p_args, char const * p_key);
 static uint64_t     arg_u64 (vector_args_t const * p_args, char const * p_key);
-static void         arg_list8 (vector_args_t const * p_args,
-                               char const * p_key, uint8_t * p_out);
-static void print_cells (proto_session_config_t const * p_msg);
+static void         arg_list8 (vector_args_t const * p_args, char const * p_key,
+                               uint8_t * p_out);
+static void         print_cells (proto_session_config_t const * p_msg);
 static void     arg_crc_list (vector_args_t const * p_args, uint32_t * p_crc);
 static uint16_t arg_payload (vector_args_t const * p_args);
 static proto_header_t arg_header (vector_args_t const * p_args);
@@ -889,9 +889,9 @@ static void print_cells (proto_session_config_t const * p_msg)
         for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
             proto_cell_t const * const p_cell = &p_msg->cell[node];
-            uint8_t const value = (0u == part)   ? p_cell->b_placed
-                                  : (1u == part) ? p_cell->row
-                                                 : p_cell->col;
+            uint8_t const              value  = (0u == part) ? p_cell->b_placed
+                                                : (1u == part) ? p_cell->row
+                                                               : p_cell->col;
 
             printf("%s%" PRIu8, (0u == node) ? "" : ",", value);
         }
@@ -1188,13 +1188,18 @@ static uint32_t encode_coordinator (uint32_t type, vector_args_t const * p_args)
         case PROTO_TYPE_STATUS:
         {
             /* Masked to the member widths; the encoder checks the range. */
-            proto_status_t const msg = {
-                header, arg_u16(p_args, "readiness"), arg_u16(p_args, "online"),
-                arg_u8(p_args, "state"), arg_s8(p_args, "score"),
-                arg_u8(p_args, "round_state"), arg_u8(p_args, "level"),
-                arg_u8(p_args, "missed"), arg_u8(p_args, "wrong"),
-                arg_u8(p_args, "shown"), arg_u8(p_args, "time_left_s"),
-                arg_u16(p_args, "reaction_ms")};
+            proto_status_t const msg = {header,
+                                        arg_u16(p_args, "readiness"),
+                                        arg_u16(p_args, "online"),
+                                        arg_u8(p_args, "state"),
+                                        arg_s8(p_args, "score"),
+                                        arg_u8(p_args, "round_state"),
+                                        arg_u8(p_args, "level"),
+                                        arg_u8(p_args, "missed"),
+                                        arg_u8(p_args, "wrong"),
+                                        arg_u8(p_args, "shown"),
+                                        arg_u8(p_args, "time_left_s"),
+                                        arg_u16(p_args, "reaction_ms")};
 
             written = proto_encode_status(&msg, g_out, FILE_MAX);
         }
@@ -1234,10 +1239,9 @@ static uint32_t encode_game (uint32_t type, vector_args_t const * p_args)
 
         case PROTO_TYPE_MOLE_ON:
         {
-            proto_mole_on_t const msg = {header, node,
-                                         arg_u64(p_args, "t_show"),
-                                         arg_u16(p_args, "up_ms"),
-                                         arg_u8(p_args, "kind")};
+            proto_mole_on_t const msg = {
+                header, node, arg_u64(p_args, "t_show"),
+                arg_u16(p_args, "up_ms"), arg_u8(p_args, "kind")};
 
             written = proto_encode_mole_on(&msg, g_out, FILE_MAX);
         }
@@ -1254,10 +1258,9 @@ static uint32_t encode_game (uint32_t type, vector_args_t const * p_args)
 
         case PROTO_TYPE_GAME_CONTROL:
         {
-            proto_game_control_t const msg = {header, node,
-                                              arg_u8(p_args, "command"),
-                                              arg_u8(p_args, "level"),
-                                              arg_u8(p_args, "threshold")};
+            proto_game_control_t const msg = {
+                header, node, arg_u8(p_args, "command"),
+                arg_u8(p_args, "level"), arg_u8(p_args, "threshold")};
 
             written = proto_encode_game_control(&msg, g_out, FILE_MAX);
         }
@@ -1265,16 +1268,15 @@ static uint32_t encode_game (uint32_t type, vector_args_t const * p_args)
 
         case PROTO_TYPE_WALL_PICTURE:
         {
-            proto_wall_picture_t const msg = {
-                header,
-                node,
-                arg_u8(p_args, "slot"),
-                arg_u8(p_args, "effect"),
-                arg_u8(p_args, "colour"),
-                arg_u8(p_args, "repeat"),
-                arg_u64(p_args, "t_show"),
-                arg_u16(p_args, "dur_ms"),
-                arg_u64(p_args, "mask")};
+            proto_wall_picture_t const msg = {header,
+                                              node,
+                                              arg_u8(p_args, "slot"),
+                                              arg_u8(p_args, "effect"),
+                                              arg_u8(p_args, "colour"),
+                                              arg_u8(p_args, "repeat"),
+                                              arg_u64(p_args, "t_show"),
+                                              arg_u16(p_args, "dur_ms"),
+                                              arg_u64(p_args, "mask")};
 
             written = proto_encode_wall_picture(&msg, g_out, FILE_MAX);
         }
@@ -1320,9 +1322,9 @@ static uint32_t encode_pc (uint32_t type, vector_args_t const * p_args)
                                           {{0u, 0u, 0u}},
                                           arg_u16(p_args, "frame_count"),
                                           {0u}};
-            uint8_t placed[PROTO_NODE_MAX];
-            uint8_t row[PROTO_NODE_MAX];
-            uint8_t col[PROTO_NODE_MAX];
+            uint8_t                placed[PROTO_NODE_MAX];
+            uint8_t                row[PROTO_NODE_MAX];
+            uint8_t                col[PROTO_NODE_MAX];
 
             arg_list8(p_args, "placed", placed);
             arg_list8(p_args, "row", row);

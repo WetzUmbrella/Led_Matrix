@@ -33,17 +33,17 @@
 /** One message waiting for its ACK. */
 typedef struct
 {
-    bool        b_busy;
-    uint8_t     node_id;   /**< Addressee: 1 to 9 for a tile, 0 for the PC. */
-    uint8_t     type;      /**< Message type code, for ack_outbox_cancel(). */
-    uint16_t    seq;       /**< Header seq; the ACK's acked_seq. */
-    uint32_t    addr;      /**< Destination address. */
-    uint16_t    port;      /**< Destination port. */
-    uint8_t     len;       /**< Bytes in buf. */
-    uint8_t     buf[ACK_OUTBOX_MSG_MAX];
-    uint64_t    next_us;     /**< Next send is due at or after this time. */
-    uint64_t    deadline_us; /**< Dropped at or after this time. */
-    uint32_t    sends;       /**< Sends so far, the first included. */
+    bool     b_busy;
+    uint8_t  node_id; /**< Addressee: 1 to 9 for a tile, 0 for the PC. */
+    uint8_t  type;    /**< Message type code, for ack_outbox_cancel(). */
+    uint16_t seq;     /**< Header seq; the ACK's acked_seq. */
+    uint32_t addr;    /**< Destination address. */
+    uint16_t port;    /**< Destination port. */
+    uint8_t  len;     /**< Bytes in buf. */
+    uint8_t  buf[ACK_OUTBOX_MSG_MAX];
+    uint64_t next_us;     /**< Next send is due at or after this time. */
+    uint64_t deadline_us; /**< Dropped at or after this time. */
+    uint32_t sends;       /**< Sends so far, the first included. */
 } ack_outbox_entry_t;
 
 /** The outbox. */

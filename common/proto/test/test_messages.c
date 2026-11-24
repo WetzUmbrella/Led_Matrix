@@ -43,26 +43,26 @@
 /** First bit of the SESSION_CONFIG cells: node 1's placed flag (step 4d). */
 #define CELL_BIT                                                               \
     (PROTO_HEADER_BITS + PROTO_GRID_BITS + PROTO_GRID_BITS + PROTO_POLICY_BITS)
-#define LEN_MANIFEST       10u
-#define LEN_CHUNK_HEAD     5u
-#define LEN_CHUNK_ACK      5u
-#define LEN_NACK           7u
-#define LEN_BUSY           7u
-#define LEN_ASSET_READY    9u
-#define LEN_SYNC_READY     5u
-#define LEN_BEACON         12u
-#define LEN_START_AT       12u
-#define LEN_RESUME_AT      13u
-#define LEN_COMMAND        4u
-#define LEN_STATUS         13u
-#define LEN_TELEMETRY      9u
-#define LEN_TELEMETRY_ACK  6u
-#define LEN_TAP            15u
-#define LEN_MOLE_ON        14u
-#define LEN_FEEDBACK       5u
-#define LEN_GAME_CONTROL   6u
-#define LEN_WALL_PICTURE   23u
-#define LEN_ACK            7u
+#define LEN_MANIFEST      10u
+#define LEN_CHUNK_HEAD    5u
+#define LEN_CHUNK_ACK     5u
+#define LEN_NACK          7u
+#define LEN_BUSY          7u
+#define LEN_ASSET_READY   9u
+#define LEN_SYNC_READY    5u
+#define LEN_BEACON        12u
+#define LEN_START_AT      12u
+#define LEN_RESUME_AT     13u
+#define LEN_COMMAND       4u
+#define LEN_STATUS        13u
+#define LEN_TELEMETRY     9u
+#define LEN_TELEMETRY_ACK 6u
+#define LEN_TAP           15u
+#define LEN_MOLE_ON       14u
+#define LEN_FEEDBACK      5u
+#define LEN_GAME_CONTROL  6u
+#define LEN_WALL_PICTURE  23u
+#define LEN_ACK           7u
 
 /** The six whack-a-mole rows, and the largest value of the 4-bit node_id
  *  field (15), for the decode-side refusals. */
@@ -70,7 +70,7 @@
 #define NODE_FIELD_MAX ((1u << PROTO_NODE_BITS) - 1u)
 
 static proto_type_t const g_game_rows[GAME_ROWS] = {
-    PROTO_TYPE_TAP,          PROTO_TYPE_MOLE_ON,    PROTO_TYPE_FEEDBACK,
+    PROTO_TYPE_TAP,          PROTO_TYPE_MOLE_ON,      PROTO_TYPE_FEEDBACK,
     PROTO_TYPE_GAME_CONTROL, PROTO_TYPE_WALL_PICTURE, PROTO_TYPE_ACK};
 
 static uint8_t  g_buf[BUF_BYTES];
@@ -179,8 +179,8 @@ bool test_messages_lengths (void)
     proto_start_at_t const       start = {hdr, 0u};
     proto_resume_at_t const      res   = {hdr, 0u, 0u};
     proto_command_t const        cmd   = {hdr};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u,
-                                          0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u, 0u,
+                                          0u,  0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_telemetry_ack_t const  tack  = {hdr, 0u};
 
@@ -294,7 +294,7 @@ static bool lengths_game (void)
                             __LINE__)) &&
            b_ok;
     b_ok = (test_main_check(LEN_WALL_PICTURE == proto_encode_wall_picture(
-                                                  &mask, g_buf, BUF_BYTES),
+                                                    &mask, g_buf, BUF_BYTES),
                             __LINE__)) &&
            b_ok;
     b_ok = (test_main_check(LEN_ACK == proto_encode_ack(&ack, g_buf, BUF_BYTES),
@@ -509,29 +509,28 @@ static bool game_decode (proto_type_t type, uint32_t len)
  */
 static bool reject_encode (void)
 {
-    bool                   b_ok  = true;
-    proto_header_t const   hdr   = header_at(CORNER_MIN);
-    proto_heartbeat_t      beat  = {hdr, 0u};
-    proto_manifest_t       man   = {hdr, 2u, 0u, 0u};
-    proto_status_t         stat  = {hdr, BITMAP_MAX + 1u, 0u, 0u, 0u,
-                                    0u, 0u, 0u, 0u, 0u, 0u, 0u};
-    proto_status_t         hi    = {hdr, 0u, 0u, 0u, SCORE_OVER,
-                                    0u, 0u, 0u, 0u, 0u, 0u, 0u};
-    proto_status_t         lo    = {hdr, 0u, 0u, 0u, SCORE_UNDER,
-                                    0u, 0u, 0u, 0u, 0u, 0u, 0u};
-    proto_telemetry_t      tel   = {hdr, 1u, 0u, 0u, PROTO_DISPLAY_COUNT};
-    proto_asset_chunk_t    chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
-                                    g_payload};
+    bool                 b_ok = true;
+    proto_header_t const hdr  = header_at(CORNER_MIN);
+    proto_heartbeat_t    beat = {hdr, 0u};
+    proto_manifest_t     man  = {hdr, 2u, 0u, 0u};
+    proto_status_t       stat = {
+        hdr, BITMAP_MAX + 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t      hi    = {hdr, 0u, 0u, 0u, SCORE_OVER, 0u,
+                                 0u,  0u, 0u, 0u, 0u,         0u};
+    proto_status_t      lo    = {hdr, 0u, 0u, 0u, SCORE_UNDER, 0u,
+                                 0u,  0u, 0u, 0u, 0u,          0u};
+    proto_telemetry_t   tel   = {hdr, 1u, 0u, 0u, PROTO_DISPLAY_COUNT};
+    proto_asset_chunk_t chunk = {hdr, PROTO_CHUNK_INDEX_MAX + 1u, 1u,
+                                 g_payload};
     /* Node 1 placed on row 2 of a 2 x 5 grid: outside it (step 4d). */
-    proto_session_config_t cfg   = {hdr, 2u, 5u, 0u, {{1u, 2u, 0u}}, 1u,
-                                    {0u}};
-    proto_mole_on_t        mole  = {hdr, 1u, 0u, 0u, 0u};
+    proto_session_config_t cfg  = {hdr, 2u, 5u, 0u, {{1u, 2u, 0u}}, 1u, {0u}};
+    proto_mole_on_t        mole = {hdr, 1u, 0u, 0u, 0u};
     /* Command 8 is past the last (TAP_TEST_OFF); 4 is ARM since 11 Nov. */
-    proto_game_control_t   ctrl  = {hdr, 1u, (uint8_t)PROTO_GAME_CMD_COUNT,
-                                    0u, 0u};
-    proto_feedback_msg_t   feed  = {hdr, 1u, 3u}; /* 3 = FEEDBACK_COUNT. */
-    proto_ack_t            ack   = {hdr, PROTO_NODE_MAX + 1u, 0u};
-    proto_tap_t            tap   = {hdr, 0u, 0u, 0u};
+    proto_game_control_t ctrl = {hdr, 1u, (uint8_t)PROTO_GAME_CMD_COUNT, 0u,
+                                 0u};
+    proto_feedback_msg_t feed = {hdr, 1u, 3u}; /* 3 = FEEDBACK_COUNT. */
+    proto_ack_t          ack  = {hdr, PROTO_NODE_MAX + 1u, 0u};
+    proto_tap_t          tap  = {hdr, 0u, 0u, 0u};
 
     /* Encoders refuse out-of-range fields. */
     b_ok =
@@ -606,8 +605,8 @@ static bool reject_decode_range (void)
     proto_header_t const         hdr   = header_at(CORNER_MIN);
     proto_heartbeat_t const      beat  = {hdr, 1u};
     proto_manifest_t const       man   = {hdr, 2u, 1u, 0u};
-    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u,
-                                          0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t const         stat  = {hdr, 0u, 0u, 0u, 0u, 0u,
+                                          0u,  0u, 0u, 0u, 0u, 0u};
     proto_telemetry_t const      tel   = {hdr, 1u, 0u, 0u, 0u};
     proto_asset_chunk_t const    chunk = {hdr, 0u, 1u, g_payload};
     proto_session_config_t const cfg   = {hdr, 1u, 1u, 0u, {{0u}}, 1u, {0u}};
@@ -880,13 +879,13 @@ static void rt_heartbeat (uint32_t corner)
 static void rt_session_config (uint32_t corner)
 {
     bool const             b_max = (CORNER_MIN != corner);
-    proto_session_config_t msg   = {
-        header_at(corner), 1u, 1u, 0u, {{0u, 0u, 0u}}, 1u, {0u}};
+    proto_session_config_t msg   = {header_at(corner), 1u, 1u,  0u,
+                                    {{0u, 0u, 0u}},    1u, {0u}};
     proto_session_config_t out;
     bool                   b_same;
 
-    msg.rows   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u; /* 9 fits. */
-    msg.cols   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u; /* 9 fits. */
+    msg.rows   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u;     /* 9 fits. */
+    msg.cols   = b_max ? (uint8_t)PROTO_GRID_MAX : 1u;     /* 9 fits. */
     msg.policy = b_max ? (uint8_t)PROTO_POLICY_PAUSE : 0u; /* Code 1. */
 
     msg.frame_count = b_max ? (uint16_t)PROTO_FRAME_MAX : 1u; /* 1023. */
@@ -895,9 +894,9 @@ static void rt_session_config (uint32_t corner)
     {
         msg.cell[node].b_placed = b_max ? 1u : 0u;
         /* Row 8 fits uint8_t. */
-        msg.cell[node].row      = b_max ? (uint8_t)(PROTO_GRID_MAX - 1u) : 0u;
-        msg.cell[node].col      = b_max ? (uint8_t)node : 0u; /* < 9. */
-        msg.crc32[node]         = b_max ? UINT32_MAX : 0u;
+        msg.cell[node].row = b_max ? (uint8_t)(PROTO_GRID_MAX - 1u) : 0u;
+        msg.cell[node].col = b_max ? (uint8_t)node : 0u; /* < 9. */
+        msg.crc32[node]    = b_max ? UINT32_MAX : 0u;
     }
 
     uint32_t const len = proto_encode_session_config(&msg, g_buf, BUF_BYTES);
@@ -1135,13 +1134,17 @@ static void rt_status (uint32_t corner)
 {
     bool const           b_max = (CORNER_MIN != corner);
     proto_status_t const msg   = {
-        header_at(corner), b_max ? BITMAP_MAX : 0u, b_max ? BITMAP_MAX : 0u,
+        header_at(corner),
+        b_max ? BITMAP_MAX : 0u,
+        b_max ? BITMAP_MAX : 0u,
         b_max ? (uint8_t)PROTO_COORD_COORDINATING_GAME : 0u, /* Code 12. */
         b_max ? (int8_t)PROTO_SCORE_MAX : (int8_t)-PROTO_SCORE_MAX,
         b_max ? (uint8_t)PROTO_ROUND_RESULTS : 0u,
         b_max ? (uint8_t)PROTO_LEVEL_HARD : 0u,
-        b_max ? PROTO_COUNT_MAX : 0u, b_max ? PROTO_COUNT_MAX : 0u,
-        b_max ? PROTO_COUNT_MAX : 0u, b_max ? PROTO_TIME_LEFT_MAX : 0u,
+        b_max ? PROTO_COUNT_MAX : 0u,
+        b_max ? PROTO_COUNT_MAX : 0u,
+        b_max ? PROTO_COUNT_MAX : 0u,
+        b_max ? PROTO_TIME_LEFT_MAX : 0u,
         b_max ? PROTO_REACTION_MAX : 0u};
     proto_status_t out;
     uint32_t const len = proto_encode_status(&msg, g_buf, BUF_BYTES);
@@ -1281,19 +1284,14 @@ static void rt_game_control (uint32_t corner)
  */
 static void rt_wall_picture (uint32_t corner)
 {
-    bool const               b_max = (CORNER_MIN != corner);
+    bool const                 b_max = (CORNER_MIN != corner);
     proto_wall_picture_t const msg   = {
-        header_at(corner),
-        b_max ? PROTO_NODE_MAX : 1u,
-        b_max ? 3u : 0u,
+        header_at(corner), b_max ? PROTO_NODE_MAX : 1u, b_max ? 3u : 0u,
         /* Enum codes 2 and 7: both fit uint8_t. */
         b_max ? (uint8_t)PROTO_PIC_CLEAR : 0u,
-        b_max ? (uint8_t)PROTO_COLOUR_CYAN : 0u,
-        b_max ? 1u : 0u,
-        b_max ? UINT64_MAX : 0u,
-        b_max ? 8191u : 0u,
-        b_max ? UINT64_MAX : 0u};
-    proto_wall_picture_t       out;
+        b_max ? (uint8_t)PROTO_COLOUR_CYAN : 0u, b_max ? 1u : 0u,
+        b_max ? UINT64_MAX : 0u, b_max ? 8191u : 0u, b_max ? UINT64_MAX : 0u};
+    proto_wall_picture_t out;
     uint32_t const len = proto_encode_wall_picture(&msg, g_buf, BUF_BYTES);
 
     tally((proto_decode_wall_picture(g_buf, len, &out)) &&
@@ -1331,8 +1329,8 @@ static bool cells_encode (uint8_t rows, uint8_t cols, uint8_t placed_a,
                           uint8_t row_a, uint8_t col_a, uint8_t placed_b,
                           uint8_t row_b, uint8_t col_b)
 {
-    proto_session_config_t msg = {
-        header_at(CORNER_MIN), rows, cols, 0u, {{0u, 0u, 0u}}, 1u, {0u}};
+    proto_session_config_t msg = {header_at(CORNER_MIN), rows, cols, 0u,
+                                  {{0u, 0u, 0u}},        1u,   {0u}};
 
     msg.cell[0].b_placed = placed_a;
     msg.cell[0].row      = row_a;
@@ -1358,37 +1356,46 @@ bool test_messages_cells (void)
 
     /* Accepted: (0, 0) and (4, 4) of 5 x 5; (8, 8) of 9 x 9. */
     b_ok = (test_main_check(cells_encode(5u, 5u, 1u, 0u, 0u, 1u, 4u, 4u),
-                            __LINE__)) && b_ok;
-    b_ok = (test_main_check((proto_decode_session_config(
-                                g_buf, LEN_SESSION_CONFIG, &out)) &&
-                                (1u == out.cell[1].b_placed) &&
-                                (4u == out.cell[1].row) &&
-                                (4u == out.cell[1].col),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
+    b_ok = (test_main_check(
+               (proto_decode_session_config(g_buf, LEN_SESSION_CONFIG, &out)) &&
+                   (1u == out.cell[1].b_placed) && (4u == out.cell[1].row) &&
+                   (4u == out.cell[1].col),
+               __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(cells_encode(9u, 9u, 1u, 8u, 8u, 0u, 0u, 0u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* Refused by the encoder: one cell twice, outside the grid (row then
      * col), a cell on a tile not placed, placed 2. */
     b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 1u, 2u, 1u, 1u, 2u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 3u, 0u, 0u, 0u, 0u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 0u, 3u, 0u, 0u, 0u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(!cells_encode(3u, 3u, 1u, 0u, 0u, 0u, 1u, 0u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     b_ok = (test_main_check(!cells_encode(3u, 3u, 2u, 0u, 0u, 0u, 0u, 0u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
 
     /* Refused by the decoder: a second tile placed on node 1's cell (0, 0)
      * written into the bits of a valid message. */
     b_ok = (test_main_check(cells_encode(1u, 1u, 1u, 0u, 0u, 0u, 0u, 0u),
-                            __LINE__)) && b_ok;
+                            __LINE__)) &&
+           b_ok;
     proto_put_bits(g_buf, CELL_BIT + PROTO_CELL_BITS, PROTO_PLACED_BITS, 1u);
-    b_ok = (test_main_check(!proto_decode_session_config(
-                                g_buf, LEN_SESSION_CONFIG, &out),
-                            __LINE__)) && b_ok;
+    b_ok = (test_main_check(
+               !proto_decode_session_config(g_buf, LEN_SESSION_CONFIG, &out),
+               __LINE__)) &&
+           b_ok;
 
     return b_ok;
 }
