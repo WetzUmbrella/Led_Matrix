@@ -7,8 +7,7 @@
  *          function takes the time, so the host tests run it on a fake clock
  *          with an injected RNG seed.
  *
- * Owner: Benjamin (Buddy 2), game engine (re-plan table: "Benjamin (B2):
- * Pico COORDINATING_GAME, game engine"). Written for build step 7.
+ * Owner: Cheston (Buddy 3), game rules. Written for build step 7.
  *
  * Rules (re-plan "v1 rules"):
  * - One mole at a time on a random active tile. Never the same tile twice
