@@ -65,7 +65,7 @@ jobs:
       - name: pytest (barr_check, skew_analyse, proto_layout and the C/Python vectors)
         run: python3 -m pytest -q tools/tests pc/tests
 
-      - name: Host tests (timesync), plain and with sanitizers
+      - name: Host tests (panel_sync tile modules), plain and with sanitizers
         run: |
           make -C panel_sync/test
           make -C panel_sync/test asan
@@ -79,6 +79,11 @@ jobs:
         run: |
           make -C ledwall_sync/test
           make -C ledwall_sync/test asan
+
+      - name: Host tests (pico_tap edge ring), plain and with sanitizers
+        run: |
+          make -C tools/pico_tap/test
+          make -C tools/pico_tap/test asan
 
   pico:
     name: Pico W (ledwall_sync)

@@ -12,6 +12,37 @@ update the matching section (decisions, status, open questions) in the same comm
 
 ---
 
+## Final submission (25 Nov 2026, branch `feature/whack-a-mole`)
+
+A 3x3 wall of ESP32-S3 tiles (8x8 LEDs each) coordinated by a Pico W plays a
+GIF in sync (under 5 ms between tiles, by camera) and runs a whack-a-mole game
+for children, both driven from a website on the PC. Sections 1 to 7 below are
+the project overview from October and describe the early prototype; the
+documents in this table are current.
+
+| What | Where |
+|---|---|
+| Tile firmware (ESP-IDF) | `panel_sync/` |
+| Pico W coordinator (Pico SDK) | `ledwall_sync/` |
+| Shared message codec (C) | `common/proto/` |
+| Website, GIF build, upload (Python) | `pc/` (`pc/web.py`) |
+| **Test report**: unit, integration and system tests, inputs, expected and actual results, failures | [`docs/testing/TEST_REPORT.md`](docs/testing/TEST_REPORT.md) |
+| Test logs of the submitted code, every case with its verdict | [`docs/testing/results/`](docs/testing/results/) |
+| Run every host test | `./tools/run_all_tests.sh` |
+| Requirements and their status | [`docs/plan/game_plan_v2.md`](docs/plan/game_plan_v2.md), [`docs/final/requirements_check_24nov.md`](docs/final/requirements_check_24nov.md) |
+| Change requirement 1 (minimum-bit data), Week 13 evidence | [`docs/week13/`](docs/week13/) |
+| Message layout (every field, its range and bits) | [`protocol/layout_table.md`](protocol/layout_table.md) |
+| Bench records of every hardware test | [`docs/bench/`](docs/bench/) |
+| Module defence notes | `docs/*_DEFENCE.md` |
+
+Start the demo (router `MATRIX`, Pico at 192.168.1.154, 9 tiles):
+
+```
+.venv/bin/python pc/web.py --pico 192.168.1.154 --layout 3x3 --gif frog_ripple_64x64.gif --policy continue
+```
+
+---
+
 ## 1. What this project is
 
 A wall of LED panels that plays one animation across all of them, kept in

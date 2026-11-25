@@ -18,11 +18,12 @@
 static tap_ring_t g_ring;
 static uint32_t   g_failures = 0u;
 
-static void check (bool b_condition, int32_t line);
-static bool test_order (void);
-static bool test_full_drops (void);
-static bool test_index_wrap (void);
-static bool test_empty (void);
+static void     check (bool b_condition, int32_t line);
+static uint32_t report (char const * p_name, bool b_passed);
+static bool     test_order (void);
+static bool     test_full_drops (void);
+static bool     test_index_wrap (void);
+static bool     test_empty (void);
 
 /**
  * @brief  Run the four ring tests.
@@ -32,10 +33,14 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
 {
     uint32_t passed = 0u;
 
-    passed += test_order() ? 1u : 0u;
-    passed += test_full_drops() ? 1u : 0u;
-    passed += test_index_wrap() ? 1u : 0u;
-    passed += test_empty() ? 1u : 0u;
+    passed +=
+        report("R1: events come out in order, with their values", test_order());
+    passed += report("R2: a full ring refuses and counts the extra event",
+                     test_full_drops());
+    passed += report("R3: head and tail wrap at 2^32, nothing lost",
+                     test_index_wrap());
+    passed += report("R4: an empty ring returns nothing, drops nothing",
+                     test_empty());
     printf("tap_ring: Pass = %" PRIu32 " of %u\n", passed, TEST_COUNT);
 
     /* DEVIATION D-2: the exit status is the int that main returns. */
@@ -54,6 +59,19 @@ static void check (bool b_condition, int32_t line)
         g_failures++;
         printf("    FAIL at line %" PRId32 "\n", line);
     }
+}
+
+/**
+ * @brief  Print one test's name and verdict, as the other host suites do.
+ * @param  p_name    Test name.
+ * @param  b_passed  Whether every check of the test passed.
+ * @return 1 when it passed, else 0, to add to the pass count.
+ */
+static uint32_t report (char const * p_name, bool b_passed)
+{
+    printf("%s\n  %s\n", p_name, b_passed ? "PASS" : "FAIL");
+
+    return b_passed ? 1u : 0u;
 }
 
 /**
