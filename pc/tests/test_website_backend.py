@@ -474,6 +474,18 @@ def test_start_wall_sets_the_layout_and_gif_then_publishes(tmp_path, monkeypatch
     assert start.link.configs == [] and start.model.job is None
 
 
+def test_policy_option_reaches_the_session_config() -> None:
+    # Bench 25 Nov 2026: the demo may run the continue policy.
+    assert web.POLICIES == {"pause": plink.POLICY_PAUSE,
+                            "continue": plink.POLICY_CONTINUE}
+    shell = _shell()
+    shell.model.policy = web.POLICIES["continue"]
+    web.start_wall(shell, "3x3", None, None)
+    while shell.model.job is not None:
+        time.sleep(0.01)
+    assert shell.link.configs[-1][3] == plink.POLICY_CONTINUE
+
+
 # Background publishing (the website).
 
 def test_website_publish_runs_in_the_background(tmp_path) -> None:  # type: ignore

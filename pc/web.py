@@ -54,8 +54,11 @@ only used by one thread at a time; a GIF upload and the preview take it only
 briefly. Usage:
     python3 pc/web.py --pico 192.168.1.57 [--session 7] [--port 8080]
         [--layout 3x3 [--map 1,2,3,4,5,6,7,8,9]] [--gif NAME.gif]
+        [--policy pause|continue]
 --layout, --map and --gif set up the wall at start (demo day: no
-tap-placing after a restart); the map defaults to reading order.
+tap-placing after a restart); the map defaults to reading order. --policy
+is the failure policy every SESSION_CONFIG carries (default pause; bench
+25 Nov 2026: under pause a tile away over 5 s puts the Pico in FAULT).
 """
 
 from __future__ import annotations
@@ -75,6 +78,7 @@ import asset_builder as ab  # noqa: E402
 import dashboard as db  # noqa: E402
 import gif_library as gl  # noqa: E402
 import proto_layout as pl  # noqa: E402
+import pico_link  # noqa: E402
 import tap_log as tl  # noqa: E402
 
 #: Port and bind address (the page is for the laptop and the wall's PC LAN).
@@ -357,6 +361,11 @@ def start_wall(shell, layout: Optional[str],  # type: ignore[no-untyped-def]
     shell.run_job("upload", shell.publish)
 
 
+#: --policy names to the SESSION_CONFIG failure policy (T-B2-04).
+POLICIES = {"pause": pico_link.POLICY_PAUSE,
+            "continue": pico_link.POLICY_CONTINUE}
+
+
 def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
     """Command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -374,6 +383,10 @@ def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
     parser.add_argument("--tap-log", default="auto",
                         help="CSV of every tap: auto (pc/logs/taps_<time>"
                              ".csv), none, or a path")
+    parser.add_argument("--policy", choices=sorted(POLICIES),
+                        default="pause",
+                        help="failure policy when a tile is lost during "
+                             "playback (default pause)")
     args = parser.parse_args(argv)
     try:
         session = db.resolve_session(args.session)
@@ -382,6 +395,8 @@ def main(argv: Optional[list] = None) -> int:  # type: ignore[type-arg]
         return 1
     shell = db.DashboardShell(args.pico, session)
     shell.background = True
+    shell.model.policy = POLICIES[args.policy]
+    print("failure policy: %s" % args.policy)
     if args.tap_log != "none":
         shell.tap_log = tl.TapLog(tl.default_path() if args.tap_log == "auto"
                                   else args.tap_log)
