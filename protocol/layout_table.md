@@ -414,11 +414,22 @@ Every field and every shared packed word, with its valid range, bits before (the
 | rows, cols | SESSION_CONFIG | 1 to 9 each (up to 81 cells, step 4d) | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4; replaces the 2-bit layout code |
 | cell row, col | SESSION_CONFIG | 0 to 8 each | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4 (step 4d) |
 | placed | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 values (step 4d) |
-| peak | TAP | 0 to 65,535 | 16 (`uint16_t` in `tap_detect`) | 16 | shifts and masks | the tile's peak type; the 0.5 g floor is 2,048 LSB and a hard tap can pass 32,767 |
-| up_ms | MOLE_ON | 1 to 2,000 ms | 16 (`uint16_t`, rule) | 11 | shifts and masks | 2,000 values, ceil(log2 2000) = 11; a 64-bit hide time was rejected (53 bits more per mole) |
+| peak | TAP | 0 to 65,535 mg | 16 (`uint16_t` in `tap_detect`) | 16 | shifts and masks | the tile's peak type, in mg from 11 Nov 2026 (+/-16 g range, so a hard tap reaches 16,000 mg; 15 bits would also fit, 16 kept as the detector's type) |
+| up_ms | MOLE_ON | 0 to 4,000 ms | 16 (`uint16_t`, rule) | 12 | shifts and masks | 4,001 values, ceil(log2 4001) = 12 (11 bits until 11 Nov 2026, widened for the 3,000 ms rotate sprite, DS-10); a 64-bit hide time was rejected (52 bits more per mole) |
 | game score | STATUS | -99 to 99 | 8 (`int8_t`, rule) | 8, two's complement | shifts and masks | 199 values, ceil(log2 199) = 8; the Pico clamps the score |
 | FEEDBACK result | FEEDBACK | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 codes (miss, hit, reserved decoy); 2 bits by decision of 6 Nov 2026 |
-| game command | GAME_CONTROL | 0 to 3 | 8 (enum, rule) | 4 | shifts and masks | 4 commands, 12 spare; 4 bits by decision of 6 Nov 2026 |
+| game command | GAME_CONTROL | 0 to 7 | 8 (enum, rule) | 4 | shifts and masks | 8 commands (section 5.10), 8 spare; 4 bits by decision of 6 Nov 2026, so codes 4 to 7 (11 Nov) needed no layout change |
+| t_tap, t_show | TAP, MOLE_ON, WALL_PICTURE | 0 to 2^64 - 1 us | 64 (`uint64_t` time, rule) | 64 | shifts and masks | J1: Pico corrected clock, same type as the beacon time |
+| target kind | MOLE_ON | 0 to 4 | 8 (enum, rule) | 3 | shifts and masks | 5 codes (section 5.12), ceil(log2 5) = 3 |
+| level | GAME_CONTROL, STATUS | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 levels, ceil(log2 3) = 2 |
+| tap threshold | GAME_CONTROL (ARM) | 0 to 250 (20 mg steps) | 16 (`uint16_t` mg, rule) | 8 | shifts and masks | 251 values, ceil(log2 251) = 8; 20 mg steps cover 20 to 5,000 mg |
+| round state | STATUS | 0 to 4 | 8 (enum, rule) | 3 | shifts and masks | 5 codes (section 5.15), ceil(log2 5) = 3 |
+| missed, wrong, shown | STATUS | 0 to 127 each | 32 each (`uint32_t` counter, rule) | 7 each | shifts and masks | a 30 s round shows at most about 60 targets; 7 bits saturate at 127 |
+| time left | STATUS | 0 to 63 s | 32 (`uint32_t` counter, rule) | 6 | shifts and masks | round 30 s, ceil(log2 31) = 5; 6 bits leave room to 63 s |
+| reaction time | STATUS | 0 to 2,047 ms | 32 (`uint32_t` counter, rule) | 11 | shifts and masks | mean tap reaction; targets stay up at most 4,000 ms but the mean is clamped at 2,047 (11 bits) |
+| wall turn | STATUS | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | quarter turns since the layout (D-17, 24 Nov 2026) |
+| picture slot, effect, colour, repeat | WALL_PICTURE | 0 to 3, 0 to 2, 0 to 7, 0 to 1 | 8 each (enum or flag, rule) | 2, 2, 3, 1 | shifts and masks | 4 slots; 3 effects (section 5.13); 8 colours (section 5.14); a flag |
+| picture duration | WALL_PICTURE | 0 to 8,191 ms | 32 (`uint32_t` counter, rule) | 13 | shifts and masks | up to 8.2 s per picture, ceil(log2 8192) = 13 |
 | score mask | WALL_PICTURE | 64 bits | 64 | 64 | shifts and masks | one bit per pixel of an 8 x 8 tile |
 | failure policy | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 policies |
 | readiness bitmap | STATUS; Pico RAM | 9 bits | 72 (9 x `uint8_t` flag, rule) | 9 on the wire, one `uint16_t` in RAM | shifts and masks; single writer in poll context | VC-11b |
