@@ -1,0 +1,4 @@
+CL_STATS state=8 sent=7201 first_seq=0 last_seq=7200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=7 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=30 dispatch_max_us=643 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x0000000a tx_drop=0 tx_fail=0 tel_rx=5882 wt_known=0x1ff wall_turn=0
+LATE_HIST,7201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,29457,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,29428,25,0,3,0,0,1,0,0,0,0

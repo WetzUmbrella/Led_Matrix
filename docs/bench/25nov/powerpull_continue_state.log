@@ -1,0 +1,7 @@
+14:32:47.8 pico=COORDINATING PLAYBACK pc=READY offline=[] notready=[] map=[1, 2, 3, 4, 5, 6, 7, 8, 9] last_msg=video play
+14:33:37.3 pico=COORDINATING PLAYBACK pc=READY offline=[9] notready=[] map=[1, 2, 3, 4, 5, 6, 7, 8, 9] last_msg=tile 9 lost (Pico STATUS online bit cleared)
+14:33:44.1 pico=COORDINATING PLAYBACK pc=READY offline=[] notready=[] map=[1, 2, 3, 4, 5, 6, 7, 8, 9] last_msg=tile 9 lost (Pico STATUS online bit cleared)
+14:34:28.6 pico=COORDINATING PLAYBACK pc=READY offline=[9] notready=[] map=[1, 2, 3, 4, 5, 6, 7, 8, 9] last_msg=tile 9 lost (Pico STATUS online bit cleared)
+14:34:39.1 pico=COORDINATING PLAYBACK pc=READY offline=[] notready=[] map=[1, 2, 3, 4, 5, 6, 7, 8, 9] last_msg=tile 9 lost (Pico STATUS online bit cleared)
+14:35:38.5 pico=COORDINATING PLAYBACK pc=READY offline=[9] notready=[] map=[1, 2, 3, 4, 5, 6, 7, 8, 9] last_msg=tile 9 lost (Pico STATUS online bit cleared)
+14:35:49.4 pico=COORDINATING PLAYBACK pc=READY offline=[] notready=[] map=[1, 2, 3, 4, 5, 6, 7, 8, 9] last_msg=tile 9 lost (Pico STATUS online bit cleared)

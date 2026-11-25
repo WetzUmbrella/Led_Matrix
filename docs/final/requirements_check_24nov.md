@@ -23,6 +23,17 @@ Biggest gaps, in order of risk for the final demo and report:
 5. **Defence docs do not cover the game** (NR-14): only `orientation_DEFENCE.md` mentions it.
 6. **CI was red from 9 Nov to 24 Nov** (clang-format), which skipped barr_check, pytest and every host test in CI. Fixed in `263d5c4`; all steps pass locally.
 
+### 1.1 Update, 25 Nov 2026 (bench and Week 13 docs)
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| NR-03 tap to feedback under 300 ms | Built, not measured | **Met**: median about 171 ms, worst about 196 ms (tile 5, 39 taps) | `docs/bench/25nov/nr03.md` |
+| NR-06 10 rounds without a reboot | Partly | **Met**: 13 rounds on 3x3, no Pico restart | `docs/bench/25nov/rehearsal.md` |
+| E9 tile drops out mid-round | Built, not measured | **Partly**: the round goes on without it; a tile back mid-round shows nothing until the results and could get invisible moles (known limit, user's decision 25 Nov) | `docs/bench/25nov/rehearsal.md` |
+| FR20 / NFR9 continue policy on the wall | not yet produced | **Met**: 3 s and 10 s pulls during playback, wall kept playing, tile rejoined in step | `docs/bench/25nov/powerpull.md` |
+| Pause policy | assumed fine | **Bug**: a tile away over 5 s sends the Pico to FAULT, which re-joins the router and the watchdog restarts it; the demo uses `--policy continue` | `docs/bench/25nov/powerpull.md` |
+| Week 13 CR evidence (section 4.2) | game fields missing, final build not measured | table, message sizes (24 of 24 types) and final-build RAM done; correctness and performance note written; on-air capture and timing profile still not run | `docs/week13/` |
+
 ## 2. Functional requirements (game_plan_v2 section 4)
 
 ### 2.1 Operator website (A)
