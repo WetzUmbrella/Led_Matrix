@@ -1,11 +1,11 @@
 # SE15 Distributed LED Matrix Video Wall: test report
 
-Final submission, 25 Nov 2026, branch `feature/whack-a-mole`. Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
+Final submission, 25 Nov 2026, branch `feature/whack-a-mole`. Host results below are from commit `8d17446`. Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
 
 | Level | What runs | Cases | Result | Where |
 |---|---|---|---|---|
 | Unit and integration, C | 4 host suites (tile, Pico, protocol, tap logger), plain and sanitized | 117 | 117 pass | [results/2026-11-25](results/2026-11-25/SUMMARY.md) |
-| Unit and integration, Python | pytest: website, GIF build, upload, protocol, tools | 515 | 514 pass, 1 skipped | [results/2026-11-25](results/2026-11-25/SUMMARY.md) |
+| Unit and integration, Python | pytest: website, GIF build, upload, protocol, tools | 519 | 518 pass, 1 skipped | [results/2026-11-25](results/2026-11-25/SUMMARY.md) |
 | System, on the wall | 9 ESP32-S3 tiles, 1 Pico W, the website, router `MATRIX` | 14 | 12 pass, 1 fail, 1 partly | [section 4](#4-system-tests-on-the-wall) |
 
 Every case with its verdict: [results/2026-11-25/CASES.md](results/2026-11-25/CASES.md).
@@ -46,7 +46,7 @@ Test 1: slew int8_t round trip and limit at -100/+100
 | `panel_sync/test` | tile: time sync (incl. seqlock and drift limit), fault word, playback, telemetry book, asset receive, coordinator lock, display and orientation, tap detector, game tile | 62 (56 counted + 6 supplementary) | 62 pass | 62 pass |
 | `ledwall_sync/test` | Pico: beacons, registry, heartbeats, session, failure policies, uploads readiness, game rules, whole-wall turn | 43 | 43 pass | 43 pass |
 | `tools/pico_tap/test` | tap logger edge ring | 4 | 4 pass | 4 pass |
-| pytest (20 files) | website and its API, GIF to tile assets, uploader, Python codec, telemetry, camera skew tools, Barr-C checker | 515 | 514 pass, 1 skipped | not applicable |
+| pytest (21 files) | website and its API, GIF to tile assets, uploader, Python codec, telemetry, camera skew tools, Barr-C checker, the test case lister | 519 | 518 pass, 1 skipped | not applicable |
 
 The skipped test (`pc/tests/test_skew_analyse.py`, the camera skew plot) needs `matplotlib`, which is not installed on the bench laptop or in CI (`pytest.importorskip`).
 

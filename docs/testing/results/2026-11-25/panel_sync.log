@@ -1,0 +1,183 @@
+make: Entering directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/panel_sync/test'
+./test_timesync
+Test 1: slew int8_t round trip and limit at -100/+100
+    request -100 -> int8_t -100
+    request   +0 -> int8_t   +0
+    request +100 -> int8_t +100
+    request -101 -> int8_t -100
+    request +101 -> int8_t +100
+    through ts_tick: error +101 -> slews +100, +1; error -101 -> slews -100, -1
+  PASS
+Test 2: 16-sample minimum-delay filter, known minimum
+    estimate 123457389 us, sample 9 offset 123457389 us
+  PASS
+Test 3: 2 ms offset step absorbed in exactly 20 ticks
+    step +2000 us: after tick 19 residual +100 us
+    step +2000 us: after tick 20 residual +0 us
+    step +2000 us: after tick 21 residual +0 us
+    step +2000 us absorbed at tick 20
+    step -2000 us: after tick 19 residual -100 us
+    step -2000 us: after tick 20 residual +0 us
+    step -2000 us: after tick 21 residual +0 us
+    step -2000 us absorbed at tick 20
+  PASS
+Test 4: forced writer interleaving, SYNC_STALE after 3 failures
+    (a) writer update after acquire load: read returned complete set k=2
+    (a) writer update mid copy          : read returned complete set k=2
+    (a) writer update before reload     : read returned complete set k=2
+    (b) writer pre-empted after odd store  : SYNC_STALE set, last good k=1 returned
+    (b) writer pre-empted mid fields       : SYNC_STALE set, last good k=1 returned
+    (b) writer pre-empted before even store: SYNC_STALE set, last good k=1 returned
+    (c) 3 forced failures: SYNC_STALE set, last good k=10 returned (k=11..13 published)
+    (c) 2 forced failures: third attempt fresh, k=21, SYNC_STALE clear
+    (d) 200000 random interleavings: 161501 fresh, 38499 SYNC_STALE (last good), 0 torn
+  PASS
+Supplementary arithmetic checks (not counted)
+    deadline exact up to n = 553402322211239 for origin 0
+  PASS
+OD-10 SYNC_READY rule (not counted)
+    window 15 of 16: SYNC_READY 0
+    window full, no drift: SYNC_READY 0
+    all met, newest 0 s old: SYNC_READY 1
+    all met, newest 1.0 s old: SYNC_READY 1
+    all met, newest 1.1 s old: SYNC_READY 0
+  PASS
+R1-2 re-seed on another Pico clock (not counted)
+    after the switch: reseeds 1, SYNC_READY 0
+    16 samples later: SYNC_READY 1
+    400 ms late sample: reseeds 0
+    600 ms late samples: reseeds 0, dropped 0
+  PASS
+24 Nov drift limit, 50 ppm (not counted)
+    newer half 5 ms late: drift 50000 ppb
+    published offset - estimate: +75 us
+    older half 5 ms late: drift -50000 ppb
+    real 20 ppm: drift 19999 ppb
+  PASS
+24 Nov WiFi stall, no re-seed (not counted)
+    stall burst: reseeds 0, clock moved 1000000 us over 1 s of beacons
+  PASS
+24 Nov Pico restart re-seeds at once (not counted)
+    restart signal: reseeds 1 on the next beacon
+  PASS
+Pass = 4 of 4
+Test F1: fault_word_set and fault_word_snapshot
+  PASS
+Test F2: ACK clears only the sent event bits
+  PASS
+Test F3: condition bits clear only through their owner
+  PASS
+Test F4: VC-4 merge of repeats between send and ACK
+  PASS
+Test F5: two setters and a reporter, 0 lost (T-X-02 forerunner)
+    setter 0: sets=100000 seen=100000 lost=0
+    setter 1: sets=100000 seen=100000 lost=0
+  PASS
+Test F6: a new session clears QUEUE_OVERFLOW only
+  PASS
+Fault word: Pass = 6 of 6
+Test P1: three identical START_AT give 1 transition
+    3 copies, 1 transition
+  PASS
+Test P2: a wrong session_id gives 0 transitions
+    wrong session: 0 transitions, 3 rejected
+  PASS
+Test P3: frame at origin + k x 10^6 / 60 is k mod 600, k 0 to 1199
+    1200 ticks, 0 wrong frames
+  PASS
+Test P4: STOP accepted from PAUSED
+  PASS
+Test P5: RESUME_AT shows the saved index at t_resume
+    saved 150, shown at t_resume 150, then 151
+  PASS
+Test P6: 0.9 s without beacons keeps playing, 1.1 s pauses, 10 of 10
+    0.9 s: 10 of 10 keep playing; 1.1 s: 10 of 10 pause
+  PASS
+Playback 24 Nov: a coordinator restart stops a playing tile; its first START_AT is taken
+  PASS
+Playback: Pass = 7 of 7
+Test T1: ACK of a recorded seq returns its bits
+  PASS
+Test T2: repeated and unknown ACKs change nothing
+  PASS
+Test T3: ring of 4, the oldest expires
+  PASS
+Test T4: seq wrap 65535 to 0
+  PASS
+Test T5: VC-4 drop every third, 100% delivered, 0 transitions
+  PASS
+Telemetry: Pass = 5 of 5
+Test A1: manifest format and length rules
+  PASS
+Test A2: 600 frames = 57 chunks, the last 256 B
+  PASS
+Test A3: new, repeat, other session, wrong length
+  PASS
+Test A4: complete after all 57 chunks in any order
+  PASS
+Test A5: zlib CRC32 0xCBF43926 and continuation
+  PASS
+Test A6: a held upload ACKs every chunk, never complete
+  PASS
+Asset: Pass = 6 of 6
+Test L1: first lock, repeat, foreign sender counted and refused
+  PASS
+Test L2: 1.9 s keeps the lock, 2.1 s of silence switches it
+  PASS
+Test L3: commands refused while unlocked and from others
+  PASS
+Test L4: t_l near INT64_MAX / 2 does not overflow
+  PASS
+Coordinator lock: Pass = 4 of 4
+Test D1: frame_pattern vector 192 of 192 bytes, all 0 to 8
+    frame_pattern: 192 of 192 bytes equal
+  PASS
+Test D2: rotation remap, 4 x 90 = identity, 180 = reverse
+  PASS
+Test D3: frame index from ticks
+  PASS
+Test D4: corner LEDs match the hand-worked table, all orientations
+  PASS
+Test D5: gravity to picture, 64 LEDs upright in all orientations
+  PASS
+Test D6: one source pixel reaches the expected wire LED
+  PASS
+Test O1: 25 equal samples give 0 changes, 26 give 1
+  PASS
+Test O2: forced NACK keeps the orientation, IMU bit set then cleared
+  PASS
+Test O3: quadrants, weak gravity, flicker restarts the count
+  PASS
+Display: Pass = 9 of 9
+Test K1: 199 mg no tap, 200 mg a tap timed at the spike
+  PASS
+Test K2: peak is the largest deviation in the 10 ms window
+  PASS
+Test K3: a slap ringing 480 ms counts once
+  PASS
+Test K4: re-arm after 250 ms and 30 ms quiet, not before
+  PASS
+Test K5: continuous shaking re-arms at most every 600 ms
+  PASS
+Test K6: a bad first sample is reseeded away
+  PASS
+Test K7: still gravity in six directions gives no tap
+  PASS
+Test K8: default 300 mg, clamped to 50 to 5,000 mg, acts
+  PASS
+G1 step 3: mole rises and sinks, hit squash and burst, red X on a miss
+  PASS
+G2 re-plan: only this tile's messages are ACKed, repeats not applied
+  PASS
+G3 step 3: ARM holes and threshold, start sprite, START, END, tap test
+  PASS
+G4 step 3: picture list timed, out of order, loop, clears, rotation
+  PASS
+G5 step 3: GPIO4 pulses 10 ms mole, 6 ms hit, none otherwise
+  PASS
+G6 re-plan: TAP and ACK encodings, state publish reads back whole
+  PASS
+G7: a restarted Pico's ARM and pictures are taken after new_pico
+  PASS
+Tap: Pass = 15 of 15
+make: Leaving directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/panel_sync/test'

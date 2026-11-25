@@ -1,0 +1,598 @@
+make: Entering directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/ledwall_sync/test'
+gcc -std=c11 -Wall -Wextra -Werror -O2 -DCL_HOST_TEST -I. -I.. -I../../common/proto -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o test_coordinator_asan test_main.c test_coord.c coordinator_port.c ../coordinator_loop.c ../../common/proto/proto.c test_join_backoff.c ../join_backoff.c test_ack_outbox.c ../../common/proto/ack_outbox.c test_game_rules.c ../game_rules.c test_wall_turn.c ../wall_turn.c test_score_font.c ../score_font.c test_coord_game.c
+setarch $(uname -m) -R ./test_coordinator_asan
+C1 T-B2-02: absolute 100 ms schedule, t_p at the send, lateness 0
+    100 beacons in 10 s, all on the 100 ms grid, lateness bin 0: 100
+  PASS
+C2 T-B2-02: a stall skips whole slots, no burst, seq contiguous
+    stall 350 ms: 3 slots skipped, 21 beacons, seq contiguous
+  PASS
+C3 T-B2-03: 9 simulated Node IDs register, 9 of 9 in the registry
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 JOIN node=3 value=50440384
+CL_EVENT t_ms=1000 BACK node=3 value=0
+CL_EVENT t_ms=1000 JOIN node=4 value=67217600
+CL_EVENT t_ms=1000 BACK node=4 value=0
+CL_EVENT t_ms=1000 JOIN node=5 value=83994816
+CL_EVENT t_ms=1000 BACK node=5 value=0
+CL_EVENT t_ms=1000 JOIN node=6 value=100772032
+CL_EVENT t_ms=1000 BACK node=6 value=0
+CL_EVENT t_ms=1000 JOIN node=7 value=117549248
+CL_EVENT t_ms=1000 BACK node=7 value=0
+CL_EVENT t_ms=1000 JOIN node=8 value=134326464
+CL_EVENT t_ms=1000 BACK node=8 value=0
+    online bitmap 0x1ff
+  PASS
+C4 T-B2-03: heartbeat loss logged 2.5 to 2.6 s after, 10 of 10
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=5000 LOSS node=2 value=2500050
+    trial 0: loss logged 2500050 us after the last heartbeat
+CL_EVENT t_ms=1037 JOIN node=1 value=16885952
+CL_EVENT t_ms=1037 BACK node=1 value=0
+CL_EVENT t_ms=1037 JOIN node=2 value=33663168
+CL_EVENT t_ms=1037 BACK node=2 value=0
+CL_EVENT t_ms=5100 LOSS node=2 value=2563000
+    trial 1: loss logged 2563000 us after the last heartbeat
+CL_EVENT t_ms=1074 JOIN node=1 value=16885952
+CL_EVENT t_ms=1074 BACK node=1 value=0
+CL_EVENT t_ms=1074 JOIN node=2 value=33663168
+CL_EVENT t_ms=1074 BACK node=2 value=0
+CL_EVENT t_ms=5100 LOSS node=2 value=2525950
+    trial 2: loss logged 2525950 us after the last heartbeat
+CL_EVENT t_ms=1111 JOIN node=1 value=16885952
+CL_EVENT t_ms=1111 BACK node=1 value=0
+CL_EVENT t_ms=1111 JOIN node=2 value=33663168
+CL_EVENT t_ms=1111 BACK node=2 value=0
+CL_EVENT t_ms=5200 LOSS node=2 value=2588900
+    trial 3: loss logged 2588900 us after the last heartbeat
+CL_EVENT t_ms=1148 JOIN node=1 value=16885952
+CL_EVENT t_ms=1148 BACK node=1 value=0
+CL_EVENT t_ms=1148 JOIN node=2 value=33663168
+CL_EVENT t_ms=1148 BACK node=2 value=0
+CL_EVENT t_ms=5200 LOSS node=2 value=2551850
+    trial 4: loss logged 2551850 us after the last heartbeat
+CL_EVENT t_ms=1185 JOIN node=1 value=16885952
+CL_EVENT t_ms=1185 BACK node=1 value=0
+CL_EVENT t_ms=1185 JOIN node=2 value=33663168
+CL_EVENT t_ms=1185 BACK node=2 value=0
+CL_EVENT t_ms=5200 LOSS node=2 value=2514800
+    trial 5: loss logged 2514800 us after the last heartbeat
+CL_EVENT t_ms=1222 JOIN node=1 value=16885952
+CL_EVENT t_ms=1222 BACK node=1 value=0
+CL_EVENT t_ms=1222 JOIN node=2 value=33663168
+CL_EVENT t_ms=1222 BACK node=2 value=0
+CL_EVENT t_ms=5300 LOSS node=2 value=2577750
+    trial 6: loss logged 2577750 us after the last heartbeat
+CL_EVENT t_ms=1259 JOIN node=1 value=16885952
+CL_EVENT t_ms=1259 BACK node=1 value=0
+CL_EVENT t_ms=1259 JOIN node=2 value=33663168
+CL_EVENT t_ms=1259 BACK node=2 value=0
+CL_EVENT t_ms=5300 LOSS node=2 value=2540700
+    trial 7: loss logged 2540700 us after the last heartbeat
+CL_EVENT t_ms=1296 JOIN node=1 value=16885952
+CL_EVENT t_ms=1296 BACK node=1 value=0
+CL_EVENT t_ms=1296 JOIN node=2 value=33663168
+CL_EVENT t_ms=1296 BACK node=2 value=0
+CL_EVENT t_ms=5300 LOSS node=2 value=2503650
+    trial 8: loss logged 2503650 us after the last heartbeat
+CL_EVENT t_ms=1333 JOIN node=1 value=16885952
+CL_EVENT t_ms=1333 BACK node=1 value=0
+CL_EVENT t_ms=1333 JOIN node=2 value=33663168
+CL_EVENT t_ms=1333 BACK node=2 value=0
+CL_EVENT t_ms=5400 LOSS node=2 value=2566600
+    trial 9: loss logged 2566600 us after the last heartbeat
+  PASS
+C5 T-B2-03: dispatch waits when 1 ms is not left before a beacon
+CL_EVENT t_ms=1099 JOIN node=5 value=83994816
+CL_EVENT t_ms=1100 BACK node=5 value=0
+  PASS
+C6 T-B2-04: 100 wrong-session or old-seq messages, 0 accepted
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+    100 injected, 100 dropped, readiness 0x000
+  PASS
+C7 T-B2-04: Start refused until 2 of 2 ASSET_READY and SYNC_READY
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1200 START_REFUSED node=0 value=5
+CL_EVENT t_ms=1300 START_REFUSED node=0 value=5
+CL_EVENT t_ms=1350 STATE node=0 value=6
+CL_EVENT t_ms=1400 START_REFUSED node=0 value=6
+CL_EVENT t_ms=1500 START_REFUSED node=0 value=6
+CL_EVENT t_ms=1550 STATE node=0 value=7
+CL_EVENT t_ms=1600 STATE node=0 value=8
+    Start refused 4 times, accepted after 2 of 2 ASSET_READY and SYNC_READY
+  PASS
+C8 T-B2-04: ASSET_READY with the wrong CRC32 is not counted
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1100 CRC_MISMATCH node=1 value=572662306
+  PASS
+C9 T-B2-04: SESSION_CONFIG validation
+CL_EVENT t_ms=1000 SESSION_REJECTED node=0 value=0
+CL_EVENT t_ms=1000 SESSION_REJECTED node=0 value=4
+CL_EVENT t_ms=1100 STATE node=0 value=3
+CL_EVENT t_ms=1100 STATE node=0 value=4
+  PASS
+C9b re-plan: new SESSION_CONFIG refused in COORDINATING GAME and COORDINATING PLAYBACK
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 SESSION_REJECTED node=0 value=8
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 STATE node=0 value=8
+CL_EVENT t_ms=2200 SESSION_REJECTED node=0 value=8
+  PASS
+C10 T-B2-04: STATUS every 250 ms to the PC address
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+    7 STATUS in 2 s, each within 1 ms of its 250 ms slot
+  PASS
+C11 T-B2-05: START_AT 3 copies, one seq, t_start = copy 1 + 600 ms
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 STATE node=0 value=8
+    3 copies, t_start = copy 1 + 600 ms
+  PASS
+C12 T-B2-05: PAUSE, RESUME_AT shows the saved frame, STOP from PAUSED
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 STATE node=0 value=8
+CL_EVENT t_ms=4200 STATE node=0 value=9
+CL_EVENT t_ms=4700 STATE node=0 value=8
+    paused at frame 143, RESUME_AT frame 143
+CL_EVENT t_ms=5200 STATE node=0 value=9
+CL_EVENT t_ms=5700 STATE node=0 value=7
+  PASS
+C13 T-B2-04: pause policy, PAUSE then FAULT 5 s after the loss
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 STATE node=0 value=8
+CL_EVENT t_ms=5500 LOSS node=2 value=2500050
+CL_EVENT t_ms=5500 STATE node=0 value=10
+CL_EVENT t_ms=10500 STATE node=0 value=11
+  PASS
+C14 T-B2-04: continue policy, others keep playing, rejoin RESUME_AT
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 STATE node=0 value=8
+CL_EVENT t_ms=4500 LOSS node=2 value=2500050
+CL_EVENT t_ms=5200 BACK node=2 value=0
+CL_EVENT t_ms=5300 REJOIN_SENT node=2 value=0
+    rejoin: 3 RESUME_AT copies to tile 2 only
+  PASS
+C15 re-plan: router join retried with 1, 2, 4, 8, then 10 s backoff
+  PASS
+C16 re-plan: acked outbox resends until ACK, expires, refuses when full
+  PASS
+C17 re-plan: 30 s round, mole 1200 to 500 ms, 300 ms gap, no repeats
+    26 moles in a 30 s round with no taps
+  PASS
+C18 re-plan: hit +1, miss -1, dedupe within 30 ms by highest peak
+  PASS
+C18b re-plan: tap in flight at the hide still hits, tap after it misses, timeout keeps the score
+  PASS
+C18c re-plan: a late tap and its late echo are one group, one HIT
+  PASS
+C18d 24 Nov: a real tap 140 ms behind its echoes wins, a 1 s late echo is a duplicate
+  PASS
+C35 24 Nov: a wall turn turns the layout, 4 turns give it back, the match finds the turn
+  PASS
+C36 24 Nov: wall turn when every tile turns alike within 1.5 s; partial, mixed and unheard tiles are not
+  PASS
+C37 24 Nov: a wall turn while playing stops, then resumes at the saved frame in the turned layout
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 STATE node=0 value=8
+CL_EVENT t_ms=3800 WALL_TURN node=0 value=1
+CL_EVENT t_ms=3800 STATE node=0 value=7
+CL_EVENT t_ms=4100 STATE node=0 value=3
+CL_EVENT t_ms=4100 STATE node=0 value=5
+CL_EVENT t_ms=4100 STATE node=0 value=6
+CL_EVENT t_ms=4100 STATE node=0 value=8
+  PASS
+C38 24 Nov: one tile turned, a turn undone, game mode and a new grid leave no wall turn
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 STATE node=0 value=8
+CL_EVENT t_ms=7800 WALL_TURN node=0 value=2
+CL_EVENT t_ms=7800 STATE node=0 value=7
+CL_EVENT t_ms=9500 WALL_TURN node=0 value=2
+CL_EVENT t_ms=9500 STATE node=0 value=8
+CL_EVENT t_ms=9700 STATE node=0 value=7
+CL_STATS state=7 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=10 wt_known=0x003 wall_turn=0
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,60,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=13200 WALL_TURN node=0 value=1
+CL_EVENT t_ms=13400 STATE node=0 value=3
+CL_EVENT t_ms=13400 STATE node=0 value=5
+CL_EVENT t_ms=13700 STATE node=0 value=3
+CL_EVENT t_ms=13700 STATE node=0 value=5
+  PASS
+C19 re-plan: score font pixel counts, centring and tile slices
+  PASS
+C19b step 3: wall pictures at the largest scale per shape, sparse
+  PASS
+C19c step 4d: grids of more than 9 cells, sparse and dense
+  PASS
+C20 re-plan: START refused in video mode, mode and START ACKed, repeat ACKed only
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 GAME_REFUSED node=0 value=7
+CL_EVENT t_ms=1220 STATE node=0 value=12
+  PASS
+C21 re-plan: round: MOLE_ON resent until ACK, hit, STATUS score, END and WALL_PICTURE
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1210 STATE node=0 value=12
+CL_EVENT t_ms=1510 GAME_MOLE node=2 value=1193
+CL_EVENT t_ms=1665 GAME_TAP node=2 value=135000
+CL_EVENT t_ms=1815 GAME_FEEDBACK node=2 value=1
+CL_EVENT t_ms=2015 GAME_MOLE node=1 value=1182
+CL_EVENT t_ms=3497 GAME_MOLE node=2 value=1147
+CL_EVENT t_ms=4944 GAME_MOLE node=1 value=1113
+CL_EVENT t_ms=6357 GAME_MOLE node=2 value=1080
+CL_EVENT t_ms=7737 GAME_MOLE node=1 value=1048
+CL_EVENT t_ms=9085 GAME_MOLE node=2 value=1017
+CL_EVENT t_ms=10402 GAME_MOLE node=1 value=986
+CL_STATS state=12 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,54,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=11688 GAME_MOLE node=2 value=956
+CL_EVENT t_ms=12944 GAME_MOLE node=1 value=927
+CL_EVENT t_ms=14171 GAME_MOLE node=2 value=898
+CL_EVENT t_ms=15369 GAME_MOLE node=1 value=870
+CL_EVENT t_ms=16539 GAME_MOLE node=2 value=843
+CL_EVENT t_ms=17682 GAME_MOLE node=1 value=816
+CL_EVENT t_ms=18798 GAME_MOLE node=2 value=790
+CL_EVENT t_ms=19888 GAME_MOLE node=1 value=765
+CL_EVENT t_ms=20953 GAME_MOLE node=2 value=740
+CL_STATS state=12 sent=201 first_seq=0 last_seq=200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,94,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=21993 GAME_MOLE node=1 value=716
+CL_EVENT t_ms=23009 GAME_MOLE node=2 value=692
+CL_EVENT t_ms=24001 GAME_MOLE node=1 value=669
+CL_EVENT t_ms=24970 GAME_MOLE node=2 value=646
+CL_EVENT t_ms=25916 GAME_MOLE node=1 value=624
+CL_EVENT t_ms=26840 GAME_MOLE node=2 value=602
+CL_EVENT t_ms=27742 GAME_MOLE node=1 value=581
+CL_EVENT t_ms=28623 GAME_MOLE node=2 value=561
+CL_EVENT t_ms=29484 GAME_MOLE node=1 value=541
+CL_EVENT t_ms=30325 GAME_MOLE node=2 value=521
+CL_STATS state=12 sent=301 first_seq=0 last_seq=300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,301,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,134,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=31210 STATE node=0 value=7
+  PASS
+C22 re-plan: TAP ACKed and relayed once, SESSION_CONFIG refused in round
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1230 STATE node=0 value=12
+CL_EVENT t_ms=1240 SESSION_REJECTED node=0 value=9
+CL_EVENT t_ms=1530 GAME_MOLE node=2 value=1193
+CL_EVENT t_ms=1440 GAME_TAP node=2 value=0
+  PASS
+C23 re-plan: a re-registered tile's TAPs from a low seq are new
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1210 STATE node=0 value=5
+  PASS
+C24 step 3: ARM, start sprite on the centre tile, countdown, level
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1210 STATE node=0 value=12
+CL_EVENT t_ms=1220 GAME_TAP node=1 value=4294387296
+CL_EVENT t_ms=1520 GAME_TAP node=2 value=0
+CL_EVENT t_ms=5620 GAME_MOLE node=2 value=1493
+  PASS
+C25 step 3: START_NOW, abort in the countdown, 60 s arm timeout
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1210 STATE node=0 value=12
+CL_EVENT t_ms=1530 STATE node=0 value=7
+CL_EVENT t_ms=5840 GAME_REFUSED node=0 value=7
+CL_EVENT t_ms=5850 STATE node=0 value=12
+CL_STATS state=12 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,53,0,0,0,0,0,0,0,0,0,0
+CL_STATS state=12 sent=201 first_seq=0 last_seq=200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,93,0,0,0,0,0,0,0,0,0,0
+CL_STATS state=12 sent=301 first_seq=0 last_seq=300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,301,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,133,0,0,0,0,0,0,0,0,0,0
+CL_STATS state=12 sent=401 first_seq=0 last_seq=400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,401,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,173,0,0,0,0,0,0,0,0,0,0
+CL_STATS state=12 sent=501 first_seq=0 last_seq=500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,501,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,213,0,0,0,0,0,0,0,0,0,0
+CL_STATS state=12 sent=601 first_seq=0 last_seq=600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,601,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,253,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=65850 STATE node=0 value=7
+  PASS
+C26 step 3: tap test lights the tapped tile, refused while armed
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=3450 STATE node=0 value=12
+CL_EVENT t_ms=3460 GAME_REFUSED node=0 value=12
+  PASS
+C27 step 3: STATUS level, time left, wrong, missed, shown, reaction
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1210 STATE node=0 value=12
+CL_EVENT t_ms=1510 GAME_MOLE node=2 value=1193
+CL_EVENT t_ms=1370 GAME_TAP node=2 value=4294807296
+CL_EVENT t_ms=1560 GAME_FEEDBACK node=2 value=1
+CL_EVENT t_ms=1830 GAME_MOLE node=1 value=1186
+CL_EVENT t_ms=1870 GAME_TAP node=2 value=0
+CL_EVENT t_ms=2020 GAME_FEEDBACK node=2 value=0
+CL_EVENT t_ms=3316 GAME_MOLE node=2 value=1151
+CL_EVENT t_ms=4767 GAME_MOLE node=1 value=1118
+CL_EVENT t_ms=6185 GAME_MOLE node=2 value=1084
+CL_EVENT t_ms=7569 GAME_MOLE node=1 value=1052
+CL_EVENT t_ms=8921 GAME_MOLE node=2 value=1021
+CL_EVENT t_ms=10242 GAME_MOLE node=1 value=990
+CL_STATS state=12 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,54,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=11532 GAME_MOLE node=2 value=960
+CL_EVENT t_ms=12792 GAME_MOLE node=1 value=930
+CL_EVENT t_ms=14022 GAME_MOLE node=2 value=902
+CL_EVENT t_ms=15224 GAME_MOLE node=1 value=874
+CL_EVENT t_ms=16398 GAME_MOLE node=2 value=846
+CL_EVENT t_ms=17544 GAME_MOLE node=1 value=819
+CL_EVENT t_ms=18663 GAME_MOLE node=2 value=793
+CL_EVENT t_ms=19756 GAME_MOLE node=1 value=768
+CL_EVENT t_ms=20824 GAME_MOLE node=2 value=743
+CL_STATS state=12 sent=201 first_seq=0 last_seq=200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,94,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=21867 GAME_MOLE node=1 value=719
+CL_EVENT t_ms=22886 GAME_MOLE node=2 value=695
+CL_EVENT t_ms=23881 GAME_MOLE node=1 value=672
+CL_EVENT t_ms=24853 GAME_MOLE node=2 value=649
+CL_EVENT t_ms=25802 GAME_MOLE node=1 value=627
+CL_EVENT t_ms=26729 GAME_MOLE node=2 value=605
+CL_EVENT t_ms=27634 GAME_MOLE node=1 value=584
+CL_EVENT t_ms=28518 GAME_MOLE node=2 value=563
+CL_EVENT t_ms=29381 GAME_MOLE node=1 value=543
+CL_EVENT t_ms=30224 GAME_MOLE node=2 value=524
+CL_STATS state=12 sent=301 first_seq=0 last_seq=300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=0 dispatch_max_us=0 online=0x003 ready=0x003 sync=0x003 wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=0 wt_known=0x000 wall_turn=0
+LATE_HIST,301,0,0,0,0,0,0,0,0,0,0
+CB_HIST,0,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,134,0,0,0,0,0,0,0,0,0,0
+CL_EVENT t_ms=31210 STATE node=0 value=7
+CL_EVENT t_ms=31920 STATE node=0 value=12
+  PASS
+C28 step 4: game mode READY without a video, video START refused
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1200 STATE node=0 value=7
+CL_EVENT t_ms=1210 START_REFUSED node=0 value=7
+CL_EVENT t_ms=1220 STATE node=0 value=12
+CL_EVENT t_ms=1230 STATE node=0 value=7
+CL_EVENT t_ms=1240 STATE node=0 value=5
+  PASS
+C29 step 4: a new session ends the tap test (bench 12 Nov 2026)
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1230 STATE node=0 value=3
+CL_EVENT t_ms=1230 STATE node=0 value=6
+  PASS
+C30 step 4d: a sparse layout plays, small pictures on each tile
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1200 STATE node=0 value=7
+CL_EVENT t_ms=1210 STATE node=0 value=12
+  PASS
+C31 9-tile SESSION_CONFIG keeps every byte; a longer datagram dropped
+CL_EVENT t_ms=1100 STATE node=0 value=3
+CL_EVENT t_ms=1100 STATE node=0 value=4
+CL_EVENT t_ms=1100 JOIN node=1 value=16885952
+CL_EVENT t_ms=1100 BACK node=1 value=0
+CL_EVENT t_ms=1100 JOIN node=2 value=33663168
+CL_EVENT t_ms=1100 BACK node=2 value=0
+CL_EVENT t_ms=1100 JOIN node=3 value=50440384
+CL_EVENT t_ms=1100 BACK node=3 value=0
+CL_EVENT t_ms=1100 JOIN node=4 value=67217600
+CL_EVENT t_ms=1100 BACK node=4 value=0
+CL_EVENT t_ms=1100 JOIN node=5 value=83994816
+CL_EVENT t_ms=1100 BACK node=5 value=0
+CL_EVENT t_ms=1100 JOIN node=6 value=100772032
+CL_EVENT t_ms=1100 BACK node=6 value=0
+CL_EVENT t_ms=1100 JOIN node=7 value=117549248
+CL_EVENT t_ms=1100 BACK node=7 value=0
+CL_EVENT t_ms=1200 STATE node=0 value=6
+  PASS
+C32: a tile switched off is sent a picture clear (layout, ARM)
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+CL_EVENT t_ms=1200 JOIN node=3 value=50440384
+CL_EVENT t_ms=1200 BACK node=3 value=0
+CL_EVENT t_ms=1200 STATE node=0 value=3
+CL_EVENT t_ms=1200 STATE node=0 value=5
+CL_EVENT t_ms=1210 STATE node=0 value=6
+CL_EVENT t_ms=1220 GAME_REFUSED node=0 value=6
+  PASS
+C33: a burst of nine TAPs: one send per pass, every ACK and relay
+CL_EVENT t_ms=1000 STATE node=0 value=3
+CL_EVENT t_ms=1000 STATE node=0 value=4
+CL_EVENT t_ms=1000 JOIN node=1 value=16885952
+CL_EVENT t_ms=1000 BACK node=1 value=0
+CL_EVENT t_ms=1000 JOIN node=2 value=33663168
+CL_EVENT t_ms=1000 BACK node=2 value=0
+CL_EVENT t_ms=1000 STATE node=0 value=5
+CL_EVENT t_ms=1100 STATE node=0 value=6
+CL_EVENT t_ms=1100 STATE node=0 value=7
+  PASS
+Coordinator: Pass = 43 of 43
+make: Leaving directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/ledwall_sync/test'
