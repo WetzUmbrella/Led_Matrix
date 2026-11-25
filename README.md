@@ -12,7 +12,7 @@ update the matching section (decisions, status, open questions) in the same comm
 
 ---
 
-## Final submission (25 Nov 2026, branch `feature/whack-a-mole`)
+## Final submission (25 Nov 2026)
 
 A 3x3 wall of ESP32-S3 tiles (8x8 LEDs each) coordinated by a Pico W plays a
 GIF in sync (under 5 ms between tiles, by camera) and runs a whack-a-mole game
