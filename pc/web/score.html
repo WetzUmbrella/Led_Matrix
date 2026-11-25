@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SE15 Scoreboard</title>
+<!--
+  Scoreboard for a TV or projector (A16, DS-16, 18 Nov 2026): score, time
+  left, stars and the round state in large type, readable from 3 m. No
+  buttons: the control page is /. Polls /api/state 4 times a second.
+-->
+<style>
+  :root {
+    --bg: #0d1016; --text: #f4f6fa; --muted: #8e97a6; --accent: #ffd34d;
+    --ok: #57d68d; --bad: #ff7a6e; --panel: #171b23;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); overflow: hidden;
+    font: 600 16px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 3vh 4vw;
+  }
+  .title { font-size: clamp(1.4rem, 4.2vh, 3rem); color: var(--muted); letter-spacing: 0.04em; }
+  .headline { font-size: clamp(2.6rem, 11vh, 8rem); margin: 2vh 0 0; }
+  .big { font-size: clamp(6rem, 38vh, 26rem); line-height: 0.95; color: var(--accent); margin: 1vh 0; }
+  .label { font-size: clamp(1.1rem, 3.4vh, 2.4rem); color: var(--muted); }
+  .row { display: flex; gap: 6vw; justify-content: center; margin-top: 3vh; }
+  .row .v { font-size: clamp(2.4rem, 10vh, 7rem); }
+  .stars { font-size: clamp(3rem, 15vh, 10rem); letter-spacing: 0.08em; color: var(--accent); margin: 1vh 0; }
+  .stars .off { color: #39404d; }
+  .newbest {
+    display: inline-block; margin-top: 2vh; padding: 0.5vh 2.4vh; border-radius: 99px;
+    background: var(--ok); color: #0d1016; font-size: clamp(1.6rem, 6vh, 4rem);
+  }
+  .best { margin-top: 3vh; font-size: clamp(1.1rem, 3.6vh, 2.6rem); color: var(--muted); }
+  .best b { color: var(--text); }
+  .offline { color: var(--bad); }
+  /* Results stack the most: the score and stars give way to fit 16:9. */
+  body.results .headline { font-size: clamp(2rem, 8vh, 6rem); }
+  body.results .big { font-size: clamp(5rem, 28vh, 20rem); }
+  body.results .stars { font-size: clamp(2.4rem, 11vh, 8rem); }
+  body.results .newbest { margin-top: 1vh; }
+  body.results .best { margin-top: 2vh; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="title">Whack-a-mole</div>
+  <div class="headline" id="headline">Connecting...</div>
+  <div class="big" id="big" hidden></div>
+  <div class="label" id="big-label" hidden></div>
+  <div class="stars" id="stars" hidden></div>
+  <div class="newbest" id="newbest" hidden>New best!</div>
+  <div class="row" id="row" hidden>
+    <div><div class="v" id="row-a"></div><div class="label" id="row-a-label"></div></div>
+    <div><div class="v" id="row-b"></div><div class="label" id="row-b-label"></div></div>
+  </div>
+  <div class="best" id="best" hidden></div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+function show(id, text) {
+  const node = $(id);
+  node.hidden = text === null;
+  if (text !== null) node.textContent = text;
+}
+function setStars(count) {
+  const box = $("stars");
+  if (count === null) { box.hidden = true; return; }
+  box.hidden = false;
+  box.replaceChildren();
+  for (let i = 0; i < 3; i++) {
+    const star = document.createElement("span");
+    star.textContent = "★";
+    if (i >= count) star.className = "off";
+    box.append(star);
+  }
+}
+function setRow(a, aLabel, b, bLabel) {
+  $("row").hidden = a === null;
+  if (a === null) return;
+  $("row-a").textContent = a; $("row-a-label").textContent = aLabel;
+  $("row-b").textContent = b; $("row-b-label").textContent = bLabel;
+}
+function bestLine(state, level) {
+  const best = state.best[level];
+  return best === undefined ? null : "Best today (" + level + "): ";
+}
+
+function render(state) {
+  const round = state.round_state;
+  const live = state.round;
+  const level = (live && live.level) || state.level;
+  let headline = null, big = null, bigLabel = null, starCount = null, newBest = false, row = [null];
+  $("headline").classList.remove("offline");
+  if (state.mode !== "game") {
+    headline = "Watch the wall!";
+  } else if (round === "ARMED") {
+    headline = "Tap the arrow to start!";
+  } else if (round === "COUNTDOWN") {
+    headline = "Get ready!";
+  } else if (round === "PLAYING" && live) {
+    big = String(live.hits);
+    bigLabel = "score";
+    row = [live.time_left_s + " s", "time left", String(live.missed), "missed"];
+  } else if (round === "RESULTS" && state.last_result) {
+    const r = state.last_result;
+    headline = "Well done!";
+    big = String(r.score);
+    bigLabel = r.hits + " of " + r.shown + " moles";
+    starCount = r.stars;
+    newBest = r.new_best;
+  } else {
+    headline = "Who's next?";
+  }
+  document.body.classList.toggle("results", starCount !== null);
+  show("headline", headline);
+  show("big", big);
+  show("big-label", bigLabel);
+  setStars(starCount);
+  $("newbest").hidden = !newBest;
+  setRow(...row);
+  const label = state.mode === "game" ? bestLine(state, level) : null;
+  const best = $("best");
+  best.hidden = label === null || round === "PLAYING";
+  if (!best.hidden) {
+    best.replaceChildren(label);
+    const value = document.createElement("b");
+    value.textContent = String(state.best[level]);
+    best.append(value);
+  }
+}
+
+async function poll() {
+  try {
+    const res = await fetch("/api/state", {cache: "no-store"});
+    if (!res.ok) throw new Error(String(res.status));
+    render(await res.json());
+  } catch (e) {
+    show("headline", "Scoreboard offline");
+    $("headline").classList.add("offline");
+    for (const id of ["big", "big-label", "newbest", "row", "best", "stars"]) $(id).hidden = true;
+  }
+  setTimeout(poll, 250);
+}
+poll();
+</script>
+</body>
+</html>

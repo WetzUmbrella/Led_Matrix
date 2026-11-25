@@ -1,0 +1,49 @@
+=== IMG_4538.MOV  start 0 s  boxes A 247,191,181,182  B 428,203,175,175
+readable frames: A 303, B 303
+steps: A 114, B 114; implied frame rate 131.9 fps (50 steps/s)
+paired steps: 114
+skew B - A: median 0.00 ms, mean -0.12 ms
+|skew|: median 0.80 ms, p95 1.43 ms, max 9.07 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_4538.MOV  start 10 s  boxes A 246,192,179,178  B 428,203,175,175
+readable frames: A 303, B 303
+steps: A 125, B 125; implied frame rate 119.4 fps (50 steps/s)
+paired steps: 125
+skew B - A: median 0.00 ms, mean -0.08 ms
+|skew|: median 0.80 ms, p95 1.39 ms, max 4.03 ms
+NR-07 (under 5 ms): PASS
+=== IMG_4538.MOV  start 20 s  boxes A 252,183,176,186  B 417,195,186,183
+readable frames: A 303, B 303
+steps: A 125, B 56; implied frame rate 119.8 fps (50 steps/s)
+paired steps: 52
+skew B - A: median 0.01 ms, mean 2.95 ms
+|skew|: median 0.82 ms, p95 18.33 ms, max 133.96 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_4538.MOV  start 30 s  boxes A 241,182,177,177  B 423,193,175,177
+readable frames: A 304, B 304
+steps: A 126, B 124; implied frame rate 119.6 fps (50 steps/s)
+paired steps: 124
+skew B - A: median 0.00 ms, mean -0.09 ms
+|skew|: median 0.95 ms, p95 1.64 ms, max 3.17 ms
+NR-07 (under 5 ms): PASS
+=== IMG_4538.MOV  start 40 s  boxes A 241,183,173,181  B 424,197,173,177
+readable frames: A 303, B 303
+steps: A 124, B 122; implied frame rate 120.3 fps (50 steps/s)
+paired steps: 122
+skew B - A: median 0.00 ms, mean -0.13 ms
+|skew|: median 0.86 ms, p95 1.59 ms, max 9.43 ms
+NR-07 (under 5 ms): FAIL
+=== IMG_4538.MOV  start 50 s  boxes A 241,182,172,186  B 422,187,173,191
+readable frames: A 302, B 302
+steps: A 125, B 125; implied frame rate 119.0 fps (50 steps/s)
+paired steps: 125
+skew B - A: median 0.00 ms, mean -0.10 ms
+|skew|: median 0.78 ms, p95 1.46 ms, max 2.15 ms
+NR-07 (under 5 ms): PASS
+=== IMG_4538.MOV  start 60 s  boxes A 237,182,173,174  B 417,192,172,174
+readable frames: A 75, B 75
+steps: A 36, B 36; implied frame rate 100.0 fps (50 steps/s)
+paired steps: 36
+skew B - A: median -0.29 ms, mean -0.22 ms
+|skew|: median 0.62 ms, p95 1.51 ms, max 1.68 ms
+NR-07 (under 5 ms): PASS

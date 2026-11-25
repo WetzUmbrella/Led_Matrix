@@ -1,0 +1,223 @@
+CL_STATS state=7 sent=3701 first_seq=0 last_seq=3700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=24 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=43 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,3701,0,0,0,0,0,0,0,0,0,0
+CB_HIST,3341,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,2974,81,36,198,50,1,0,0,0,0,1
+CL_STATS state=7 sent=3801 first_seq=0 last_seq=3800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=24 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=43 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,3801,0,0,0,0,0,0,0,0,0,0
+CB_HIST,3433,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3059,82,36,203,51,1,0,0,0,0,1
+CL_STATS state=7 sent=3901 first_seq=0 last_seq=3900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=24 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=43 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,3901,0,0,0,0,0,0,0,0,0,0
+CB_HIST,3513,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3138,83,36,203,51,1,0,0,0,0,1
+CL_EVENT t_ms=400505 STATE node=0 value=12
+CL_STATS state=12 sent=4001 first_seq=0 last_seq=4000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=24 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=43 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4001,0,0,0,0,0,0,0,0,0,0
+CB_HIST,3606,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3226,84,36,204,53,2,0,0,0,0,1
+CL_EVENT t_ms=411931 GAME_TAP node=5 value=30223
+CL_EVENT t_ms=412205 GAME_TAP node=4 value=17883
+CL_EVENT t_ms=412595 GAME_TAP node=4 value=37799
+CL_EVENT t_ms=413203 GAME_TAP node=4 value=17905
+CL_STATS state=12 sent=4101 first_seq=0 last_seq=4100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=25 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=43 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,3699,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3312,85,37,208,53,2,0,0,0,0,2
+CL_EVENT t_ms=414567 GAME_MOLE node=5 value=1992
+CL_EVENT t_ms=415045 GAME_TAP node=5 value=17989
+CL_EVENT t_ms=415065 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=415327 GAME_MOLE node=4 value=1972
+CL_EVENT t_ms=415725 GAME_TAP node=4 value=18649
+CL_EVENT t_ms=415745 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=416007 GAME_MOLE node=5 value=1954
+CL_EVENT t_ms=416409 GAME_TAP node=5 value=16825
+CL_EVENT t_ms=416429 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=416692 GAME_MOLE node=4 value=1936
+CL_EVENT t_ms=417104 GAME_TAP node=4 value=16667
+CL_EVENT t_ms=417124 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=417387 GAME_MOLE node=5 value=1917
+CL_EVENT t_ms=417781 GAME_TAP node=5 value=18405
+CL_EVENT t_ms=417801 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=418063 GAME_MOLE node=4 value=1899
+CL_EVENT t_ms=418551 GAME_TAP node=4 value=53643
+CL_EVENT t_ms=418571 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=418798 GAME_MOLE node=5 value=1880
+CL_EVENT t_ms=419249 GAME_TAP node=5 value=51795
+CL_EVENT t_ms=419269 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=419497 GAME_MOLE node=4 value=1861
+CL_EVENT t_ms=419919 GAME_TAP node=4 value=20592
+CL_EVENT t_ms=419939 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=420198 GAME_MOLE node=5 value=1842
+CL_EVENT t_ms=420575 GAME_TAP node=5 value=36692
+CL_EVENT t_ms=420595 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=420838 GAME_MOLE node=4 value=1825
+CL_EVENT t_ms=421209 GAME_TAP node=4 value=16599
+CL_EVENT t_ms=421229 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=421492 GAME_MOLE node=5 value=1808
+CL_EVENT t_ms=421908 GAME_TAP node=5 value=35699
+CL_EVENT t_ms=421928 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=422172 GAME_MOLE node=4 value=1790
+CL_EVENT t_ms=422582 GAME_TAP node=4 value=17623
+CL_EVENT t_ms=422602 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=422864 GAME_MOLE node=5 value=1771
+CL_EVENT t_ms=423267 GAME_TAP node=5 value=16667
+CL_EVENT t_ms=423287 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=423550 GAME_MOLE node=4 value=1753
+CL_STATS state=12 sent=4201 first_seq=0 last_seq=4200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=25 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=43 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,3822,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3408,99,37,209,65,2,0,0,0,0,2
+CL_EVENT t_ms=424568 GAME_TAP node=4 value=57863
+CL_EVENT t_ms=424588 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=424810 GAME_MOLE node=5 value=1719
+CL_EVENT t_ms=425184 GAME_TAP node=5 value=38124
+CL_EVENT t_ms=425204 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=425446 GAME_MOLE node=4 value=1702
+CL_EVENT t_ms=425907 GAME_TAP node=4 value=47408
+CL_EVENT t_ms=425927 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=426160 GAME_MOLE node=5 value=1683
+CL_EVENT t_ms=426558 GAME_TAP node=5 value=22276
+CL_EVENT t_ms=426578 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=426836 GAME_MOLE node=4 value=1665
+CL_EVENT t_ms=427272 GAME_TAP node=4 value=34385
+CL_EVENT t_ms=427292 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=427538 GAME_MOLE node=5 value=1647
+CL_EVENT t_ms=427949 GAME_TAP node=5 value=26203
+CL_EVENT t_ms=427969 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=428223 GAME_MOLE node=4 value=1628
+CL_EVENT t_ms=428667 GAME_TAP node=4 value=43994
+CL_EVENT t_ms=428687 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=428923 GAME_MOLE node=5 value=1610
+CL_EVENT t_ms=429382 GAME_TAP node=5 value=48903
+CL_EVENT t_ms=429402 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=429634 GAME_MOLE node=4 value=1591
+CL_EVENT t_ms=430261 GAME_TAP node=5 value=25659
+CL_EVENT t_ms=430281 GAME_FEEDBACK node=5 value=0
+CL_EVENT t_ms=430952 GAME_TAP node=4 value=20847
+CL_EVENT t_ms=430972 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=431231 GAME_MOLE node=5 value=1548
+CL_EVENT t_ms=431694 GAME_TAP node=5 value=17865
+CL_EVENT t_ms=431714 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=431977 GAME_MOLE node=4 value=1528
+CL_EVENT t_ms=432585 GAME_TAP node=5 value=16137
+CL_EVENT t_ms=432605 GAME_FEEDBACK node=5 value=0
+CL_EVENT t_ms=433099 GAME_TAP node=4 value=16470
+CL_EVENT t_ms=433119 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=433382 GAME_MOLE node=5 value=1491
+CL_EVENT t_ms=433789 GAME_TAP node=5 value=20558
+CL_EVENT t_ms=433809 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=434068 GAME_MOLE node=4 value=1472
+CL_STATS state=12 sent=4301 first_seq=0 last_seq=4300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=28 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=43 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4301,0,0,0,0,0,0,0,0,0,0
+CB_HIST,3952,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3507,114,38,214,75,2,0,0,0,0,2
+CL_EVENT t_ms=434508 GAME_TAP node=4 value=17005
+CL_EVENT t_ms=434528 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=434791 GAME_MOLE node=5 value=1453
+CL_EVENT t_ms=435157 GAME_TAP node=5 value=24575
+CL_EVENT t_ms=435177 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=435433 GAME_MOLE node=4 value=1436
+CL_EVENT t_ms=435832 GAME_TAP node=4 value=43125
+CL_EVENT t_ms=435852 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=436089 GAME_MOLE node=5 value=1419
+CL_EVENT t_ms=436413 GAME_TAP node=5 value=15112
+CL_EVENT t_ms=436433 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=436698 GAME_MOLE node=4 value=1402
+CL_EVENT t_ms=437104 GAME_TAP node=4 value=17648
+CL_EVENT t_ms=437124 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=437386 GAME_MOLE node=5 value=1384
+CL_EVENT t_ms=437782 GAME_TAP node=5 value=49413
+CL_EVENT t_ms=437802 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=438032 GAME_MOLE node=4 value=1367
+CL_EVENT t_ms=438465 GAME_TAP node=4 value=16692
+CL_EVENT t_ms=438485 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=438749 GAME_MOLE node=5 value=1348
+CL_EVENT t_ms=439079 GAME_TAP node=5 value=22776
+CL_EVENT t_ms=439099 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=439356 GAME_MOLE node=4 value=1331
+CL_EVENT t_ms=439786 GAME_TAP node=4 value=34725
+CL_EVENT t_ms=439806 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=440051 GAME_MOLE node=5 value=1313
+CL_EVENT t_ms=440411 GAME_TAP node=5 value=13834
+CL_EVENT t_ms=440431 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=440697 GAME_MOLE node=4 value=1296
+CL_EVENT t_ms=441068 GAME_TAP node=4 value=14944
+CL_EVENT t_ms=441088 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=441353 GAME_MOLE node=5 value=1278
+CL_EVENT t_ms=441669 GAME_TAP node=5 value=46290
+CL_EVENT t_ms=441689 GAME_FEEDBACK node=5 value=1
+CL_EVENT t_ms=441923 GAME_MOLE node=4 value=1263
+CL_EVENT t_ms=442275 GAME_TAP node=4 value=28823
+CL_EVENT t_ms=442295 GAME_FEEDBACK node=4 value=1
+CL_EVENT t_ms=442547 GAME_MOLE node=5 value=1246
+CL_EVENT t_ms=442856 GAME_TAP node=5 value=22351
+CL_EVENT t_ms=442876 GAME_FEEDBACK node=5 value=1
+CL_STATS state=12 sent=4401 first_seq=0 last_seq=4400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=28 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4401,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4075,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3602,128,38,216,87,2,0,0,0,0,2
+CL_EVENT t_ms=444268 STATE node=0 value=7
+CL_STATS state=7 sent=4501 first_seq=0 last_seq=4500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=28 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4501,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4190,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3689,129,43,238,87,2,0,0,0,0,2
+CL_STATS state=7 sent=4601 first_seq=0 last_seq=4600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=32 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4601,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4299,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3768,130,53,257,87,2,0,0,0,0,2
+CL_STATS state=7 sent=4701 first_seq=0 last_seq=4700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4701,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4415,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3847,133,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=4801 first_seq=0 last_seq=4800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4801,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4495,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,3926,134,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=4901 first_seq=0 last_seq=4900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,4901,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4575,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4006,134,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5001 first_seq=0 last_seq=5000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5001,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4655,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4085,135,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5101 first_seq=0 last_seq=5100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4735,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4164,136,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5201 first_seq=0 last_seq=5200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4815,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4244,136,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5301 first_seq=0 last_seq=5300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5301,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4895,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4323,137,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5401 first_seq=0 last_seq=5400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5401,0,0,0,0,0,0,0,0,0,0
+CB_HIST,4975,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4402,138,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5501 first_seq=0 last_seq=5500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5501,0,0,0,0,0,0,0,0,0,0
+CB_HIST,5055,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4481,139,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5601 first_seq=0 last_seq=5600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=37 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5601,0,0,0,0,0,0,0,0,0,0
+CB_HIST,5135,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4560,140,63,281,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5701 first_seq=0 last_seq=5700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=38 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5701,0,0,0,0,0,0,0,0,0,0
+CB_HIST,5218,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4639,141,64,283,87,2,0,0,0,0,2
+CL_STATS state=7 sent=5801 first_seq=0 last_seq=5800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=38 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5801,0,0,0,0,0,0,0,0,0,0
+CB_HIST,5301,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4717,142,65,285,88,2,0,0,0,0,2
+CL_STATS state=7 sent=5901 first_seq=0 last_seq=5900 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=38 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,5901,0,0,0,0,0,0,0,0,0,0
+CB_HIST,5381,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4796,143,65,285,88,2,0,0,0,0,2
+CL_STATS state=7 sent=6001 first_seq=0 last_seq=6000 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=38 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=45 dispatch_max_us=1194 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,6001,0,0,0,0,0,0,0,0,0,0
+CB_HIST,5460,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,4874,144,65,285,88,2,0,0,0,0,2

@@ -1,0 +1,99 @@
+## open 16:35:59
+CL_STATS state=8 sent=2201 first_seq=0 last_seq=2200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=235 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=29 dispatch_max_us=628 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x0000000a tx_drop=0 tx_fail=0 tel_rx=1928 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,10159,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,9991,163,0,4,0,0,1,0,0,0,0
+CL_EVENT t_ms=225620 START_REFUSED node=0 value=8
+CL_EVENT t_ms=230886 WALL_TURN node=0 value=1
+
+CL_EVENT t_ms=230886 STATE node=0 value=7
+
+CL_STATS state=5 sent=2301 first_seq=0 last_seq=2300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=258 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=29 dispatch_max_us=628 online=0x1ff ready=0x0fe sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x0000000a tx_drop=0 tx_fail=0 tel_rx=2025 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,2301,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,10515,185,0,5,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=236683 STATE node=0 value=8
+
+LATE_HIST,2401,0,0,0,0,0,0,0,0,0,0
+CB_HIST,11225,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,11017,202,0,5,0,0,1,0,0,0,0
+CL_EVENT t_ms=245886 WALL_TURN node=0 value=3
+CL_EVENT t_ms=245886 STATE node=0 value=7
+
+## open 16:36:39
+## open 16:36:39
+## open 16:36:39
+
+## open 16:36:52
+## open 16:36:52
+## open 16:36:52
+
+
+CL_EVENT t_ms=5852 BACK node=6 value=0
+
+CL_EVENT t_ms=5853 BACK node=1 value=0
+
+CL_EVENT t_ms=5853 JOIN node=7 value=855746752
+
+CL_EVENT t_ms=5869 BACK node=2 value=0
+
+CL_EVENT t_ms=5873 JOIN node=4 value=100772032
+
+CL_EVENT t_ms=5873 BACK node=4 value=0
+
+CL_EVENT t_ms=5879 JOIN node=9 value=3674319040
+CL_EVENT t_ms=5879 BACK node=9 value=0
+
+
+
+CL_EVENT t_ms=6541 STATE node=0 value=3
+CL_EVENT t_ms=6541 STATE node=0 value=5
+CL_EVENT t_ms=6846 STATE node=0 value=3
+CL_EVENT t_ms=6846 STATE node=0 value=5
+CL_STATS state=5 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=25 dispatch_max_us=337 online=0x1ff ready=0x0ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x80000002 tx_drop=0 tx_fail=0 tel_rx=90 wt_known=0x1ff wall_turn=0
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,452,0,0,0,0,0,0,0,0,0,0
+
+
+
+LATE_HIST,201,0,0,0,0,0,0,0,0,0,0
+CB_HIST,926,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,922,1,0,2,0,0,1,0,0,0,0
+CL_EVENT t_ms=31143 STATE node=0 value=8
+CL_STATS state=8 sent=301 first_seq=0 last_seq=300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=25 dispatch_max_us=667 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x80000002 tx_drop=0 tx_fail=0 tel_rx=269 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,1380,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,1376,1,0,2,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=401 first_seq=0 last_seq=400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=25 dispatch_max_us=667 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x80000002 tx_drop=0 tx_fail=0 tel_rx=359 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,1827,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,1823,1,0,2,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=501 first_seq=0 last_seq=500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=25 dispatch_max_us=667 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x80000002 tx_drop=0 tx_fail=0 tel_rx=449 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,2278,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,2274,1,0,2,0,0,1,0,0,0,0
+
+CL_STATS state=8 sent=601 first_seq=0 last_seq=600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=25 dispatch_max_us=667 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x80000002 tx_drop=0 tx_fail=0 tel_rx=539 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,2730,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,2726,1,0,2,0,0,1,0,0,0,0
+

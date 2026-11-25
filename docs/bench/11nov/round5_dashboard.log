@@ -1,0 +1,21 @@
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> stop
+>>> mode game
+1794370024.668 mode game
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> game start
+game refused: the Pico did not acknowledge the round start
+  0.0 s  READY score=0 online=0x018
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc IDLE; start disabled; missing [1]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1

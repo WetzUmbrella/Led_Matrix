@@ -36,11 +36,14 @@ TYPICAL: Dict[str, Dict[str, object]] = {
     "REGISTER": {"node_id": 3, "cached_session_id": 0xA5,
                  "cached_crc32": 0x1234ABCD},
     "HEARTBEAT": {"node_id": 7},
-    "SESSION_CONFIG": {"layout": 1, "policy": 1,
-                       "node_map": [1, 2, 0, 3, 4, 0, 0, 0, 0],
+    # A sparse 3 x 5 grid (step 4d): nodes 1, 2, 4, 5 and 7 placed.
+    "SESSION_CONFIG": {"rows": 3, "cols": 5, "policy": 1,
+                       "placed": [1, 1, 0, 1, 1, 0, 1, 0, 0],
+                       "row": [0, 0, 0, 1, 2, 0, 2, 0, 0],
+                       "col": [0, 4, 0, 2, 1, 0, 4, 0, 0],
                        "frame_count": 600,
-                       "crc32": [0x11111111, 0x22222222, 0, 0x33333333,
-                                 0x44444444, 0, 0, 0, 0]},
+                       "crc32": [0x11111111, 0x22222222, 0, 0x44444444,
+                                 0x55555555, 0, 0x77777777, 0, 0]},
     "MANIFEST": {"format_version": 2, "frame_count": 600,
                  "crc32": 0xCBF43926},
     "ASSET_CHUNK": {"chunk_index": 56,
@@ -55,10 +58,29 @@ TYPICAL: Dict[str, Dict[str, object]] = {
     "RESUME_AT": {"t_resume": 9_876_543_210_987, "frame_index": 517},
     "PAUSE": {},
     "STOP": {},
-    "STATUS": {"readiness": 0x0A5, "online": 0x15A, "state": 8},
+    "STATUS": {"readiness": 0x0A5, "online": 0x15A, "state": 12,
+               "score": -7, "round_state": 3, "level": 1, "missed": 5,
+               "wrong": 2, "shown": 17, "time_left_s": 21,
+               "reaction_ms": 431, "wall_turn": 3},
     "TELEMETRY": {"node_id": 8, "fault_word": 0x80000041,
                   "orientation": 2, "display_state": 4},
     "TELEMETRY_ACK": {"acked_seq": 0xBEEF},
+    "TAP": {"node_id": 5, "peak": 0x2A5C, "t_tap": 0x00000123456789AB},
+    "MOLE_ON": {"node_id": 3, "t_show": 1_234_567_890_123, "up_ms": 1200,
+                "kind": 1},
+    "FEEDBACK": {"node_id": 6, "result": 1},
+    "GAME_CONTROL": {"node_id": 2, "command": 4, "level": 1,
+                     "threshold": 10},
+    "WALL_PICTURE": {"node_id": 7, "slot": 2, "effect": 0, "colour": 1,
+                     "repeat": 1, "t_show": 9_876_543_210_987,
+                     "dur_ms": 1000, "mask": 0x183C7EFFFF7E3C18},
+    "ACK": {"node_id": 4, "acked_seq": 0xA55A},
+}
+
+#: Largest-value corners that break a rule across fields: every tile placed
+#: on 9 x 9, but no two in one cell, so they fill the bottom row (step 4d).
+CORNER_MAX_OVERRIDE: Dict[str, Dict[str, object]] = {
+    "SESSION_CONFIG": {"col": list(range(pl.NODE_MAX))},
 }
 
 
@@ -73,6 +95,8 @@ def _corner(name: str, high: bool) -> Dict[str, object]:
         else:
             fields[field] = value
     fields.update(arrays)
+    if high:
+        fields.update(CORNER_MAX_OVERRIDE.get(name, {}))
     if name == "ASSET_CHUNK":
         size = pl.CHUNK_PAYLOAD_MAX if high else 1
         fields["payload"] = bytes((0xFF if high else 0x00,)) * size

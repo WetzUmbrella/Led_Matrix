@@ -20,6 +20,8 @@
 #include "test_display.h"
 #include "test_fault_word.h"
 #include "test_playback.h"
+#include "test_game_tile.h"
+#include "test_tap_detect.h"
 #include "test_telemetry_book.h"
 #include "test_timesync.h"
 
@@ -59,6 +61,8 @@ static test_case_t const g_faults[] = {
      test_fault_word_merge_rule},
     {"Test F5: two setters and a reporter, 0 lost (T-X-02 forerunner)",
      test_fault_word_two_threads},
+    {"Test F6: a new session clears QUEUE_OVERFLOW only",
+     test_fault_word_new_session},
 };
 
 static test_case_t const g_playback[] = {
@@ -73,6 +77,9 @@ static test_case_t const g_playback[] = {
      test_playback_resume_frame},
     {"Test P6: 0.9 s without beacons keeps playing, 1.1 s pauses, 10 of 10",
      test_playback_holdover},
+    {"Playback 24 Nov: a coordinator restart stops a playing tile; its first "
+     "START_AT is taken",
+     test_playback_pico_restart},
 };
 
 static test_case_t const g_telemetry[] = {
@@ -95,6 +102,8 @@ static test_case_t const g_asset[] = {
     {"Test A4: complete after all 57 chunks in any order",
      test_asset_rx_complete},
     {"Test A5: zlib CRC32 0xCBF43926 and continuation", test_asset_rx_crc32},
+    {"Test A6: a held upload ACKs every chunk, never complete",
+     test_asset_rx_held},
 };
 
 static test_case_t const g_coord[] = {
@@ -114,6 +123,12 @@ static test_case_t const g_display[] = {
     {"Test D2: rotation remap, 4 x 90 = identity, 180 = reverse",
      test_display_rotation},
     {"Test D3: frame index from ticks", test_display_frame_index},
+    {"Test D4: corner LEDs match the hand-worked table, all orientations",
+     test_display_rotation_corners},
+    {"Test D5: gravity to picture, 64 LEDs upright in all orientations",
+     test_display_rotation_gravity},
+    {"Test D6: one source pixel reaches the expected wire LED",
+     test_display_rotation_wire},
     {"Test O1: 25 equal samples give 0 changes, 26 give 1",
      test_display_orient_debounce},
     {"Test O2: forced NACK keeps the orientation, IMU bit set then cleared",
@@ -122,8 +137,42 @@ static test_case_t const g_display[] = {
      test_display_orient_classify},
 };
 
-/** Number of counted display and orientation tests (6): the element count
- *  of a six-entry array fits uint32_t. */
+static test_case_t const g_tap[] = {
+    {"Test K1: 199 mg no tap, 200 mg a tap timed at the spike",
+     test_tap_detect_threshold},
+    {"Test K2: peak is the largest deviation in the 10 ms window",
+     test_tap_detect_peak_window},
+    {"Test K3: a slap ringing 480 ms counts once", test_tap_detect_ringing},
+    {"Test K4: re-arm after 250 ms and 30 ms quiet, not before",
+     test_tap_detect_rearm},
+    {"Test K5: continuous shaking re-arms at most every 600 ms",
+     test_tap_detect_rearm_cap},
+    {"Test K6: a bad first sample is reseeded away", test_tap_detect_reseed},
+    {"Test K7: still gravity in six directions gives no tap",
+     test_tap_detect_gravity},
+    {"Test K8: default 300 mg, clamped to 50 to 5,000 mg, acts",
+     test_tap_detect_set_threshold},
+    {"G1 step 3: mole rises and sinks, hit squash and burst, red X on a miss",
+     test_game_tile_mole_and_flash},
+    {"G2 re-plan: only this tile's messages are ACKed, repeats not applied",
+     test_game_tile_acks},
+    {"G3 step 3: ARM holes and threshold, start sprite, START, END, tap test",
+     test_game_tile_round},
+    {"G4 step 3: picture list timed, out of order, loop, clears, rotation",
+     test_game_tile_pictures},
+    {"G5 step 3: GPIO4 pulses 10 ms mole, 6 ms hit, none otherwise",
+     test_game_tile_pulses},
+    {"G6 re-plan: TAP and ACK encodings, state publish reads back whole",
+     test_game_tile_codecs},
+    {"G7: a restarted Pico's ARM and pictures are taken after new_pico",
+     test_game_tile_new_pico},
+};
+
+/** Number of counted tap tests (6): a six-entry array count fits uint32_t. */
+#define TAP_COUNT ((uint32_t)(sizeof(g_tap) / sizeof(g_tap[0])))
+
+/** Number of counted display and orientation tests (9): the element count
+ *  of a nine-entry array fits uint32_t. */
 #define DISPLAY_COUNT                                                          \
     ((uint32_t)(sizeof(g_display) / sizeof(g_display[0]))) /* Fits. */
 
@@ -229,6 +278,14 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     bool const b_reseed =
         test_main_run("R1-2 re-seed on another Pico clock (not counted)",
                       test_timesync_reseed);
+    bool const b_drift = test_main_run(
+        "24 Nov drift limit, 50 ppm (not counted)", test_timesync_drift_limit);
+    bool const b_stall =
+        test_main_run("24 Nov WiFi stall, no re-seed (not counted)",
+                      test_timesync_wifi_stall);
+    bool const b_restart =
+        test_main_run("24 Nov Pico restart re-seeds at once (not counted)",
+                      test_timesync_pico_restart);
 
     printf("Pass = %" PRIu32 " of %" PRIu32 "\n", passed, CASE_COUNT);
 
@@ -262,14 +319,19 @@ int main (void) /* DEVIATION D-2: the C standard fixes int main (void). */
     printf("Display: Pass = %" PRIu32 " of %" PRIu32 "\n", display_passed,
            DISPLAY_COUNT);
 
+    uint32_t tap_passed = run_cases(g_tap, TAP_COUNT);
+
+    printf("Tap: Pass = %" PRIu32 " of %" PRIu32 "\n", tap_passed, TAP_COUNT);
+
     /* DEVIATION D-2: the exit status is the int that main returns. */
     int status = 1;
 
-    if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed &&
-        (FAULT_COUNT == fault_passed) && (PLAYBACK_COUNT == playback_passed) &&
+    if ((CASE_COUNT == passed) && b_supp && b_ready && b_reseed && b_drift &&
+        b_stall && b_restart && (FAULT_COUNT == fault_passed) &&
+        (PLAYBACK_COUNT == playback_passed) &&
         (TELEMETRY_COUNT == telemetry_passed) &&
         (ASSET_COUNT == asset_passed) && (COORD_COUNT == coord_passed) &&
-        (DISPLAY_COUNT == display_passed))
+        (DISPLAY_COUNT == display_passed) && (TAP_COUNT == tap_passed))
     {
         status = 0;
     }

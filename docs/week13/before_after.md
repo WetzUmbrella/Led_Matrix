@@ -96,3 +96,22 @@ Counting decisions, used in every row below:
 | REGISTER | Node ID `uint32_t` 4; cached asset session_id `uint32_t` 4; cached CRC32 `uint32_t` 4 | 9 + 4 + 4 + 4 | 21 B | derived, W6 8-bit design | as listed | T-B2-01 "REGISTER (Node ID, cached asset session_id and CRC32)"; T-B3-05. The cached session_id is a separate field from the header session_id: the tile may hold an asset from an earlier session | 10 B, derived (73 bits, ceil(73 / 8)) |
 
 The check that every message type in the frozen T-B2-01 table has a before cell labelled measured or derived is made in T-X-04 and T-X-06, not here (T-B4-01 row, Round 2 ruling F21).
+
+## 4. Final build, 25 Nov 2026 (the demo firmware)
+
+Measured on the builds flashed for the final demo: tiles `630c390`, Pico `f9d313c` (`docs/week13/final_25nov/`). The "after" column of section 1 stays the 3 Nov build that first carried the packed representation; this section adds the game (11 to 24 Nov) on top.
+
+| Item | Before (`cr1-before`) | After, 3 Nov | Final, 25 Nov | Label |
+|---|---|---|---|---|
+| `panel_sync` static DRAM (DIRAM `.data` + `.bss`) | 34,864 B | 40,576 B | 44,304 B (19,448 + 24,856) | measured (`final_25nov/idf_size.txt`) |
+| `panel_sync` static IRAM (IRAM region + DIRAM `.text`) | 90,750 B | 94,406 B | 94,238 B (16,383 + 77,855) | measured |
+| `ledwall_sync.elf` text / data / bss | 340,304 / 0 / 50,944 B | 346,120 / 0 / 50,500 B | 371,152 / 0 / 57,244 B | measured (`final_25nov/pico_size.txt`) |
+| Free internal heap after WiFi (tile) | not measured at the tag | not measured | 163,488 and 163,664 B (2 boots) | measured (`HEAP` line, `asset_store_probe_heap()` after the first IP; `docs/bench/24nov/long_tile8.log`, `long_tile8_try1.log`) |
+| Largest internal block after WiFi (tile) | not measured at the tag | not measured | 96,256 B (both boots) | measured, same lines |
+| Playback asset in RAM (copy plus 32 KB margin, RAR-4) | 147,968 B (8 bits per channel) | 90,368 B | 90,368 B | derived (section 2) |
+
+How to read it:
+
+- **Static RAM rose** from the tag to the final build because whole subsystems were added after the tag (upload and verify, telemetry, time sync, the game, whole-wall rotation). Static size does not isolate the representation change; the rows that do are the asset and the messages.
+- **The asset is where the change pays off.** The packed asset needs 90,368 B of one internal block; the largest internal block after WiFi is 96,256 B, so it fits with 5,888 B to spare and the tile logs `od04=internal`. The 8-bit asset would need 147,968 B, more than any internal block, so it would need PSRAM, which is off in this build. Packing to 4 bits per channel is what keeps playback in internal RAM.
+- **Messages:** every one of the 24 types is smaller packed than at the 8-bit typing rule (`message_sizes.md`); BEACON, sent 10 times a second, went from 50 B (measured) to 12 B.

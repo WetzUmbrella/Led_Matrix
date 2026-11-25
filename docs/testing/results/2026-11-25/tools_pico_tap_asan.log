@@ -1,0 +1,13 @@
+make: Entering directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/tools/pico_tap/test'
+gcc -std=c11 -Wall -Wextra -Werror -O2 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o test_tap_ring_asan test_tap_ring.c ../tap_ring.c
+setarch $(uname -m) -R ./test_tap_ring_asan
+R1: events come out in order, with their values
+  PASS
+R2: a full ring refuses and counts the extra event
+  PASS
+R3: head and tail wrap at 2^32, nothing lost
+  PASS
+R4: an empty ring returns nothing, drops nothing
+  PASS
+tap_ring: Pass = 4 of 4
+make: Leaving directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/tools/pico_tap/test'

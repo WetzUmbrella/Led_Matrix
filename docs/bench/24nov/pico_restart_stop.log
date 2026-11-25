@@ -1,0 +1,72 @@
+## open 16:52:51
+CL_STATS state=7 sent=5501 first_seq=0 last_seq=5500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=56 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=30 dispatch_max_us=649 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000a wd_prev=0x0000000a tx_drop=0 tx_fail=0 tel_rx=4208 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,5501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,21194,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,21145,46,0,2,0,0,1,0,0,0,0
+
+CL_EVENT t_ms=555547 STATE node=0 value=8
+
+## open 16:52:58
+## open 16:52:58
+## open 16:52:58
+Joining MATRIX (timeout 10000 ms)
+
+COORDINATOR up: ip=192.168.1.154, beacons on 4210, tiles to 4211, PC to 4212
+
+CL_EVENT t_ms=5587 JOIN node=8 value=1258399936
+
+CL_EVENT t_ms=5587 BACK node=8 value=0
+
+CL_EVENT t_ms=5589 JOIN node=7 value=855746752
+
+CL_EVENT t_ms=5589 BACK node=7 value=0
+
+CL_EVENT t_ms=5590 JOIN node=6 value=2181146816
+
+CL_EVENT t_ms=5590 BACK node=6 value=0
+
+CL_EVENT t_ms=5621 JOIN node=5 value=234989760
+
+CL_EVENT t_ms=5622 BACK node=5 value=0
+
+CL_EVENT t_ms=5622 JOIN node=2 value=2416027840
+
+CL_EVENT t_ms=5622 BACK node=2 value=0
+
+CL_EVENT t_ms=5632 JOIN node=9 value=3674319040
+
+CL_EVENT t_ms=5633 BACK node=9 value=0
+
+CL_EVENT t_ms=5634 JOIN node=3 value=1627498688
+
+CL_EVENT t_ms=5634 BACK node=3 value=0
+
+CL_EVENT t_ms=5635 JOIN node=4 value=100772032
+
+CL_EVENT t_ms=5635 BACK node=4 value=0
+
+CL_EVENT t_ms=5637 JOIN node=1 value=1442949312
+
+CL_EVENT t_ms=5637 BACK node=1 value=0
+
+CL_EVENT t_ms=5836 STATE node=0 value=3
+
+CL_EVENT t_ms=5836 STATE node=0 value=5
+
+CL_EVENT t_ms=6350 STATE node=0 value=3
+
+CL_EVENT t_ms=6351 STATE node=0 value=5
+
+CL_EVENT t_ms=11967 STATE node=0 value=7
+
+CL_STATS state=7 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=3 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=29 dispatch_max_us=652 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0 tel_rx=90 wt_known=0x1ff wall_turn=0
+
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,477,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,473,1,0,2,0,0,1,0,0,0,0
+

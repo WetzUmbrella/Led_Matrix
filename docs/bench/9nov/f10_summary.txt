@@ -1,0 +1,26 @@
+tile 4
+  own soft taps  n=10 min  9470  p10  9839  median 11818  max 16455 mg
+  own palm slaps n=10 min 17749  p10 18095  median 18595  max 21616 mg
+  when the OTHER tile got soft: median  1204  max  1919 mg
+  when the OTHER tile got palm: median  2588  max  4083 mg
+  quiet 27 s                 : p99   733  max  1687 mg (n=2653 windows)
+  soft taps per threshold    : 100 mg:10/20  150 mg:10/20  200 mg:10/20  300 mg:10/20  500 mg:10/20
+tile 5
+  own soft taps  n=10 min  9813  p10 10362  median 11924  max 14169 mg
+  own palm slaps n=10 min 15730  p10 16116  median 18754  max 22047 mg
+  when the OTHER tile got soft: median  2969  max  4275 mg
+  when the OTHER tile got palm: median  7196  max 10227 mg
+  quiet 27 s                 : p99  1002  max  4491 mg (n=2637 windows)
+  soft taps per threshold    : 100 mg:10/20  150 mg:10/20  200 mg:10/20  300 mg:10/20  500 mg:10/20
+per tap: does the rule pick the tapped tile? (other tile counted only if it also crossed 300 mg)
+  soft: other tile quiet 0 | both fired 20 -> highest peak right 20 wrong 0 | first-over-300mg right 15 wrong 4 same-10ms-window 1 | lead ms [-1139, -4, -4, -1, 0, 2, 3, 4, 4, 4, 5, 7, 7, 8, 8, 9, 11, 13, 15, 348]
+event mix: 20 soft, 20 palm
+rule                         child hits the mole        child hits the tile NEXT to it
+target wins (any echo) soft  scored 20/20               FREE hit 20/20            
+target wins (any echo) palm  scored 20/20               FREE hit 20/20            
+target >= 0.3 x other soft   scored 20/20               FREE hit 2/20             
+target >= 0.3 x other palm   scored 20/20               FREE hit 9/20             
+target >= 0.5 x other soft   scored 20/20               FREE hit 0/20             
+target >= 0.5 x other palm   scored 20/20               FREE hit 1/20             
+highest peak wins soft       scored 20/20               FREE hit 0/20             
+highest peak wins palm       scored 20/20               FREE hit 0/20             

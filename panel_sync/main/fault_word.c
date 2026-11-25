@@ -77,4 +77,9 @@ void fault_word_clear_events (uint32_t sent_bits)
                                     memory_order_relaxed);
 }
 
+void fault_word_new_session (void)
+{
+    fault_word_clear_events(FAULT_BIT_QUEUE_OVERFLOW);
+}
+
 /*** end of file ***/

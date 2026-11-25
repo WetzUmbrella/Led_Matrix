@@ -167,6 +167,24 @@ bool test_fault_word_merge_rule (void)
     return b_ok;
 }
 
+bool test_fault_word_new_session (void)
+{
+    bool b_ok = true;
+
+    word_reset();
+    fault_word_set(FAULT_BIT_QUEUE_OVERFLOW | FAULT_BIT_CRC_FAIL |
+                   FAULT_BIT_IMU);
+    fault_word_new_session();
+
+    uint32_t const word = fault_word_snapshot();
+
+    b_ok = (test_main_check((FAULT_BIT_CRC_FAIL | FAULT_BIT_IMU) == word,
+                            __LINE__)) &&
+           b_ok;
+
+    return b_ok;
+}
+
 /**
  * @brief  Test F5: two setters, one reporter, 0 lost sets.
  * @return true when every check passed.

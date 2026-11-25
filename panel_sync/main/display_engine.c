@@ -22,6 +22,7 @@
 
 #include <inttypes.h>
 #include <stddef.h>
+#include <stdatomic.h>
 #include <stdio.h>
 
 #include "freertos/FreeRTOS.h"
@@ -41,6 +42,7 @@
 #include "asset_store.h"
 #include "display_frame.h"
 #include "fault_word.h"
+#include "game_tile.h"
 #include "orientation.h"
 #include "playback_control.h"
 #include "proto.h"
@@ -60,6 +62,13 @@
  *  arming calls themselves); a deadline closer than this is a missed tick. */
 #define DE_MIN_LEAD_US INT64_C(200)
 
+/** Most lead for arming a tick, microseconds: six ticks (plan choice). A
+ *  deadline further away means the corrected clock stepped back (the Pico
+ *  restarted and Time Sync re-seeded): the tick is dropped and the next one
+ *  after now is shown. Without this the gptimer waited out the Pico's old
+ *  uptime with the LEDs frozen (bench 12 Nov 2026). */
+#define DE_MAX_LEAD_US INT64_C(100000)
+
 /** Marker every 64 ticks and the two pulse widths (RIG.md section 4b). */
 #define DE_MARKER_PERIOD 64u
 #define DE_PULSE_US      INT64_C(1000)
@@ -74,8 +83,20 @@
 #define DE_T_SHORT 3u
 #define DE_T_LONG  9u
 
-/** RMT memory per channel without DMA, symbols (PROVISIONAL, OD-16). */
-#define DE_RMT_SYMBOLS 64u
+/** RMT DMA buffer, symbols (OD-16, decided 12 Nov 2026). Without DMA the
+ *  channel had 64 symbols and a refill every 32 (about 38 us); in game mode
+ *  the extra WiFi traffic made refills late and corrupted the rest of the
+ *  frame (random pixels and colours, bench 12 Nov 2026). With DMA the
+ *  driver plays the buffer as two halves of 1,023 symbols: a frame (192
+ *  bytes, 1,536 symbols) needs one refill, due about 1.3 ms after the frame
+ *  starts. 2,046 is the driver's maximum (ESP-IDF 5.3 rmt_tx.c: larger
+ *  fails "mem_block_symbols can't exceed 2046", and the LEDs keep their
+ *  last image: bench 12 Nov 2026, round 4). */
+#define DE_RMT_SYMBOLS 2046u
+
+_Static_assert((DE_RMT_SYMBOLS <= 2046u) && (0u == (DE_RMT_SYMBOLS % 2u)) &&
+                   (DE_RMT_SYMBOLS >= (8u * DISPLAY_FRAME_WIRE_BYTES)),
+               "even, within the driver's DMA limit, and holding a frame");
 
 /** Poll period while waiting for SYNC_READY before the first tick (plan
  *  choice: 20 ms, about one beacon interval / 5). */
@@ -131,22 +152,37 @@ static uint8_t *    g_p_back    = g_buf[1];
 static portMUX_TYPE g_swap_lock = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t     g_ticks     = 0u;
 static uint32_t     g_missed    = 0u;
+static uint32_t     g_jumps     = 0u;
 static uint32_t     g_rmt_busy  = 0u;
 static uint32_t     g_hist[DE_HIST_BINS];
-static int64_t      g_prep_max_us = 0;
-static uint32_t     g_state       = PROTO_DISPLAY_COUNT; /* None reported. */
-static uint8_t      g_orient      = PROTO_ORIENT_0;
-static bool         g_b_rmt_fault = false;
+static int64_t      g_prep_max_us   = 0;
+static uint32_t     g_state         = PROTO_DISPLAY_COUNT; /* None reported. */
+static uint8_t      g_orient        = PROTO_ORIENT_0;
+static uint8_t      g_posted_orient = PROTO_ORIENT_0; /* In TELEMETRY. */
+static bool         g_b_rmt_fault   = false;
+
+/* Game-mode event pulses (DS-13). The frame prepared next is the game's
+ * (g_b_game_frame) with this pulse width (0: none); the previous game frame's
+ * times find the events that start in it. g_b_game_shown is read by the
+ * Orientation Task for the tap pulse. */
+static bool               g_b_game_frame    = false;
+static uint32_t           g_game_pulse_us   = 0u;
+static int64_t            g_game_prev_pico  = 0;
+static int64_t            g_game_prev_local = 0;
+static _Atomic bool       g_b_game_shown    = false;
+static esp_timer_handle_t g_p_tap_timer     = NULL;
 
 static void     de_task (void * p_arg);
 static void     de_report (proto_display_state_t state);
+static void     de_report_orient (void);
 static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
                              timesync_reader_t * p_reader, uint64_t tick);
 static void     de_present (de_rmt_t const * p_rmt, int64_t deadline);
 static void     de_swap (void);
-static void     de_prepare_frame (uint64_t tick);
+static void     de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader);
 static void     de_log (void);
 static void     de_test_after_prepare (uint32_t frame, bool b_frame);
+static void     de_tap_pulse_end (void * p_arg);
 #ifdef DE_PROFILE
 static uint32_t g_prof[DE_PROF_BINS];
 #endif
@@ -195,6 +231,14 @@ static void de_task (void * p_arg)
 
     (void)gpio_config(&pin_cfg);           /* Fixed, valid configuration. */
     (void)gpio_set_level(DE_TEST_PIN, 0u); /* Valid pin and level. */
+
+    esp_timer_create_args_t const tap_args = {.callback = de_tap_pulse_end,
+                                              .name     = "de_tap"};
+
+    if (ESP_OK != esp_timer_create(&tap_args, &g_p_tap_timer))
+    {
+        g_p_tap_timer = NULL; /* No tap pulses; the ticks still run. */
+    }
 #ifdef DE_PROFILE
     gpio_config_t const prof_cfg = {
         .pin_bit_mask = (UINT64_C(1) << DE_PROF_PIN),
@@ -244,7 +288,7 @@ static void de_task (void * p_arg)
 
     printf("display_engine: test pin GPIO%u, first tick %" PRIu64 "\n",
            DE_TEST_PIN, tick);
-    de_prepare_frame(tick);
+    de_prepare_frame(tick, &reader);
 
     for (;;)
     {
@@ -261,6 +305,23 @@ static void de_task (void * p_arg)
 }
 
 /**
+ * @brief  A turn of the tile: TELEMETRY carries the new orientation at once
+ *         (D-17, the Pico's wall-turn window), once a display state has been
+ *         reported. Never blocks.
+ */
+static void de_report_orient (void)
+{
+    if ((g_orient != g_posted_orient) && (g_state < PROTO_DISPLAY_COUNT))
+    {
+        /* A display state is 0 to 6, so it fits uint8_t. */
+        uint8_t const state = (uint8_t)g_state;
+
+        g_posted_orient = g_orient;
+        (void)tile_net_post_status(g_orient, state); /* Drops oldest. */
+    }
+}
+
+/**
  * @brief  Report a display state change to the Network Task for TELEMETRY
  *         (T-B3-06), with the orientation in use. Never blocks; only a
  *         change is posted.
@@ -271,7 +332,8 @@ static void de_report (proto_display_state_t state)
     /* A display state is 0 to 6, so it fits uint32_t. */
     if ((uint32_t)state != g_state)
     {
-        g_state = (uint32_t)state; /* Same range. */
+        g_state         = (uint32_t)state; /* Same range. */
+        g_posted_orient = g_orient;
         /* A full queue drops its oldest item and counts it (tile_net). The
          * state is 0 to 6, so it fits uint8_t. */
         (void)tile_net_post_status(g_orient, (uint8_t)state);
@@ -299,20 +361,39 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
         timesync_deadline_local(p_reader, DE_ORIGIN_US, tick);
     int64_t const lead = deadline - esp_timer_get_time();
 
-    if (lead < DE_MIN_LEAD_US)
+    if ((lead < DE_MIN_LEAD_US) || (lead > DE_MAX_LEAD_US))
     {
-        g_missed++;
-        fault_word_set(FAULT_BIT_MISSED_DEADLINE);
+        if (lead < DE_MIN_LEAD_US)
+        {
+            g_missed++;
+            fault_word_set(FAULT_BIT_MISSED_DEADLINE);
+        }
+        else
+        {
+            /* The clock stepped back: not a missed tick, no fault. */
+            g_jumps++;
+            printf("DE clock jump lead_us=%" PRId64 "\n", lead);
+        }
+
         next =
             timesync_next_tick(DE_ORIGIN_US, timesync_now_corrected(p_reader));
-        de_prepare_frame(next);
+        de_prepare_frame(next, p_reader);
     }
     else
     {
+        /* Video: the tick pulse, wider on a marker. Game (DS-13): a pulse
+         * only on a frame where an event starts, as wide as its kind; the
+         * falling edge keeps the tick's pace either way. */
+        bool const    b_game = g_b_game_frame;
+        bool const    b_high = (!b_game) || (0u != g_game_pulse_us);
         int64_t const width =
-            (0u == (tick % DE_MARKER_PERIOD)) ? DE_MARKER_US : DE_PULSE_US;
+            (b_game && (0u != g_game_pulse_us))
+                ? (int64_t)g_game_pulse_us /* At most 10,000. */
+                : ((0u == (tick % DE_MARKER_PERIOD)) ? DE_MARKER_US
+                                                     : DE_PULSE_US);
 
-        de_arm_next(p_timer, lead, true);
+        atomic_store(&g_b_game_shown, b_game);
+        de_arm_next(p_timer, lead, b_high);
         de_wait_alarm(); /* Rising edge: tick n. */
         de_present(p_rmt, deadline);
         de_arm_next(p_timer, width, false);
@@ -325,7 +406,7 @@ static uint64_t de_run_tick (gptimer_handle_t p_timer, de_rmt_t const * p_rmt,
         gpio_ll_set_level(&GPIO, DE_PROF_PIN, 1u);
 #endif
 
-        de_prepare_frame(next);
+        de_prepare_frame(next, p_reader);
 
 #ifdef DE_TEST_SLOW_PREP
         esp_rom_delay_us(DE_SLOW_PREP_US); /* T-B5-07 (b). */
@@ -437,7 +518,7 @@ static void de_swap (void)
  *         stable orientation; otherwise a status pattern. Reports the state.
  * @param  tick  Tick number the buffer is for.
  */
-static void de_prepare_frame (uint64_t tick)
+static void de_prepare_frame (uint64_t tick, timesync_reader_t * p_reader)
 {
     playback_control_timeline_t timeline;
     uint8_t const *             p_payload   = NULL;
@@ -447,9 +528,42 @@ static void de_prepare_frame (uint64_t tick)
     bool                        b_frame     = false;
 
     g_orient = orientation_current();
+    de_report_orient();
 
     bool const b_timeline = playback_control_read_timeline(&timeline);
     bool const b_asset    = asset_store_get(&p_payload, &len, &frame_count);
+
+    /* Whack-a-mole (build step 7): the mole, its flash or the held score is
+     * drawn by the tile, unless video is playing (video takes the wall back
+     * when its START_AT arrives). */
+    game_tile_state_t game;
+
+    game_tile_read(&game);
+
+    int64_t const now_local = esp_timer_get_time();
+
+    if ((game_tile_active(&game, now_local)) &&
+        (!((b_timeline) && (timeline.b_running))))
+    {
+        int64_t const now_pico = timesync_now_corrected(p_reader);
+
+        game_tile_fill_wire(&game, now_pico, now_local,
+                            display_frame_mounted(g_orient), g_p_back);
+        /* The first game frame has no previous one: no event pulse. */
+        g_game_pulse_us =
+            g_b_game_frame
+                ? game_tile_pulse_us(&game, g_game_prev_pico, now_pico,
+                                     g_game_prev_local, now_local)
+                : 0u;
+        g_b_game_frame    = true;
+        g_game_prev_pico  = now_pico;
+        g_game_prev_local = now_local;
+        de_test_after_prepare(0u, false);
+        return;
+    }
+
+    g_b_game_frame  = false;
+    g_game_pulse_us = 0u;
 
     if ((b_timeline) && (b_asset) && (timeline.b_held))
     {
@@ -479,12 +593,14 @@ static void de_prepare_frame (uint64_t tick)
 
         if (DISPLAY_FRAME_PACKED_BYTES == frame_bytes)
         {
-            display_frame_unpack(p_frame, g_orient, g_p_back);
+            display_frame_unpack(p_frame, display_frame_mounted(g_orient),
+                                 g_p_back);
         }
         else
         {
             /* DE_PROFILE 8-bit asset (OD-15): copied, not unpacked. */
-            display_frame_copy_8bit(p_frame, g_orient, g_p_back);
+            display_frame_copy_8bit(p_frame, display_frame_mounted(g_orient),
+                                    g_p_back);
         }
     }
     else if ((b_timeline) && (b_asset) && (timeline.b_running))
@@ -500,6 +616,33 @@ static void de_prepare_frame (uint64_t tick)
     }
 
     de_test_after_prepare(frame, b_frame);
+}
+
+/**
+ * @brief  The game-mode tap pulse (see display_engine.h): the pin goes high
+ *         now and a one-shot esp_timer drops it. A tap during an event pulse
+ *         of the tick timer is rare (a tap on the mole's first frame); the
+ *         two edges then overlap and pico_tap sees one wider pulse.
+ */
+void display_engine_tap_pulse (void)
+{
+    if ((atomic_load(&g_b_game_shown)) && (NULL != g_p_tap_timer))
+    {
+        gpio_ll_set_level(&GPIO, DE_TEST_PIN, 1u);
+        /* A stopped or finished one-shot restarts; a running one is left. */
+        (void)esp_timer_start_once(g_p_tap_timer, GAME_TILE_PULSE_TAP_US);
+    }
+}
+
+/**
+ * @brief  End of the tap pulse (esp_timer task context).
+ * @param  p_arg  Unused.
+ */
+static void de_tap_pulse_end (void * p_arg)
+{
+    (void)p_arg; /* The callback takes no parameter. */
+
+    gpio_ll_set_level(&GPIO, DE_TEST_PIN, 0u);
 }
 
 /**
@@ -539,8 +682,8 @@ static void de_test_after_prepare (uint32_t frame, bool b_frame)
 static void de_log (void)
 {
     printf("DE ticks=%" PRIu32 " missed=%" PRIu32 " rmt_busy=%" PRIu32
-           " prep_max_us=%" PRId64 " orient=%" PRIu8 "\n",
-           g_ticks, g_missed, g_rmt_busy, g_prep_max_us, g_orient);
+           " jumps=%" PRIu32 " prep_max_us=%" PRId64 " orient=%" PRIu8 "\n",
+           g_ticks, g_missed, g_rmt_busy, g_jumps, g_prep_max_us, g_orient);
     printf("DE_HIST");
 
     for (uint32_t bin = 0u; bin < DE_HIST_BINS; bin++)
@@ -700,9 +843,10 @@ static gptimer_handle_t de_timer_create (void)
 
 /**
  * @brief  Create the RMT TX channel on GPIO14 and a bytes encoder with the
- *         WS2812B bit timing, from de_task on core 1 (T-B5-03). No DMA: the
- *         RMT refill interrupt is IRAM-safe (CONFIG_RMT_ISR_IRAM_SAFE),
- *         PROVISIONAL (OD-16, owner Jia Jun).
+ *         WS2812B bit timing, from de_task on core 1 (T-B5-03). With DMA
+ *         (OD-16, see DE_RMT_SYMBOLS): the first 1,023 symbols of a frame
+ *         are encoded before it starts, and the one refill has about
+ *         1.3 ms, so late interrupts no longer cut a frame.
  * @param  p_rmt  Receives the channel and encoder.
  * @return true when the channel is enabled.
  */
@@ -714,6 +858,7 @@ static bool de_start_rmt (de_rmt_t * p_rmt)
         .resolution_hz     = DE_RMT_HZ,
         .mem_block_symbols = DE_RMT_SYMBOLS,
         .trans_queue_depth = 1u,
+        .flags             = {.with_dma = 1u},
     };
     rmt_bytes_encoder_config_t const enc_cfg = {
         .bit0  = {.level0    = 1u,

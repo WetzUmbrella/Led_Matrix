@@ -1,0 +1,48 @@
+>>> config docs/bench/9nov/numbered_1x2.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794386770.357 configuration accepted
+>>> build
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+>>> upload
+failed: node 4 (0 of 57 chunks ACKed after 20 rounds)
+1794386860.555 uploaded to 172.20.10.5: 57 of 57 chunks ACKed, resent 0, 5.20 s
+1794386860.555 node 4 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+>>> upload
+failed: none
+1794386868.763 uploaded to 172.20.10.4: 57 of 57 chunks ACKed, resent 0, 5.20 s
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794386869.014 all tiles ready
+>>> mode game
+1794386871.770 mode game
+>>> game start
+  0.0 s  READY score=0 online=0x018
+  0.3 s  COORDINATING GAME score=0 online=0x018
+  0.5 s  COORDINATING GAME score=-1 online=0x018
+  1.0 s  COORDINATING GAME score=-2 online=0x018
+  1.3 s  COORDINATING GAME score=-1 online=0x018
+  2.0 s  COORDINATING GAME score=0 online=0x018
+  2.8 s  COORDINATING GAME score=1 online=0x018
+  3.5 s  COORDINATING GAME score=2 online=0x018
+  4.5 s  COORDINATING GAME score=3 online=0x018
+  5.5 s  COORDINATING GAME score=2 online=0x018
+  6.5 s  COORDINATING GAME score=1 online=0x018
+  7.8 s  COORDINATING GAME score=0 online=0x018
+  9.3 s  COORDINATING GAME score=1 online=0x018
+  9.5 s  COORDINATING GAME score=0 online=0x018
+ 10.3 s  COORDINATING GAME score=1 online=0x018
+ 11.3 s  COORDINATING GAME score=2 online=0x018
+ 12.3 s  COORDINATING GAME score=3 online=0x018
+ 13.0 s  COORDINATING GAME score=4 online=0x018
+ 13.8 s  COORDINATING GAME score=5 online=0x018
+ 14.8 s  COORDINATING GAME score=6 online=0x018
+ 30.1 s  READY score=0 online=0x018
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794386902.867 round over, score 6

@@ -1,0 +1,57 @@
+/**
+ * @file    test_game_rules.h
+ * @brief   Host tests of the whack-a-mole rules (C17, C18).
+ *
+ * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
+ * step 7.
+ */
+#ifndef TEST_GAME_RULES_H
+#define TEST_GAME_RULES_H
+
+#include <stdbool.h>
+
+/**
+ * @brief  C17: a 30 s round with no taps: mole time 1193 ms at the first
+ *         mole, 1200 ms at the start and 500 ms at the end, a 300 ms gap
+ *         after each timeout, never the same tile twice in a row, only active
+ *         tiles, the round ends at 30 s, and game_next_due() never lies.
+ * @return true when every check passed.
+ */
+bool test_game_rules_timing (void);
+
+/**
+ * @brief  C18: hits (+1, the mole ends at once), wrong tiles and taps with no
+ *         mole up (-1), dedupe within 50 ms (highest peak counts, later taps
+ *         count separately), and a stopped round ignores taps.
+ * @return true when every check passed.
+ */
+bool test_game_rules_scoring (void);
+
+/**
+ * @brief  Tap grace: a tap stamped before the hide that arrives within the
+ *         grace hits (+1); a tap stamped at or after the hide misses (-1); a
+ *         mole that times out with no tap scores 0 and the next show is 300 ms
+ *         after the hide.
+ * @return true when every check passed.
+ */
+bool test_game_rules_grace (void);
+
+/**
+ * @brief  C18c: a tap and its echo delivered late (bench 11 Nov, round 11)
+ *         are one group; a late straggler stamped just before a closed group
+ *         is a duplicate.
+ * @return true when every check passed.
+ */
+bool test_game_rules_late_echo (void);
+
+/**
+ * @brief  C18d: a real tap arriving 140 ms after its echoes still wins; two
+ *         9-tile taps wait at once; an echo arriving after later groups
+ *         closed is a duplicate (bench 24 Nov 2026).
+ * @return true when every check passed.
+ */
+bool test_game_rules_slow_echo (void);
+
+#endif /* TEST_GAME_RULES_H */
+
+/*** end of file ***/

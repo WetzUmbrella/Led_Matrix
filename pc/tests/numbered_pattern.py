@@ -43,10 +43,14 @@ FRAME_BITS = 10
 #: Full channel value before scaling.
 FULL = 255
 
-#: Default map per layout (positions row by row in 3 columns).
+#: Default map per layout (positions row by row over rows x cols).
 DEFAULT_MAPS = {"1x1": [1, 0, 0, 0, 0, 0, 0, 0, 0],
-                "2x2": [1, 2, 0, 3, 4, 0, 0, 0, 0],
+                "2x2": [1, 2, 3, 4, 0, 0, 0, 0, 0],
                 "3x3": [1, 2, 3, 4, 5, 6, 7, 8, 9]}
+
+#: Strip layouts (build step 6). 1x9 is the strip GIF for the demo.
+STRIP_MAPS = {"1x5": [1, 2, 3, 4, 5, 0, 0, 0, 0],
+              "1x9": [1, 2, 3, 4, 5, 6, 7, 8, 9]}
 
 
 def region_pixels(node_id: int, frame: int) -> List[Tuple[int, int, int]]:
@@ -63,14 +67,14 @@ def region_pixels(node_id: int, frame: int) -> List[Tuple[int, int, int]]:
 def make_frames(layout: str, node_map: Sequence[int]):  # type: ignore
     """PIL frames and delays of the pattern for a layout."""
     from PIL import Image
-    _code, rows, cols = ab.parse_layout(layout, node_map)
+    rows, cols = ab.parse_layout(layout, node_map)
     frames = []
     for frame in range(SOURCE_FRAMES):
         wall = Image.new("RGB", (cols * ab.TILE, rows * ab.TILE))
         for slot, node in enumerate(node_map):
             if not node:
                 continue
-            row, col = divmod(slot, ab.MAP_COLUMNS)
+            row, col = divmod(slot, cols)
             for led, pixel in enumerate(region_pixels(node, frame)):
                 y, x = divmod(led, ab.TILE)
                 wall.putpixel((col * ab.TILE + x, row * ab.TILE + y), pixel)
@@ -82,10 +86,12 @@ def main(argv: List[str] = None) -> int:  # type: ignore[assignment]
     """Write the pattern as a GIF."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--layout", default="2x2",
-                        choices=sorted(DEFAULT_MAPS))
+                        choices=sorted(DEFAULT_MAPS) + sorted(STRIP_MAPS),
+                        help="1x9 makes the strip GIF (build step 6)")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
-    frames, delays = make_frames(args.layout, DEFAULT_MAPS[args.layout])
+    maps = dict(DEFAULT_MAPS, **STRIP_MAPS)
+    frames, delays = make_frames(args.layout, maps[args.layout])
     frames[0].save(args.out, save_all=True, append_images=frames[1:],
                    duration=delays, loop=0)
     print("wrote %s (%d frames)" % (args.out, len(frames)))

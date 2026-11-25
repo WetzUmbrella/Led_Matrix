@@ -1,0 +1,30 @@
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 start 15:58:03
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 15:58:03.281
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 15:58:04.392
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 15:58:04.893
+15:58:05.294 Joining <network> (timeout 10000 ms)
+15:58:08.300 COORDINATOR up: ip=172.20.10.2, beacons on 4210, tiles to 4211, PC to 4212
+15:58:08.301 CL_EVENT t_ms=3801 JOIN node=4 value=67769516
+15:58:08.301 CL_EVENT t_ms=3801 BACK node=4 value=0
+15:58:08.301 CL_EVENT t_ms=3801 JOIN node=5 value=84546732
+15:58:08.301 CL_EVENT t_ms=3801 BACK node=5 value=0
+15:58:18.318 CL_STATS state=2 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=20 dispatch_max_us=130 online=0x018 ready=0x000 sync=0x018
+15:58:18.318 LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+15:58:18.318 CB_HIST,79,0,0,0,0,0,0,0,0,0,0
+15:58:18.318 DISPATCH_HIST,78,1,0,0,0,0,0,0,0,0,0
+15:58:28.338 CL_STATS state=2 sent=201 first_seq=0 last_seq=200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=20 dispatch_max_us=130 online=0x018 ready=0x000 sync=0x018
+15:58:28.338 LATE_HIST,201,0,0,0,0,0,0,0,0,0,0
+15:58:28.338 CB_HIST,159,0,0,0,0,0,0,0,0,0,0
+15:58:28.338 DISPATCH_HIST,158,1,0,0,0,0,0,0,0,0,0
+15:58:38.358 CL_STATS state=2 sent=301 first_seq=0 last_seq=300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=20 dispatch_max_us=130 online=0x018 ready=0x000 sync=0x018
+15:58:38.358 LATE_HIST,301,0,0,0,0,0,0,0,0,0,0
+15:58:38.358 CB_HIST,239,0,0,0,0,0,0,0,0,0,0
+15:58:38.358 DISPATCH_HIST,238,1,0,0,0,0,0,0,0,0,0
+15:58:48.374 CL_STATS state=2 sent=401 first_seq=0 last_seq=400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=20 dispatch_max_us=130 online=0x018 ready=0x000 sync=0x018
+15:58:48.374 LATE_HIST,401,0,0,0,0,0,0,0,0,0,0
+15:58:48.374 CB_HIST,319,0,0,0,0,0,0,0,0,0,0
+15:58:48.374 DISPATCH_HIST,318,1,0,0,0,0,0,0,0,0,0
+15:58:58.393 CL_STATS state=2 sent=501 first_seq=0 last_seq=500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=20 dispatch_max_us=130 online=0x018 ready=0x000 sync=0x018
+15:58:58.393 LATE_HIST,501,0,0,0,0,0,0,0,0,0,0
+15:58:58.393 CB_HIST,399,0,0,0,0,0,0,0,0,0,0
+15:58:58.393 DISPATCH_HIST,398,1,0,0,0,0,0,0,0,0,0

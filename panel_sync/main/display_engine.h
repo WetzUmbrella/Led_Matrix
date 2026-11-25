@@ -45,8 +45,9 @@
  * PROVISIONAL (marker, owner Jia Jun): pulse, not toggle; rising edge at tick
  * n, high 1 ms, or 4 ms when n mod 64 == 0 (RIG.md section 4b request). The
  * falling edge is a second one-shot alarm.
- * PROVISIONAL (OD-16, owner Jia Jun): RMT without DMA; the refill interrupt
- * is IRAM-safe (CONFIG_RMT_ISR_IRAM_SAFE).
+ * OD-16 (owner Jia Jun), decided 12 Nov 2026: RMT with DMA, a buffer that
+ * holds a whole frame (DE_RMT_SYMBOLS); without DMA, late refills under
+ * game-mode WiFi traffic corrupted frames.
  * PROVISIONAL (owner Jia Jun): the tick grid origin is 0 in Pico time; the
  * playback origin (START_AT) selects the first frame's tick on that grid.
  * Open interface items with Ahsanul (timesync_DEFENCE.md): the reader
@@ -73,6 +74,15 @@
  * @return true when the task was created.
  */
 bool display_engine_start (void);
+
+/**
+ * @brief  The game-mode tap pulse on the test pin (DS-13): high now, low
+ *         GAME_TILE_PULSE_TAP_US later (an esp_timer one-shot), only while
+ *         the last frame drawn was the game's. Video mode keeps its tick
+ *         pulses untouched. Called by the Orientation Task when a tap is
+ *         detected; never blocks.
+ */
+void display_engine_tap_pulse (void);
 
 #endif /* DISPLAY_ENGINE_H */
 

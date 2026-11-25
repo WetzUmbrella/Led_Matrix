@@ -1,0 +1,15 @@
+# Tap test, 19 Nov 2026, website session 62: the last 12 taps the website kept (the full test was not logged).
+# Taps felt by several tiles at the same moment are one tap and its echoes through the board.
+time,tile,peak_mg
+15:56:50,5,13757
+15:56:50,7,342
+15:56:50,3,456
+15:56:50,1,1086
+15:56:52,7,408
+15:56:52,1,1293
+15:56:52,5,11497
+15:56:52,3,500
+15:56:52,4,1787
+15:56:52,6,1142
+15:56:53,5,5040
+15:56:53,4,508

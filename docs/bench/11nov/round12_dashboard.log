@@ -1,0 +1,29 @@
+>>> config docs/bench/9nov/numbered_1x2.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794386288.970 configuration accepted
+>>> build
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+>>> upload
+failed: node 4 (56 of 57 chunks ACKed after 20 rounds)
+1794386304.266 uploaded to 172.20.10.5: 57 of 57 chunks ACKed, resent 0, 5.20 s
+1794386304.266 node 4 not uploaded: 56 of 57 chunks ACKed after 20 rounds
+>>> upload
+failed: node 4 (0 of 57 chunks ACKed after 20 rounds)
+1794386392.150 node 4 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc ERROR; start disabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> mode game
+1794386395.159 mode game
+>>> game start
+  0.0 s  READY score=0 online=0x018
+  0.3 s  COORDINATING GAME score=0 online=0x018
+ 30.3 s  READY score=0 online=0x018
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+pc ERROR; start disabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794386426.491 round over, score 0

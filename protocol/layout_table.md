@@ -24,7 +24,7 @@ Width rule for every field PostTri does not size: bits = ceil(log2(number of val
 
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
-| type | 0 | 5 | 0 to 17 | message type code (section 5.1) | IFM-2a; width plan choice (18 types) |
+| type | 0 | 5 | 0 to 23 | message type code (section 5.1) | IFM-2a; width plan choice (24 types) |
 | session_id | 5 | 8 | 0 to 255 | session the message belongs to | IFM-2a, W6D-2f; width plan choice |
 | seq | 13 | 16 | 0 to 65,535 | sender's sequence number, wrap-aware | IFM-2a, W6D-2f; width plan choice |
 
@@ -54,29 +54,48 @@ Offsets are absolute bit offsets in the message. Direction: T = tile, P = Pico, 
 
 | Field | Bit offset | Bits | Valid range | Meaning | Source |
 |---|---|---|---|---|---|
-| layout | 29 | 2 | 0 to 2 | 1x1, 2x2, 3x3 (section 5.2) | T-B2-01, FR3 |
-| policy | 31 | 1 | 0 to 1 | continue, pause (section 5.3) | T-B2-01, FR18 |
-| node_map[0] | 32 | 4 | 0 to 9 | Node ID at row 0, column 0; 0 = blank | T-B2-01, OD-21 |
-| node_map[1] | 36 | 4 | 0 to 9 | row 0, column 1 | as above |
-| node_map[2] | 40 | 4 | 0 to 9 | row 0, column 2 | as above |
-| node_map[3] | 44 | 4 | 0 to 9 | row 1, column 0 | as above |
-| node_map[4] | 48 | 4 | 0 to 9 | row 1, column 1 | as above |
-| node_map[5] | 52 | 4 | 0 to 9 | row 1, column 2 | as above |
-| node_map[6] | 56 | 4 | 0 to 9 | row 2, column 0 | as above |
-| node_map[7] | 60 | 4 | 0 to 9 | row 2, column 1 | as above |
-| node_map[8] | 64 | 4 | 0 to 9 | row 2, column 2 | as above |
-| frame_count | 68 | 10 | 1 to 1023 | frames in every tile asset of the session (all tiles share one duration) | T-B1-03, VC-3; field PROVISIONAL (section 10 item 9) |
-| crc32[0] | 78 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 0; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[1] | 110 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 1; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[2] | 142 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 2; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[3] | 174 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 3; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[4] | 206 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 4; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[5] | 238 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 5; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[6] | 270 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 6; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[7] | 302 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 7; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
-| crc32[8] | 334 | 32 | 0 to 2^32 - 1 | manifest CRC32 of the tile at map position 8; 0 for a blank position | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9) |
+| rows | 29 | 4 | 1 to 9 | rows of the wall (section 5.2) | whack-a-mole re-plan, step 3; width rule, 9 values |
+| cols | 33 | 4 | 1 to 9 | columns of the wall (section 5.2) | as above |
+| policy | 37 | 1 | 0 to 1 | continue, pause (section 5.3) | T-B2-01, FR18 |
+| placed[0] | 38 | 1 | 0 to 1 | 1 = Node ID 1 is in the wall | step 4d, DS-15 (12 Nov 2026) |
+| row[0] | 39 | 4 | 0 to 8 | Node ID 1's row, 0 to rows - 1; 0 when not placed | as above |
+| col[0] | 43 | 4 | 0 to 8 | Node ID 1's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[1] | 47 | 1 | 0 to 1 | 1 = Node ID 2 is in the wall | as above |
+| row[1] | 48 | 4 | 0 to 8 | Node ID 2's row, 0 to rows - 1; 0 when not placed | as above |
+| col[1] | 52 | 4 | 0 to 8 | Node ID 2's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[2] | 56 | 1 | 0 to 1 | 1 = Node ID 3 is in the wall | as above |
+| row[2] | 57 | 4 | 0 to 8 | Node ID 3's row, 0 to rows - 1; 0 when not placed | as above |
+| col[2] | 61 | 4 | 0 to 8 | Node ID 3's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[3] | 65 | 1 | 0 to 1 | 1 = Node ID 4 is in the wall | as above |
+| row[3] | 66 | 4 | 0 to 8 | Node ID 4's row, 0 to rows - 1; 0 when not placed | as above |
+| col[3] | 70 | 4 | 0 to 8 | Node ID 4's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[4] | 74 | 1 | 0 to 1 | 1 = Node ID 5 is in the wall | as above |
+| row[4] | 75 | 4 | 0 to 8 | Node ID 5's row, 0 to rows - 1; 0 when not placed | as above |
+| col[4] | 79 | 4 | 0 to 8 | Node ID 5's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[5] | 83 | 1 | 0 to 1 | 1 = Node ID 6 is in the wall | as above |
+| row[5] | 84 | 4 | 0 to 8 | Node ID 6's row, 0 to rows - 1; 0 when not placed | as above |
+| col[5] | 88 | 4 | 0 to 8 | Node ID 6's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[6] | 92 | 1 | 0 to 1 | 1 = Node ID 7 is in the wall | as above |
+| row[6] | 93 | 4 | 0 to 8 | Node ID 7's row, 0 to rows - 1; 0 when not placed | as above |
+| col[6] | 97 | 4 | 0 to 8 | Node ID 7's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[7] | 101 | 1 | 0 to 1 | 1 = Node ID 8 is in the wall | as above |
+| row[7] | 102 | 4 | 0 to 8 | Node ID 8's row, 0 to rows - 1; 0 when not placed | as above |
+| col[7] | 106 | 4 | 0 to 8 | Node ID 8's column, 0 to cols - 1; 0 when not placed | as above |
+| placed[8] | 110 | 1 | 0 to 1 | 1 = Node ID 9 is in the wall | as above |
+| row[8] | 111 | 4 | 0 to 8 | Node ID 9's row, 0 to rows - 1; 0 when not placed | as above |
+| col[8] | 115 | 4 | 0 to 8 | Node ID 9's column, 0 to cols - 1; 0 when not placed | as above |
+| frame_count | 119 | 10 | 1 to 1023 | frames in every tile asset of the session (all tiles share one duration) | T-B1-03, VC-3; field PROVISIONAL (section 10 item 9) |
+| crc32[0] | 129 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 1; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[1] | 161 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 2; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[2] | 193 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 3; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[3] | 225 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 4; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[4] | 257 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 5; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[5] | 289 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 6; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[6] | 321 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 7; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[7] | 353 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 8; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
+| crc32[8] | 385 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 9; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
 
-The map is always 9 positions in row-major order of a 3x3 grid; a 1x1 layout uses position 0 and a 2x2 layout positions 0, 1, 3 and 4 **(plan choice)**. Unused positions are 0. `crc32[i]` belongs to the tile at `node_map[i]`. **PROVISIONAL (OD-07 item 9, owner Benjamin):** `frame_count` and `crc32[]` were added on 29 Oct 2026 so the Pico can check ASSET_READY against the manifest CRC32 of each Node ID (T-B2-04) and compute the saved frame index it sends in RESUME_AT and in a rejoin (T-B2-05, OD-14). Every tile of a session plays the same GIF duration, so one frame_count serves all of them.
+**Cells (step 4d, DS-15, decided 12 Nov 2026; replaces the 9-position row-major node_map of the whack-a-mole re-plan):** the grid is rows x cols cells, each 1 to 9, so up to 81 cells, and up to 9 tiles sit in any of them (a 5x5 diagonal, an L, a ring). Each Node ID n has one entry, `placed[n-1]`, `row[n-1]`, `col[n-1]`, so a tile cannot appear twice. Both codecs refuse (an encoder refuses it and a decoder rejects it) a placed tile outside the grid, two placed tiles in one cell, and a tile not placed with a row or column other than 0 (one encoding per layout). The Pico, not the codec, checks that at least one tile is placed. A tile switched off on the website is simply not placed; the PC remembers its cell. `crc32[n-1]` belongs to Node ID n (by map position before step 4d). Only the PC and the Pico read this message, so the tiles did not change. A full grid of up to 9 tiles still gives every tile the cell it had: row = position / cols, col = position mod cols. **PROVISIONAL (OD-07 item 9, owner Benjamin):** `frame_count` and `crc32[]` were added on 29 Oct 2026 so the Pico can check ASSET_READY against the manifest CRC32 of each Node ID (T-B2-04) and compute the saved frame index it sends in RESUME_AT and in a rejoin (T-B2-05, OD-14). Every tile of a session plays the same GIF duration, so one frame_count serves all of them.
 
 ### MANIFEST (type 3, C to T)
 
@@ -170,7 +189,16 @@ Header only. Accepted in PLAYING and PAUSED (W6D-2e).
 |---|---|---|---|---|---|
 | readiness | 29 | 9 | 0 to 0x1FF | bit n - 1 = Node ID n ready | T-B2-04, VC-11b |
 | online | 38 | 9 | 0 to 0x1FF | bit n - 1 = Node ID n online | T-B2-04 |
-| state | 47 | 4 | 0 to 11 | coordinator state (section 5.6) | T-B2-04, W6 statechart 2 |
+| state | 47 | 4 | 0 to 12 | coordinator state (section 5.6) | T-B2-04, W6 statechart 2 |
+| score | 51 | 8 | -99 to 99 | live game score, two's complement; 0 outside a game | whack-a-mole re-plan, step 3 (live score on the website); width rule, 199 values |
+| round_state | 59 | 3 | 0 to 4 | round state (section 5.15) | DS-08 (build step 3, 11 Nov 2026); width rule, 5 states |
+| level | 62 | 2 | 0 to 2 | level of the armed or running round (section 5.11) | DS-08, B4; width rule, 3 levels |
+| missed | 64 | 7 | 0 to 127 | targets that timed out this round | C3, A7; width rule (at most about 60 targets in 30 s) |
+| wrong | 71 | 7 | 0 to 127 | wrong taps this round | C2, A7 |
+| shown | 78 | 7 | 0 to 127 | targets shown this round (stars and accuracy, C6, A9) | C6, A9 |
+| time_left_s | 85 | 6 | 0 to 63 | seconds left in the round | A7; width rule, 31 values for a 30 s round, 6 bits for room |
+| reaction_ms | 91 | 11 | 0 to 2,047 | average reaction time of this round's hits, ms (show to tap) | A9; width rule, 2,048 values |
+| wall_turn | 102 | 2 | 0 to 3 | quarter turns clockwise of the whole wall since the active session's layout; 0 = none. The PC re-cuts for the turned layout and sends a new SESSION_CONFIG (section 10 item 17) | D-17 (24 Nov 2026); width rule, 4 values; fits the 13 B STATUS (102 to 104 bits) |
 
 ### TELEMETRY (type 16, T to C)
 
@@ -189,6 +217,65 @@ The telemetry seq of VC-4 is the header seq.
 |---|---|---|---|---|---|
 | acked_seq | 29 | 16 | 0 to 65,535 | header seq of the TELEMETRY acknowledged | VC-4; separate from the PC's own header seq (`before_after.md` decision 2) |
 
+### TAP (type 18, T to P, unicast, acked)
+
+| Field | Bit offset | Bits | Valid range | Meaning | Source |
+|---|---|---|---|---|---|
+| node_id | 29 | 4 | 1 to 9 | board number of the tapped tile | whack-a-mole re-plan, step 3 |
+| peak | 33 | 16 | 0 to 65,535 | tap_detect peak, mg (from 11 Nov 2026, build step 2; before: LSB at +/-8 g); the Pico keeps only the highest peak among taps within 50 ms | re-plan (tap dedupe); width of the tile's `uint16_t` peak |
+| t_tap | 49 | 64 | 0 to 2^64 - 1 | tap time in the Pico's corrected clock, us | re-plan; J1 |
+
+The TAP seq is the header seq.
+
+### MOLE_ON (type 19, P to one tile, unicast, acked)
+
+| Field | Bit offset | Bits | Valid range | Meaning | Source |
+|---|---|---|---|---|---|
+| node_id | 29 | 4 | 1 to 9 | addressed tile | re-plan, step 3 |
+| t_show | 33 | 64 | 0 to 2^64 - 1 | show time, Pico corrected clock, us | re-plan ("show and hide times"); J1 |
+| up_ms | 97 | 12 | 0 to 4,000 | how long the target stays up, ms; hide time = t_show + up_ms x 1,000 us; 0 = up until tapped or cleared (the start sprite) | re-plan; widened from 11 bits on 11 Nov 2026 (DS-10) for the stretch rotate sprite (up to 3,000 ms) |
+| kind | 109 | 3 | 0 to 4 | target kind (section 5.12) | DS-10; width rule, 5 codes (3 reserved for stretch goals) |
+
+The row keeps its name, MOLE_ON, but carries any target (DS-10 calls it TARGET). The tile draws the target itself; no asset is uploaded.
+
+### FEEDBACK (type 20, P to one tile, unicast, acked)
+
+| Field | Bit offset | Bits | Valid range | Meaning | Source |
+|---|---|---|---|---|---|
+| node_id | 29 | 4 | 1 to 9 | addressed tile | re-plan, step 3 |
+| result | 33 | 2 | 0 to 2 | flash to show now (section 5.9); 3 is spare and refused | re-plan (green flash on a hit, red on a miss); 2 bits by decision of 6 Nov 2026, for the decoy code |
+
+### GAME_CONTROL (type 21, C to P and P to one tile, unicast, acked)
+
+| Field | Bit offset | Bits | Valid range | Meaning | Source |
+|---|---|---|---|---|---|
+| node_id | 29 | 4 | 0 to 9 | 0 = PC to Pico; 1 to 9 = addressed tile | re-plan, step 3 |
+| command | 33 | 4 | 0 to 7 | game command (section 5.10); 8 to 15 are spare and refused | re-plan (mode switch, game start); 4 bits by decision of 6 Nov 2026, room for later commands; codes 4 to 7 added 11 Nov 2026 (DS-08, DS-10) |
+| level | 37 | 2 | 0 to 2 | level for ARM (section 5.11); 0 otherwise | DS-08; width rule |
+| threshold | 39 | 8 | 0 to 250 | tap threshold for ARM in 20 mg steps (20 to 5,000 mg); 0 = the tile's default (200 mg) | A12; carried in ARM rather than SESSION_CONFIG (11 Nov 2026), so no layout message change; 8 bits for 251 values |
+
+### WALL_PICTURE (type 22, P to one tile, unicast, acked)
+
+| Field | Bit offset | Bits | Valid range | Meaning | Source |
+|---|---|---|---|---|---|
+| node_id | 29 | 4 | 1 to 9 | addressed tile | re-plan, step 3 |
+| slot | 33 | 2 | 0 to 3 | entry of the tile's picture list | DS-09 (11 Nov 2026); a list of 4 |
+| effect | 35 | 2 | 0 to 2 | 0 picture (the mask), 1 sparkle (the tile's own twinkle), 2 clear the list (section 5.13) | DS-09; 3 is spare and refused |
+| colour | 37 | 3 | 0 to 7 | colour of the lit pixels (section 5.14) | DS-09; 8 colours |
+| repeat | 40 | 1 | 0 to 1 | 1 = after this entry, start again from slot 1 (the results loop) | DS-09 |
+| t_show | 41 | 64 | 0 to 2^64 - 1 | show time, Pico corrected clock, us | DS-09: every tile changes together, whatever the delivery delay |
+| dur_ms | 105 | 13 | 0 to 8,191 | how long the entry shows, ms; 0 = until replaced | DS-09 |
+| mask | 118 | 64 | 0 to 2^64 - 1 | bit n = pixel n lit, pixels in asset frame order (section 6), before the tile's rotation | re-plan ("final score drawn across the wall"); one bit per pixel |
+
+Replaces SCORE_MASK (same type code 22, renamed 11 Nov 2026, DS-09). The Pico draws each picture (countdown, score, stars) across the whole wall and sends each tile its 8 x 8 piece as a timed list entry, about 0.5 s ahead, so tiles need no font and no layout.
+
+### ACK (type 23, any direction, unicast)
+
+| Field | Bit offset | Bits | Valid range | Meaning | Source |
+|---|---|---|---|---|---|
+| node_id | 29 | 4 | 0 to 9 | 0 = between PC and Pico; 1 to 9 = the tile that sends it or is sent it | re-plan, step 3 |
+| acked_seq | 33 | 16 | 0 to 65,535 | header seq of the TAP, MOLE_ON, FEEDBACK, GAME_CONTROL or WALL_PICTURE acknowledged | re-plan ("seq and an ack"); all acked messages from one sender share one seq counter (section 10 item 13), so seq alone names the message |
+
 ## 4. Encoded lengths, before and after
 
 "Before" is copied from `docs/week13/before_after.md` (T-B4-01) with its label; T-X-04 measures the on-air "after" values.
@@ -197,7 +284,7 @@ The telemetry seq of VC-4 is the header seq.
 |---|---|---|---|---|
 | REGISTER | 73 | 10 | 21 | derived, W6 8-bit design |
 | HEARTBEAT | 33 | 5 | 9 (`sizeof(hello_t)`, the tag's heartbeat) | measured (Xtensa `sizeof`); on-air pending B-3 |
-| SESSION_CONFIG | 366 | 46 | 87 | derived |
+| SESSION_CONFIG | 417 | 53 | 87 | derived (step 4d cells; 372 bits, 47 B before) |
 | MANIFEST | 73 | 10 | 22 | derived |
 | ASSET_CHUNK | 40 + payload | 5 + 1 to 1,024 (1,029 full) | 13 + 1,024 = 1,037 | derived |
 | CHUNK_ACK | 40 | 5 | 13 | derived |
@@ -210,30 +297,36 @@ The telemetry seq of VC-4 is the header seq.
 | RESUME_AT | 103 | 13 | 21 | derived |
 | PAUSE | 29 | 4 | 9 | derived |
 | STOP | 29 | 4 | 9 | derived |
-| STATUS | 51 | 7 | 28 | derived |
+| STATUS | 104 | 13 | 28 | derived (wall_turn added 24 Nov: 102 to 104 bits, same 13 B) |
 | TELEMETRY | 70 | 9 | 15 | derived |
 | TELEMETRY_ACK | 45 | 6 | 13 | derived |
+| TAP | 113 | 15 | none | new row, no before |
+| MOLE_ON | 112 | 14 | none | new row, no before |
+| FEEDBACK | 35 | 5 | none | new row, no before |
+| GAME_CONTROL | 47 | 6 | none | new row, no before |
+| WALL_PICTURE | 182 | 23 | none | new row, no before |
+| ACK | 49 | 7 | none | new row, no before |
 
 The "after" sizes include the node_id, ref_seq and acked_seq fields that the before rows do not count (section 10, items 4 and 5).
 
 ## 5. Code tables
 
-### 5.1 Message type (5 bits, 18 codes, 14 spare)
+### 5.1 Message type (5 bits, 24 codes, 8 spare)
 
-| Code | Type | Code | Type | Code | Type |
-|---|---|---|---|---|---|
-| 0 | REGISTER | 6 | NACK | 12 | RESUME_AT |
-| 1 | HEARTBEAT | 7 | BUSY | 13 | PAUSE |
-| 2 | SESSION_CONFIG | 8 | ASSET_READY | 14 | STOP |
-| 3 | MANIFEST | 9 | SYNC_READY | 15 | STATUS |
-| 4 | ASSET_CHUNK | 10 | BEACON | 16 | TELEMETRY |
-| 5 | CHUNK_ACK | 11 | START_AT | 17 | TELEMETRY_ACK |
+| Code | Type | Code | Type | Code | Type | Code | Type |
+|---|---|---|---|---|---|---|---|
+| 0 | REGISTER | 6 | NACK | 12 | RESUME_AT | 18 | TAP |
+| 1 | HEARTBEAT | 7 | BUSY | 13 | PAUSE | 19 | MOLE_ON |
+| 2 | SESSION_CONFIG | 8 | ASSET_READY | 14 | STOP | 20 | FEEDBACK |
+| 3 | MANIFEST | 9 | SYNC_READY | 15 | STATUS | 21 | GAME_CONTROL |
+| 4 | ASSET_CHUNK | 10 | BEACON | 16 | TELEMETRY | 22 | WALL_PICTURE |
+| 5 | CHUNK_ACK | 11 | START_AT | 17 | TELEMETRY_ACK | 23 | ACK |
 
-Codes follow the order of the T-B2-01 message rows **(plan choice)**.
+Codes 0 to 17 follow the order of the T-B2-01 message rows **(plan choice)**; 18 to 23 are appended for the whack-a-mole re-plan, so no existing code moves.
 
-### 5.2 Layout (2 bits)
+### 5.2 Wall shape (rows 4 bits, cols 4 bits)
 
-0 = 1x1, 1 = 2x2, 2 = 3x3. Code 3 is free for a 1x2 strip if OD-21 widens FR3.
+rows and cols are each 1 to 9, so a grid has 1 to 81 cells; since step 4d (12 Nov 2026) up to 9 tiles sit in any of its cells (section 3, SESSION_CONFIG cells). Until step 4d rows x cols was at most 9 (1x1 to 1x9 strips, 9x1 columns, 2x2, 3x3 and the rest), every cell a position of the node_map. This replaces the 2-bit layout code (0 = 1x1, 1 = 2x2, 2 = 3x3), which could not hold a strip. 4 bits each is the width rule for 9 values; one shape code (then the 23 shapes with rows x cols at most 9, ceil(log2 23) = 5 bits, 3 fewer) was rejected because it needs the same lookup table in C and Python and the re-plan names the two fields **(plan choice)**.
 
 ### 5.3 Failure policy (1 bit)
 
@@ -247,9 +340,9 @@ Codes follow the order of the T-B2-01 message rows **(plan choice)**.
 
 0 = unknown format_version (VC-5), 1 = wrong payload length (VC-5), 2 = Command Queue full (VA-3.6, T-B3-03), 3 = Upload Queue full (VA-3.6, T-B3-05) **(plan choice, OD-07 brief)**.
 
-### 5.6 Coordinator state (4 bits, W6 statechart 2, 12 states)
+### 5.6 Coordinator state (4 bits, W6 statechart 2 plus COORDINATING GAME, 13 states)
 
-0 BOOTING, 1 CONNECTING TO ROUTER, 2 WAITING FOR SESSION, 3 VALIDATING SESSION, 4 WAITING FOR NODES, 5 WAITING FOR TILE READINESS, 6 SYNCHRONISING, 7 READY, 8 COORDINATING PLAYBACK, 9 PAUSED, 10 RECOVERING, 11 FAULT.
+0 BOOTING, 1 CONNECTING TO ROUTER, 2 WAITING FOR SESSION, 3 VALIDATING SESSION, 4 WAITING FOR NODES, 5 WAITING FOR TILE READINESS, 6 SYNCHRONISING, 7 READY, 8 COORDINATING PLAYBACK, 9 PAUSED, 10 RECOVERING, 11 FAULT, 12 COORDINATING GAME (whack-a-mole re-plan: entered only from IDLE or READY, exclusive with COORDINATING PLAYBACK; the state machine is build step 7). 13 states still fit 4 bits.
 
 ### 5.7 Orientation (2 bits)
 
@@ -258,6 +351,34 @@ Codes follow the order of the T-B2-01 message rows **(plan choice)**.
 ### 5.8 Display state (3 bits, W6 statechart 5 as T-B5-03 lists it, 7 states)
 
 0 INITIALISING DISPLAY, 1 DISPLAY IDLE, 2 PREPARING FRAME, 3 TRANSMITTING PIXELS, 4 WAITING FOR NEXT TICK, 5 DISPLAY PAUSED, 6 DISPLAY FAULT.
+
+### 5.9 FEEDBACK result (2 bits, 3 codes, 1 spare)
+
+0 = miss (red flash: a tap on a tile with no mole up), 1 = hit (green flash), 2 = reserved for the decoy stretch goal (no tile acts on it yet). Code 3 is spare and both codecs refuse it. **Width (decision of 6 Nov 2026):** 2 bits, the width rule for these 3 codes, so adding the decoy result later needs no layout change; FEEDBACK stays 5 bytes (35 bits).
+
+### 5.10 GAME_CONTROL command (4 bits, 8 codes, 8 spare)
+
+0 = MODE_VIDEO, 1 = MODE_GAME (switch mode; the Pico accepts these only while stopped), 2 = START (Pico to a tile: the round starts), 3 = END (end or abort the round), 4 = ARM (arm a round at a level, with the tap threshold: the Pico shows the start sprite, DS-08), 5 = START_NOW (skip the start sprite and count down), 6 = TAP_TEST_ON, 7 = TAP_TEST_OFF (every tap lights its tile, A11). The PC sends MODE_VIDEO, MODE_GAME, ARM, START_NOW, END and the tap test to the Pico (node_id 0); the Pico sends START, END, ARM and the tap test to each tile. Codes 8 to 15 are spare and both codecs refuse them. **Width (decision of 6 Nov 2026):** 4 bits, so later commands need no layout change; codes 4 to 7 added 11 Nov 2026.
+
+### 5.11 Level (2 bits, 3 codes)
+
+0 = Easy, 1 = Normal, 2 = Hard (DS-08, B4).
+
+### 5.12 Target kind (3 bits, 5 codes, 3 spare)
+
+0 = mole (tap it), 1 = start sprite (tap it to start, DS-08), 2 = rotate sprite, 3 = golden mole, 4 = decoy (2 to 4 reserved for the stretch goals; no tile acts on them yet). Codes 5 to 7 are refused.
+
+### 5.13 WALL_PICTURE effect (2 bits, 3 codes, 1 spare)
+
+0 = picture (the mask in the colour), 1 = sparkle (the tile's own twinkle), 2 = clear the list. Code 3 is refused.
+
+### 5.14 Colour (3 bits, 8 codes)
+
+0 white, 1 yellow, 2 green, 3 red, 4 blue, 5 orange, 6 purple, 7 cyan, each within channel values 0 to 8 (VC-6).
+
+### 5.15 Round state (3 bits, 5 codes, 3 spare)
+
+0 GAME IDLE (or not in game mode), 1 ARMED, 2 COUNTDOWN, 3 PLAYING, 4 RESULTS (DS-08).
 
 ## 6. Packed asset frame (OD-05)
 
@@ -279,7 +400,7 @@ Every field and every shared packed word, with its valid range, bits before (the
 
 | Field | Where | Valid range | Bits before | Bits after | Method after | Justification |
 |---|---|---|---|---|---|---|
-| message type | header | 0 to 17 | 8 (`uint8_t` enum, rule) | 5 | shifts and masks | 18 types, ceil(log2 18) = 5 |
+| message type | header | 0 to 23 | 8 (`uint8_t` enum, rule) | 5 | shifts and masks | 24 types, ceil(log2 24) = 5 |
 | session_id | header | 0 to 255 | 32 (`uint32_t` ID, rule) | 8 | shifts and masks | plan choice; CRC32 also checked, so a reused ID never reuses an asset alone |
 | seq | header | 0 to 65,535, wrap-aware | 32 (`uint32_t seq`, `panel_sync.c:55` at the tag) | 16 | shifts and masks | 109.2 min wrap at 10 Hz with a wrap-aware comparison |
 | Node ID | messages from tiles; map | 1 to 9 (0 = blank in the map) | 32 (`uint32_t` ID, rule; the tag's `board` was `uint8_t`) | 4 | shifts and masks | 9 nodes plus blank, ceil(log2 10) = 4 |
@@ -290,11 +411,30 @@ Every field and every shared packed word, with its valid range, bits before (the
 | format_version | MANIFEST | 0 to 3 | 8 (`uint8_t version`, `panel_sync.c:54`) | 2 | shifts and masks | 4 codes (section 5.4) |
 | chunk index | ASSET_CHUNK, CHUNK_ACK | 0 to 112 | 32 (counter, rule) | 7 | shifts and masks | 113 chunks for the 8-bit 600-frame asset, ceil(log2 113) = 7 |
 | NACK reason | NACK | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | 4 reasons |
-| layout | SESSION_CONFIG | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 layouts |
+| rows, cols | SESSION_CONFIG | 1 to 9 each (up to 81 cells, step 4d) | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4; replaces the 2-bit layout code |
+| cell row, col | SESSION_CONFIG | 0 to 8 each | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4 (step 4d) |
+| placed | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 values (step 4d) |
+| peak | TAP | 0 to 65,535 mg | 16 (`uint16_t` in `tap_detect`) | 16 | shifts and masks | the tile's peak type, in mg from 11 Nov 2026 (+/-16 g range, so a hard tap reaches 16,000 mg; 15 bits would also fit, 16 kept as the detector's type) |
+| up_ms | MOLE_ON | 0 to 4,000 ms | 16 (`uint16_t`, rule) | 12 | shifts and masks | 4,001 values, ceil(log2 4001) = 12 (11 bits until 11 Nov 2026, widened for the 3,000 ms rotate sprite, DS-10); a 64-bit hide time was rejected (52 bits more per mole) |
+| game score | STATUS | -99 to 99 | 8 (`int8_t`, rule) | 8, two's complement | shifts and masks | 199 values, ceil(log2 199) = 8; the Pico clamps the score |
+| FEEDBACK result | FEEDBACK | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 codes (miss, hit, reserved decoy); 2 bits by decision of 6 Nov 2026 |
+| game command | GAME_CONTROL | 0 to 7 | 8 (enum, rule) | 4 | shifts and masks | 8 commands (section 5.10), 8 spare; 4 bits by decision of 6 Nov 2026, so codes 4 to 7 (11 Nov) needed no layout change |
+| t_tap, t_show | TAP, MOLE_ON, WALL_PICTURE | 0 to 2^64 - 1 us | 64 (`uint64_t` time, rule) | 64 | shifts and masks | J1: Pico corrected clock, same type as the beacon time |
+| target kind | MOLE_ON | 0 to 4 | 8 (enum, rule) | 3 | shifts and masks | 5 codes (section 5.12), ceil(log2 5) = 3 |
+| level | GAME_CONTROL, STATUS | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 levels, ceil(log2 3) = 2 |
+| tap threshold | GAME_CONTROL (ARM) | 0 to 250 (20 mg steps) | 16 (`uint16_t` mg, rule) | 8 | shifts and masks | 251 values, ceil(log2 251) = 8; 20 mg steps cover 20 to 5,000 mg |
+| round state | STATUS | 0 to 4 | 8 (enum, rule) | 3 | shifts and masks | 5 codes (section 5.15), ceil(log2 5) = 3 |
+| missed, wrong, shown | STATUS | 0 to 127 each | 32 each (`uint32_t` counter, rule) | 7 each | shifts and masks | a 30 s round shows at most about 60 targets; 7 bits saturate at 127 |
+| time left | STATUS | 0 to 63 s | 32 (`uint32_t` counter, rule) | 6 | shifts and masks | round 30 s, ceil(log2 31) = 5; 6 bits leave room to 63 s |
+| reaction time | STATUS | 0 to 2,047 ms | 32 (`uint32_t` counter, rule) | 11 | shifts and masks | mean tap reaction; targets stay up at most 4,000 ms but the mean is clamped at 2,047 (11 bits) |
+| wall turn | STATUS | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | quarter turns since the layout (D-17, 24 Nov 2026) |
+| picture slot, effect, colour, repeat | WALL_PICTURE | 0 to 3, 0 to 2, 0 to 7, 0 to 1 | 8 each (enum or flag, rule) | 2, 2, 3, 1 | shifts and masks | 4 slots; 3 effects (section 5.13); 8 colours (section 5.14); a flag |
+| picture duration | WALL_PICTURE | 0 to 8,191 ms | 32 (`uint32_t` counter, rule) | 13 | shifts and masks | up to 8.2 s per picture, ceil(log2 8192) = 13 |
+| score mask | WALL_PICTURE | 64 bits | 64 | 64 | shifts and masks | one bit per pixel of an 8 x 8 tile |
 | failure policy | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 policies |
 | readiness bitmap | STATUS; Pico RAM | 9 bits | 72 (9 x `uint8_t` flag, rule) | 9 on the wire, one `uint16_t` in RAM | shifts and masks; single writer in poll context | VC-11b |
 | online bitmap | STATUS; Pico RAM | 9 bits | 72 (rule) | 9 on the wire, one `uint16_t` in RAM | as above | as readiness |
-| coordinator state | STATUS | 0 to 11 | 8 (enum, rule) | 4 | shifts and masks | 12 states, ceil(log2 12) = 4 |
+| coordinator state | STATUS | 0 to 12 | 8 (enum, rule) | 4 | shifts and masks | 13 states, ceil(log2 13) = 4 |
 | fault word | TELEMETRY; tile RAM | 32 bits | 32 (`uint32_t`, rule; no fault word at the tag) | 32 | `_Atomic uint32_t`, fetch-or and fetch-and (`fault_word`, T-B3-06) | LDC-2; bit map OD-12 |
 | orientation | TELEMETRY; tile RAM | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | VB-5c |
 | display state | TELEMETRY; tile RAM | 0 to 6 | 8 (enum, rule) | 3 | shifts and masks | VB-5c, 7 states |
@@ -328,7 +468,7 @@ The receiver checks session_id against its session and seq against the last acce
 
 ## 10. For Benjamin to confirm before the freeze (OD-07)
 
-1. Every width marked plan choice: type 5, session_id 8, seq 16, Node ID 4, format_version 2, chunk index 7, NACK reason 2, layout 2, policy 1. (Coordinator state 4 and display state 3 are derived by the T-B2-01 rule, ceil(log2 states).)
+1. Every width marked plan choice: type 5, session_id 8, seq 16, Node ID 4, format_version 2, chunk index 7, NACK reason 2, rows 4, cols 4, policy 1. (Coordinator state 4 and display state 3 are derived by the T-B2-01 rule, ceil(log2 states).)
 1a. The bit numbering of section 1 (bit 0 = least significant bit of byte 0), which also fixes OD-05 option (a).
 2. seq comparison rule and counter scope (per sender, or per sender and type).
 3. Maximum asset size: chunk index 0 to 112 holds every packed asset up to 1023 frames (96 chunks) and the 600-frame 8-bit `DE_PROFILE` asset (113 chunks, OD-15). An 8-bit asset above 600 frames would need 8 bits.
@@ -337,11 +477,19 @@ The receiver checks session_id against its session and seq against the last acce
 6. frame_rate left off the wire.
 7. ASSET_CHUNK payload on a byte boundary, length from the datagram.
 8. The NACK reason list (CRC mismatch, manifest session mismatch and upload while PLAYING are not in it; any one of them makes 5 reasons and 3 bits).
-9. How the Pico learns each Node ID's manifest CRC32, which T-B2-04 needs to check ASSET_READY: the plan's SESSION_CONFIG row has no CRC field. **PROVISIONAL, implemented 29 Oct 2026:** 9 x 32-bit CRCs, one per map position, plus the shared frame_count, added to SESSION_CONFIG (46 B). The other option, the PC sending each tile's MANIFEST to the Pico, does not work as the row stands: MANIFEST carries no Node ID, so the Pico could not tell which tile a CRC belongs to.
+9. How the Pico learns each Node ID's manifest CRC32, which T-B2-04 needs to check ASSET_READY: the plan's SESSION_CONFIG row has no CRC field. **PROVISIONAL, implemented 29 Oct 2026:** 9 x 32-bit CRCs, one per map position (one per Node ID since step 4d, 12 Nov 2026), plus the shared frame_count, added to SESSION_CONFIG (46 B; 53 B since step 4d). The other option, the PC sending each tile's MANIFEST to the Pico, does not work as the row stands: MANIFEST carries no Node ID, so the Pico could not tell which tile a CRC belongs to.
 10. OD-14 (rejoin message) and OD-20 (two-way exchange) may add rows; 14 type codes are spare. **PROVISIONAL, implemented:** OD-14 option (a), with no new row: the Pico sends the rejoining tile a RESUME_AT (unicast) whose t_resume is a tick deadline at least 600 ms ahead and whose frame_index is the frame the wall shows at that tick.
 11. **PC commands to the Pico (PROVISIONAL, implemented).** The plan lists Start, Pause, Resume and Stop as dashboard commands (T-B1-05 `pico_link.py`) but no row carries them from the PC. They reuse the START_AT, PAUSE, RESUME_AT and STOP rows in the direction C to P, with t_start, t_resume and frame_index sent as 0 and ignored: the Pico chooses those values itself (T-B2-05). No type code is added.
 12. **Transport (PROVISIONAL, implemented):** the ports and addressing of section 11.
-13. **seq scope (item 2, PROVISIONAL, implemented):** one counter per sender for every message it sends; a REGISTER (tile) or a SESSION_CONFIG with a new session_id (PC) restarts the receiver's baseline for that sender, because a sender that reboots starts its counter again.
+13. **seq scope (item 2, PROVISIONAL):** **ACK rule: all acked messages from one sender share one seq counter**, so an ACK's acked_seq names exactly one message. A sender may keep other counters for messages that are not acked. On the Pico the acked messages are on the command counter (`g_cmd_seq`), which carries MOLE_ON, FEEDBACK, GAME_CONTROL and WALL_PICTURE (from build step 7, alongside START_AT, RESUME_AT, PAUSE and STOP today). BEACON (`g_beacon_seq`) and STATUS (`g_status_seq`) are not acked and keep their own counters. A receiver compares seq only within one counter of one sender. A REGISTER (tile) or a SESSION_CONFIG with a new session_id (PC) restarts the receiver's baseline for that sender, because a sender that reboots starts its counters again.
+14. **Whack-a-mole rows (PROVISIONAL, re-plan build step 3, 6 Nov 2026):** SESSION_CONFIG's 2-bit layout became rows and cols (4 bits each) with the map row-major over rows x cols; STATUS gained score (8 bits); coordinator state 12 COORDINATING GAME; new rows TAP, MOLE_ON, FEEDBACK, GAME_CONTROL, WALL_PICTURE and ACK (types 18 to 23). All six are unicast with an ACK, never broadcast (about 2.8% broadcast loss on the router). The sender resends an unacknowledged message with the same seq; the retry timing belongs to build step 7. These rows must be in the OD-07 freeze.
+15. **Deviations from the re-plan, accepted by Ahsanul on 6 Nov 2026 (PROVISIONAL until the OD-07 freeze):**
+    - **MOLE_ON carries t_show and up_ms, not a show and a hide time.** The hide time is t_show + up_ms x 1,000 us, so it is fully determined, and an 11-bit duration (1 to 2,000 ms) replaces a second 64-bit time: 53 bits less per mole, and a hide before the show cannot be encoded.
+    - **WALL_PICTURE (type 22) is a new row the plan does not list.** The plan asks for the final score drawn across the wall. The Pico renders it once over the whole wall and sends each tile its 8 x 8 slice as a 64-bit mask, so tiles need no font, no wall layout and no knowledge of their position.
+    - **ACK has no acknowledged-type field.** All acked messages from one sender share one seq counter (the ACK rule, item 13; on the Pico the command counter), so acked_seq alone names the message. A type field would only repeat what seq already says.
+16. **Widths widened on purpose, decided by Ahsanul on 6 Nov 2026:** FEEDBACK result is 2 bits (3 codes, the decoy code reserved) and GAME_CONTROL command is 4 bits (4 codes, 12 spare), so the decoy stretch goal and later commands need no layout change. Neither changes a byte count: FEEDBACK is 35 bits and GAME_CONTROL 37 bits, both 5 bytes.
+
+17. **Whole-wall rotation (D-17, 24 Nov 2026, video mode only):** the Pico also listens on 4215 for the tiles' broadcast TELEMETRY and reads only node_id and orientation (the PC still ACKs it). A tile sends TELEMETRY as soon as its orientation changes, besides its 1 s period. When every placed, online tile has turned by the same quarter turns k from its reference within 1.5 s of the first change, the Pico adds k to STATUS wall_turn and, if it was playing, saves the frame and sends STOP; if it was paused, it stops too and returns to PAUSED after the new layout. The PC turns its layout by wall_turn (a cell at row r, column c of a rows x cols grid goes to row c, column rows - 1 - r for each quarter turn clockwise, and rows and cols swap), re-cuts and re-uploads, and sends a new SESSION_CONFIG. With a turn pending, the Pico finds the turn j (0 to 3) that maps its previous layout onto the new one and subtracts it from wall_turn; with none pending only the same layout keeps the references; any other layout is new and every tile's reference is taken again. A wall turn moves the reference of every known tile, an offline one too. A pending resume then sends RESUME_AT with the saved frame once every tile is ready. Turns are ignored in game mode.
 
 ## 11. Transport (PROVISIONAL, section 10 item 12, owner Benjamin)
 
@@ -349,11 +497,11 @@ All messages are single UDP datagrams on the dedicated router's subnet. Port num
 
 | Port | Listener | Messages received | How the sender addresses it |
 |---|---|---|---|
-| 4210 | every tile (`tile_net`) | BEACON, START_AT, RESUME_AT, PAUSE, STOP from the Pico | subnet broadcast; a rejoin RESUME_AT is unicast to the one tile (section 10 item 10) |
-| 4211 | Pico (`coordinator_loop`) | REGISTER, HEARTBEAT, ASSET_READY, SYNC_READY, NACK (reason 2) from tiles | unicast to the Pico, whose address the tile takes from the source address of the beacons |
-| 4212 | Pico (`coordinator_loop`) | SESSION_CONFIG and the C to P commands of section 10 item 11 | unicast from the PC to the Pico's address (shown on the Pico's USB log and in the router's client list as `PICO-Main`) |
-| 4213 | PC (`pc/pico_link.py`) | STATUS from the Pico | the Pico replies to the address and port of the last valid datagram from the PC |
+| 4210 | every tile (`tile_net`) | BEACON, START_AT, RESUME_AT, PAUSE, STOP from the Pico; MOLE_ON, FEEDBACK, GAME_CONTROL, WALL_PICTURE and ACK (of a TAP) from the Pico | subnet broadcast; a rejoin RESUME_AT is unicast to the one tile (section 10 item 10); the game rows are always unicast to the tile's REGISTER source address |
+| 4211 | Pico (`coordinator_loop`) | REGISTER, HEARTBEAT, ASSET_READY, SYNC_READY, NACK (reason 2), TAP and ACK from tiles | unicast to the Pico, whose address the tile takes from the source address of the beacons |
+| 4212 | Pico (`coordinator_loop`) | SESSION_CONFIG, the C to P commands of section 10 item 11 and GAME_CONTROL | unicast from the PC to the Pico's address (shown on the Pico's USB log and in the router's client list as `PICO-Main`) |
+| 4213 | PC (`pc/pico_link.py`) | STATUS and ACK (of a GAME_CONTROL) from the Pico | the Pico replies to the address and port of the last valid datagram from the PC |
 | 4214 | every tile (`tile_net`) | MANIFEST, ASSET_CHUNK, TELEMETRY_ACK from the PC | unicast from the PC to the tile address it learnt from that tile's TELEMETRY |
-| 4215 | PC (`pc/uploader.py`, `pc/telemetry.py`) | TELEMETRY (subnet broadcast); CHUNK_ACK, NACK, BUSY (unicast replies) from tiles | TELEMETRY is broadcast, so the PC learns every tile's address and Node ID without a lookup; replies go to the address and port the request came from |
+| 4215 | PC (`pc/uploader.py`, `pc/telemetry.py`); Pico (`coordinator_loop`, TELEMETRY only, from 24 Nov, D-17) | TELEMETRY (subnet broadcast); CHUNK_ACK, NACK, BUSY (unicast replies) from tiles | TELEMETRY is broadcast, so the PC learns every tile's address and Node ID without a lookup; replies go to the address and port the request came from |
 
 TELEMETRY is broadcast because nothing else tells the PC which address a Node ID has, and the PC must unicast MANIFEST and ASSET_CHUNK to the right tile (MANIFEST has no Node ID field). One 9 B TELEMETRY per tile per telemetry period (OD-11) is small next to the 120 B/s of beacons.

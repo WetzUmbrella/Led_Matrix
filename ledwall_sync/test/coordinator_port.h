@@ -11,8 +11,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** Bytes kept per recorded send (the largest Pico send is 13 B). */
-#define COORDINATOR_PORT_BYTES 16u
+/** Bytes kept per recorded send (the largest Pico send is WALL_PICTURE,
+ *  23 B, from build step 3; a shorter copy made the decoder read past it). */
+#define COORDINATOR_PORT_BYTES 32u
 
 /** Recorded sends: enough for 60 s of beacons, STATUS and commands. */
 #define COORDINATOR_PORT_MAX 4096u

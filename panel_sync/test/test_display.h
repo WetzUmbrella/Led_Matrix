@@ -36,6 +36,29 @@ bool test_display_rotation (void);
 bool test_display_frame_index (void);
 
 /**
+ * @brief  Test D4: the source LED on each corner, for all four orientations,
+ *         equals a table worked out by hand.
+ * @return true when every check passed.
+ */
+bool test_display_rotation_corners (void);
+
+/**
+ * @brief  Test D5: for gravity along +Y, +X, -Y and -X the classifier gives
+ *         0, 1, 2 and 3 and all 64 LEDs show the source pixel at their world
+ *         position, so the picture stays upright. Axes assumed X right, Y up
+ *         (PROVISIONAL, check on a tile).
+ * @return true when every check passed.
+ */
+bool test_display_rotation_gravity (void);
+
+/**
+ * @brief  Test D6: one lit source pixel reaches the expected physical LED
+ *         through display_frame_unpack() in all four orientations.
+ * @return true when every check passed.
+ */
+bool test_display_rotation_wire (void);
+
+/**
  * @brief  Test O1 (T-B5-05 acceptance): 25 equal samples give 0
  *         ORIENTATION_CHANGED, 26 give 1.
  * @return true when every check passed.

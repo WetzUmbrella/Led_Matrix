@@ -1,0 +1,29 @@
+make: Entering directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/common/proto/test'
+./test_proto
+bits: put/get round trip, widths 1 to 64, offsets 0 to 7
+    512 width and offset pairs round-tripped
+  PASS
+beacon: reference bytes and T-B2-01 boundary set
+    93 bits, 12 bytes; reference vectors match
+    8 boundary cases, 0 mismatches
+  PASS
+beacon: short buffer, wrong length and wrong type rejected
+    short buffer, 11 B, 13 B and type START_AT rejected
+  PASS
+messages: T-B2-01 boundary set, every row, 0 mismatches
+    48 cases (24 message rows x 2 corners), 0 mismatches
+  PASS
+messages: encoded lengths equal layout_table.md section 4
+    24 encoders return the layout_table.md lengths
+  PASS
+messages: out-of-range, wrong type and wrong length refused
+    15 out-of-range encodes, 8 out-of-range decodes, wrong type, wrong lengths and a short buffer refused
+    6 game rows: 1 byte short, node_id 10 to 15, and node_id 0 where a tile is required, refused; rows 0 and cols 0 refused
+  PASS
+le helpers: u16, u32, u64 little-endian
+    u16, u32, u64: low byte first, values round-trip
+  PASS
+session config: sparse cells, shared or outside cells refused
+  PASS
+Pass = 8 of 8
+make: Leaving directory '/home/coloc/SIT/Y2/inf2004/project/Led_Matrix/common/proto/test'

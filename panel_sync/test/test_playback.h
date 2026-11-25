@@ -15,6 +15,7 @@ bool test_playback_frame_index (void);
 bool test_playback_stop_from_paused (void);
 bool test_playback_resume_frame (void);
 bool test_playback_holdover (void);
+bool test_playback_pico_restart (void);
 
 #endif /* TEST_PLAYBACK_H */
 

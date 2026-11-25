@@ -70,13 +70,33 @@
  *  this long without beacons. Changed only by T-B4-05 (OD-19). */
 #define TIMESYNC_HOLDOVER_US INT64_C(1000000)
 
-/** Re-seed threshold: a sample whose offset (t_l - t_p) differs from the
- *  current estimate by more than 500 ms comes from another Pico clock (a
- *  coordinator switch or a Pico reboot), so the window is emptied and the
- *  next tick sets the offset directly (review round 1 R1-2). 500 ms is above
- *  the 307 ms DTIM 3 buffering of the START_AT lead, so network delay alone
- *  never triggers it (PROVISIONAL, plan choice, owner Ahsanul). */
-#define TIMESYNC_RESEED_US INT64_C(500000)
+/** Re-seed threshold, the fallback: a sample whose offset (t_l - t_p)
+ *  differs from the current estimate by more than 5 s comes from another
+ *  Pico clock, so the window is emptied and the next tick sets the offset
+ *  directly (review round 1 R1-2). A Pico restart or switch normally re-seeds
+ *  at once through timesync_pico_restart(). Was 500 ms: on the old Matrix
+ *  router (bench 24 Nov 2026, 19:06:50) a 0.65 s WiFi stall delivered
+ *  beacons 540 to 648 ms late in a row, every tile re-seeded on that delay
+ *  and the video jumped 667 ms on the whole wall. Late beacons never move
+ *  the minimum-delay estimate, so below this they are harmless (owner
+ *  Ahsanul). */
+#define TIMESYNC_RESEED_US INT64_C(5000000)
+
+/** Re-seed only after this many samples in a row are past
+ *  TIMESYNC_RESEED_US; until then each such sample is dropped (decided
+ *  with Cheston 12 Nov 2026: on the Matrix router with 10 devices single
+ *  beacons arrived up to 514 ms late and re-seeded every few seconds, each
+ *  step a burst of missed display ticks). A real Pico restart re-seeds 2
+ *  beacons (about 200 ms) later. */
+#define TIMESYNC_RESEED_SAMPLES 3u
+
+/** Largest drift estimate kept: the 50 ppm worst case of VA-4.7, in ppb.
+ *  The two half-window minima are only 0.8 s apart, so a change of beacon
+ *  delay between them reads as a clock rate: on the old Matrix router (bench
+ *  24 Nov 2026) the estimates had a median of 1,500 ppm and put neighbouring
+ *  tiles up to 10 ms apart (NR-07). The crystals cannot drift faster than
+ *  this, so a larger estimate is limited to it (owner Ahsanul). */
+#define TIMESYNC_DRIFT_MAX_PPB INT32_C(50000)
 
 /** Snapshot flag: a published set was copied at least once. */
 #define TIMESYNC_SNAP_VALID 0x1u
@@ -305,6 +325,21 @@ bool timesync_drift_estimate (int32_t * p_drift_ppb);
  * @return The count.
  */
 uint32_t timesync_reseed_count (void);
+
+/**
+ * @brief  The Pico restarted or another Pico took over (tile_net sees its
+ *         beacons start over or come from a new address): the next sample
+ *         empties the window and starts a new one, as a re-seed, whatever its
+ *         offset (bench 24 Nov 2026). Any task may call this.
+ */
+void timesync_pico_restart (void);
+
+/**
+ * @brief  Samples dropped as late or early, while fewer than
+ *         TIMESYNC_RESEED_SAMPLES in a row were off (since timesync_init()).
+ * @return The count.
+ */
+uint32_t timesync_dropped_count (void);
 
 /**
  * @brief  The int8_t slew of the last tick, for the host tests.

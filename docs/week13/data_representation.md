@@ -8,7 +8,7 @@ Every field and every shared packed word, with its valid range, bits before (the
 
 | Field | Where | Valid range | Bits before | Bits after | Method after | Justification |
 |---|---|---|---|---|---|---|
-| message type | header | 0 to 17 | 8 (`uint8_t` enum, rule) | 5 | shifts and masks | 18 types, ceil(log2 18) = 5 |
+| message type | header | 0 to 23 | 8 (`uint8_t` enum, rule) | 5 | shifts and masks | 24 types, ceil(log2 24) = 5 |
 | session_id | header | 0 to 255 | 32 (`uint32_t` ID, rule) | 8 | shifts and masks | plan choice; CRC32 also checked, so a reused ID never reuses an asset alone |
 | seq | header | 0 to 65,535, wrap-aware | 32 (`uint32_t seq`, `panel_sync.c:55` at the tag) | 16 | shifts and masks | 109.2 min wrap at 10 Hz with a wrap-aware comparison |
 | Node ID | messages from tiles; map | 1 to 9 (0 = blank in the map) | 32 (`uint32_t` ID, rule; the tag's `board` was `uint8_t`) | 4 | shifts and masks | 9 nodes plus blank, ceil(log2 10) = 4 |
@@ -19,11 +19,30 @@ Every field and every shared packed word, with its valid range, bits before (the
 | format_version | MANIFEST | 0 to 3 | 8 (`uint8_t version`, `panel_sync.c:54`) | 2 | shifts and masks | 4 codes (section 5.4) |
 | chunk index | ASSET_CHUNK, CHUNK_ACK | 0 to 112 | 32 (counter, rule) | 7 | shifts and masks | 113 chunks for the 8-bit 600-frame asset, ceil(log2 113) = 7 |
 | NACK reason | NACK | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | 4 reasons |
-| layout | SESSION_CONFIG | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 layouts |
+| rows, cols | SESSION_CONFIG | 1 to 9 each (up to 81 cells, step 4d) | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4; replaces the 2-bit layout code |
+| cell row, col | SESSION_CONFIG | 0 to 8 each | 8 each (`uint8_t`, rule) | 4 each | shifts and masks | 9 values, ceil(log2 9) = 4 (step 4d) |
+| placed | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 values (step 4d) |
+| peak | TAP | 0 to 65,535 mg | 16 (`uint16_t` in `tap_detect`) | 16 | shifts and masks | the tile's peak type, in mg from 11 Nov 2026 (+/-16 g range, so a hard tap reaches 16,000 mg; 15 bits would also fit, 16 kept as the detector's type) |
+| up_ms | MOLE_ON | 0 to 4,000 ms | 16 (`uint16_t`, rule) | 12 | shifts and masks | 4,001 values, ceil(log2 4001) = 12 (11 bits until 11 Nov 2026, widened for the 3,000 ms rotate sprite, DS-10); a 64-bit hide time was rejected (52 bits more per mole) |
+| game score | STATUS | -99 to 99 | 8 (`int8_t`, rule) | 8, two's complement | shifts and masks | 199 values, ceil(log2 199) = 8; the Pico clamps the score |
+| FEEDBACK result | FEEDBACK | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 codes (miss, hit, reserved decoy); 2 bits by decision of 6 Nov 2026 |
+| game command | GAME_CONTROL | 0 to 7 | 8 (enum, rule) | 4 | shifts and masks | 8 commands (section 5.10), 8 spare; 4 bits by decision of 6 Nov 2026, so codes 4 to 7 (11 Nov) needed no layout change |
+| t_tap, t_show | TAP, MOLE_ON, WALL_PICTURE | 0 to 2^64 - 1 us | 64 (`uint64_t` time, rule) | 64 | shifts and masks | J1: Pico corrected clock, same type as the beacon time |
+| target kind | MOLE_ON | 0 to 4 | 8 (enum, rule) | 3 | shifts and masks | 5 codes (section 5.12), ceil(log2 5) = 3 |
+| level | GAME_CONTROL, STATUS | 0 to 2 | 8 (enum, rule) | 2 | shifts and masks | 3 levels, ceil(log2 3) = 2 |
+| tap threshold | GAME_CONTROL (ARM) | 0 to 250 (20 mg steps) | 16 (`uint16_t` mg, rule) | 8 | shifts and masks | 251 values, ceil(log2 251) = 8; 20 mg steps cover 20 to 5,000 mg |
+| round state | STATUS | 0 to 4 | 8 (enum, rule) | 3 | shifts and masks | 5 codes (section 5.15), ceil(log2 5) = 3 |
+| missed, wrong, shown | STATUS | 0 to 127 each | 32 each (`uint32_t` counter, rule) | 7 each | shifts and masks | a 30 s round shows at most about 60 targets; 7 bits saturate at 127 |
+| time left | STATUS | 0 to 63 s | 32 (`uint32_t` counter, rule) | 6 | shifts and masks | round 30 s, ceil(log2 31) = 5; 6 bits leave room to 63 s |
+| reaction time | STATUS | 0 to 2,047 ms | 32 (`uint32_t` counter, rule) | 11 | shifts and masks | mean tap reaction; targets stay up at most 4,000 ms but the mean is clamped at 2,047 (11 bits) |
+| wall turn | STATUS | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | quarter turns since the layout (D-17, 24 Nov 2026) |
+| picture slot, effect, colour, repeat | WALL_PICTURE | 0 to 3, 0 to 2, 0 to 7, 0 to 1 | 8 each (enum or flag, rule) | 2, 2, 3, 1 | shifts and masks | 4 slots; 3 effects (section 5.13); 8 colours (section 5.14); a flag |
+| picture duration | WALL_PICTURE | 0 to 8,191 ms | 32 (`uint32_t` counter, rule) | 13 | shifts and masks | up to 8.2 s per picture, ceil(log2 8192) = 13 |
+| score mask | WALL_PICTURE | 64 bits | 64 | 64 | shifts and masks | one bit per pixel of an 8 x 8 tile |
 | failure policy | SESSION_CONFIG | 0 to 1 | 8 (flag, rule) | 1 | shifts and masks | 2 policies |
 | readiness bitmap | STATUS; Pico RAM | 9 bits | 72 (9 x `uint8_t` flag, rule) | 9 on the wire, one `uint16_t` in RAM | shifts and masks; single writer in poll context | VC-11b |
 | online bitmap | STATUS; Pico RAM | 9 bits | 72 (rule) | 9 on the wire, one `uint16_t` in RAM | as above | as readiness |
-| coordinator state | STATUS | 0 to 11 | 8 (enum, rule) | 4 | shifts and masks | 12 states, ceil(log2 12) = 4 |
+| coordinator state | STATUS | 0 to 12 | 8 (enum, rule) | 4 | shifts and masks | 13 states, ceil(log2 13) = 4 |
 | fault word | TELEMETRY; tile RAM | 32 bits | 32 (`uint32_t`, rule; no fault word at the tag) | 32 | `_Atomic uint32_t`, fetch-or and fetch-and (`fault_word`, T-B3-06) | LDC-2; bit map OD-12 |
 | orientation | TELEMETRY; tile RAM | 0 to 3 | 8 (enum, rule) | 2 | shifts and masks | VB-5c |
 | display state | TELEMETRY; tile RAM | 0 to 6 | 8 (enum, rule) | 3 | shifts and masks | VB-5c, 7 states |
@@ -47,7 +66,7 @@ Every field and every shared packed word, with its valid range, bits before (the
 |---|---|---|---|---|
 | REGISTER | 0 | 73 bits, ceil(73 / 8) | 10 | derived (encoder) |
 | HEARTBEAT | 1 | 33 bits, ceil(33 / 8) | 5 | derived (encoder) |
-| SESSION_CONFIG | 2 | 366 bits, ceil(366 / 8) | 46 | derived (encoder) |
+| SESSION_CONFIG | 2 | 417 bits, ceil(417 / 8) | 53 | derived (encoder) |
 | MANIFEST | 3 | 73 bits, ceil(73 / 8) | 10 | derived (encoder) |
 | ASSET_CHUNK | 4 | 5 B head + 1,024 B (last of 57: 5 + 256 = 261 B) | 1029 | derived (encoder) |
 | CHUNK_ACK | 5 | 40 bits, ceil(40 / 8) | 5 | derived (encoder) |
@@ -60,6 +79,12 @@ Every field and every shared packed word, with its valid range, bits before (the
 | RESUME_AT | 12 | 103 bits, ceil(103 / 8) | 13 | derived (encoder) |
 | PAUSE | 13 | 29 bits, ceil(29 / 8) | 4 | derived (encoder) |
 | STOP | 14 | 29 bits, ceil(29 / 8) | 4 | derived (encoder) |
-| STATUS | 15 | 51 bits, ceil(51 / 8) | 7 | derived (encoder) |
+| STATUS | 15 | 104 bits, ceil(104 / 8) | 13 | derived (encoder) |
 | TELEMETRY | 16 | 70 bits, ceil(70 / 8) | 9 | derived (encoder) |
 | TELEMETRY_ACK | 17 | 45 bits, ceil(45 / 8) | 6 | derived (encoder) |
+| TAP | 18 | 113 bits, ceil(113 / 8) | 15 | derived (encoder) |
+| MOLE_ON | 19 | 112 bits, ceil(112 / 8) | 14 | derived (encoder) |
+| FEEDBACK | 20 | 35 bits, ceil(35 / 8) | 5 | derived (encoder) |
+| GAME_CONTROL | 21 | 47 bits, ceil(47 / 8) | 6 | derived (encoder) |
+| WALL_PICTURE | 22 | 182 bits, ceil(182 / 8) | 23 | derived (encoder) |
+| ACK | 23 | 49 bits, ceil(49 / 8) | 7 | derived (encoder) |

@@ -1,0 +1,140 @@
+c3433_010: frames 305, steps A 62 B 62, missed A 13 B 13
+c3433_010: 0 pairs over 4 ms
+c3433_020: frames 302, steps A 63 B 63, missed A 0 B 0
+c3433_020: 0 pairs over 4 ms
+c3433_030: frames 302, steps A 63 B 63, missed A 0 B 0
+c3433_030: 0 pairs over 4 ms
+c3433_040: frames 302, steps A 63 B 63, missed A 0 B 0
+c3433_040: 0 pairs over 4 ms
+c3433_050: frames 302, steps A 62 B 62, missed A 0 B 0
+c3433_050: 0 pairs over 4 ms
+c3433_060: frames 302, steps A 63 B 63, missed A 0 B 0
+c3433_060: 0 pairs over 4 ms
+c3433_070: frames 302, steps A 62 B 62, missed A 0 B 0
+  out01 value  5: A at f160.77, B at f161.82, skew +4.39 ms; frames 157..165 -> c3433_070_out01.png
+      A decoded:   3   4   4   4   ~   5   5   5   5
+      B decoded:   3   4   4   4   4   5   5   5   5
+  out02 value 13: A at f200.77, B at f201.83, skew +4.42 ms; frames 197..205 -> c3433_070_out02.png
+      A decoded:  11  12  12  12   ~  13  13  13  13
+      B decoded:  11  12  12  12  12  13  13  13  13
+  out03 value 20: A at f232.93, B at f233.96, skew +4.31 ms; frames 229..237 -> c3433_070_out03.png
+      A decoded:  18  19  19  19   ~  20  20  20   ~
+      B decoded:  18  19  19  19  19  20  20  20  20
+  out04 value 21: A at f236.80, B at f237.85, skew +4.38 ms; frames 233..241 -> c3433_070_out04.png
+      A decoded:   ~  20  20  20   ~  21  21  21  21
+      B decoded:  19  20  20  20  20  21  21  21  21
+  out05 value 26: A at f260.83, B at f261.90, skew +4.46 ms; frames 257..265 -> c3433_070_out05.png
+      A decoded:  24  25  25  25   ~  26  26  26  26
+      B decoded:  24  25  25  25  25  26  26  26  26
+  out06 value 29: A at f275.75, B at f276.83, skew +4.48 ms; frames 272..280 -> c3433_070_out06.png
+      A decoded:  27  27   ~  28   ~   ~  29  29  29
+      B decoded:  27  27  28  28  28   ~  29  29  29
+c3433_070: 6 pairs over 4 ms
+c3433_090: frames 302, steps A 61 B 61, missed A 13 B 13
+  out01 value 13: A at f154.75, B at f156.81, skew +8.56 ms; frames 151..160 -> c3433_090_out01.png
+      A decoded:  11  11  11  12   ~   ~   ~  13  13  13
+      B decoded:  11  11  11  12  12  12   ~  13  13  13
+c3433_090: 1 pairs over 4 ms
+c3433_100: frames 302, steps A 63 B 63, missed A 0 B 0
+c3433_100: 0 pairs over 4 ms
+d3434_020: frames 304, steps A 63 B 63, missed A 0 B 0
+d3434_020: 0 pairs over 4 ms
+d3434_030: frames 305, steps A 62 B 62, missed A 13 B 13
+  out01 value  2: A at f16.90, B at f13.75, skew -13.10 ms; frames 10..20 -> d3434_030_out01.png
+      A decoded:   0   0   0   1   1   1   1   2   2   2   2
+      B decoded:   0   0   0   1   ~   ~   ~   2   2   2   2
+d3434_030: 1 pairs over 4 ms
+d3434_040: frames 304, steps A 63 B 63, missed A 0 B 0
+d3434_040: 0 pairs over 4 ms
+d3434_050: frames 303, steps A 63 B 63, missed A 0 B 0
+d3434_050: 0 pairs over 4 ms
+d3434_060: frames 302, steps A 63 B 63, missed A 0 B 0
+  out01 value  1: A at f33.00, B at f31.95, skew -4.40 ms; frames 28..37 -> d3434_060_out01.png
+      A decoded:  63   0   0   0   0   1   1   1   1   2
+      B decoded:  63   0   0   0   1   1   1   1   2   2
+  out02 value  2: A at f36.93, B at f35.78, skew -4.79 ms; frames 32..40 -> d3434_060_out02.png
+      A decoded:   0   1   1   1   1   2   2   2   2
+      B decoded:   1   1   1   1   2   2   2   2   2
+  out03 value  5: A at f52.91, B at f51.83, skew -4.48 ms; frames 48..56 -> d3434_060_out03.png
+      A decoded:   3   4   4   4   4   5   5   5   5
+      B decoded:   4   4   4   4   5   5   5   5   5
+  out04 value  9: A at f72.95, B at f71.94, skew -4.21 ms; frames 68..76 -> d3434_060_out04.png
+      A decoded:   8   8   8   8   8   9   9   9   9
+      B decoded:   8   8   8   8   ~   9   9   9   ~
+  out05 value 10: A at f76.97, B at f75.84, skew -4.71 ms; frames 72..80 -> d3434_060_out05.png
+      A decoded:   8   9   9   9   9  10  10  10  10
+      B decoded:   ~   9   9   9   ~  10  10  10  10
+d3434_060: 5 pairs over 4 ms
+d3434_070: frames 303, steps A 63 B 63, missed A 0 B 0
+  out01 value 13: A at f94.83, B at f95.81, skew +4.08 ms; frames 91..99 -> d3434_070_out01.png
+      A decoded:  11  12  12  12   ~  13  13  13  13
+      B decoded:  11   ~  12  12  12  13  13  13  13
+d3434_070: 1 pairs over 4 ms
+d3434_080: frames 303, steps A 64 B 64, missed A 0 B 0
+d3434_080: 0 pairs over 4 ms
+d3434_090: frames 302, steps A 62 B 62, missed A 0 B 0
+  out01 value 29: A at f188.90, B at f187.87, skew -4.30 ms; frames 184..192 -> d3434_090_out01.png
+      A decoded:  27  28  28  28  28  29  29  29  29
+      B decoded:  27  28  28  28   ~  29  29  29  29
+d3434_090: 1 pairs over 4 ms
+d3434_100: frames 302, steps A 64 B 64, missed A 0 B 0
+d3434_100: 0 pairs over 4 ms
+e3435_020: frames 303, steps A 63 B 63, missed A 0 B 0
+e3435_020: 0 pairs over 4 ms
+e3435_040: frames 302, steps A 62 B 62, missed A 0 B 0
+e3435_040: 0 pairs over 4 ms
+e3435_070: frames 304, steps A 63 B 25, missed A 0 B 0
+  out01 value  9: A at f98.88, B at f100.76, skew +7.80 ms; frames 95..104 -> e3435_070_out01.png
+      A decoded:   7   ~   8   8   ~   ~   ~   ~   9   ~
+      B decoded:   7   ~   8   8   8   8   9   9   9   ~
+e3435_070: 1 pairs over 4 ms
+f3436_010: frames 303, steps A 64 B 60, missed A 0 B 4
+  out01 value 62: A at f84.92, B at f83.76, skew -4.83 ms; frames 80..88 -> f3436_010_out01.png
+      A decoded:   ~  61  61  61  61  62  62  62  62
+      B decoded:   ~  61  61  61   ~  62  62  62  62
+f3436_010: 1 pairs over 4 ms
+f3436_020: frames 302, steps A 63 B 63, missed A 0 B 0
+  out01 value 23: A at f212.92, B at f211.96, skew -4.03 ms; frames 208..216 -> f3436_020_out01.png
+      A decoded:  21  22  22  22  22  23  23  23  23
+      B decoded:  21  22  22  22   ~  23  23  23  23
+  out02 value 31: A at f252.92, B at f251.95, skew -4.01 ms; frames 248..256 -> f3436_020_out02.png
+      A decoded:  29  30  30  30  30  31  31  31  32
+      B decoded:  29  30  30  30   ~  31  31  31  32
+f3436_020: 2 pairs over 4 ms
+f3436_030: frames 305, steps A 63 B 63, missed A 0 B 0
+f3436_030: 0 pairs over 4 ms
+f3436_040: frames 305, steps A 62 B 62, missed A 0 B 0
+f3436_040: 0 pairs over 4 ms
+f3436_050: frames 303, steps A 64 B 29, missed A 0 B 99
+f3436_050: 0 pairs over 4 ms
+f3436_070: frames 305, steps A 64 B 64, missed A 0 B 0
+  out01 value 29: A at f219.82, B at f220.79, skew +4.02 ms; frames 216..224 -> f3436_070_out01.png
+      A decoded:  27  28  28  28   ~  29  29  29  29
+      B decoded:  27  28  28  28  28  29  29  29  29
+f3436_070: 1 pairs over 4 ms
+f3436_080: frames 303, steps A 63 B 63, missed A 0 B 0
+  out01 value 61: A at f71.84, B at f72.84, skew +4.18 ms; frames 68..76 -> f3436_080_out01.png
+      A decoded:  59  60  60  60   ~  61  61  61  61
+      B decoded:  59  60  60  60  60  61  61  61  61
+f3436_080: 1 pairs over 4 ms
+f3436_090: frames 303, steps A 64 B 26, missed A 0 B 104
+  out01 value 62: A at f85.13, B at f83.97, skew -4.84 ms; frames 80..89 -> f3436_090_out01.png
+      A decoded:   ~  61  61  61  61  62  62  62  62  62
+      B decoded:   ~  61  61  61   ~   ~   ~   ~   ~   ~
+f3436_090: 1 pairs over 4 ms
+f3436_100: frames 305, steps A 64 B 62, missed A 0 B 0
+f3436_100: 0 pairs over 4 ms
+g3437_020: frames 303, steps A 63 B 63, missed A 0 B 0
+g3437_020: 0 pairs over 4 ms
+g3437_050: frames 305, steps A 60 B 62, missed A 13 B 13
+g3437_050: 0 pairs over 4 ms
+g3437_060: frames 302, steps A 63 B 63, missed A 0 B 0
+g3437_060: 0 pairs over 4 ms
+g3437_080: frames 305, steps A 64 B 64, missed A 0 B 0
+  out01 value  5: A at f176.00, B at f174.93, skew -4.47 ms; frames 171..180 -> g3437_080_out01.png
+      A decoded:   3   4   4   4   4   5   5   5   5   6
+      B decoded:   3   4   4   4   ~   5   5   5   5   6
+  out02 value 18: A at f235.89, B at f234.88, skew -4.19 ms; frames 231..239 -> g3437_080_out02.png
+      A decoded:  16  17  17  17  17  18  18  18  18
+      B decoded:  16  17  17  17   ~  18  18  18  18
+g3437_080: 2 pairs over 4 ms

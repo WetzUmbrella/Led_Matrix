@@ -20,7 +20,7 @@ choice. PROVISIONAL (OD-05, owners Jolyn and Jia Jun): nibble order (a) in
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Tuple
+from typing import Dict, List, Mapping, Sequence, Tuple
 
 #: Width of the header fields, bits (layout_table.md section 2).
 TYPE_BITS = 5
@@ -30,7 +30,6 @@ HEADER_BITS = TYPE_BITS + SESSION_BITS + SEQ_BITS
 
 #: Ranges and sizes shared with proto.h.
 NODE_MAX = 9
-MAP_SLOTS = 9
 FRAME_MAX = 1023
 FRAME_RATE = 60
 FRAME_BYTES = 96
@@ -39,6 +38,25 @@ NIBBLE_MAX = 8
 CHUNK_PAYLOAD_MAX = 1024
 CHUNK_INDEX_MAX = 112
 CHUNK_HEAD_BYTES = 5
+GRID_MAX = 9
+UP_MS_MAX = 4000
+SCORE_MAX = 99
+
+#: GAME_CONTROL commands (layout_table.md section 5.10).
+(GAME_MODE_VIDEO, GAME_MODE_GAME, GAME_START, GAME_END, GAME_ARM,
+ GAME_START_NOW, GAME_TAP_TEST_ON, GAME_TAP_TEST_OFF) = range(8)
+
+#: Levels, target kinds, WALL_PICTURE effects and colours, round states
+#: (layout_table.md sections 5.11 to 5.15, build step 3).
+LEVEL_EASY, LEVEL_NORMAL, LEVEL_HARD = range(3)
+TARGET_MOLE, TARGET_START, TARGET_ROTATE, TARGET_GOLDEN, TARGET_DECOY = range(5)
+PIC_PICTURE, PIC_SPARKLE, PIC_CLEAR = range(3)
+COLOURS = ("white", "yellow", "green", "red", "blue", "orange", "purple",
+           "cyan")
+ROUND_STATES = ("IDLE", "ARMED", "COUNTDOWN", "PLAYING", "RESULTS")
+#: Tap threshold step on GAME_CONTROL, mg (code 0 = the tile's default).
+THRESHOLD_STEP_MG = 20
+THRESHOLD_MAX = 250
 
 #: One field: (name, width in bits, smallest valid value, largest valid
 #: value). Order is the order on the wire.
@@ -48,6 +66,8 @@ _U16 = (1 << 16) - 1
 _U32 = (1 << 32) - 1
 _U64 = (1 << 64) - 1
 _NODE: Field = ("node_id", 4, 1, NODE_MAX)
+#: GAME_CONTROL and ACK: 0 = between the PC and the Pico.
+_NODE_OR_PC: Field = ("node_id", 4, 0, NODE_MAX)
 _CRC_MAX = _U32
 
 #: Message rows: name -> (type code, body fields after the header).
@@ -56,12 +76,18 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     "REGISTER": (0, [_NODE, ("cached_session_id", 8, 0, 255),
                      ("cached_crc32", 32, 0, _CRC_MAX)]),
     "HEARTBEAT": (1, [_NODE]),
-    "SESSION_CONFIG": (2, [("layout", 2, 0, 2), ("policy", 1, 0, 1)]
-                       + [("node_map[%d]" % slot, 4, 0, NODE_MAX)
-                          for slot in range(MAP_SLOTS)]
+    "SESSION_CONFIG": (2, [("rows", 4, 1, GRID_MAX), ("cols", 4, 1, GRID_MAX),
+                           ("policy", 1, 0, 1)]
+                       # Step 4d (DS-15): a cell per Node ID 1 to 9.
+                       + [field for node in range(NODE_MAX)
+                          for field in (("placed[%d]" % node, 1, 0, 1),
+                                        ("row[%d]" % node, 4, 0,
+                                         GRID_MAX - 1),
+                                        ("col[%d]" % node, 4, 0,
+                                         GRID_MAX - 1))]
                        + [("frame_count", 10, 1, FRAME_MAX)]
-                       + [("crc32[%d]" % slot, 32, 0, _CRC_MAX)
-                          for slot in range(MAP_SLOTS)]),
+                       + [("crc32[%d]" % node, 32, 0, _CRC_MAX)
+                          for node in range(NODE_MAX)]),
     "MANIFEST": (3, [("format_version", 2, 0, 3),
                      ("frame_count", 10, 1, FRAME_MAX),
                      ("crc32", 32, 0, _CRC_MAX)]),
@@ -78,11 +104,32 @@ LAYOUT: Dict[str, Tuple[int, List[Field]]] = {
     "PAUSE": (13, []),
     "STOP": (14, []),
     "STATUS": (15, [("readiness", 9, 0, 0x1FF), ("online", 9, 0, 0x1FF),
-                    ("state", 4, 0, 11)]),
+                    ("state", 4, 0, 12),
+                    ("score", 8, -SCORE_MAX, SCORE_MAX),
+                    ("round_state", 3, 0, 4), ("level", 2, 0, 2),
+                    ("missed", 7, 0, 127), ("wrong", 7, 0, 127),
+                    ("shown", 7, 0, 127), ("time_left_s", 6, 0, 63),
+                    ("reaction_ms", 11, 0, 2047),
+                    # D-17 (24 Nov 2026): quarter turns clockwise of the
+                    # whole wall since the session's layout.
+                    ("wall_turn", 2, 0, 3)]),
     "TELEMETRY": (16, [_NODE, ("fault_word", 32, 0, _U32),
                        ("orientation", 2, 0, 3),
                        ("display_state", 3, 0, 6)]),
     "TELEMETRY_ACK": (17, [("acked_seq", 16, 0, _U16)]),
+    # Whack-a-mole re-plan, build step 3 (layout_table.md, PROVISIONAL).
+    "TAP": (18, [_NODE, ("peak", 16, 0, _U16), ("t_tap", 64, 0, _U64)]),
+    "MOLE_ON": (19, [_NODE, ("t_show", 64, 0, _U64),
+                     ("up_ms", 12, 0, UP_MS_MAX), ("kind", 3, 0, 4)]),
+    "FEEDBACK": (20, [_NODE, ("result", 2, 0, 2)]),
+    "GAME_CONTROL": (21, [_NODE_OR_PC, ("command", 4, 0, 7),
+                          ("level", 2, 0, 2),
+                          ("threshold", 8, 0, THRESHOLD_MAX)]),
+    "WALL_PICTURE": (22, [_NODE, ("slot", 2, 0, 3), ("effect", 2, 0, 2),
+                          ("colour", 3, 0, 7), ("repeat", 1, 0, 1),
+                          ("t_show", 64, 0, _U64), ("dur_ms", 13, 0, 8191),
+                          ("mask", 64, 0, _U64)]),
+    "ACK": (23, [_NODE_OR_PC, ("acked_seq", 16, 0, _U16)]),
 }
 
 #: Type code -> message name.
@@ -132,12 +179,64 @@ def _check(field: str, value: int, low: int, high: int) -> None:
         raise LayoutError("%s=%r outside %d to %d" % (field, value, low, high))
 
 
+def _array(fields: Mapping[str, object], base: str) -> List[int]:
+    """An array field as a list, given whole or as ``base[i]`` entries."""
+    whole = fields.get(base)
+    if isinstance(whole, (list, tuple)):
+        return [int(item) for item in whole]
+    return [int(fields["%s[%d]" % (base, i)])  # type: ignore[call-overload]
+            for i in range(NODE_MAX)]
+
+
+def _check_shape(name: str, fields: Mapping[str, object]) -> None:
+    """SESSION_CONFIG (step 4d, DS-15): a placed tile's cell is inside the
+    grid and no other placed tile has it; a tile not placed has row and col
+    0, so each layout has one encoding."""
+    if name != "SESSION_CONFIG":
+        return
+    rows, cols = int(fields["rows"]), int(fields["cols"])  # type: ignore
+    seen = set()
+    for node, (placed, row, col) in enumerate(zip(
+            _array(fields, "placed"), _array(fields, "row"),
+            _array(fields, "col")), start=1):
+        if not placed:
+            if row or col:
+                raise LayoutError("node %d is not placed but has cell "
+                                  "(%d, %d)" % (node, row, col))
+        elif row >= rows or col >= cols:
+            raise LayoutError("node %d at (%d, %d) is outside the %d x %d "
+                              "grid" % (node, row, col, rows, cols))
+        elif (row, col) in seen:
+            raise LayoutError("node %d shares cell (%d, %d)"
+                              % (node, row, col))
+        else:
+            seen.add((row, col))
+
+
+def places_from_map(cols: int, node_map: Sequence[int]
+                    ) -> Dict[str, List[int]]:
+    """The SESSION_CONFIG cell fields for a row-major map (0 = empty), the
+    form the bench tools and a full grid use."""
+    placed, rows_of, cols_of = [0] * NODE_MAX, [0] * NODE_MAX, [0] * NODE_MAX
+    for position, node in enumerate(node_map):
+        if node:
+            placed[node - 1] = 1
+            rows_of[node - 1], cols_of[node - 1] = divmod(position, cols)
+    return {"placed": placed, "row": rows_of, "col": cols_of}
+
+
+def _to_signed(value: int, width: int) -> int:
+    """Two's complement field bits to a Python int (a field with low < 0)."""
+    return value - (1 << width) if value >= 1 << (width - 1) else value
+
+
 def encode(name: str, fields: Mapping[str, object]) -> bytes:
     """Encode one message from a dict of its fields.
 
     ``fields`` holds ``session_id``, ``seq`` and every body field of the row;
-    an array field (``node_map``, ``crc32`` of SESSION_CONFIG) may be given
-    as a list of 9 entries; ASSET_CHUNK also needs ``payload`` (bytes, 1 to
+    an array field (``placed``, ``row``, ``col``, ``crc32`` of
+    SESSION_CONFIG, each indexed by Node ID - 1) may be given as a list of 9
+    entries; ASSET_CHUNK also needs ``payload`` (bytes, 1 to
     1,024).
     """
     if name not in LAYOUT:
@@ -156,8 +255,10 @@ def encode(name: str, fields: Mapping[str, object]) -> bytes:
     for field, width, low, high in header + body:
         item = flat.get(field)
         _check(field, item, low, high)  # type: ignore[arg-type]
-        value |= int(item) << bit  # type: ignore[call-overload]
+        # A signed field (low < 0) goes on the wire in two's complement.
+        value |= (int(item) & ((1 << width) - 1)) << bit  # type: ignore
         bit += width
+    _check_shape(name, flat)
     if name == "ASSET_CHUNK":
         payload = flat.get("payload")
         if not isinstance(payload, (bytes, bytearray)) \
@@ -200,12 +301,15 @@ def decode(data: bytes) -> Dict[str, object]:
     for (field, bit, width), (_, _, low, high) in zip(offsets(name),
                                                       LAYOUT[name][1]):
         item = (value >> bit) & ((1 << width) - 1)
+        if low < 0:
+            item = _to_signed(item, width)
         _check(field, item, low, high)
         if "[" in field:
             arrays.setdefault(field.split("[", 1)[0], []).append(item)
         else:
             result[field] = item
     result.update(arrays)
+    _check_shape(name, result)
     if name == "ASSET_CHUNK":
         result["payload"] = bytes(data[CHUNK_HEAD_BYTES:])
     return result
@@ -267,6 +371,18 @@ encode_telemetry = _named_encoder("TELEMETRY")
 decode_telemetry = _named_decoder("TELEMETRY")
 encode_telemetry_ack = _named_encoder("TELEMETRY_ACK")
 decode_telemetry_ack = _named_decoder("TELEMETRY_ACK")
+encode_tap = _named_encoder("TAP")
+decode_tap = _named_decoder("TAP")
+encode_mole_on = _named_encoder("MOLE_ON")
+decode_mole_on = _named_decoder("MOLE_ON")
+encode_feedback = _named_encoder("FEEDBACK")
+decode_feedback = _named_decoder("FEEDBACK")
+encode_game_control = _named_encoder("GAME_CONTROL")
+decode_game_control = _named_decoder("GAME_CONTROL")
+encode_wall_picture = _named_encoder("WALL_PICTURE")
+decode_wall_picture = _named_decoder("WALL_PICTURE")
+encode_ack = _named_encoder("ACK")
+decode_ack = _named_decoder("ACK")
 
 
 def pack_frame(values: List[int]) -> bytes:

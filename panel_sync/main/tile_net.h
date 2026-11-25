@@ -161,6 +161,14 @@ typedef struct
 bool tile_net_start (void);
 
 /**
+ * @brief  A tap is waiting (Orientation Task, build step 2): wake the Network
+ *         Task so the TAP goes out at once instead of on its next 20 ms
+ *         pass. Never blocks; when the queue is full the task is busy and
+ *         sends the TAP on its next pass anyway.
+ */
+void tile_net_tap_ready (void);
+
+/**
  * @brief  The Time Sync Queue: items are timesync_pair_t, drop-oldest.
  * @return Its handle, or NULL before tile_net_start().
  */

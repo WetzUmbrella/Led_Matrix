@@ -1,0 +1,33 @@
+DE ticks=97200 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,96133,1040,11,3,0,2,3,0,1,0,7
+DE ticks=97800 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,96732,1041,11,3,0,2,3,0,1,0,7
+DE ticks=98400 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,97331,1042,11,3,0,2,3,0,1,0,7
+ASSET_FLASH writes=116 erases=2 refused=0 ignored=0 busy=0 reply_drops=0
+DE ticks=99000 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,97931,1042,11,3,0,2,3,0,1,0,7
+DE ticks=99600 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,98530,1043,11,3,0,2,3,0,1,0,7
+DE ticks=100200 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,99128,1045,11,3,0,2,3,0,1,0,7
+DE ticks=100800 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,99726,1047,11,3,0,2,3,0,1,0,7
+DE ticks=101400 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,100324,1049,11,3,0,2,3,0,1,0,7
+ASSET_FLASH writes=116 erases=2 refused=0 ignored=0 busy=0 reply_drops=0
+DE ticks=102000 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,100921,1052,11,3,0,2,3,0,1,0,7
+DE ticks=102600 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,101519,1054,11,3,0,2,3,0,1,0,7
+DE ticks=103200 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,102116,1057,11,3,0,2,3,0,1,0,7
+DE ticks=103800 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,102713,1060,11,3,0,2,3,0,1,0,7
+DE ticks=104400 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,103310,1063,11,3,0,2,3,0,1,0,7
+DE ticks=105000 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,103905,1068,11,3,0,2,3,0,1,0,7
+ASSET_FLASH writes=116 erases=2 refused=0 ignored=0 busy=0 reply_drops=0
+DE ticks=105600 missed=3 rmt_busy=0 prep_max_us=527 orient=3
+DE_HIST,104502,1071,11,3,0,2,3,0,1,0,7

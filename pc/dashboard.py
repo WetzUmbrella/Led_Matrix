@@ -3,7 +3,9 @@
 control playback from the PC.
 
 Owner: Jolyn (Buddy 1), task T-B1-05. Implemented by Ahsanul (B4) for
-Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session.
+Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session. Build step 4 (6 Nov
+2026): any rows x cols layout, tap-to-place, resumable uploads, the Pico's
+reported state, and an optional session id.
 
 States (W6 statechart 1): IDLE, CONFIGURING, VALIDATING CONFIGURATION,
 PREPARING ASSETS, UPLOADING ASSETS, VERIFYING UPLOADS (waits for Pico
@@ -16,36 +18,283 @@ them without a network:
     re-uploading every tile, and the dashboard says so first;
   * readiness comes only from Pico STATUS; Start is enabled only when the
     readiness bitmap equals the mask of the Node IDs in the map;
+  * the coordinator state shown is the one the Pico last reported in STATUS;
+    the dashboard never assumes it (a local state is kept for the PC's own
+    steps only);
   * telemetry is ACKed with its seq (``pc/telemetry.py``);
   * a tile that drops out of the STATUS online bitmap is shown by Node ID,
     with the time, on the next STATUS (NFR9: within 2 s of the Pico log);
-  * a new GIF or layout is accepted only while stopped (IDLE, READY or
-    ERROR).
+  * a new GIF, layout, slot or mode is accepted only while the Pico is
+    stopped (see ``DashboardModel.stopped``);
+  * an upload skips every tile that already ACKed the current asset, and a
+    failed tile does not stop the others; the failures are reported.
 The PC's WiFi power save must be off (README); the dashboard cannot check it.
 
+Website (step 4e, 18 Nov 2026): ``pc/web.py`` runs ``DashboardShell.pump``
+about 50 times a second in its own thread, so STATUS, TAPs and TELEMETRY are
+read (and TELEMETRY ACKed) whether or not a browser is open, and a publish
+(build, SESSION_CONFIG, uploads) runs as a background job, so the page keeps
+updating during an upload. Every tile is uploaded at the same time (DS-14),
+each from its own socket, with its progress in the snapshot. One re-entrant
+lock (``DashboardShell.lock``) guards the model and the shared sockets.
+
+Session id: the header field is 8 bits (layout_table.md section 2), so a
+fresh session is a random value 1 to 255 that differs from the last one used,
+kept in ``pc/.last_session`` (gitignored).
+
 Usage (interactive shell, ``help`` lists the commands):
-    python3 pc/dashboard.py --pico 192.168.1.57
+    python3 pc/dashboard.py --pico 192.168.1.57 [--session 7]
 """
 
 from __future__ import annotations
 
 import argparse
 import cmd
+import contextlib
 import os
+import random
 import sys
+import threading
 import time
-from typing import Callable, Dict, List, Optional, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from typing import (Callable, ContextManager, Dict, List, Optional, Sequence,
+                    Tuple)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asset_builder as ab  # noqa: E402
+import gif_library  # noqa: E402
 import pico_link  # noqa: E402
+import proto_layout as pl  # noqa: E402
+import tap_log as tl  # noqa: E402
+import telemetry  # noqa: E402
+import uploader  # noqa: E402
 
 STATES = ("IDLE", "CONFIGURING", "VALIDATING CONFIGURATION",
           "PREPARING ASSETS", "UPLOADING ASSETS", "VERIFYING UPLOADS",
           "READY", "MONITORING PLAYBACK", "ERROR")
 
-#: States in which a new GIF or layout may be accepted.
+#: PC-side states in which the wall may be stopped (no Pico state known).
 STOPPED = ("IDLE", "READY", "ERROR")
+
+#: Pico coordinator states in which the wall is playing or about to play.
+PLAYING_PICO_STATES = ("SYNCHRONISING", "COORDINATING PLAYBACK", "PAUSED",
+                       "RECOVERING", "COORDINATING GAME")
+
+#: Modes of the wall (GAME_CONTROL codes are in pico_link).
+MODES = ("video", "game")
+
+#: The Pico's coordinator state while a round runs (layout_table.md 5.6).
+GAME_STATE = "COORDINATING GAME"
+
+#: How long a tap-to-place waits for a TAP, seconds.
+PLACE_WAIT_S = 30.0
+
+#: Session ids: 8 bits on the wire (layout_table.md section 2).
+SESSION_MIN, SESSION_MAX = 1, 255
+
+#: Where the last session id is kept (gitignored).
+SESSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            ".last_session")
+
+#: Where the last command seq is kept (gitignored): a restarted dashboard
+#: goes on above it, so the Pico takes its commands as new (step 4).
+SEQ_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        ".last_seq")
+
+#: DS-12 A1: how long an upload waits for the tile's TELEMETRY to carry the
+#: new session (tiles send it about once a second), and the poll step.
+SESSION_WAIT_S = 3.0
+SESSION_POLL_S = 0.05
+
+#: DS-12 C: how long to wait for a fresh STATUS (the Pico sends 4 a second).
+READY_WAIT_S = 1.0
+
+#: The website calls the Pico silent after this long without a STATUS, and
+#: then resends its last SESSION_CONFIG this often, so a restarted Pico
+#: takes the session back and learns where to send STATUS (wall test 18 Nov
+#: 2026: after a Pico restart the page kept showing the last STATUS).
+STATUS_STALE_S = 2.0
+CONFIG_RESEND_S = 1.0
+
+#: How long an ARM waits for STATUS to show the round armed. The Pico ACKs
+#: every GAME_CONTROL, a refused one too (bench 19 Nov 2026: ARM pressed,
+#: nothing happened, no error).
+ARM_CONFIRM_S = 1.5
+
+#: A tile not heard on TELEMETRY (about once a second) for this long is
+#: offline: it is not uploaded to (wall test 18 Nov 2026: an upload to an
+#: unplugged tile retried for 27 s and held up every layout change).
+TILE_SILENT_S = 5.0
+
+#: Messages kept in memory for the website.
+MESSAGE_KEEP = 200
+
+#: Tiles uploaded at the same time (DS-14: all of them).
+UPLOAD_WORKERS = pl.NODE_MAX
+
+#: Tiles whose upload failed are tried again this often, seconds, once one
+#: of them sends TELEMETRY again (bench 24 Nov 2026: a failed upload was
+#: never retried, so the Pico waited for that tile's asset forever).
+UPLOAD_RETRY_S = 5.0
+
+#: A tile on the map that is online but not ready this long, while the Pico
+#: waits for tile readiness in this session, is uploaded again although it
+#: ACKed its asset (bench 24 Nov 2026: tiles reflashed or power-cycled after
+#: their upload lost the asset, and the wall waited until the GIF was chosen
+#: again).
+LOST_ASSET_S = 5.0
+
+#: Taps kept for the website's tap test (A11), and how many it shows.
+TAP_KEEP = 24
+TAP_SHOW = 12
+
+#: Pico states in which video can be paused, resumed or stopped.
+VIDEO_PLAYING_STATES = ("SYNCHRONISING", "COORDINATING PLAYBACK", "PAUSED",
+                        "RECOVERING")
+
+
+class Refused(RuntimeError):
+    """A change the current state does not allow (the website answers 409)."""
+
+
+def turn_slots(rows: int, cols: int, slots: Dict[int, int],
+               quarters: int) -> Tuple[int, int, Dict[int, int]]:
+    """Turn a grid clockwise by quarter turns (D-17, E5), as the Pico does
+    (``wall_turn_rotate``): each quarter turn moves the cell at row r,
+    column c of a rows x cols grid to row c, column rows - 1 - r, and the
+    grid becomes cols x rows. ``slots`` maps row-major slots to anything
+    (board numbers); returns the new rows, cols and slots."""
+    for _ in range(quarters % 4):
+        turned = {}
+        for slot, value in slots.items():
+            row, col = divmod(slot, cols)
+            turned[col * rows + (rows - 1 - row)] = value
+        rows, cols, slots = cols, rows, turned
+    return rows, cols, slots
+
+
+def pick_session_id(last: Optional[int],
+                    rng: random.Random = random.Random()) -> int:
+    """A fresh session id: random, 1 to 255, not ``last``."""
+    while True:
+        value = rng.randint(SESSION_MIN, SESSION_MAX)
+        if value != last:
+            return value
+
+
+def load_last_session(path: str = SESSION_FILE) -> Optional[int]:
+    """The session id saved by the last run, or None."""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return int(handle.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def save_last_session(session_id: int, path: str = SESSION_FILE) -> None:
+    """Remember the session id in use."""
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("%d\n" % session_id)
+
+
+def resolve_session(requested: Optional[int],
+                    path: str = SESSION_FILE) -> int:
+    """``requested`` when given (1 to 255), else a fresh id; the id in use is
+    saved so the next fresh one differs from it."""
+    if requested is None:
+        session = pick_session_id(load_last_session(path))
+    else:
+        if not SESSION_MIN <= requested <= SESSION_MAX:
+            raise ValueError("session must be 1 to 255 (8 bits on the wire)")
+        session = requested
+    save_last_session(session, path)
+    return session
+
+
+def run_uploads(model: "DashboardModel", session_id: int,
+                send: Callable[[str, int, bytes], object],
+                address_of: Callable[[int], Optional[str]],
+                wait_session: Optional[Callable[[int], bool]] = None,
+                ready_of: Optional[Callable[[int], bool]] = None,
+                workers: int = 1,
+                lock: Optional[ContextManager[object]] = None
+                ) -> Dict[int, str]:
+    """Upload every tile asset that is not yet ACKed for this session.
+
+    ``send(address, session_id, payload)`` raises ``uploader.UploadError``
+    when a tile refuses; the other tiles are still tried. Returns the failed
+    Node IDs with the reason. Rerunning sends only the failed tiles.
+
+    DS-12 (12 Nov 2026): ``wait_session(node)`` waits until the tile works
+    in this session, so its MANIFEST is not dropped (A1; False = it never
+    showed, the upload is tried all the same). When the uploader's rounds
+    run out, ``ready_of(node)`` asks the Pico: a tile the Pico counts
+    ready holds the whole asset, only its last CHUNK_ACKs were lost (C).
+
+    Step 4e (DS-14): with ``workers`` above 1 the tiles are uploaded at the
+    same time, ``send`` being called from several threads; ``lock`` is then
+    taken around every change of the model, and ``model.uploads`` shows each
+    tile's state (waiting, uploading, done, failed). ``send``,
+    ``wait_session`` and ``ready_of`` are called without it.
+    """
+    guard = lock if lock is not None else contextlib.nullcontext()
+    with guard:
+        model.state = "UPLOADING ASSETS"
+        pending = model.pending_uploads(session_id)
+        payloads = {node: model.assets[node].payload for node in pending}
+        model.uploads = {node: {"state": "waiting"} for node in pending}
+
+    def note(node: int, **fields: object) -> None:
+        with guard:
+            model.uploads[node].update(fields)
+
+    def upload(node: int) -> Optional[str]:
+        """Upload one tile: None when done, else the reason it failed. The
+        wait for the session comes first: it is also the wait for the
+        tile's first TELEMETRY, which gives its address (a website just
+        started knows no address yet; wall test 18 Nov 2026)."""
+        if (wait_session is not None) and (not wait_session(node)):
+            with guard:
+                model._say("node %d: no TELEMETRY in session %d yet, "
+                           "uploading anyway" % (node, session_id))
+        address = address_of(node)
+        if address is None:
+            note(node, state="failed", error="no TELEMETRY yet, address "
+                 "unknown")
+            return "no TELEMETRY yet, address unknown"
+        note(node, state="uploading", address=address)
+        started = time.monotonic()
+        try:
+            send(address, session_id, payloads[node])
+        except uploader.UploadIncomplete as err:
+            if (ready_of is None) or (not ready_of(node)):
+                note(node, state="failed", error=str(err))
+                return str(err)
+            with guard:
+                model._say("node %d: %s, but the Pico counts it ready: "
+                           "uploaded" % (node, err))
+        except uploader.UploadError as err:
+            note(node, state="failed", error=str(err))
+            return str(err)
+        with guard:
+            model.mark_uploaded(node, session_id)
+            model.uploads[node].update(
+                state="done", seconds=round(time.monotonic() - started, 2))
+        return None
+
+    if workers > 1 and len(pending) > 1:
+        with ThreadPoolExecutor(max_workers=min(workers, len(pending)),
+                                thread_name_prefix="se15-upload") as pool:
+            reasons = list(pool.map(upload, pending))
+    else:
+        reasons = [upload(node) for node in pending]
+    failed = {node: reason for node, reason in zip(pending, reasons)
+              if reason is not None}
+    with guard:
+        model.state = "ERROR" if failed else "VERIFYING UPLOADS"
+        for node, reason in sorted(failed.items()):
+            model._say("node %d not uploaded: %s" % (node, reason))
+    return failed
 
 
 class DashboardModel:
@@ -55,26 +304,110 @@ class DashboardModel:
         self.state = "IDLE"
         self.clock = clock
         self.layout = "1x1"
-        self.node_map: List[int] = [1] + [0] * 8
+        self.node_map: List[int] = [1]
         self.policy = pico_link.POLICY_PAUSE
         self.brightness = ab.BRIGHTNESS_MAX
         self.gif: Optional[str] = None
         self.assets: Dict[int, ab.TileAsset] = {}
         self.readiness = 0
         self.online = 0
+        self.status: Optional[pico_link.Status] = None
+        #: Final score of the last round, None before any round. STATUS
+        #: reports 0 outside a round, so it is kept when the round ends.
+        self.last_score: Optional[int] = None
+        #: The last round's counts (score, hits, missed, wrong, shown,
+        #: reaction_ms, stars), None before any round.
+        self.last_result: Optional[Dict[str, int]] = None
+        self.mode = "video"
+        #: The next round's level (DS-08) and tap threshold in mg (0: the
+        #: tiles' default, A12).
+        self.level = "easy"
+        self.threshold_mg = 0
+        #: The tap test (A11) as last asked of the Pico.
+        self.tap_test = False
+        #: Tap-to-place: (slot, deadline) while the website waits for a TAP.
+        self.armed: Optional[Tuple[int, float]] = None
+        #: Board number taken off each slot, put back by set_slot(on).
+        self.parked: Dict[int, int] = {}
+        #: Node ID -> (session_id, crc32) of the asset it last ACKed.
+        self.acked: Dict[int, Tuple[int, int]] = {}
         self.messages: List[str] = []
+        #: The background job running (the website's publish), or None;
+        #: changes are refused while one runs (step 4e).
+        self.job: Optional[str] = None
+        #: Node ID -> the last upload's state, address, error, seconds.
+        self.uploads: Dict[int, Dict[str, object]] = {}
+        #: Best score per level since the website started (A10).
+        self.best: Dict[str, int] = {}
+        #: (board, peak in mg, time.monotonic()) of the latest taps (A11).
+        self.taps: List[Tuple[int, int, float]] = []
 
     def _say(self, text: str) -> None:
         self.messages.append("%.3f %s" % (self.clock(), text))
+        del self.messages[:-MESSAGE_KEEP]
+
+    def shape(self) -> Tuple[int, int]:
+        """(rows, cols) of the layout."""
+        return ab.parse_shape(self.layout)
 
     def required(self) -> int:
         """Readiness mask of the configured map."""
         return pico_link.required_mask(self.node_map)
 
+    def pico_state(self) -> str:
+        """Coordinator state as the Pico last reported it in STATUS."""
+        return self.status.state_name() if self.status else "NO STATUS YET"
+
+    def stopped(self) -> bool:
+        """True when the wall is stopped. The Pico's STATUS decides once it
+        has reported; before that the PC's own state does."""
+        if self.status is not None:
+            return self.status.state_name() not in PLAYING_PICO_STATES
+        return self.state in STOPPED
+
+    def check_idle(self) -> None:
+        """Refused while a background job (an upload) runs."""
+        if self.job is not None:
+            raise Refused("wait for the %s to finish" % self.job)
+
+    def _check_slot(self, slot: int) -> None:
+        self.check_idle()
+        if not self.stopped():
+            raise Refused("stop playback before changing the layout")
+        rows, cols = self.shape()
+        if not 0 <= slot < rows * cols:
+            raise ab.AssetError("slot %d is outside the %s layout"
+                                % (slot, self.layout))
+
+    def turn_wall(self, quarters: int) -> None:
+        """The Pico saw the whole wall turn (STATUS wall_turn, D-17): turn
+        the grid, the map and the tiles switched off with it, so the next
+        publish re-cuts the GIF for the turned wall. No tap-to-place is
+        needed again (E5)."""
+        self.check_idle()
+        rows, cols = self.shape()
+        placed = {slot: node for slot, node in enumerate(self.node_map)
+                  if node}
+        new_rows, new_cols, placed = turn_slots(rows, cols, placed, quarters)
+        _, _, parked = turn_slots(rows, cols, dict(self.parked), quarters)
+        new_map = [0] * (new_rows * new_cols)
+        for slot, node in placed.items():
+            new_map[slot] = node
+        self.layout = "%dx%d" % (new_rows, new_cols)
+        self.node_map, self.parked = new_map, parked
+        self._drop_assets()
+        self._say("wall turned %d degrees clockwise: grid %s, re-cutting the "
+                  "video" % (90 * (quarters % 4), self.layout))
+
+    def _drop_assets(self) -> None:
+        """A change of GIF, layout, map or brightness: assets are rebuilt."""
+        self.assets = {}
+        self.state = "IDLE"
+
     def configure(self, gif: str, layout: str, node_map: Sequence[int],
                   policy: int, brightness: int) -> bool:
         """CONFIGURING then VALIDATING CONFIGURATION; True when accepted."""
-        if self.state not in STOPPED:
+        if not self.stopped():
             self._say("refused: stop playback before changing the GIF or "
                       "layout")
             return False
@@ -88,12 +421,22 @@ class DashboardModel:
             self.state = "IDLE" if not self.assets else "READY"
             return False
         self.gif, self.layout = gif, layout
-        self.node_map, self.policy = list(node_map), policy
+        self.node_map = ab.normalise_map(layout, node_map)
+        self.policy = policy
         self.brightness = brightness
-        self.assets = {}
-        self.state = "IDLE"
+        self._drop_assets()
         self._say("configuration accepted")
         return True
+
+    def set_gif(self, gif: Optional[str]) -> None:
+        """Choose the GIF to play (a path), or None for no video (a game
+        needs none, A14); only while stopped. The assets are rebuilt."""
+        self.check_idle()
+        if not self.stopped():
+            raise Refused("stop playback before changing the GIF")
+        self.gif = gif
+        self._drop_assets()
+        self._say("GIF %s" % (os.path.basename(gif) if gif else "none"))
 
     def set_brightness(self, value: int) -> bool:
         """Change the cap; refused above 8. Existing assets are dropped:
@@ -103,22 +446,281 @@ class DashboardModel:
         except ab.AssetError as err:
             self._say("refused: %s" % err)
             return False
-        if self.state not in STOPPED:
+        if not self.stopped():
             self._say("refused: stop playback first")
             return False
         if self.assets and value != self.brightness:
             self._say("brightness change: every tile asset will be rebuilt "
                       "and re-uploaded (VC-6)")
-            self.assets = {}
-            self.state = "IDLE"
+            self._drop_assets()
         self.brightness = value
         return True
+
+    def set_grid(self, rows: int, cols: int) -> None:
+        """Change the grid shape (up to 9 x 9, step 4d). Tiles keep their row
+        and column when the new grid still has that cell; the rest are taken
+        off the map."""
+        if not self.stopped():
+            raise Refused("stop playback before changing the grid")
+        self.check_idle()
+        layout = "%dx%d" % (rows, cols)
+        ab.parse_shape(layout)
+        _old_rows, old_cols = self.shape()
+        new_map = [0] * (rows * cols)
+        for slot, node in enumerate(self.node_map):
+            row, col = divmod(slot, old_cols)
+            if node and row < rows and col < cols:
+                new_map[row * cols + col] = node
+        if not any(new_map):
+            raise ab.AssetError("no tile is left inside %s; place one first"
+                                % layout)
+        self.layout, self.node_map = layout, new_map
+        self.parked = {}
+        self._drop_assets()
+        self._say("grid %s" % layout)
+
+    def set_slot(self, slot: int, on: bool) -> int:
+        """Slot off writes 0 and remembers the board number; slot on writes
+        that board number back. Returns the board number now or before."""
+        self._check_slot(slot)
+        new_map = list(self.node_map)
+        if on:
+            if new_map[slot]:
+                return new_map[slot]
+            node = self.parked.get(slot, 0)
+            if not node:
+                raise ab.AssetError("slot %d has no tile to put back; place "
+                                    "one there first" % slot)
+            if node in new_map:
+                raise ab.AssetError("tile %d is already in another slot"
+                                    % node)
+            new_map[slot] = node
+            self.parked.pop(slot, None)
+        else:
+            node = new_map[slot]
+            if not node:
+                return 0
+            if sum(1 for other in new_map if other) == 1:
+                raise ab.AssetError("at least one tile must stay on")
+            self.parked[slot] = node
+            new_map[slot] = 0
+        self.node_map = new_map
+        self._drop_assets()
+        self._say("slot %d %s" % (slot, "on" if on else "off"))
+        return node
+
+    def remove_slot(self, slot: int) -> int:
+        """Take the tile in ``slot`` out of the grid (19 Nov 2026): unlike
+        off, the cell is freed and nothing remembers the tile there. Works
+        on a switched-off tile too. Returns the board number removed (0 for
+        an empty cell)."""
+        self._check_slot(slot)
+        node = self.node_map[slot] or self.parked.get(slot, 0)
+        if not node:
+            return 0
+        if self.node_map[slot] and sum(1 for n in self.node_map if n) == 1:
+            raise ab.AssetError("at least one tile must stay on the grid")
+        new_map = list(self.node_map)
+        new_map[slot] = 0
+        self.node_map = new_map
+        self.parked.pop(slot, None)
+        self._drop_assets()
+        self._say("tile %d removed from slot %d" % (node, slot))
+        return node
+
+    def _place_node(self, slot: int, node: int) -> None:
+        new_map = [0 if other == node else other for other in self.node_map]
+        new_map[slot] = node
+        self.node_map = new_map
+        # The tile is here now: no other cell keeps it as switched off.
+        self.parked = {other: parked for other, parked in self.parked.items()
+                       if other != slot and parked != node}
+        self._drop_assets()
+        self._say("slot %d holds tile %d" % (slot, node))
+
+    def place(self, slot: int, next_tap: Callable[[], Optional[int]]
+              ) -> Optional[int]:
+        """Tap-to-place (build step 4): ``next_tap()`` returns the board
+        number of the next TAP, or None when none came. That number goes into
+        ``node_map[slot]``; a tile already elsewhere moves here."""
+        self._check_slot(slot)
+        node = next_tap()
+        if node is None:
+            self._say("place: no tap for slot %d" % slot)
+            return None
+        if not 1 <= node <= pl.NODE_MAX:
+            raise ab.AssetError("TAP named board %d; boards are 1 to 9"
+                                % node)
+        self._place_node(slot, node)
+        return node
+
+    def arm_place(self, slot: int) -> None:
+        """Highlight ``slot`` and wait for a TAP for it (website flow)."""
+        self._check_slot(slot)
+        self.armed = (slot, self.clock() + PLACE_WAIT_S)
+        self._say("place: tap the tile for slot %d" % slot)
+
+    def poll_place(self, next_tap: Callable[[], Optional[int]]
+                   ) -> Optional[int]:
+        """Called on every poll: place the armed slot if a TAP is waiting,
+        or give up after PLACE_WAIT_S. Returns the board number placed."""
+        if self.armed is None:
+            return None
+        slot, deadline = self.armed
+        if self.clock() > deadline:
+            self.armed = None
+            self._say("place: slot %d timed out" % slot)
+            return None
+        node = next_tap()
+        if node is None:
+            return None
+        self.armed = None
+        return self.place(slot, lambda: node)
+
+    def set_mode(self, mode: str) -> None:
+        """Video or game; only while the wall is stopped."""
+        if mode not in MODES:
+            raise ab.AssetError("mode must be video or game")
+        self.check_idle()
+        if not self.stopped():
+            raise Refused("stop playback before changing the mode")
+        self.mode = mode
+        self._say("mode %s" % mode)
+
+    def start_game(self) -> None:
+        """Round start: game mode, and the Pico ready (every tile ready and
+        synchronised). Raises Refused otherwise."""
+        if self.mode != "game":
+            raise Refused("switch to game mode before starting a round")
+        if self.pico_state() != "READY":
+            raise Refused("the wall must be READY to start a round "
+                          "(now %s)" % self.pico_state())
+
+    def abort_game(self) -> None:
+        """Abort: only while the Pico runs a round (armed, counting down or
+        playing: all COORDINATING GAME)."""
+        if self.pico_state() != GAME_STATE:
+            raise Refused("no round is running")
+
+    def round_state(self) -> str:
+        """The Pico's round state (DS-08), GAME IDLE before any STATUS."""
+        return self.status.round_name() if self.status else "GAME IDLE"
+
+    def arm_game(self) -> None:
+        """Arm a round (DS-08): as start_game(); the start sprite appears and
+        the child's tap on it starts the countdown."""
+        self.start_game()
+
+    def start_now(self) -> None:
+        """Skip the start sprite: only while armed."""
+        if self.round_state() != "ARMED":
+            raise Refused("no round is armed (now %s)" % self.round_state())
+
+    def check_play(self) -> None:
+        """Video play: video mode, nothing uploading, every mapped tile
+        ready (the Start rule)."""
+        if self.mode != "video":
+            raise Refused("switch to video mode to play a GIF")
+        self.check_idle()
+        if self.gif is None:
+            raise Refused("choose a GIF first")
+        if not self.start_enabled():
+            raise Refused("not every tile is ready (missing %s)" % (
+                ", ".join(str(n) for n in self.missing()) or "the upload"))
+
+    def check_video(self, action: str) -> None:
+        """Pause, resume or stop: only while the video plays (pause, stop)
+        or is paused (resume, stop)."""
+        state = self.pico_state()
+        allowed = {"pause": ("COORDINATING PLAYBACK",),
+                   "resume": ("PAUSED",),
+                   "stop": VIDEO_PLAYING_STATES}[action]
+        if state not in allowed:
+            raise Refused("cannot %s now (the wall is %s)" % (action, state))
+
+    def add_taps(self, events: Sequence[Sequence[float]]) -> None:
+        """Keep the latest taps for the tap test (A11): (board, peak in mg,
+        time.monotonic()), any further fields left out."""
+        self.taps.extend((int(e[0]), int(e[1]), float(e[2]))
+                         for e in events)
+        del self.taps[:-TAP_KEEP]
+
+    def set_tap_test(self, on: bool) -> None:
+        """The tap test (A11): game mode, and the wall READY with no round
+        armed or playing."""
+        if self.mode != "game":
+            raise Refused("switch to game mode before the tap test")
+        if self.pico_state() != "READY":
+            raise Refused("the tap test needs the wall READY "
+                          "(now %s)" % self.pico_state())
+
+    def set_level(self, level: str) -> None:
+        """The next round's level: easy, normal or hard."""
+        if level not in pico_link.LEVELS:
+            raise ab.AssetError("level must be easy, normal or hard")
+        self.level = level
+        self._say("level %s" % level)
+
+    def set_threshold(self, threshold_mg: int) -> None:
+        """The tap threshold for the next ARM, mg: 0 (the tiles' default) or
+        a multiple of 20 from 60 to 5,000 (A12)."""
+        step = pico_link.THRESHOLD_STEP_MG
+        if threshold_mg != 0 and not (
+                60 <= threshold_mg <= pico_link.THRESHOLD_MAX_MG and
+                threshold_mg % step == 0):
+            raise ab.AssetError("threshold must be 0 or a multiple of %d "
+                                "from 60 to %d mg" % (
+                                    step, pico_link.THRESHOLD_MAX_MG))
+        self.threshold_mg = threshold_mg
+        self._say("tap threshold %s" % (
+            "default" if threshold_mg == 0 else "%d mg" % threshold_mg))
+
+    def level_code(self) -> int:
+        """The next round's level on the wire."""
+        return pico_link.LEVELS.index(self.level)
+
+    def threshold_code(self) -> int:
+        """The tap threshold on the wire, 20 mg steps."""
+        return self.threshold_mg // pico_link.THRESHOLD_STEP_MG
 
     def on_status(self, status: pico_link.Status) -> None:
         """New Pico STATUS: readiness, online losses, READY or not."""
         lost = self.online & ~status.online & self.required()
         for node in pico_link.nodes_in(lost):
             self._say("tile %d lost (Pico STATUS online bit cleared)" % node)
+        prev = self.status
+        if (status.round_name() == "RESULTS") and (prev is not None) and \
+                (prev.round_name() == "PLAYING"):
+            # The round ended: RESULTS carries the final counts (DS-08).
+            # Only a round seen playing counts: a fresh dashboard that finds
+            # the Pico still showing an old round's results reports nothing
+            # (bench 12 Nov 2026, round 2).
+            self.last_score = status.score
+            level = status.level_name()
+            best = self.best.get(level)
+            # A10: a higher score replaces the best and is a new best; the
+            # first round with any score counts as one.
+            new_best = status.score > (best if best is not None else 0)
+            if new_best or best is None:
+                self.best[level] = status.score
+            self.last_result = {
+                "score": status.score, "hits": status.hits(),
+                "missed": status.missed, "wrong": status.wrong,
+                "shown": status.shown, "reaction_ms": status.reaction_ms,
+                "stars": status.stars(), "level": level,
+                "accuracy_pct": (status.hits() * 100 // status.shown
+                                 if status.shown else 0),
+                "new_best": new_best}
+            self._say("round over, score %d, %d of %d moles, %d wrong, "
+                      "%d stars" % (status.score, status.hits(),
+                                    status.shown, status.wrong,
+                                    status.stars()))
+        elif (prev is not None) and (prev.round_name() in
+                                     ("ARMED", "COUNTDOWN")) and \
+                (status.round_name() == "GAME IDLE"):
+            self._say("round not started (aborted or the start sprite "
+                      "timed out)")
+        self.status = status
         self.online = status.online
         self.readiness = status.readiness
         if self.state == "VERIFYING UPLOADS" and self.start_enabled():
@@ -134,40 +736,759 @@ class DashboardModel:
         """Node IDs in the map that are not ready."""
         return pico_link.nodes_in(self.required() & ~self.readiness)
 
+    def pending_uploads(self, session_id: int) -> List[int]:
+        """Node IDs whose current asset is not ACKed yet for this session."""
+        return [node for node, asset in sorted(self.assets.items())
+                if self.acked.get(node) != (session_id, asset.crc32)]
+
+    def mark_uploaded(self, node: int, session_id: int) -> None:
+        """The tile ACKed every chunk of its current asset."""
+        self.acked[node] = (session_id, self.assets[node].crc32)
+
+    def snapshot(self) -> Dict[str, object]:
+        """What the website shows. Built from the model only; no sockets."""
+        rows, cols = self.shape()
+        status = self.status
+        now = time.monotonic()
+        return {
+            "rows": rows, "cols": cols, "layout": self.layout,
+            "node_map": list(self.node_map),
+            "parked": [self.parked.get(slot, 0)
+                       for slot in range(rows * cols)],
+            "pico_state": self.pico_state(),
+            "readiness": self.readiness, "online": self.online,
+            "score": status.score if status else 0,
+            "last_score": self.last_score,
+            "last_result": self.last_result,
+            "round_state": self.round_state(),
+            "level": self.level, "threshold_mg": self.threshold_mg,
+            "tap_test": self.tap_test,
+            "round": ({
+                "level": status.level_name(), "hits": status.hits(),
+                "missed": status.missed, "wrong": status.wrong,
+                "shown": status.shown, "time_left_s": status.time_left_s,
+                "reaction_ms": status.reaction_ms} if status else None),
+            "start_now_enabled": self.round_state() == "ARMED",
+            "mode": self.mode, "stopped": self.stopped(),
+            "game_running": self.pico_state() == GAME_STATE,
+            "game_start_enabled": (self.mode == "game" and
+                                   self.pico_state() == "READY"),
+            "armed": self.armed[0] if self.armed else None,
+            "pc_state": self.state,
+            "gif": os.path.basename(self.gif) if self.gif else None,
+            "start_enabled": self.start_enabled(),
+            "missing": self.missing(),
+            "messages": self.messages[-8:],
+            "job": self.job,
+            "uploads": [dict(self.uploads[node], node=node)
+                        for node in sorted(self.uploads)],
+            "best": dict(self.best),
+            "taps": [{"node": node, "peak_mg": peak,
+                      "age_s": round(max(now - when, 0.0), 1)}
+                     for node, peak, when in reversed(self.taps[-TAP_SHOW:])],
+            "play_enabled": self._allowed(self.check_play),
+            "pause_enabled": self._allowed(lambda: self.check_video("pause")),
+            "resume_enabled": self._allowed(
+                lambda: self.check_video("resume")),
+            "stop_enabled": self._allowed(lambda: self.check_video("stop")),
+        }
+
+    @staticmethod
+    def _allowed(check: Callable[[], None]) -> bool:
+        """Whether ``check`` passes (it raises Refused when not)."""
+        try:
+            check()
+        except Refused:
+            return False
+        return True
+
 
 class DashboardShell(cmd.Cmd):
     """Interactive front end over DashboardModel, PicoLink, the uploader
-    and the telemetry receiver."""
+    and the telemetry receiver. The website (pc/web.py) uses the same
+    methods, without the printing."""
 
     intro = "SE15 dashboard. Type help or ? to list commands."
     prompt = "(se15) "
 
+    #: Whether a SESSION_CONFIG went out from this shell yet (see
+    #: send_config), and where the session in use is saved.
+    config_sent = False
+    session_file: Optional[str] = None
+    #: Where every tap is logged (website), or None.
+    tap_log: Optional[tl.TapLog] = None
+
+    #: When the pump last resent SESSION_CONFIG to a silent Pico, and
+    #: whether it did since the Pico was last heard.
+    config_resent = 0.0
+    pico_was_silent = False
+    #: The Pico came back and has not been sent the website's mode yet.
+    mode_unsent = False
+    #: The session whose wall turn (STATUS wall_turn) was acted on.
+    turned_session: Optional[int] = None
+    #: When failed uploads were last tried again (time.monotonic()).
+    upload_retried = 0.0
+    #: Since when each tile has been online but not ready while the Pico
+    #: waited for tile readiness (LOST_ASSET_S).
+    unready_since: Optional[Dict[int, float]] = None
+
     def __init__(self, pico_ip: str, session_id: int) -> None:
         super().__init__()
-        import telemetry  # Opens UDP 4215.
-        import uploader
         self.model = DashboardModel()
-        self.link = pico_link.PicoLink(pico_ip)
+        self.link = pico_link.PicoLink(pico_ip, seq_file=SEQ_FILE)
         self.telemetry = telemetry.TelemetryReceiver()
-        self.uploader = uploader.Uploader()
+        self.new_uploader: Callable[[], uploader.Uploader] = uploader.Uploader
         self.session_id = session_id
+        self.session_file = SESSION_FILE
+        #: Guards the model and the link and telemetry sockets: the website's
+        #: request threads, its pump and the upload threads all take it.
+        self.lock = threading.RLock()
+        #: True for the website: a publish runs as a background job.
+        self.background = False
+        #: Tile address -> the progress of its upload (website).
+        self.live: Dict[str, uploader.UploadStats] = {}
 
     def _flush(self) -> None:
-        self.telemetry.poll()
-        status = self.link.poll_status()
-        if status is not None:
-            self.model.on_status(status)
+        with self.lock:
+            self.telemetry.poll()
+            status = self.link.poll_status()
+            if status is not None:
+                self.model.on_status(status)
+            events = getattr(self.link, "tap_events", None)
+            if events:
+                self._log_taps(events)
+                self.model.add_taps(events)
+                events.clear()
+
+    def _log_taps(self, events: Sequence[Sequence[float]]) -> None:
+        """Write each TAP to the tap log, when there is one."""
+        if self.tap_log is None:
+            return
+        offset = time.time() - time.monotonic()
+        model = self.model
+        for event in events:
+            self.tap_log.write(
+                offset + float(event[2]), int(event[0]), int(event[1]),
+                int(event[3]) if len(event) > 3 else None, model.mode,
+                model.tap_test, model.round_state(), self.session_id)
+
+    def _print_messages(self) -> None:
         for line in self.model.messages:
             print(line)
         self.model.messages.clear()
 
     def postcmd(self, stop: bool, line: str) -> bool:
         self._flush()
+        self._print_messages()
         return stop
+
+    # Steps shared by the shell and the website.
+
+    def build(self) -> None:
+        """Build every tile asset (PREPARING ASSETS). Raises on refusal. The
+        GIF is read and cut without the lock, so the website keeps updating
+        while a long GIF is built."""
+        with self.lock:
+            model = self.model
+            model.state = "PREPARING ASSETS"
+            gif, layout = model.gif or "", model.layout
+            node_map, brightness = list(model.node_map), model.brightness
+        try:
+            frames, delays = ab.load_gif(gif)
+            assets = ab.build_assets(frames, delays, layout, node_map,
+                                     brightness)
+        except (ab.AssetError, OSError):
+            with self.lock:
+                model.state = "ERROR"
+            raise
+        with self.lock:
+            model.assets = assets
+
+    def send_config(self) -> None:
+        """SESSION_CONFIG: the shape, the map and one CRC32 per position.
+        With no video built (game only, A14) it carries 1 frame and no CRC
+        (0): the Pico needs no video in game mode.
+
+        The Pico ignores a SESSION_CONFIG that repeats its active session
+        (``cl_session_apply``), so the first one goes out in the session
+        given and every later one in a fresh session (wall test 18 Nov 2026:
+        the website's GIF, sent after its layout in the same session, was
+        ignored and every tile's ASSET_READY failed the Pico's CRC check). A
+        fresh session also makes every tile take the asset again; a tile
+        that holds it already ACKs it without writing it (DS-12 B)."""
+        with self.lock:
+            if self.config_sent:
+                self.session_id = pick_session_id(self.session_id)
+                if self.session_file:
+                    save_last_session(self.session_id, self.session_file)
+                # Session ids repeat (8 bits): an upload ACKed in an earlier
+                # use of this id must not count in this one.
+                self.model.acked = {}
+                self.model._say("session %d" % self.session_id)
+            self.config_sent = True
+            model = self.model
+            node_map = ab.normalise_map(model.layout, model.node_map)
+            if model.assets:
+                frame_count = next(iter(model.assets.values())).frame_count
+            else:
+                frame_count = 1
+            # One CRC32 per Node ID (step 4d); 0 for a tile not placed.
+            crcs = [model.assets[node].crc32 if node in model.assets else 0
+                    for node in range(1, pl.NODE_MAX + 1)]
+            rows, cols = model.shape()
+            self.link.send_session_config(self.session_id, rows, cols,
+                                          model.policy, node_map,
+                                          frame_count, crcs)
+
+    def _send_asset(self, address: str, session_id: int,
+                    payload: bytes) -> object:
+        """One tile's upload from its own socket, so tiles can be uploaded
+        at the same time (DS-14); its progress is kept in ``live``."""
+        sender = self.new_uploader()
+        stats = uploader.UploadStats()
+        with self.lock:
+            self.live[address] = stats
+        try:
+            sender.upload_asset(address, session_id, payload, stats=stats)
+        finally:
+            sender.close()
+        with self.lock:
+            self.model._say("uploaded to %s: %d of %d chunks ACKed, resent "
+                            "%d, %.2f s" % (address, len(stats.acked),
+                                            stats.chunks, stats.resent,
+                                            stats.seconds))
+        return stats
+
+    def _address_of(self, node: int) -> Optional[str]:
+        """The tile's address, or None when it has been silent for
+        TILE_SILENT_S (offline: an upload would only time out)."""
+        with self.lock:
+            row = getattr(self.telemetry, "tiles", {}).get(node)
+            if (row is not None) and \
+                    (time.monotonic() - row.last_seen > TILE_SILENT_S):
+                return None
+            return self.telemetry.address_of(node)
+
+    def _wait_session(self, node: int) -> bool:
+        """DS-12 A1: wait until the tile's TELEMETRY header carries this
+        session. A tile takes a new session from the Pico's beacon; a
+        MANIFEST that arrives before that is dropped (bench 9 Nov 2026)."""
+        deadline = time.monotonic() + SESSION_WAIT_S
+        while True:
+            with self.lock:
+                self.telemetry.poll()
+                if self.telemetry.session_of(node) == self.session_id:
+                    return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(SESSION_POLL_S)
+
+    def _pico_ready(self, node: int) -> bool:
+        """DS-12 C: whether a STATUS received from now on shows the tile
+        ready (the Pico counts only an ASSET_READY with the session's
+        CRC32). An older STATUS could predate the upload."""
+        asked = time.monotonic()
+        deadline = asked + READY_WAIT_S
+        while time.monotonic() < deadline:
+            with self.lock:
+                self._flush()
+                status = self.model.status
+                if (status is not None) and (status.received >= asked):
+                    return node in pico_link.nodes_in(status.readiness)
+            time.sleep(SESSION_POLL_S)
+        return False
+
+    def upload_pending(self) -> Dict[int, str]:
+        """Upload every tile that has not ACKed its asset, all at the same
+        time (DS-14); returns failures."""
+        with self.lock:
+            self.telemetry.poll()
+            self.live = {}
+        return run_uploads(self.model, self.session_id, self._send_asset,
+                           self._address_of, self._wait_session,
+                           self._pico_ready, workers=UPLOAD_WORKERS,
+                           lock=self.lock)
+
+    def publish(self) -> Dict[int, str]:
+        """Rebuild, send SESSION_CONFIG and upload what is pending. Used after
+        every change of GIF, layout, slot or brightness (build step 6).
+        With no GIF chosen only the layout is sent (a game needs no video,
+        A14)."""
+        with self.lock:
+            no_video = self.model.gif is None
+        if no_video:
+            self.send_config()
+            return {}
+        self.build()
+        self.send_config()
+        return self.upload_pending()
+
+    def run_job(self, name: str, work: Callable[[], object]) -> None:
+        """Run ``work`` in a background thread as the model's job (website);
+        Refused while another job runs. A failure becomes a message."""
+        with self.lock:
+            self.model.check_idle()
+            self.model.job = name
+
+        def body() -> None:
+            try:
+                work()
+            except Exception as err:  # A job never fails silently.
+                with self.lock:
+                    self.model._say("%s failed: %s" % (name, err))
+            finally:
+                with self.lock:
+                    self.model.job = None
+
+        threading.Thread(target=body, name="se15-%s" % name,
+                         daemon=True).start()
+
+    # Website calls.
+
+    def pump(self) -> None:
+        """One pass over the network: STATUS, TAPs and TELEMETRY (ACKed),
+        then a tap-to-place waiting for its TAP. The website calls this
+        about 50 times a second from its own thread."""
+        with self.lock:
+            self._flush()
+            self._wake_pico()
+            back = self._pico_back()
+        if back:
+            self._republish_after_silence()
+        self._restore_mode_when_ready()
+        self._follow_wall_turn()
+        self._retry_failed_uploads()
+        with self.lock:
+            if self.model.armed is None:
+                return
+            try:
+                node = self.model.poll_place(
+                    lambda: self.link.next_tap(0.0))
+            except (ab.AssetError, Refused) as err:
+                self.model._say("place refused: %s" % err)
+                node = None
+        if node is not None:
+            self._republish()
+
+    def status_age(self) -> Optional[float]:
+        """Seconds since the last STATUS, or None before any."""
+        status = self.model.status
+        if status is None:
+            return None
+        return max(time.monotonic() - status.received, 0.0)
+
+    def _wake_pico(self) -> None:
+        """While the Pico is silent, resend the last SESSION_CONFIG every
+        CONFIG_RESEND_S (see STATUS_STALE_S)."""
+        age = self.status_age()
+        resend = getattr(self.link, "resend_config", None)
+        if (age is None) and self.config_sent:
+            age = STATUS_STALE_S  # Never answered since the layout went out.
+        if (resend is None) or (age is None) or (age < STATUS_STALE_S):
+            return
+        now = time.monotonic()
+        if now - self.config_resent >= CONFIG_RESEND_S:
+            self.config_resent = now
+            self.pico_was_silent = True
+            resend()
+
+    def _pico_back(self) -> bool:
+        """Whether the Pico answers again after the pump woke it (once)."""
+        age = self.status_age()
+        if (age is not None) and (self.model.status is not None) and \
+                (self.model.status.received < self.config_resent):
+            return False  # A STATUS from before the wake-up, not an answer.
+        if self.pico_was_silent and (age is not None) and \
+                (age < STATUS_STALE_S):
+            self.pico_was_silent = False
+            return True
+        return False
+
+    def _republish_after_silence(self) -> None:
+        """The Pico is back (wall test 18 Nov 2026): it took the resent
+        SESSION_CONFIG, but a tile reports ASSET_READY only after an upload,
+        so tiles that hold the asset already were never counted ready.
+        Publishing again (a fresh session) has every tile confirm it; a tile
+        that holds it ACKs without writing (DS-12 B). A restarted Pico also
+        starts in video mode, so the website's mode is sent again once the
+        Pico is READY (_restore_mode_when_ready)."""
+        with self.lock:
+            self.model._say("Pico back: publishing again")
+            self.mode_unsent = True
+        try:
+            self._republish()
+        except Refused as err:  # A job runs; it publishes anyway.
+            with self.lock:
+                self.model._say("Pico back: %s" % err)
+
+    def _retry_failed_uploads(self) -> None:
+        """Upload again to tiles whose upload failed in this session, at
+        most every UPLOAD_RETRY_S and only once one of them is heard again
+        (it has an address). Website only, while stopped and idle; tiles
+        already ACKed are not sent again (``upload_pending``). Bench 24 Nov
+        2026: tiles refused an upload as BUSY while still playing for a
+        restarted Pico, and the wall waited for their assets until the GIF
+        was chosen again."""
+        with self.lock:
+            model = self.model
+            if (not self.background) or (model.job is not None) or \
+                    (model.gif is None) or (not model.stopped()):
+                return
+            now = time.monotonic()
+            lost = self._lost_assets(now)
+            if now - self.upload_retried < UPLOAD_RETRY_S:
+                return
+            for node in lost:
+                model.acked.pop(node, None)  # Its ACK no longer holds.
+                model._say("tile %d is online but not ready: uploading its "
+                           "video again" % node)
+            failed = [node for node in model.pending_uploads(self.session_id)
+                      if node in lost or
+                      model.uploads.get(node, {}).get("state") == "failed"]
+            if not any(self._address_of(node) for node in failed):
+                return
+            self.upload_retried = now
+            model._say("retrying the upload to tile%s %s"
+                       % ("s" if len(failed) > 1 else "",
+                          ", ".join(str(node) for node in failed)))
+        try:
+            self.run_job("upload", self.upload_pending)
+        except Refused:
+            pass  # Another job started meanwhile; it uploads anyway.
+
+    def _lost_assets(self, now: float) -> List[int]:
+        """Tiles on the map that ACKed their asset in this session but have
+        been online and not ready for LOST_ASSET_S while the Pico waits for
+        tile readiness in this session (called with the lock held)."""
+        status = self.model.status
+        if self.unready_since is None:
+            self.unready_since = {}
+        if (status is None) or (status.session_id != self.session_id) or \
+                (status.state_name() != "WAITING FOR TILE READINESS"):
+            self.unready_since.clear()
+            return []
+        lost = []
+        for node in [n for n in self.model.node_map if n]:
+            bit = 1 << (node - 1)
+            acked = self.model.acked.get(node, (None,))[0] == self.session_id
+            if acked and (status.online & bit) and \
+                    not (status.readiness & bit):
+                since = self.unready_since.setdefault(node, now)
+                if now - since >= LOST_ASSET_S:
+                    lost.append(node)
+            else:
+                self.unready_since.pop(node, None)
+        return lost
+
+    def _follow_wall_turn(self) -> None:
+        """The Pico decides wall turns (D-17): when its STATUS for this
+        website's session shows wall_turn, turn the layout by it once and
+        publish again (re-cut, upload, a new session). The Pico then resumes
+        the video at the frame it saved. Video mode only; while an upload
+        runs, the turn waits for it."""
+        with self.lock:
+            status = self.model.status
+            if (status is None) or (status.wall_turn == 0):
+                return
+            if (self.model.mode != "video") or (self.model.job is not None):
+                return
+            if (status.session_id != self.session_id) or \
+                    (self.turned_session == self.session_id):
+                return
+            self.turned_session = self.session_id
+            try:
+                self.model.turn_wall(status.wall_turn)
+            except Refused as err:
+                self.model._say("wall turn: %s" % err)
+                return
+        self._republish()
+
+    def _restore_mode_when_ready(self) -> None:
+        """Send the website's mode to a Pico that came back, once its STATUS
+        shows READY. Right after a restart the Pico passes SYNCHRONISING, where
+        it refuses a mode change but still ACKs it, so a mode sent at once
+        was lost and every ARM was then refused (wall test 24 Nov 2026)."""
+        with self.lock:
+            if (not self.mode_unsent) or (self.model.pico_state() != "READY"):
+                return
+            age = self.status_age()
+            if (age is None) or (age >= STATUS_STALE_S):
+                return
+            self.mode_unsent = False
+            self._restore_mode()
+
+    def _restore_mode(self) -> None:
+        """Send the website's mode to the Pico again (a restarted Pico is in
+        video mode); a mode not acknowledged becomes a message."""
+        with self.lock:
+            mode = self.model.mode
+            code = pico_link.MODE_GAME if mode == "game" else \
+                pico_link.MODE_VIDEO
+            if not self.link.send_game_control(code):
+                self.model._say("Pico back: mode %s not acknowledged" % mode)
+
+    def snapshot(self) -> Dict[str, object]:
+        """Fresh STATUS and telemetry, an armed placement, then the model,
+        with each tile's health (A8) and upload progress. A Pico silent
+        for STATUS_STALE_S shows as NO STATUS, with nothing to press."""
+        self.pump()
+        with self.lock:
+            snap = self.model.snapshot()
+            age = self.status_age()
+            snap["status_age_s"] = None if age is None else round(age, 1)
+            if (age is not None) and (age >= STATUS_STALE_S):
+                snap["pico_state"] = "NO STATUS"
+                for key in ("play_enabled", "pause_enabled", "resume_enabled",
+                            "stop_enabled", "game_start_enabled",
+                            "start_now_enabled", "start_enabled"):
+                    snap[key] = False
+            snap["session"] = self.session_id
+            snap["tap_log"] = (os.path.basename(self.tap_log.path)
+                               if self.tap_log is not None else None)
+            for row in snap["uploads"]:  # type: ignore[union-attr]
+                stats = self.live.get(str(row.get("address")))
+                row["acked"] = len(stats.acked) if stats else 0
+                row["chunks"] = stats.chunks if stats else 0
+            snap["tiles"] = self._tiles()
+            return snap
+
+    def _tiles(self) -> List[Dict[str, object]]:
+        """Every tile heard or placed: online (Pico STATUS), cell, on or
+        off, orientation, faults and the age of its TELEMETRY (A8)."""
+        model = self.model
+        rows = getattr(self.telemetry, "tiles", {})
+        cell = {node: slot for slot, node in enumerate(model.node_map)
+                if node}
+        parked = {node: slot for slot, node in model.parked.items()}
+        now = time.monotonic()
+        tiles = []
+        for node in range(1, pl.NODE_MAX + 1):
+            row = rows.get(node)
+            if row is None and node not in cell and node not in parked:
+                continue
+            tiles.append({
+                "node": node,
+                "online": bool(model.online & (1 << (node - 1))),
+                "cell": cell.get(node, parked.get(node)),
+                "on": node in cell,
+                "orientation": row.orientation if row else None,
+                "faults": row.faults() if row else None,
+                "seen_s": round(now - row.last_seen, 1) if row else None})
+        return tiles
+
+    def _republish(self) -> None:
+        """After a change: a background job on the website, else now. A
+        publish here must not run under the lock: its upload threads take
+        it."""
+        if self.background:
+            self.run_job("upload", self._publish_quiet)
+        else:
+            self._publish_quiet()
+
+    def _publish_quiet(self) -> None:
+        try:
+            self.publish()
+        except (ab.AssetError, OSError) as err:
+            with self.lock:
+                self.model._say("publish failed: %s" % err)
+
+    def _after_change(self) -> Dict[str, object]:
+        """After a layout change: rebuild and re-upload when a GIF is set,
+        otherwise send the layout alone (A14). On the website this runs in
+        the background; the page follows it in the snapshot. Called without
+        the lock held, except by the website's request handler, whose
+        publish is a background job."""
+        if self.background:
+            self.run_job("upload", self.publish)
+        else:
+            self.publish()
+        return self.snapshot()
+
+    def list_gifs(self) -> Dict[str, object]:
+        """The GIF library and the GIF chosen."""
+        with self.lock:
+            chosen = self.model.gif
+        return {"gifs": gif_library.list_gifs(),
+                "chosen": os.path.basename(chosen) if chosen else None}
+
+    def add_gif(self, name: str, data: bytes) -> Dict[str, object]:
+        """Keep an uploaded GIF in the library. A GIF in use cannot be
+        replaced while the wall plays it."""
+        with self.lock:
+            chosen = self.model.gif
+            if chosen and os.path.basename(chosen) == name and \
+                    not self.model.stopped():
+                raise Refused("%s is playing; stop it first" % name)
+        gif_library.save_gif(name, data)
+        return self.list_gifs()
+
+    def delete_gif(self, name: str) -> Dict[str, object]:
+        """Remove a GIF from the library; not the one chosen."""
+        with self.lock:
+            chosen = self.model.gif
+        if chosen and os.path.basename(chosen) == name:
+            raise Refused("%s is the GIF chosen; choose another first" % name)
+        gif_library.delete_gif(name)
+        return self.list_gifs()
+
+    def choose_gif(self, name: Optional[str]) -> Dict[str, object]:
+        """Choose a library GIF for the wall (None: no video), then rebuild
+        and upload it."""
+        path = gif_library.path_of(name) if name is not None else None
+        with self.lock:
+            self.model.set_gif(path)
+        return self._after_change()
+
+    def preview_png(self) -> bytes:
+        """The chosen GIF's first frame cut for the grid, as a PNG. Drawn
+        without the lock: only the layout is copied under it."""
+        with self.lock:
+            model = self.model
+            gif, layout = model.gif, model.layout
+            node_map, off = list(model.node_map), sorted(model.parked)
+        if gif is None:
+            raise ab.AssetError("choose a GIF first")
+        return ab.render_preview(ab.load_first_frame(gif), layout, node_map,
+                                 off)
+
+    def play(self) -> Dict[str, object]:
+        """Start the video (Start rule: every mapped tile ready)."""
+        with self.lock:
+            self._flush()
+            self.model.check_play()
+            self.link.start()
+            self.model._say("video play")
+            return self.snapshot()
+
+    def video(self, action: str) -> Dict[str, object]:
+        """Pause, resume or stop the video."""
+        with self.lock:
+            self._flush()
+            self.model.check_video(action)
+            {"pause": self.link.pause, "resume": self.link.resume,
+             "stop": self.link.stop}[action]()
+            self.model._say("video %s" % action)
+            return self.snapshot()
+
+    def set_grid(self, rows: int, cols: int) -> Dict[str, object]:
+        with self.lock:
+            self.model.set_grid(rows, cols)
+        return self._after_change()
+
+    def set_slot(self, slot: int, on: bool) -> Dict[str, object]:
+        with self.lock:
+            self.model.set_slot(slot, on)
+        return self._after_change()
+
+    def remove_slot(self, slot: int) -> Dict[str, object]:
+        """Take a tile out of the grid; the layout is published again."""
+        with self.lock:
+            self.model.remove_slot(slot)
+        return self._after_change()
+
+    def arm_place(self, slot: int) -> Dict[str, object]:
+        with self.lock:
+            self._flush()
+            self.link.taps = []  # A TAP from before the press does not count.
+            self.model.arm_place(slot)
+            return self.snapshot()
+
+    def set_mode(self, mode: str) -> Dict[str, object]:
+        """Mode switch, acknowledged by the Pico; the old mode is kept when it
+        is not acknowledged."""
+        previous = self.model.mode
+        self.model.set_mode(mode)
+        code = pico_link.MODE_GAME if mode == "game" else pico_link.MODE_VIDEO
+        if not self.link.send_game_control(code):
+            self.model.mode = previous
+            raise OSError("the Pico did not acknowledge the mode change")
+        self.mode_unsent = False  # Sent now, while stopped.
+        return self.snapshot()
+
+    def start_game(self) -> Dict[str, object]:
+        """Round start: refused unless ready in game mode; the Pico must
+        acknowledge the command."""
+        self._flush()
+        self.model.start_game()
+        if not self.link.send_game_control(pico_link.GAME_START):
+            raise OSError("the Pico did not acknowledge the round start")
+        return self.snapshot()
+
+    def arm_game(self) -> Dict[str, object]:
+        """Arm a round at the model's level and tap threshold (DS-08)."""
+        self._flush()
+        self.model.arm_game()
+        asked = time.monotonic()
+        if not self.link.send_game_control(
+                pico_link.GAME_ARM, level=self.model.level_code(),
+                threshold=self.model.threshold_code()):
+            raise OSError("the Pico did not acknowledge the arm")
+        self.model.tap_test = False
+        self._confirm_round(asked, "arm the round",
+                            ("ARMED", "COUNTDOWN", "PLAYING"))
+        return self.snapshot()
+
+    def _confirm_round(self, asked: float, what: str,
+                       rounds: Sequence[str]) -> None:
+        """Wait up to ARM_CONFIRM_S for a STATUS received after ``asked``
+        whose round state is one of ``rounds``; Refused (with what the Pico
+        reports) when none comes, since the Pico ACKs a command it refuses
+        all the same."""
+        deadline = asked + ARM_CONFIRM_S
+        while True:
+            self._flush()
+            status = self.model.status
+            if (status is not None) and (status.received >= asked) and \
+                    (status.round_name() in rounds):
+                return
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(SESSION_POLL_S)
+        self.model._say("the Pico did not %s" % what)
+        raise Refused("the Pico did not %s (it reports %s, %s)" % (
+            what, self.model.pico_state(), self.model.round_state()))
+
+    def start_now(self) -> Dict[str, object]:
+        """Skip the start sprite: the countdown starts now."""
+        self._flush()
+        self.model.start_now()
+        if not self.link.send_game_control(pico_link.GAME_START_NOW):
+            raise OSError("the Pico did not acknowledge start now")
+        return self.snapshot()
+
+    def set_tap_test(self, on: bool) -> Dict[str, object]:
+        """The tap test on or off (A11)."""
+        self._flush()
+        self.model.set_tap_test(on)
+        code = pico_link.GAME_TAP_TEST_ON if on else \
+            pico_link.GAME_TAP_TEST_OFF
+        if not self.link.send_game_control(code):
+            raise OSError("the Pico did not acknowledge the tap test")
+        self.model.tap_test = on
+        return self.snapshot()
+
+    def set_level(self, level: str) -> Dict[str, object]:
+        self.model.set_level(level)
+        return self.snapshot()
+
+    def set_threshold(self, threshold_mg: int) -> Dict[str, object]:
+        self.model.set_threshold(threshold_mg)
+        return self.snapshot()
+
+    def abort_game(self) -> Dict[str, object]:
+        """Abort the round now: an armed or counting round clears, a playing
+        one ends as at the time limit."""
+        self._flush()
+        self.model.abort_game()
+        if not self.link.send_game_control(pico_link.GAME_END):
+            raise OSError("the Pico did not acknowledge the abort")
+        return self.snapshot()
+
+    # Shell commands.
 
     def do_config(self, arg: str) -> None:
         """config GIF LAYOUT MAP POLICY BRIGHTNESS
-        e.g. config demo.gif 2x2 1,2,0,3,4,0,0,0,0 pause 8"""
+        e.g. config demo.gif 2x2 1,2,3,4,0,0,0,0,0 pause 8"""
         try:
             gif, layout, map_text, policy, brightness = arg.split()
             node_map = [int(n) for n in map_text.split(",")]
@@ -184,62 +1505,83 @@ class DashboardShell(cmd.Cmd):
         except ValueError:
             print("usage: brightness N")
 
+    def do_grid(self, arg: str) -> None:
+        """grid ROWS COLS   (each 1 to 9: up to 81 cells, 9 tiles in any of them)"""
+        try:
+            rows, cols = (int(part) for part in arg.split())
+            self.set_grid(rows, cols)
+        except (ValueError, ab.AssetError, Refused, OSError) as err:
+            print("grid refused: %s" % err)
+            return
+        self._print_messages()
+
+    def do_place(self, arg: str) -> None:
+        """place SLOT   then tap the tile for that slot (30 s)"""
+        try:
+            slot = int(arg)
+            self.link.taps = []
+            node = self.model.place(
+                slot, lambda: self.link.next_tap(PLACE_WAIT_S))
+        except (ValueError, ab.AssetError, Refused) as err:
+            print("place refused: %s" % err)
+            return
+        if node is not None:
+            self._after_change()
+        self._print_messages()
+
     def do_build(self, _arg: str) -> None:
         """Build every tile asset (PREPARING ASSETS) and send
         SESSION_CONFIG."""
-        model = self.model
-        if model.gif is None:
+        if self.model.gif is None:
             print("config first")
             return
-        model.state = "PREPARING ASSETS"
         try:
-            frames, delays = ab.load_gif(model.gif)
-            model.assets = ab.build_assets(frames, delays, model.layout,
-                                           model.node_map, model.brightness)
+            self.build()
+            self.send_config()
         except (ab.AssetError, OSError) as err:
-            model.state = "ERROR"
             print("build failed: %s" % err)
             return
-        frame_count = next(iter(model.assets.values())).frame_count
-        crcs = [model.assets[n].crc32 if n else 0 for n in model.node_map]
-        code = ab.LAYOUTS[model.layout][0]
-        self.link.send_session_config(self.session_id, code, model.policy,
-                                      model.node_map, frame_count, crcs)
-        for node, asset in sorted(model.assets.items()):
+        for node, asset in sorted(self.model.assets.items()):
             print("node %d: %d frames, crc32 0x%08x" % (
                 node, asset.frame_count, asset.crc32))
 
     def do_upload(self, _arg: str) -> None:
-        """Upload every tile asset to the address its TELEMETRY came from."""
-        import uploader
-        model = self.model
-        model.state = "UPLOADING ASSETS"
-        self.telemetry.poll()
-        for node, asset in sorted(model.assets.items()):
-            address = self.telemetry.address_of(node)
-            if address is None:
-                print("node %d: no TELEMETRY yet, address unknown" % node)
-                model.state = "ERROR"
-                return
-            try:
-                stats = self.uploader.upload_asset(address, self.session_id,
-                                                   asset.payload)
-            except uploader.UploadError as err:
-                print("node %d: %s" % (node, err))
-                model.state = "ERROR"
-                return
-            print("node %d: %d of %d chunks ACKed, resent %d, %.2f s" % (
-                node, len(stats.acked), stats.chunks, stats.resent,
-                stats.seconds))
-        model.state = "VERIFYING UPLOADS"
+        """Upload every tile asset that has not been ACKed yet; reports the
+        tiles that failed (rerun to retry only those)."""
+        if not self.model.assets:
+            print("build first")
+            return
+        failed = self.upload_pending()
+        print("failed: %s" % (
+            ", ".join("node %d (%s)" % item for item in sorted(failed.items()))
+            or "none"))
+
+    def do_publish(self, _arg: str) -> None:
+        """Rebuild, send SESSION_CONFIG and upload what is pending."""
+        try:
+            failed = self.publish()
+        except (ab.AssetError, OSError) as err:
+            print("publish failed: %s" % err)
+            return
+        print("failed: %s" % (
+            ", ".join("node %d (%s)" % item for item in sorted(failed.items()))
+            or "none"))
 
     def do_status(self, _arg: str) -> None:
-        """Show Pico STATUS, readiness and telemetry rows."""
-        status = self.link.poll_status()
+        """Show the Pico's STATUS, the PC state and the telemetry rows."""
+        status = self.model.status
         if status:
-            print("pico %s readiness=0x%03x online=0x%03x" % (
-                status.state_name(), status.readiness, status.online))
-        print("state %s; start %s; missing %s" % (
+            print("pico %s readiness=0x%03x online=0x%03x score=%d" % (
+                status.state_name(), status.readiness, status.online,
+                status.score))
+            print("round %s level=%s hits=%d missed=%d wrong=%d shown=%d "
+                  "left=%d s reaction=%d ms" % (
+                      status.round_name(), status.level_name(),
+                      status.hits(), status.missed, status.wrong,
+                      status.shown, status.time_left_s, status.reaction_ms))
+        else:
+            print("pico: no STATUS yet")
+        print("pc %s; start %s; missing %s" % (
             self.model.state,
             "enabled" if self.model.start_enabled() else "disabled",
             self.model.missing()))
@@ -249,13 +1591,62 @@ class DashboardShell(cmd.Cmd):
                 row.node_id, row.address, row.faults(), row.orientation,
                 row.display_state))
 
+    def do_game(self, arg: str) -> None:
+        """game arm [easy|normal|hard] | now | abort | start
+        arm: the start sprite waits for the child's tap (DS-08); now: skip
+        it; abort: clear or end the round; start: a v1 round at once."""
+        words = arg.split()
+        try:
+            if words[:1] == ["arm"]:
+                if len(words) > 1:
+                    self.model.set_level(words[1])
+                self.arm_game()
+            elif words == ["now"]:
+                self.start_now()
+            elif words == ["abort"]:
+                self.abort_game()
+            elif words == ["start"]:
+                self.start_game()
+            else:
+                print("usage: game arm [easy|normal|hard] | now | abort | "
+                      "start")
+        except (ab.AssetError, Refused, OSError) as err:
+            print("game refused: %s" % err)
+        self._print_messages()
+
+    def do_tap(self, arg: str) -> None:
+        """tap on|off   the tap test: every tap lights its tile (A11)"""
+        try:
+            if arg.strip() not in ("on", "off"):
+                print("usage: tap on|off")
+                return
+            self.set_tap_test(arg.strip() == "on")
+        except (Refused, OSError) as err:
+            print("tap test refused: %s" % err)
+
+    def do_threshold(self, arg: str) -> None:
+        """threshold MG   tap threshold for the next arm; 0 = default"""
+        try:
+            self.set_threshold(int(arg))
+        except (ValueError, ab.AssetError) as err:
+            print("threshold refused: %s" % err)
+        self._print_messages()
+
+    def do_mode(self, arg: str) -> None:
+        """mode video|game   (only while stopped)"""
+        try:
+            self.set_mode(arg.strip())
+        except (ab.AssetError, Refused, OSError) as err:
+            print("mode refused: %s" % err)
+            return
+        self._print_messages()
+
     def do_start(self, _arg: str) -> None:
         """Start (only when every mapped tile is ready)."""
         if not self.model.start_enabled():
             print("start disabled: not ready %s" % self.model.missing())
             return
         self.link.start()
-        self.model.state = "MONITORING PLAYBACK"
 
     def do_pause(self, _arg: str) -> None:
         """Pause."""
@@ -268,7 +1659,6 @@ class DashboardShell(cmd.Cmd):
     def do_stop(self, _arg: str) -> None:
         """Stop."""
         self.link.stop()
-        self.model.state = "READY" if self.model.assets else "IDLE"
 
     def do_quit(self, _arg: str) -> bool:
         """Quit."""
@@ -279,9 +1669,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     """Command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--pico", required=True, help="Pico IP address")
-    parser.add_argument("--session", type=int, default=1)
+    parser.add_argument("--session", type=int, default=None,
+                        help="session id 1 to 255; default: a fresh one, "
+                             "different from the last run")
     args = parser.parse_args(argv)
-    DashboardShell(args.pico, args.session).cmdloop()
+    try:
+        session = resolve_session(args.session)
+    except ValueError as err:
+        print("dashboard: %s" % err, file=sys.stderr)
+        return 1
+    DashboardShell(args.pico, session).cmdloop()
     return 0
 
 

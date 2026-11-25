@@ -1,0 +1,12 @@
+tile 4 turned (20 turns): own peak min 889 median 1464 max 2190 mg | other tile 5: median 60 max 749 mg
+   own soft alignment taps: [326, 17175, 16783] mg
+   threshold   300 mg: turns that would fire a tap on the turned tile 20/20, on the other tile  2/20
+   threshold  1000 mg: turns that would fire a tap on the turned tile 19/20, on the other tile  0/20
+   threshold  2000 mg: turns that would fire a tap on the turned tile  2/20, on the other tile  0/20
+   threshold  5000 mg: turns that would fire a tap on the turned tile  0/20, on the other tile  0/20
+tile 5 turned (20 turns): own peak min 1013 median 1272 max 2048 mg | other tile 4: median 508 max 1032 mg
+   own soft alignment taps: [16695, 16825, 17001] mg
+   threshold   300 mg: turns that would fire a tap on the turned tile 20/20, on the other tile 13/20
+   threshold  1000 mg: turns that would fire a tap on the turned tile 20/20, on the other tile  1/20
+   threshold  2000 mg: turns that would fire a tap on the turned tile  1/20, on the other tile  0/20
+   threshold  5000 mg: turns that would fire a tap on the turned tile  0/20, on the other tile  0/20

@@ -1,0 +1,47 @@
+1795509359.837 COORDINATING PLAYBACK 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=228 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509339.684 video play
+1795509366.659 COORDINATING PLAYBACK 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=228 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509366.597 video play
+1795509370.327 COORDINATING PLAYBACK 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=228 job=None orient=(1, 1, 2, 0, 2, 3, 1, 3, 2) | 1795509366.597 video play
+1795509370.429 COORDINATING PLAYBACK 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=228 job=None orient=(1, 1, 3, 1, 2, 3, 1, 3, 3) | 1795509366.597 video play
+1795509370.531 COORDINATING PLAYBACK 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=228 job=None orient=(2, 2, 3, 1, 2, 3, 1, 0, 3) | 1795509366.597 video play
+1795509370.633 COORDINATING PLAYBACK 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=228 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509366.597 video play
+1795509372.161 READY 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=228 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509372.102 wall turned 90 degrees clockwise: grid 3x3, re-cutting the video
+1795509372.407 READY 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509372.362 session 207
+1795509372.611 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509372.362 session 207
+1795509375.152 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.132 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 2.67 s
+1795509375.254 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.245 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 0, 2.58 s
+1795509375.865 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.840 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 0, 3.37 s
+1795509375.967 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509375.963 uploaded to 192.168.1.130: 60 of 60 chunks ACKed, resent 0, 2.64 s
+1795509376.475 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509376.474 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.96 s
+1795509377.594 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=upload orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509377.570 uploaded to 192.168.1.219: 60 of 60 chunks ACKed, resent 1, 4.20 s
+1795509377.696 WAITING FOR TILE READINESS 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509377.617 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 4, 5.10 s
+1795509377.900 COORDINATING PLAYBACK 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=None orient=(2, 2, 3, 1, 2, 3, 2, 0, 3) | 1795509377.838 all tiles ready
+1795509385.428 COORDINATING PLAYBACK 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=None orient=(2, 2, 3, 1, 2, 3, 1, 0, 3) | 1795509377.838 all tiles ready
+1795509385.530 COORDINATING PLAYBACK 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=None orient=(1, 1, 3, 0, 2, 3, 1, 0, 3) | 1795509377.838 all tiles ready
+1795509385.631 COORDINATING PLAYBACK 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=None orient=(1, 1, 2, 0, 2, 3, 1, 3, 3) | 1795509377.838 all tiles ready
+1795509385.733 COORDINATING PLAYBACK 3x3 map=(7, 4, 1, 8, 5, 2, 9, 6, 3) session=207 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509377.838 all tiles ready
+1795509387.160 READY 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=207 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509387.107 wall turned 270 degrees clockwise: grid 3x3, re-cutting the video
+1795509387.475 READY 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509387.373 session 75
+1795509387.679 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509387.373 session 75
+1795509390.940 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509390.894 uploaded to 192.168.1.14: 60 of 60 chunks ACKed, resent 0, 3.17 s
+1795509391.449 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509391.405 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 0, 3.78 s
+1795509391.958 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509391.887 uploaded to 192.168.1.130: 60 of 60 chunks ACKed, resent 1, 4.16 s
+1795509392.162 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509392.118 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 1, 3.54 s
+1795509392.468 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509392.449 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.92 s
+1795509392.875 NO STATUS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509392.449 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.92 s
+1795509393.079 NO STATUS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509393.054 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 0, 4.67 s
+1795509398.176 NO STATUS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509398.164 uploaded to 192.168.1.97: 60 of 60 chunks ACKed, resent 74, 10.54 s
+1795509399.809 NO STATUS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509399.803 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 69, 11.28 s
+1795509403.788 NO STATUS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509403.705 uploaded to 192.168.1.219: 60 of 60 chunks ACKed, resent 167, 15.98 s
+1795509419.096 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=75 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509419.058 Pico back: publishing again
+1795509419.350 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509419.324 session 206
+1795509422.390 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509422.341 uploaded to 192.168.1.14: 60 of 60 chunks ACKed, resent 0, 2.57 s
+1795509422.795 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509422.758 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 3.23 s
+1795509423.098 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509423.050 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 0, 3.53 s
+1795509423.301 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509423.276 uploaded to 192.168.1.97: 60 of 60 chunks ACKed, resent 0, 3.65 s
+1795509423.808 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509423.784 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 4.21 s
+1795509424.112 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509424.018 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 7, 4.39 s
+1795509424.213 WAITING FOR TILE READINESS 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509424.121 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 3, 3.74 s
+1795509428.876 READY 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=upload orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509424.121 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 3, 3.74 s
+1795509434.655 READY 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509434.645 all tiles ready
+1795509443.685 READY 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509443.611 video play
+1795509443.889 COORDINATING PLAYBACK 3x3 map=(1, 2, 3, 4, 5, 6, 7, 8, 9) session=206 job=None orient=(1, 1, 2, 0, 1, 2, 1, 3, 2) | 1795509443.611 video play

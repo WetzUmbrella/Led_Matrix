@@ -150,6 +150,13 @@ void asset_store_probe_heap (void);
 bool asset_store_post_upload (asset_store_upload_t const * p_item);
 
 /**
+ * @brief  Drop every item waiting in the Upload Queue (Network Task only).
+ *         Called when a new session starts (bench bug of 6 Nov 2026), so the
+ *         old session's chunks are never written under the new one.
+ */
+void asset_store_drop_uploads (void);
+
+/**
  * @brief  Take one reply (Network Task only). Never blocks.
  * @param  p_reply  Receives the reply when true.
  * @return true when a reply was waiting.

@@ -55,8 +55,11 @@ static uint64_t take_u64 (reader_t * p_reader, uint32_t width);
 static uint32_t take_u32 (reader_t * p_reader, uint32_t width);
 static uint16_t take_u16 (reader_t * p_reader, uint32_t width);
 static uint8_t  take_u8 (reader_t * p_reader, uint32_t width);
+static void     put_signed (writer_t * p_writer, uint32_t width, int8_t value);
+static int8_t   take_s8 (reader_t * p_reader, uint32_t width);
+static bool     score_ok (int8_t score);
 static bool     node_ok (uint8_t node_id);
-static bool     map_ok (uint8_t const * p_map);
+static bool     cells_ok (proto_session_config_t const * p_msg);
 static bool     frame_count_ok (uint16_t frame_count);
 static bool     register_ok (proto_register_t const * p_msg);
 static bool     session_config_ok (proto_session_config_t const * p_msg);
@@ -65,6 +68,12 @@ static bool     chunk_ack_ok (proto_chunk_ack_t const * p_msg);
 static bool     nack_ok (proto_nack_t const * p_msg);
 static bool     status_ok (proto_status_t const * p_msg);
 static bool     telemetry_ok (proto_telemetry_t const * p_msg);
+static bool     tap_ok (proto_tap_t const * p_msg);
+static bool     mole_on_ok (proto_mole_on_t const * p_msg);
+static bool     feedback_ok (proto_feedback_msg_t const * p_msg);
+static bool     game_control_ok (proto_game_control_t const * p_msg);
+static bool     wall_picture_ok (proto_wall_picture_t const * p_msg);
+static bool     ack_ok (proto_ack_t const * p_msg);
 static uint32_t encode_command (proto_command_t const * p_msg,
                                 proto_type_t type, uint8_t * p_buf,
                                 uint32_t buf_len);
@@ -212,7 +221,7 @@ bool proto_decode_header (uint8_t const * p_buf, uint32_t len,
         p_header->type       = take_u8(&reader, PROTO_TYPE_BITS);
         p_header->session_id = take_u8(&reader, PROTO_SESSION_BITS);
         p_header->seq        = take_u16(&reader, PROTO_SEQ_BITS);
-        b_ok = (p_header->type < (uint8_t)PROTO_TYPE_COUNT); /* Code 18. */
+        b_ok = (p_header->type < (uint8_t)PROTO_TYPE_COUNT); /* Code 24. */
     }
 
     return b_ok;
@@ -333,19 +342,22 @@ uint32_t proto_encode_session_config (proto_session_config_t const * p_msg,
         (begin_encode(p_buf, buf_len, PROTO_SESSION_CONFIG_BYTES,
                       PROTO_TYPE_SESSION_CONFIG, &p_msg->header, &writer)))
     {
-        put_field(&writer, PROTO_LAYOUT_BITS, p_msg->layout);
+        put_field(&writer, PROTO_GRID_BITS, p_msg->rows);
+        put_field(&writer, PROTO_GRID_BITS, p_msg->cols);
         put_field(&writer, PROTO_POLICY_BITS, p_msg->policy);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            put_field(&writer, PROTO_NODE_BITS, p_msg->node_map[slot]);
+            put_field(&writer, PROTO_PLACED_BITS, p_msg->cell[node].b_placed);
+            put_field(&writer, PROTO_GRID_BITS, p_msg->cell[node].row);
+            put_field(&writer, PROTO_GRID_BITS, p_msg->cell[node].col);
         }
 
         put_field(&writer, PROTO_FRAME_BITS, p_msg->frame_count);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            put_field(&writer, PROTO_CRC_BITS, p_msg->crc32[slot]);
+            put_field(&writer, PROTO_CRC_BITS, p_msg->crc32[node]);
         }
 
         written = PROTO_SESSION_CONFIG_BYTES;
@@ -370,19 +382,22 @@ bool proto_decode_session_config (uint8_t const * p_buf, uint32_t len,
     if (begin_decode(p_buf, len, PROTO_SESSION_CONFIG_BYTES,
                      PROTO_TYPE_SESSION_CONFIG, &p_msg->header, &reader))
     {
-        p_msg->layout = take_u8(&reader, PROTO_LAYOUT_BITS);
+        p_msg->rows   = take_u8(&reader, PROTO_GRID_BITS);
+        p_msg->cols   = take_u8(&reader, PROTO_GRID_BITS);
         p_msg->policy = take_u8(&reader, PROTO_POLICY_BITS);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            p_msg->node_map[slot] = take_u8(&reader, PROTO_NODE_BITS);
+            p_msg->cell[node].b_placed = take_u8(&reader, PROTO_PLACED_BITS);
+            p_msg->cell[node].row      = take_u8(&reader, PROTO_GRID_BITS);
+            p_msg->cell[node].col      = take_u8(&reader, PROTO_GRID_BITS);
         }
 
         p_msg->frame_count = take_u16(&reader, PROTO_FRAME_BITS);
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            p_msg->crc32[slot] = take_u32(&reader, PROTO_CRC_BITS);
+            p_msg->crc32[node] = take_u32(&reader, PROTO_CRC_BITS);
         }
 
         b_ok = session_config_ok(p_msg);
@@ -975,6 +990,15 @@ uint32_t proto_encode_status (proto_status_t const * p_msg, uint8_t * p_buf,
         put_field(&writer, PROTO_BITMAP_BITS, p_msg->readiness);
         put_field(&writer, PROTO_BITMAP_BITS, p_msg->online);
         put_field(&writer, PROTO_COORD_STATE_BITS, p_msg->state);
+        put_signed(&writer, PROTO_SCORE_BITS, p_msg->score);
+        put_field(&writer, PROTO_ROUND_STATE_BITS, p_msg->round_state);
+        put_field(&writer, PROTO_LEVEL_BITS, p_msg->level);
+        put_field(&writer, PROTO_COUNT_BITS, p_msg->missed);
+        put_field(&writer, PROTO_COUNT_BITS, p_msg->wrong);
+        put_field(&writer, PROTO_COUNT_BITS, p_msg->shown);
+        put_field(&writer, PROTO_TIME_LEFT_BITS, p_msg->time_left_s);
+        put_field(&writer, PROTO_REACTION_BITS, p_msg->reaction_ms);
+        put_field(&writer, PROTO_WALL_TURN_BITS, p_msg->wall_turn);
         written = PROTO_STATUS_BYTES;
     }
 
@@ -997,10 +1021,19 @@ bool proto_decode_status (uint8_t const * p_buf, uint32_t len,
     if (begin_decode(p_buf, len, PROTO_STATUS_BYTES, PROTO_TYPE_STATUS,
                      &p_msg->header, &reader))
     {
-        p_msg->readiness = take_u16(&reader, PROTO_BITMAP_BITS);
-        p_msg->online    = take_u16(&reader, PROTO_BITMAP_BITS);
-        p_msg->state     = take_u8(&reader, PROTO_COORD_STATE_BITS);
-        b_ok             = status_ok(p_msg);
+        p_msg->readiness   = take_u16(&reader, PROTO_BITMAP_BITS);
+        p_msg->online      = take_u16(&reader, PROTO_BITMAP_BITS);
+        p_msg->state       = take_u8(&reader, PROTO_COORD_STATE_BITS);
+        p_msg->score       = take_s8(&reader, PROTO_SCORE_BITS);
+        p_msg->round_state = take_u8(&reader, PROTO_ROUND_STATE_BITS);
+        p_msg->level       = take_u8(&reader, PROTO_LEVEL_BITS);
+        p_msg->missed      = take_u8(&reader, PROTO_COUNT_BITS);
+        p_msg->wrong       = take_u8(&reader, PROTO_COUNT_BITS);
+        p_msg->shown       = take_u8(&reader, PROTO_COUNT_BITS);
+        p_msg->time_left_s = take_u8(&reader, PROTO_TIME_LEFT_BITS);
+        p_msg->reaction_ms = take_u16(&reader, PROTO_REACTION_BITS);
+        p_msg->wall_turn   = take_u8(&reader, PROTO_WALL_TURN_BITS);
+        b_ok               = status_ok(p_msg);
     }
 
     return b_ok;
@@ -1106,6 +1139,320 @@ bool proto_decode_telemetry_ack (uint8_t const * p_buf, uint32_t len,
 }
 
 /**
+ * @brief  Encode a TAP.
+ * @param  p_msg    Message.
+ * @param  p_buf    Output buffer.
+ * @param  buf_len  Size of p_buf, bytes.
+ * @return Bytes written, or 0.
+ */
+uint32_t proto_encode_tap (proto_tap_t const * p_msg, uint8_t * p_buf,
+                           uint32_t buf_len)
+{
+    uint32_t written = 0u;
+    writer_t writer;
+
+    if ((tap_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_TAP_BYTES, PROTO_TYPE_TAP,
+                      &p_msg->header, &writer)))
+    {
+        put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
+        put_field(&writer, PROTO_PEAK_BITS, p_msg->peak);
+        put_field(&writer, PROTO_TIME_BITS, p_msg->t_tap);
+        written = PROTO_TAP_BYTES;
+    }
+
+    return written;
+}
+
+/**
+ * @brief  Decode a TAP.
+ * @param  p_buf  Received bytes.
+ * @param  len    Received length, bytes.
+ * @param  p_msg  Receives the message.
+ * @return true when valid.
+ */
+bool proto_decode_tap (uint8_t const * p_buf, uint32_t len, proto_tap_t * p_msg)
+{
+    bool     b_ok = false;
+    reader_t reader;
+
+    if (begin_decode(p_buf, len, PROTO_TAP_BYTES, PROTO_TYPE_TAP,
+                     &p_msg->header, &reader))
+    {
+        p_msg->node_id = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->peak    = take_u16(&reader, PROTO_PEAK_BITS);
+        p_msg->t_tap   = take_u64(&reader, PROTO_TIME_BITS);
+        b_ok           = tap_ok(p_msg);
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Encode a MOLE_ON.
+ * @param  p_msg    Message.
+ * @param  p_buf    Output buffer.
+ * @param  buf_len  Size of p_buf, bytes.
+ * @return Bytes written, or 0.
+ */
+uint32_t proto_encode_mole_on (proto_mole_on_t const * p_msg, uint8_t * p_buf,
+                               uint32_t buf_len)
+{
+    uint32_t written = 0u;
+    writer_t writer;
+
+    if ((mole_on_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_MOLE_ON_BYTES, PROTO_TYPE_MOLE_ON,
+                      &p_msg->header, &writer)))
+    {
+        put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
+        put_field(&writer, PROTO_TIME_BITS, p_msg->t_show);
+        put_field(&writer, PROTO_UP_MS_BITS, p_msg->up_ms);
+        put_field(&writer, PROTO_TARGET_KIND_BITS, p_msg->kind);
+        written = PROTO_MOLE_ON_BYTES;
+    }
+
+    return written;
+}
+
+/**
+ * @brief  Decode a MOLE_ON.
+ * @param  p_buf  Received bytes.
+ * @param  len    Received length, bytes.
+ * @param  p_msg  Receives the message.
+ * @return true when valid.
+ */
+bool proto_decode_mole_on (uint8_t const * p_buf, uint32_t len,
+                           proto_mole_on_t * p_msg)
+{
+    bool     b_ok = false;
+    reader_t reader;
+
+    if (begin_decode(p_buf, len, PROTO_MOLE_ON_BYTES, PROTO_TYPE_MOLE_ON,
+                     &p_msg->header, &reader))
+    {
+        p_msg->node_id = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->t_show  = take_u64(&reader, PROTO_TIME_BITS);
+        p_msg->up_ms   = take_u16(&reader, PROTO_UP_MS_BITS);
+        p_msg->kind    = take_u8(&reader, PROTO_TARGET_KIND_BITS);
+        b_ok           = mole_on_ok(p_msg);
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Encode a FEEDBACK.
+ * @param  p_msg    Message.
+ * @param  p_buf    Output buffer.
+ * @param  buf_len  Size of p_buf, bytes.
+ * @return Bytes written, or 0.
+ */
+uint32_t proto_encode_feedback (proto_feedback_msg_t const * p_msg,
+                                uint8_t * p_buf, uint32_t buf_len)
+{
+    uint32_t written = 0u;
+    writer_t writer;
+
+    if ((feedback_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_FEEDBACK_BYTES, PROTO_TYPE_FEEDBACK,
+                      &p_msg->header, &writer)))
+    {
+        put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
+        put_field(&writer, PROTO_RESULT_BITS, p_msg->result);
+        written = PROTO_FEEDBACK_BYTES;
+    }
+
+    return written;
+}
+
+/**
+ * @brief  Decode a FEEDBACK.
+ * @param  p_buf  Received bytes.
+ * @param  len    Received length, bytes.
+ * @param  p_msg  Receives the message.
+ * @return true when valid.
+ */
+bool proto_decode_feedback (uint8_t const * p_buf, uint32_t len,
+                            proto_feedback_msg_t * p_msg)
+{
+    bool     b_ok = false;
+    reader_t reader;
+
+    if (begin_decode(p_buf, len, PROTO_FEEDBACK_BYTES, PROTO_TYPE_FEEDBACK,
+                     &p_msg->header, &reader))
+    {
+        p_msg->node_id = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->result  = take_u8(&reader, PROTO_RESULT_BITS);
+        b_ok           = feedback_ok(p_msg);
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Encode a GAME_CONTROL.
+ * @param  p_msg    Message.
+ * @param  p_buf    Output buffer.
+ * @param  buf_len  Size of p_buf, bytes.
+ * @return Bytes written, or 0.
+ */
+uint32_t proto_encode_game_control (proto_game_control_t const * p_msg,
+                                    uint8_t * p_buf, uint32_t buf_len)
+{
+    uint32_t written = 0u;
+    writer_t writer;
+
+    if ((game_control_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_GAME_CONTROL_BYTES,
+                      PROTO_TYPE_GAME_CONTROL, &p_msg->header, &writer)))
+    {
+        put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
+        put_field(&writer, PROTO_GAME_CMD_BITS, p_msg->command);
+        put_field(&writer, PROTO_LEVEL_BITS, p_msg->level);
+        put_field(&writer, PROTO_THRESHOLD_BITS, p_msg->threshold);
+        written = PROTO_GAME_CONTROL_BYTES;
+    }
+
+    return written;
+}
+
+/**
+ * @brief  Decode a GAME_CONTROL.
+ * @param  p_buf  Received bytes.
+ * @param  len    Received length, bytes.
+ * @param  p_msg  Receives the message.
+ * @return true when valid.
+ */
+bool proto_decode_game_control (uint8_t const * p_buf, uint32_t len,
+                                proto_game_control_t * p_msg)
+{
+    bool     b_ok = false;
+    reader_t reader;
+
+    if (begin_decode(p_buf, len, PROTO_GAME_CONTROL_BYTES,
+                     PROTO_TYPE_GAME_CONTROL, &p_msg->header, &reader))
+    {
+        p_msg->node_id   = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->command   = take_u8(&reader, PROTO_GAME_CMD_BITS);
+        p_msg->level     = take_u8(&reader, PROTO_LEVEL_BITS);
+        p_msg->threshold = take_u8(&reader, PROTO_THRESHOLD_BITS);
+        b_ok             = game_control_ok(p_msg);
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Encode a WALL_PICTURE.
+ * @param  p_msg    Message.
+ * @param  p_buf    Output buffer.
+ * @param  buf_len  Size of p_buf, bytes.
+ * @return Bytes written, or 0.
+ */
+uint32_t proto_encode_wall_picture (proto_wall_picture_t const * p_msg,
+                                    uint8_t * p_buf, uint32_t buf_len)
+{
+    uint32_t written = 0u;
+    writer_t writer;
+
+    if ((wall_picture_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_WALL_PICTURE_BYTES,
+                      PROTO_TYPE_WALL_PICTURE, &p_msg->header, &writer)))
+    {
+        put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
+        put_field(&writer, PROTO_PIC_SLOT_BITS, p_msg->slot);
+        put_field(&writer, PROTO_PIC_EFFECT_BITS, p_msg->effect);
+        put_field(&writer, PROTO_PIC_COLOUR_BITS, p_msg->colour);
+        put_field(&writer, PROTO_PIC_REPEAT_BITS, p_msg->b_repeat);
+        put_field(&writer, PROTO_TIME_BITS, p_msg->t_show);
+        put_field(&writer, PROTO_PIC_DUR_BITS, p_msg->dur_ms);
+        put_field(&writer, PROTO_MASK_BITS, p_msg->mask);
+        written = PROTO_WALL_PICTURE_BYTES;
+    }
+
+    return written;
+}
+
+/**
+ * @brief  Decode a WALL_PICTURE.
+ * @param  p_buf  Received bytes.
+ * @param  len    Received length, bytes.
+ * @param  p_msg  Receives the message.
+ * @return true when valid.
+ */
+bool proto_decode_wall_picture (uint8_t const * p_buf, uint32_t len,
+                                proto_wall_picture_t * p_msg)
+{
+    bool     b_ok = false;
+    reader_t reader;
+
+    if (begin_decode(p_buf, len, PROTO_WALL_PICTURE_BYTES,
+                     PROTO_TYPE_WALL_PICTURE, &p_msg->header, &reader))
+    {
+        p_msg->node_id  = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->slot     = take_u8(&reader, PROTO_PIC_SLOT_BITS);
+        p_msg->effect   = take_u8(&reader, PROTO_PIC_EFFECT_BITS);
+        p_msg->colour   = take_u8(&reader, PROTO_PIC_COLOUR_BITS);
+        p_msg->b_repeat = take_u8(&reader, PROTO_PIC_REPEAT_BITS);
+        p_msg->t_show   = take_u64(&reader, PROTO_TIME_BITS);
+        p_msg->dur_ms   = take_u16(&reader, PROTO_PIC_DUR_BITS);
+        p_msg->mask     = take_u64(&reader, PROTO_MASK_BITS);
+        b_ok            = wall_picture_ok(p_msg);
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  Encode an ACK.
+ * @param  p_msg    Message.
+ * @param  p_buf    Output buffer.
+ * @param  buf_len  Size of p_buf, bytes.
+ * @return Bytes written, or 0.
+ */
+uint32_t proto_encode_ack (proto_ack_t const * p_msg, uint8_t * p_buf,
+                           uint32_t buf_len)
+{
+    uint32_t written = 0u;
+    writer_t writer;
+
+    if ((ack_ok(p_msg)) &&
+        (begin_encode(p_buf, buf_len, PROTO_ACK_BYTES, PROTO_TYPE_ACK,
+                      &p_msg->header, &writer)))
+    {
+        put_field(&writer, PROTO_NODE_BITS, p_msg->node_id);
+        put_field(&writer, PROTO_SEQ_BITS, p_msg->acked_seq);
+        written = PROTO_ACK_BYTES;
+    }
+
+    return written;
+}
+
+/**
+ * @brief  Decode an ACK.
+ * @param  p_buf  Received bytes.
+ * @param  len    Received length, bytes.
+ * @param  p_msg  Receives the message.
+ * @return true when valid.
+ */
+bool proto_decode_ack (uint8_t const * p_buf, uint32_t len, proto_ack_t * p_msg)
+{
+    bool     b_ok = false;
+    reader_t reader;
+
+    if (begin_decode(p_buf, len, PROTO_ACK_BYTES, PROTO_TYPE_ACK,
+                     &p_msg->header, &reader))
+    {
+        p_msg->node_id   = take_u8(&reader, PROTO_NODE_BITS);
+        p_msg->acked_seq = take_u16(&reader, PROTO_SEQ_BITS);
+        b_ok             = ack_ok(p_msg);
+    }
+
+    return b_ok;
+}
+
+/**
  * @brief  Mask of the low width bits.
  * @param  width  1 to 64.
  * @return The mask.
@@ -1181,7 +1528,7 @@ static bool begin_encode (uint8_t * p_buf, uint32_t buf_len, uint32_t bytes,
 
         p_writer->p_buf = p_buf;
         p_writer->bit   = HEADER_TYPE;
-        put_field(p_writer, PROTO_TYPE_BITS, (uint64_t)type); /* Code < 18. */
+        put_field(p_writer, PROTO_TYPE_BITS, (uint64_t)type); /* Code < 24. */
         put_field(p_writer, PROTO_SESSION_BITS, p_header->session_id);
         put_field(p_writer, PROTO_SEQ_BITS, p_header->seq);
         b_ok = true;
@@ -1210,7 +1557,7 @@ static bool begin_decode (uint8_t const * p_buf, uint32_t len, uint32_t bytes,
     {
         p_reader->p_buf = p_buf;
         p_reader->bit   = PROTO_HEADER_BITS;
-        b_ok            = ((uint8_t)type == p_header->type); /* Code < 18. */
+        b_ok            = ((uint8_t)type == p_header->type); /* Code < 24. */
     }
 
     return b_ok;
@@ -1281,6 +1628,47 @@ static uint8_t take_u8 (reader_t * p_reader, uint32_t width)
 }
 
 /**
+ * @brief  Write a signed field of at most 8 bits in two's complement.
+ * @param  p_writer  Write position.
+ * @param  width     Field width, at most 8 bits.
+ * @param  value     Field value; put_field keeps its low width bits.
+ */
+static void put_signed (writer_t * p_writer, uint32_t width, int8_t value)
+{
+    /* Conversion to uint8_t is modulo 256, which is two's complement. */
+    put_field(p_writer, width, (uint8_t)value);
+}
+
+/**
+ * @brief  Read an 8-bit two's complement field (inverse of put_signed).
+ * @param  p_reader  Read position.
+ * @param  width     Field width, 8 bits.
+ * @return The field, -128 to 127.
+ */
+static int8_t take_s8 (reader_t * p_reader, uint32_t width)
+{
+    int16_t value = (int16_t)take_u8(p_reader, width); /* 0 to 255. */
+
+    if (value > INT8_MAX)
+    {
+        value -= (int16_t)(UINT8_MAX + 1); /* 128 to 255 -> -128 to -1. */
+    }
+
+    /* value is -128 to 127 here, so it fits int8_t. */
+    return (int8_t)value;
+}
+
+/**
+ * @brief  A game score is -99 to 99.
+ * @param  score  Score.
+ * @return true when in range.
+ */
+static bool score_ok (int8_t score)
+{
+    return (score >= -PROTO_SCORE_MAX) && (score <= PROTO_SCORE_MAX);
+}
+
+/**
  * @brief  A sender's Node ID is 1 to 9.
  * @param  node_id  Node ID.
  * @return true when in range.
@@ -1291,17 +1679,38 @@ static bool node_ok (uint8_t node_id)
 }
 
 /**
- * @brief  Every map position holds 0 (blank) or a Node ID 1 to 9.
- * @param  p_map  PROTO_MAP_SLOTS entries.
- * @return true when every entry is in range.
+ * @brief  The SESSION_CONFIG cells (step 4d, DS-15): a placed tile's cell
+ *         is inside rows x cols and no other placed tile has it; a tile not
+ *         placed has row and col 0, so each layout has one encoding.
+ * @param  p_msg  Message; rows and cols are checked by the caller.
+ * @return true when every cell is valid.
  */
-static bool map_ok (uint8_t const * p_map)
+static bool cells_ok (proto_session_config_t const * p_msg)
 {
-    bool b_ok = true;
+    uint16_t taken[PROTO_GRID_MAX] = {0u}; /* Bit c of taken[r]: (r, c). */
+    bool     b_ok                  = true;
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
     {
-        b_ok = b_ok && (p_map[slot] <= PROTO_NODE_MAX);
+        proto_cell_t const * const p_cell = &p_msg->cell[node];
+
+        if (0u == p_cell->b_placed)
+        {
+            b_ok = b_ok && (0u == p_cell->row) && (0u == p_cell->col);
+        }
+        else if ((1u != p_cell->b_placed) || (p_cell->row >= p_msg->rows) ||
+                 (p_cell->col >= p_msg->cols))
+        {
+            b_ok = false;
+        }
+        else
+        {
+            /* col < 9, so the shift fits uint16_t. */
+            uint16_t const bit = (uint16_t)(1u << p_cell->col);
+
+            b_ok = b_ok && (0u == (taken[p_cell->row] & bit));
+            taken[p_cell->row] |= bit;
+        }
     }
 
     return b_ok;
@@ -1334,9 +1743,12 @@ static bool register_ok (proto_register_t const * p_msg)
  */
 static bool session_config_ok (proto_session_config_t const * p_msg)
 {
-    return (p_msg->layout < (uint8_t)PROTO_LAYOUT_COUNT) && /* Code < 3. */
+    bool const b_rows = (p_msg->rows >= 1u) && (p_msg->rows <= PROTO_GRID_MAX);
+    bool const b_cols = (p_msg->cols >= 1u) && (p_msg->cols <= PROTO_GRID_MAX);
+
+    return (b_rows) && (b_cols) &&
            (p_msg->policy < (uint8_t)PROTO_POLICY_COUNT) && /* Code < 2. */
-           (map_ok(p_msg->node_map)) && (frame_count_ok(p_msg->frame_count));
+           (cells_ok(p_msg)) && (frame_count_ok(p_msg->frame_count));
 }
 
 /**
@@ -1381,7 +1793,16 @@ static bool status_ok (proto_status_t const * p_msg)
 {
     return (p_msg->readiness <= BITMAP_MASK) &&
            (p_msg->online <= BITMAP_MASK) &&
-           (p_msg->state < (uint8_t)PROTO_COORD_COUNT); /* Code < 12. */
+           (p_msg->state < (uint8_t)PROTO_COORD_COUNT) && /* Code < 13. */
+           (score_ok(p_msg->score)) &&
+           (p_msg->round_state < (uint8_t)PROTO_ROUND_STATE_COUNT) &&
+           (p_msg->level < (uint8_t)PROTO_LEVEL_COUNT) &&
+           (p_msg->missed <= PROTO_COUNT_MAX) &&
+           (p_msg->wrong <= PROTO_COUNT_MAX) &&
+           (p_msg->shown <= PROTO_COUNT_MAX) &&
+           (p_msg->time_left_s <= PROTO_TIME_LEFT_MAX) &&
+           (p_msg->reaction_ms <= PROTO_REACTION_MAX) &&
+           (p_msg->wall_turn <= PROTO_WALL_TURN_MAX);
 }
 
 /**
@@ -1394,6 +1815,77 @@ static bool telemetry_ok (proto_telemetry_t const * p_msg)
     return (node_ok(p_msg->node_id)) &&
            (p_msg->orientation < (uint8_t)PROTO_ORIENT_COUNT) &&  /* < 4 */
            (p_msg->display_state < (uint8_t)PROTO_DISPLAY_COUNT); /* < 7 */
+}
+
+/**
+ * @brief  TAP valid-range check.
+ * @param  p_msg  Message.
+ * @return true when valid.
+ */
+static bool tap_ok (proto_tap_t const * p_msg)
+{
+    return node_ok(p_msg->node_id);
+}
+
+/**
+ * @brief  MOLE_ON valid-range check.
+ * @param  p_msg  Message.
+ * @return true when valid.
+ */
+static bool mole_on_ok (proto_mole_on_t const * p_msg)
+{
+    return (node_ok(p_msg->node_id)) && (p_msg->up_ms <= PROTO_UP_MS_MAX) &&
+           (p_msg->kind < (uint8_t)PROTO_TARGET_COUNT); /* Code < 5. */
+}
+
+/**
+ * @brief  FEEDBACK valid-range check.
+ * @param  p_msg  Message.
+ * @return true when valid.
+ */
+static bool feedback_ok (proto_feedback_msg_t const * p_msg)
+{
+    return (node_ok(p_msg->node_id)) &&
+           (p_msg->result < (uint8_t)PROTO_FEEDBACK_COUNT); /* Code < 3. */
+}
+
+/**
+ * @brief  GAME_CONTROL valid-range check.
+ * @param  p_msg  Message.
+ * @return true when valid.
+ */
+static bool game_control_ok (proto_game_control_t const * p_msg)
+{
+    return (p_msg->node_id <= PROTO_NODE_MAX) &&               /* 0 allowed */
+           (p_msg->command < (uint8_t)PROTO_GAME_CMD_COUNT) && /* Code < 8. */
+           (p_msg->level < (uint8_t)PROTO_LEVEL_COUNT) &&      /* Code < 3. */
+           (p_msg->threshold <= PROTO_THRESHOLD_MAX);
+}
+
+/**
+ * @brief  WALL_PICTURE valid-range check.
+ * @param  p_msg  Message.
+ * @return true when valid.
+ */
+static bool wall_picture_ok (proto_wall_picture_t const * p_msg)
+{
+    /* slot, colour and b_repeat fill their widths; dur_ms is 13 bits. */
+    return (node_ok(p_msg->node_id)) &&
+           (p_msg->slot < (UINT8_C(1) << PROTO_PIC_SLOT_BITS)) &&
+           (p_msg->effect < (uint8_t)PROTO_PIC_EFFECT_COUNT) && /* < 3. */
+           (p_msg->colour < (uint8_t)PROTO_COLOUR_COUNT) &&
+           (p_msg->b_repeat <= 1u) &&
+           (p_msg->dur_ms < (UINT16_C(1) << PROTO_PIC_DUR_BITS));
+}
+
+/**
+ * @brief  ACK valid-range check.
+ * @param  p_msg  Message.
+ * @return true when valid.
+ */
+static bool ack_ok (proto_ack_t const * p_msg)
+{
+    return p_msg->node_id <= PROTO_NODE_MAX; /* 0 allowed */
 }
 
 /**

@@ -43,6 +43,17 @@
 #define TST_CRC_1   UINT32_C(0x11111111)
 #define TST_CRC_2   UINT32_C(0x22222222)
 
+/** Positions of the row-major maps the tests are written with (step 4d
+ *  turns each into cells). */
+#define TST_MAP_SLOTS 9u
+
+/** A 2x2 wall: map positions 0 to 3, row-major (re-plan step 3). */
+#define TST_ROWS_2X2 2u
+#define TST_COLS_2X2 2u
+
+/* A quarter turn clockwise of the 2x2 map {2, 1, 0, 0} (C38). */
+static uint8_t const g_turned_other[9] = {0u, 2u, 0u, 1u, 0u, 0u, 0u, 0u, 0u};
+
 static uint16_t g_tile_seq[CL_MAX_NODES + 1u];
 static uint64_t g_last_beat[CL_MAX_NODES + 1u];
 static uint16_t g_live      = 0u; /* Tiles that send heartbeats. */
@@ -56,7 +67,7 @@ static void tst_register (uint8_t node_id, uint8_t session, uint32_t crc);
 static void tst_heartbeat (uint8_t node_id);
 static void tst_asset_ready (uint8_t node_id, uint8_t session, uint32_t crc);
 static void tst_sync_ready (uint8_t node_id, uint8_t session);
-static void tst_session (uint8_t session, proto_layout_t layout,
+static void tst_session (uint8_t session, uint8_t rows, uint8_t cols,
                          proto_policy_t policy, uint8_t const * p_map);
 static void tst_pc_command (proto_type_t type, uint8_t session);
 static bool tst_to_ready (proto_policy_t policy);
@@ -65,6 +76,11 @@ static uint32_t tst_find (proto_type_t type, uint32_t from, uint32_t * p_index);
 static uint32_t tst_addr (uint8_t node_id);
 static uint16_t tst_seq_of (uint32_t index);
 static uint64_t tst_deadline (uint64_t origin, uint64_t tick);
+static void     tst_telemetry (uint8_t node_id, uint8_t orientation);
+static void     tst_turn_both (uint8_t orientation);
+static bool     tst_last_status (proto_status_t * p_msg);
+static bool     tst_resume_frame (uint32_t from, uint16_t * p_frame);
+static void     tst_mode (uint8_t command);
 
 /**
  * @brief  C1 (T-B2-02): every beacon on origin + k x 100 ms, t_p equal to
@@ -262,7 +278,8 @@ bool test_coord_stale_rejected (void)
     uint8_t const map[9] = {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
 
     tst_reset();
-    tst_session(TST_SESSION, PROTO_LAYOUT_2X2, PROTO_POLICY_CONTINUE, map);
+    tst_session(TST_SESSION, TST_ROWS_2X2, TST_COLS_2X2, PROTO_POLICY_CONTINUE,
+                map);
     tst_register(1u, 0u, 0u);
     tst_register(2u, 0u, 0u);
     tst_advance(UINT64_C(200000));
@@ -318,7 +335,8 @@ bool test_coord_start_gate (void)
     uint8_t const map[9] = {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
 
     tst_reset();
-    tst_session(TST_SESSION, PROTO_LAYOUT_2X2, PROTO_POLICY_CONTINUE, map);
+    tst_session(TST_SESSION, TST_ROWS_2X2, TST_COLS_2X2, PROTO_POLICY_CONTINUE,
+                map);
     tst_register(1u, 0u, 0u);
     tst_register(2u, 0u, 0u);
     g_live      = UINT16_C(0x0003);
@@ -379,7 +397,8 @@ bool test_coord_crc_mismatch (void)
     uint8_t const map[9] = {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
 
     tst_reset();
-    tst_session(TST_SESSION, PROTO_LAYOUT_2X2, PROTO_POLICY_CONTINUE, map);
+    tst_session(TST_SESSION, TST_ROWS_2X2, TST_COLS_2X2, PROTO_POLICY_CONTINUE,
+                map);
     tst_register(1u, 0u, 0u);
     tst_advance(UINT64_C(100000));
     tst_asset_ready(1u, TST_SESSION, TST_CRC_2); /* Node 2's CRC. */
@@ -390,29 +409,67 @@ bool test_coord_crc_mismatch (void)
 
 /**
  * @brief  C9 (T-B2-04, W6 statechart 2 VALIDATING SESSION): session_id 0,
- *         a Node ID outside the layout and a repeated Node ID are rejected;
- *         a valid map with its tiles missing waits for nodes.
+ *         a Node ID outside the layout and a layout with no tile placed are
+ *         rejected; a valid map with its tiles missing waits for nodes.
+ *         Since step 4d a Node ID cannot appear twice (one cell per Node
+ *         ID), and the codec refuses a cell outside the grid.
  * @return true when every check passed.
  */
 bool test_coord_session_validation (void)
 {
     bool          b_ok       = true;
-    uint8_t const outside[9] = {1u, 0u, 2u, 0u, 0u, 0u, 0u, 0u, 0u};
-    uint8_t const twice[9]   = {1u, 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    uint8_t const outside[9] = {1u, 0u, 0u, 0u, 2u, 0u, 0u, 0u, 0u};
+    uint8_t const empty[9]   = {0u};
     uint8_t const good[9]    = {1u, 0u, 0u, 2u, 0u, 0u, 0u, 0u, 0u};
 
     tst_reset();
-    tst_session(0u, PROTO_LAYOUT_2X2, 0u, good);
-    tst_session(3u, PROTO_LAYOUT_2X2, 0u, outside);
-    tst_session(4u, PROTO_LAYOUT_2X2, 0u, twice);
+    tst_session(0u, TST_ROWS_2X2, TST_COLS_2X2, 0u, good);
+    tst_session(3u, TST_ROWS_2X2, TST_COLS_2X2, 0u, outside);
+    tst_session(4u, TST_ROWS_2X2, TST_COLS_2X2, 0u, empty);
     tst_advance(UINT64_C(100000));
     b_ok = (test_main_check(PROTO_COORD_WAITING_FOR_SESSION ==
                                 coordinator_loop_test_state(),
                             __LINE__)) &&
            b_ok;
-    tst_session(5u, PROTO_LAYOUT_2X2, 0u, good);
+    tst_session(5u, TST_ROWS_2X2, TST_COLS_2X2, 0u, good);
     tst_advance(UINT64_C(100000));
     b_ok = (test_main_check(PROTO_COORD_WAITING_FOR_NODES ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C9b (whack-a-mole re-plan): a SESSION_CONFIG with a new
+ *         session_id is refused while a game or playback runs. The state
+ *         stays put, and the old session's readiness is kept.
+ * @return true when every check passed.
+ */
+bool test_coord_session_while_busy (void)
+{
+    bool          b_ok   = true;
+    uint8_t const map[9] = {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+
+    /* COORDINATING GAME has no entry path until build step 7: force it. */
+    b_ok = (tst_to_ready(PROTO_POLICY_CONTINUE)) && b_ok;
+    coordinator_loop_test_set_state(PROTO_COORD_COORDINATING_GAME);
+    tst_session(TST_SESSION + 1u, TST_ROWS_2X2, TST_COLS_2X2, 0u, map);
+    tst_advance(UINT64_C(100000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_GAME ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check(UINT16_C(0x0003) == coordinator_loop_test_readiness(),
+                         __LINE__)) &&
+        b_ok;
+
+    b_ok = (tst_to_playing(PROTO_POLICY_CONTINUE)) && b_ok;
+    tst_session(TST_SESSION + 1u, TST_ROWS_2X2, TST_COLS_2X2, 0u, map);
+    tst_advance(UINT64_C(100000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_PLAYBACK ==
                                 coordinator_loop_test_state(),
                             __LINE__)) &&
            b_ok;
@@ -434,7 +491,7 @@ bool test_coord_status (void)
     uint8_t const map[9] = {1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
 
     tst_reset();
-    tst_session(TST_SESSION, PROTO_LAYOUT_1X1, 0u, map);
+    tst_session(TST_SESSION, 1u, 1u, 0u, map);
     tst_advance(UINT64_C(2000000));
 
     while (0u != tst_find(PROTO_TYPE_STATUS, index, &index))
@@ -719,6 +776,79 @@ bool test_coord_continue_rejoin (void)
 }
 
 /**
+ * @brief  C31 (bench 12 Nov 2026, run V2): a 9-tile SESSION_CONFIG through
+ *         the receive path keeps every byte. A 3 x 3 wall with Node IDs 1
+ *         to 9 and a different CRC32 each; every tile registers and sends
+ *         ASSET_READY with its own CRC32, so all nine count ready. With the
+ *         48-byte receive buffer (the message is 53 B since step 4d) the
+ *         CRC32s of Nodes 8 and 9 were read from past the buffer and never
+ *         matched. A datagram one byte longer than SESSION_CONFIG is
+ *         dropped, not decoded.
+ * @return true when every check passed.
+ */
+bool test_coord_full_config (void)
+{
+    uint8_t                buf[PROTO_SESSION_CONFIG_BYTES + 1u];
+    proto_session_config_t msg  = {{PROTO_TYPE_SESSION_CONFIG, TST_SESSION, 0u},
+                                   3u,
+                                   3u,
+                                   PROTO_POLICY_PAUSE,
+                                   {{0u, 0u, 0u}},
+                                   TST_FRAMES,
+                                   {0u}};
+    bool                   b_ok = true;
+
+    tst_reset();
+
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
+    {
+        msg.cell[node].b_placed = 1u;
+        msg.cell[node].row      = (uint8_t)(node / 3u); /* < 3: fits. */
+        msg.cell[node].col      = (uint8_t)(node % 3u); /* < 3: fits. */
+        /* Every byte of each CRC32 differs from the others' (node < 9). */
+        msg.crc32[node] = UINT32_C(0x11111111) * (node + 1u);
+    }
+
+    /* One byte too long: dropped, the session is not applied. */
+    (void)memset(buf, 0, sizeof(buf)); /* Returns buf. */
+    msg.header.seq = g_pc_seq;
+    /* Returns 53; the extra byte stays 0. */
+    (void)proto_encode_session_config(&msg, buf, sizeof(buf));
+    coordinator_loop_test_rx(CL_PORT_FROM_PC, TST_PC_ADDR, TST_PC_PORT, buf,
+                             sizeof(buf));
+    tst_advance(UINT64_C(100000));
+    b_ok = (test_main_check(PROTO_COORD_WAITING_FOR_SESSION ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    /* The right length: applied, and every CRC32 arrives whole. */
+    coordinator_loop_test_rx(CL_PORT_FROM_PC, TST_PC_ADDR, TST_PC_PORT, buf,
+                             PROTO_SESSION_CONFIG_BYTES);
+    g_pc_seq++;
+
+    for (uint8_t node_id = 1u; node_id <= PROTO_NODE_MAX; node_id++)
+    {
+        tst_register(node_id, 0u, 0u);
+    }
+
+    tst_advance(UINT64_C(100000));
+
+    for (uint8_t node_id = 1u; node_id <= PROTO_NODE_MAX; node_id++)
+    {
+        tst_asset_ready(node_id, TST_SESSION, msg.crc32[node_id - 1u]);
+    }
+
+    tst_advance(UINT64_C(100000));
+    b_ok =
+        (test_main_check(UINT16_C(0x01FF) == coordinator_loop_test_readiness(),
+                         __LINE__)) &&
+        b_ok;
+
+    return b_ok;
+}
+
+/**
  * @brief  Fresh coordinator and recorder at T0.
  */
 static void tst_reset (void)
@@ -839,28 +969,41 @@ static void tst_sync_ready (uint8_t node_id, uint8_t session)
  * @brief  SESSION_CONFIG from the PC: 600 frames, CRC32 values TST_CRC_1
  *         and TST_CRC_2 at the positions of Node IDs 1 and 2.
  * @param  session  session_id.
- * @param  layout   proto_layout_t code.
+ * @param  rows     Rows of the wall.
+ * @param  cols     Columns of the wall.
  * @param  policy   proto_policy_t code.
- * @param  p_map    9 Node IDs.
+ * @param  p_map    9 Node IDs, row-major over rows x cols.
  */
-static void tst_session (uint8_t session, proto_layout_t layout,
+static void tst_session (uint8_t session, uint8_t rows, uint8_t cols,
                          proto_policy_t policy, uint8_t const * p_map)
 {
     uint8_t                buf[PROTO_SESSION_CONFIG_BYTES];
     proto_session_config_t msg = {
         {PROTO_TYPE_SESSION_CONFIG, session, g_pc_seq},
-        layout,
+        rows,
+        cols,
         policy,
-        {0u},
+        {{0u, 0u, 0u}},
         TST_FRAMES,
         {0u}};
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    /* The map is row-major; since step 4d each Node ID carries its cell,
+     * row slot / cols and column slot % cols (cols is 1 to 9). */
+    for (uint32_t slot = 0u; slot < TST_MAP_SLOTS; slot++)
     {
-        msg.node_map[slot] = p_map[slot];
-        msg.crc32[slot]    = (1u == p_map[slot])   ? TST_CRC_1
-                             : (2u == p_map[slot]) ? TST_CRC_2
-                                                   : 0u;
+        uint8_t const node_id = p_map[slot];
+
+        if ((node_id >= 1u) && (node_id <= PROTO_NODE_MAX) && (0u != cols))
+        {
+            proto_cell_t * const p_cell = &msg.cell[node_id - 1u];
+
+            p_cell->b_placed        = 1u;
+            p_cell->row             = (uint8_t)(slot / cols); /* < 9: fits. */
+            p_cell->col             = (uint8_t)(slot % cols); /* < 9: fits. */
+            msg.crc32[node_id - 1u] = (1u == node_id)   ? TST_CRC_1
+                                      : (2u == node_id) ? TST_CRC_2
+                                                        : 0u;
+        }
     }
 
     g_pc_seq++;
@@ -916,7 +1059,7 @@ static bool tst_to_ready (proto_policy_t policy)
     uint8_t const map[9] = {1u, 2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
 
     tst_reset();
-    tst_session(TST_SESSION, PROTO_LAYOUT_2X2, policy, map);
+    tst_session(TST_SESSION, TST_ROWS_2X2, TST_COLS_2X2, policy, map);
     tst_register(1u, 0u, 0u);
     tst_register(2u, 0u, 0u);
     g_live      = UINT16_C(0x0003);
@@ -1014,6 +1157,252 @@ static uint16_t tst_seq_of (uint32_t index)
 static uint64_t tst_deadline (uint64_t origin, uint64_t tick)
 {
     return origin + (((tick * UINT64_C(1000000)) + 59u) / 60u);
+}
+
+/**
+ * @brief  C37 (D-17): the whole wall turns a quarter clockwise while a 2x2
+ *         video plays: nothing until the 1.5 s window closes, then STOP,
+ *         READY and STATUS wall_turn 1; the PC's turned layout (tile 1 to
+ *         the top right, tile 2 to the bottom right) clears it, and once
+ *         both tiles are ready again RESUME_AT carries the saved frame.
+ * @return true when every check passed.
+ */
+bool test_coord_wall_turn_play (void)
+{
+    uint8_t const  turned[9] = {0u, 1u, 0u, 2u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t status;
+    uint16_t       frame = 0u;
+    bool           b_ok  = tst_to_playing(PROTO_POLICY_PAUSE);
+
+    tst_turn_both(0u); /* References. */
+    tst_advance(UINT64_C(100000));
+    tst_turn_both(1u);
+    tst_advance(UINT64_C(1300000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_PLAYBACK ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    uint32_t const mark = coordinator_port_count();
+
+    tst_advance(UINT64_C(500000));
+    b_ok = (test_main_check(PROTO_COORD_READY == coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+    uint32_t stop = 0u;
+
+    b_ok = (test_main_check(0u != tst_find(PROTO_TYPE_STOP, mark, &stop),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (1u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* The PC re-lays out: session 8 with the turned map, both tiles ready. */
+    uint32_t const before = coordinator_port_count();
+
+    tst_session(TST_SESSION + 1u, TST_ROWS_2X2, TST_COLS_2X2,
+                PROTO_POLICY_PAUSE, turned);
+    g_beat_sess = TST_SESSION + 1u;
+    tst_asset_ready(1u, TST_SESSION + 1u, TST_CRC_1);
+    tst_asset_ready(2u, TST_SESSION + 1u, TST_CRC_2);
+    tst_sync_ready(1u, TST_SESSION + 1u);
+    tst_sync_ready(2u, TST_SESSION + 1u);
+    tst_advance(UINT64_C(300000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_PLAYBACK ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+    /* Playing for about 1.8 s at 60 fps before the turn stopped it. */
+    b_ok = (test_main_check((tst_resume_frame(before, &frame)) &&
+                                (frame >= 60u) && (frame <= 150u),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  C38 (D-17): what is not a wall turn, or is undone: one tile
+ *         turned alone keeps the video playing; a wall turned and turned
+ *         back before the PC re-lays out resumes at once with wall_turn 0;
+ *         in game mode a wall turn is ignored; a layout that is no turn of
+ *         the last one (a new grid from the user) clears wall_turn.
+ * @return true when every check passed.
+ */
+bool test_coord_wall_turn_not (void)
+{
+    uint8_t const  other[9] = {2u, 1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    proto_status_t status;
+    uint16_t       frame = 0u;
+    bool           b_ok  = tst_to_playing(PROTO_POLICY_PAUSE);
+
+    tst_turn_both(0u);
+    tst_advance(UINT64_C(100000));
+    tst_telemetry(1u, 1u); /* One tile alone. */
+    tst_advance(UINT64_C(2000000));
+    b_ok = (test_main_check(PROTO_COORD_COORDINATING_PLAYBACK ==
+                                coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+    tst_telemetry(1u, 0u); /* Back: the window closes with no turn. */
+    tst_advance(UINT64_C(2000000));
+
+    /* Turned and turned back: the session's layout fits again. */
+    tst_turn_both(2u);
+    tst_advance(UINT64_C(1700000));
+    b_ok = (test_main_check(PROTO_COORD_READY == coordinator_loop_test_state(),
+                            __LINE__)) &&
+           b_ok;
+
+    uint32_t const mark = coordinator_port_count();
+
+    tst_turn_both(0u);
+    tst_advance(UINT64_C(1700000));
+    b_ok = (test_main_check((PROTO_COORD_COORDINATING_PLAYBACK ==
+                             coordinator_loop_test_state()) &&
+                                (tst_resume_frame(mark, &frame)),
+                            __LINE__)) &&
+           b_ok;
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* Game mode: a wall turn changes nothing. */
+    tst_pc_command(PROTO_TYPE_STOP, TST_SESSION);
+    tst_advance(UINT64_C(100000));
+    tst_mode((uint8_t)PROTO_GAME_MODE_GAME); /* Codes 0 to 7 fit. */
+    tst_turn_both(1u);
+    tst_advance(UINT64_C(1700000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* Video again; a wall turn while stopped, then a new grid from the
+     * user (tiles swapped, no turn of the last layout): wall_turn 0. */
+    tst_mode((uint8_t)PROTO_GAME_MODE_VIDEO); /* Codes 0 to 7 fit. */
+    tst_turn_both(2u);
+    tst_advance(UINT64_C(1700000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (1u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+    tst_session(TST_SESSION + 1u, TST_ROWS_2X2, TST_COLS_2X2,
+                PROTO_POLICY_PAUSE, other);
+    tst_advance(UINT64_C(300000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    /* With no turn pending, a user's layout that happens to be a quarter
+     * turn of the last one is a new layout, not a re-layout: wall_turn
+     * stays 0 (bench 24 Nov 2026: it became 3 and the website turned its
+     * map with the wall upright). */
+    tst_session(TST_SESSION + 2u, TST_ROWS_2X2, TST_COLS_2X2,
+                PROTO_POLICY_PAUSE, g_turned_other);
+    tst_advance(UINT64_C(300000));
+    b_ok =
+        (test_main_check((tst_last_status(&status)) && (0u == status.wall_turn),
+                         __LINE__)) &&
+        b_ok;
+
+    return b_ok;
+}
+
+/**
+ * @brief  A tile's TELEMETRY broadcast arrives now (D-17).
+ * @param  node_id      1 to 9.
+ * @param  orientation  0 to 3.
+ */
+static void tst_telemetry (uint8_t node_id, uint8_t orientation)
+{
+    uint8_t                 buf[PROTO_TELEMETRY_BYTES];
+    proto_telemetry_t const msg = {
+        {PROTO_TYPE_TELEMETRY, g_beat_sess, 0u}, node_id, 0u, orientation, 0u};
+
+    coordinator_loop_test_rx(CL_PORT_TELEMETRY, tst_addr(node_id), 4215u, buf,
+                             proto_encode_telemetry(&msg, buf, sizeof(buf)));
+}
+
+/**
+ * @brief  Tiles 1 and 2 both report an orientation.
+ * @param  orientation  0 to 3.
+ */
+static void tst_turn_both (uint8_t orientation)
+{
+    tst_telemetry(1u, orientation);
+    tst_telemetry(2u, orientation);
+}
+
+/**
+ * @brief  The last STATUS sent.
+ * @param  p_msg  Receives it.
+ * @return true when one was found and decoded.
+ */
+static bool tst_last_status (proto_status_t * p_msg)
+{
+    uint32_t index = 0u;
+    uint32_t last  = 0u;
+    bool     b_any = false;
+
+    while (0u != tst_find(PROTO_TYPE_STATUS, index, &index))
+    {
+        b_any = true;
+        last  = index;
+        index++;
+    }
+
+    return (b_any) &&
+           (proto_decode_status(coordinator_port_get(last)->bytes,
+                                coordinator_port_get(last)->len, p_msg));
+}
+
+/**
+ * @brief  The frame of the first RESUME_AT sent from an index.
+ * @param  from     First index.
+ * @param  p_frame  Receives frame_index.
+ * @return true when one was found and decoded.
+ */
+static bool tst_resume_frame (uint32_t from, uint16_t * p_frame)
+{
+    uint32_t          index = 0u;
+    proto_resume_at_t msg;
+    bool              b_ok = false;
+
+    if (0u != tst_find(PROTO_TYPE_RESUME_AT, from, &index))
+    {
+        coordinator_port_send_t const * const p_send =
+            coordinator_port_get(index);
+
+        b_ok     = proto_decode_resume_at(p_send->bytes, p_send->len, &msg);
+        *p_frame = msg.frame_index;
+    }
+
+    return b_ok;
+}
+
+/**
+ * @brief  GAME_CONTROL with a mode from the PC.
+ * @param  command  PROTO_GAME_MODE_VIDEO or PROTO_GAME_MODE_GAME.
+ */
+static void tst_mode (uint8_t command)
+{
+    uint8_t                    buf[PROTO_GAME_CONTROL_BYTES];
+    proto_game_control_t const msg = {
+        {PROTO_TYPE_GAME_CONTROL, TST_SESSION, g_pc_seq}, 0u, command, 0u, 0u};
+
+    g_pc_seq++;
+    coordinator_loop_test_rx(CL_PORT_FROM_PC, TST_PC_ADDR, TST_PC_PORT, buf,
+                             proto_encode_game_control(&msg, buf, sizeof(buf)));
+    tst_advance(UINT64_C(100000));
 }
 
 /*** end of file ***/

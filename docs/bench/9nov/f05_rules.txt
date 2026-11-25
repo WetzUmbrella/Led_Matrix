@@ -1,0 +1,10 @@
+event mix: 40 soft, 40 palm
+rule                         child hits the mole        child hits the tile NEXT to it
+target wins (any echo) soft  scored 37/40               FREE hit 13/40            
+target wins (any echo) palm  scored 40/40               FREE hit 40/40            
+target >= 0.3 x other soft   scored 37/40               FREE hit 5/40             
+target >= 0.3 x other palm   scored 38/40               FREE hit 21/40            
+target >= 0.5 x other soft   scored 37/40               FREE hit 3/40             
+target >= 0.5 x other palm   scored 38/40               FREE hit 14/40            
+highest peak wins soft       scored 36/40               FREE hit 2/40             
+highest peak wins palm       scored 34/40               FREE hit 6/40             

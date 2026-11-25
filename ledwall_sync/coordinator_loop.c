@@ -10,11 +10,13 @@
  * calls cyw43_arch_poll(), whose receive callbacks only timestamp, copy and
  * return, and then runs exactly one routine, the first that is due:
  *   1. BEACON, when next_beacon_us is reached;
- *   2. heartbeat scan, every 100 ms on its own absolute schedule;
- *   3. one copy of a timed command (START_AT, RESUME_AT, PAUSE, STOP);
- *   4. STATUS to the PC, every 250 ms on an absolute schedule;
- *   5. one buffered message, only if 1 ms is left before the next beacon;
- *   6. one log line, only if 5 ms is left before the next beacon.
+ *   2. one copy of a timed command (START_AT, RESUME_AT, PAUSE, STOP);
+ *   3. one datagram of the send queue (19 Nov 2026, see CL_TXQ_LEN):
+ *      every other send is queued, so a pass sends at most one;
+ *   4. heartbeat scan, every 100 ms on its own absolute schedule;
+ *   5. one outbox resend, STATUS to the PC every 250 ms, a game event;
+ *   6. one buffered message, only if 1 ms is left before the next beacon;
+ *   7. one log line, only if 5 ms is left before the next beacon.
  * Every routine is bounded by a fixed amount of work; T-B2-06 measures the
  * callback and dispatch times (cb_max_us, dispatch_max_us in CL_STATS).
  *
@@ -35,6 +37,18 @@
  *   CL_TEST_SUPPRESS_MS=<n> T-B4-05 test build: 20 s into each playback,
  *                           beacons stop for n ms once (bench procedure in
  *                           docs/week13/holdover_sizing.md).
+ *   CL_TEST_HANG_S=<n>      watchdog test build: n s after boot the loop
+ *                           stops once, as in a freeze, unless the watchdog
+ *                           caused this boot; the watchdog must restart the
+ *                           Pico (bench 19 Nov 2026).
+ *
+ * Watchdog (decided 19 Nov 2026 with Cheston): the Pico froze three to four
+ * times on the 18 Nov bench, once for 144 s inside one datagram's handling
+ * (dispatch_max_us), most likely in the CYW43 driver. The hardware watchdog
+ * restarts the Pico when the loop has not run for CL_WATCHDOG_MS (8 s); the PC
+ * and the tiles take a restarted Pico back by themselves. The loop feeds it
+ * every pass, and the router join, which takes up to 10 s, feeds it while
+ * it waits (cl_connect_router).
  *
  * DEVIATION D-2 (module-wide): Pico SDK and lwIP names and types
  * (struct udp_pcb, struct pbuf, ip_addr_t, u16_t, err_t, PBUF_RAM).
@@ -46,15 +60,31 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ack_outbox.h"
+#include "game_rules.h"
+#include "join_backoff.h"
+#include "score_font.h"
+#include "wall_turn.h"
+
 #ifdef CL_HOST_TEST
 #include "coordinator_port.h"
 #else
+#include "hardware/structs/watchdog.h"
+#include "hardware/watchdog.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 #include "lwip/pbuf.h"
 #include "lwip/udp.h"
 #if __has_include("wifi_secrets.h")
 #include "wifi_secrets.h"
+
+/* Every acked game message must fit an outbox slot (build step 3: the
+ * 23-byte WALL_PICTURE outgrew the old 16-byte slots). */
+_Static_assert((PROTO_MOLE_ON_BYTES <= ACK_OUTBOX_MSG_MAX) &&
+                   (PROTO_FEEDBACK_BYTES <= ACK_OUTBOX_MSG_MAX) &&
+                   (PROTO_GAME_CONTROL_BYTES <= ACK_OUTBOX_MSG_MAX) &&
+                   (PROTO_WALL_PICTURE_BYTES <= ACK_OUTBOX_MSG_MAX),
+               "every acked game message must fit an outbox slot");
 #endif
 #endif
 
@@ -74,8 +104,47 @@
 /** Heartbeat timeout 2.5 s (proposed, VA-2.7; OD-18 may select 3 s). */
 #define CL_HEARTBEAT_TIMEOUT_US 2500000u
 
-/** CONNECTING timeout 10 s (proposed, W6D-2d). */
+/** One router join attempt is bounded by 10 s (proposed, W6D-2d). Attempts
+ *  repeat forever, spaced by join_backoff_ms(). */
 #define CL_CONNECT_TIMEOUT_MS 10000u
+
+/** The watchdog restarts the Pico when the loop has not run for 8 s (plan
+ *  choice, 19 Nov 2026: a pass takes microseconds to a few milliseconds;
+ *  the RP2040 allows at most 8.3 s, and the margin covers a slow call into
+ *  the WiFi driver during a join, after an unexplained restart 14 s after a
+ *  flash with 5 s); the join feeds it every CL_JOIN_FEED_MS while it waits. */
+#define CL_WATCHDOG_MS  8000u
+#define CL_JOIN_FEED_MS 100u
+
+/** Breadcrumbs (bench 19 Nov 2026): the step the loop is in is written to
+ *  watchdog scratch[0], which a watchdog reset keeps, so the boot after a
+ *  freeze reports where it hung (CL_STATS wd_step). Bits 0 to 7 the step,
+ *  8 to 15 the first byte of a datagram being dispatched, 16 to 23 its
+ *  listen port minus 4210, bit 31 set while inside a UDP send. */
+#define CL_STEP_POLL     1u
+#define CL_STEP_BEACON   2u
+#define CL_STEP_SCAN     3u
+#define CL_STEP_CMD      4u
+#define CL_STEP_OUTBOX   5u
+#define CL_STEP_STATUS   6u
+#define CL_STEP_GAME     7u
+#define CL_STEP_DISPATCH 8u
+#define CL_STEP_LOG      9u
+#define CL_STEP_JOIN     10u
+#define CL_STEP_CONNECT  11u
+#define CL_STEP_STA_MODE 12u
+#define CL_STEP_TX       13u
+
+/** Send pacing (bench 19 Nov 2026): every send but the BEACON goes into
+ *  this queue and the loop sends one per pass, right after polling the
+ *  WiFi chip. A burst of TAPs from every tile (a hard tap felt by the
+ *  whole board) had the Pico send dozens of datagrams back to back, and
+ *  each tap test ended with the Pico frozen inside the WiFi driver. The
+ *  timed commands (START_AT, PAUSE, RESUME_AT, STOP: three copies 100 ms
+ *  apart) go at once as well, since they carry times read just before. */
+#define CL_TXQ_LEN      32u
+#define CL_TX_MAX_BYTES CL_RX_MAX_BYTES
+#define CL_STEP_IN_SEND UINT32_C(0x80000000)
 
 /** Recovery timeout 5 s (proposed, W6D-2c). */
 #define CL_RECOVERY_TIMEOUT_US 5000000u
@@ -103,12 +172,58 @@
  *  HEARTBEAT plus 9 ASSET_READY and 5 PC messages before one dispatch). */
 #define CL_RING_LEN 32u
 
-/** Largest datagram the Pico accepts: SESSION_CONFIG is 46 B. */
-#define CL_RX_MAX_BYTES 48u
+/** Largest datagram the Pico accepts: SESSION_CONFIG, 53 B since step 4d
+ *  (it was 46 B; the old 48 B buffer cut the CRC32s of Nodes 8 and 9, bench
+ *  12 Nov 2026, run V2). Every accepted type is checked below. */
+#define CL_RX_MAX_BYTES PROTO_SESSION_CONFIG_BYTES
+
+/* Every message the Pico decodes must fit the receive buffer whole. */
+_Static_assert(PROTO_REGISTER_BYTES <= CL_RX_MAX_BYTES, "REGISTER");
+_Static_assert(PROTO_HEARTBEAT_BYTES <= CL_RX_MAX_BYTES, "HEARTBEAT");
+_Static_assert(PROTO_ASSET_READY_BYTES <= CL_RX_MAX_BYTES, "ASSET_READY");
+_Static_assert(PROTO_SYNC_READY_BYTES <= CL_RX_MAX_BYTES, "SYNC_READY");
+_Static_assert(PROTO_NACK_BYTES <= CL_RX_MAX_BYTES, "NACK");
+_Static_assert(PROTO_TELEMETRY_BYTES <= CL_RX_MAX_BYTES, "TELEMETRY");
+_Static_assert(PROTO_TAP_BYTES <= CL_RX_MAX_BYTES, "TAP");
+_Static_assert(PROTO_ACK_BYTES <= CL_RX_MAX_BYTES, "ACK");
+_Static_assert(PROTO_GAME_CONTROL_BYTES <= CL_RX_MAX_BYTES, "GAME_CONTROL");
+_Static_assert(PROTO_START_AT_BYTES <= CL_RX_MAX_BYTES, "START_AT");
+_Static_assert(PROTO_RESUME_AT_BYTES <= CL_RX_MAX_BYTES, "RESUME_AT");
+_Static_assert(PROTO_PAUSE_BYTES <= CL_RX_MAX_BYTES, "PAUSE");
+_Static_assert(PROTO_STOP_BYTES <= CL_RX_MAX_BYTES, "STOP");
 
 /** Concurrent timed commands (plan choice: START_AT, then PAUSE, then
  *  RESUME_AT, plus one rejoin, can overlap within 200 ms). */
 #define CL_SEND_SLOTS 4u
+
+/** Acked messages to a tile are resent every 50 ms until their ACK (plan
+ *  choice: well inside the 300 ms MOLE_ON lead). */
+#define CL_ACK_RETRY_US 50000u
+
+/** Lifetimes of acked messages after their first send (plan choices). A
+ *  MOLE_ON lives until its show time. */
+#define CL_FEEDBACK_LIFE_US 300000u
+#define CL_CONTROL_LIFE_US  1000000u
+
+/** Round phases (DS-08, build step 3): the armed start sprite waits 60 s
+ *  for its tap; the countdown is 3 s; wall pictures go out 500 ms before
+ *  they show (DS-09). */
+#define CL_ARM_TIMEOUT_US  60000000u
+#define CL_COUNTDOWN_STEPS 3u
+#define CL_STEP_MS         1000u
+#define CL_STEP_US         (UINT64_C(1000) * CL_STEP_MS)
+#define CL_COUNTDOWN_US    (CL_COUNTDOWN_STEPS * CL_STEP_US)
+#define CL_PIC_LEAD_US     500000u
+
+/** The start sprite counts a tap only from this long after it shows: no
+ *  child reacts faster, and a tap left over from the tap test or from
+ *  handling the board does not start the round (bench 12 Nov 2026, round 2:
+ *  a tap 0.4 s after the sprite showed started it unseen). */
+#define CL_START_MIN_US 400000u
+
+/** Results (DS-09): the sparkle, then the score and the stars in turn. */
+#define CL_SPARKLE_MS 1500u
+#define CL_RESULT_MS  2500u
 
 /** Logged events waiting for a log slot (plan choice). */
 #define CL_EVENT_LEN 16u
@@ -122,14 +237,17 @@
 #define CL_US_PER_S UINT64_C(1000000)
 #define CL_FPS      UINT64_C(60)
 
-/** Layout positions used by 1x1 and 2x2 in the 9-position map
- *  (layout_table.md SESSION_CONFIG: 0; 0, 1, 3, 4). */
-#define CL_USED_1X1 UINT16_C(0x0001)
-#define CL_USED_2X2 UINT16_C(0x001B)
-#define CL_USED_3X3 UINT16_C(0x01FF)
-
 /** All 9 node bits. */
 #define CL_ALL_NODES UINT16_C(0x01FF)
+
+/** One datagram waiting in the send queue. */
+typedef struct
+{
+    uint32_t addr;
+    uint16_t port;
+    uint32_t len;
+    uint8_t  bytes[CL_TX_MAX_BYTES];
+} cl_tx_entry_t;
 
 /** One received datagram, copied by the callback. */
 typedef struct
@@ -160,11 +278,14 @@ typedef struct
 {
     bool           b_active;
     uint8_t        session_id;
+    uint8_t        rows; /**< Grid rows, 1 to 9. */
+    uint8_t        cols; /**< Grid columns, 1 to 9. */
     proto_policy_t policy;
-    uint16_t       required;    /**< Node IDs in the map, bit n - 1. */
-    uint16_t       frame_count; /**< 1 to 1023. */
-    uint8_t        node_map[PROTO_MAP_SLOTS];
-    uint32_t       crc32[PROTO_MAP_SLOTS];
+    uint16_t       required;              /**< Node IDs placed, bit n - 1. */
+    uint16_t       frame_count;           /**< 1 to 1023. */
+    proto_cell_t   cell[PROTO_NODE_MAX];  /**< Node ID n at cell[n - 1]
+                                               (step 4d, DS-15). */
+    uint32_t       crc32[PROTO_NODE_MAX]; /**< Node ID n at crc32[n - 1]. */
 } cl_session_t;
 
 /** One timed command being sent 3 times. */
@@ -196,6 +317,13 @@ typedef enum
     CL_EV_LINK_DOWN,
     CL_EV_REJOIN_SENT,
     CL_EV_SUPPRESS,
+    CL_EV_GAME_REFUSED,
+    CL_EV_GAME_MOLE,     /* DS-13: node, value up_ms, time = show time. */
+    CL_EV_GAME_TAP,      /* DS-13: node, value arrival minus tap time, us
+                          * (a 32-bit two's complement: above 2^31 means the
+                          * tap is stamped after it arrived). */
+    CL_EV_GAME_FEEDBACK, /* DS-13: node, value 1 hit or 0 miss. */
+    CL_EV_WALL_TURN,     /* D-17: value the quarter turns clockwise. */
     CL_EV_COUNT
 } cl_event_code_t;
 
@@ -213,6 +341,9 @@ typedef struct
 {
     uint32_t sent;            /**< Beacons sent. */
     uint32_t send_fail;       /**< Beacons whose udp_sendto failed. */
+    uint32_t tx_drop;         /**< Sends dropped: the send queue was full. */
+    uint32_t tx_fail;         /**< Queued sends lwIP refused. */
+    uint32_t tel_rx;          /**< TELEMETRY broadcasts heard (D-17). */
     uint32_t skipped;         /**< Beacon slots skipped after a stall. */
     uint16_t first_seq;       /**< seq of the first beacon in the window. */
     uint16_t last_seq;        /**< seq of the last beacon sent. */
@@ -248,6 +379,17 @@ static uint16_t            g_saved_frame       = 0u;
 static uint64_t            g_recover_until_us  = 0u;
 static uint64_t            g_playing_since_us  = 0u;
 
+/* Whole-wall rotation (D-17, video mode only): the detector, the layout of
+ * the session, the turn not yet re-laid out by the PC (STATUS wall_turn),
+ * and what to do once it is: resume at the saved frame, or return to
+ * PAUSED. */
+static wall_turn_t        g_turn;
+static wall_turn_layout_t g_turn_base;
+static bool               g_b_turn_base   = false;
+static uint8_t            g_wall_turn     = 0u;
+static bool               g_b_turn_resume = false;
+static bool               g_b_turn_pause  = false;
+
 /* Schedules (absolute, microseconds). */
 static uint64_t g_next_beacon_us = 0u;
 static uint64_t g_next_scan_us   = 0u;
@@ -258,6 +400,26 @@ static uint64_t g_next_log_us    = 0u;
 static uint16_t g_beacon_seq = 0u;
 static uint16_t g_cmd_seq    = 0u;
 static uint16_t g_status_seq = 0u;
+static uint16_t g_ack_seq    = 0u; /* ACK header seq: not acked itself. */
+
+/* Game (build step 7). The engine and the acked outbox are pure C. */
+static game_t       g_game;
+static ack_outbox_t g_outbox;
+static bool         g_b_game_mode = false; /* false video, true game. */
+
+/* Round phases (DS-08, build step 3). ARMED, COUNTDOWN and PLAYING run in
+ * COORDINATING GAME; IDLE and RESULTS in READY. */
+static proto_round_state_t g_round         = PROTO_ROUND_IDLE;
+static uint8_t             g_level         = (uint8_t)PROTO_LEVEL_EASY; /* 3. */
+static uint8_t             g_threshold     = 0u; /* 20 mg steps; 0 default. */
+static uint8_t             g_start_node    = 0u; /* Tile of the start sprite. */
+static uint64_t            g_start_show_us = 0u; /* Its show time. */
+static uint64_t            g_arm_deadline_us = 0u;
+static uint64_t            g_play_at_us      = 0u;
+static uint16_t            g_round_mask      = 0u; /* Tiles of the round. */
+static bool                g_b_tap_test      = false;
+static uint16_t            g_tap_seq[CL_MAX_NODES];
+static bool                g_b_tap_seen[CL_MAX_NODES];
 
 /* PC address, from the last valid datagram on CL_PORT_FROM_PC. */
 static bool     g_b_pc_known     = false;
@@ -272,32 +434,93 @@ static uint32_t   g_lateness_hist[CL_LATE_BINS];
 static uint32_t   g_cb_hist[CL_TIME_BINS];
 static uint32_t   g_dispatch_hist[CL_TIME_BINS];
 static bool       g_b_suppress_done = false;
+/** The send queue (see CL_TXQ_LEN): a ring, oldest at g_txq_head. */
+static cl_tx_entry_t g_txq[CL_TXQ_LEN];
+static uint32_t      g_txq_head  = 0u;
+static uint32_t      g_txq_count = 0u;
+
+/** The watchdog caused this boot (CL_STATS wd_boot: a freeze happened),
+ *  and the breadcrumb the frozen run left (CL_STATS wd_step). */
+static bool     g_b_watchdog_boot = false;
+static uint32_t g_watchdog_step   = 0u;
+/** The breadcrumb of the watchdog boot before (CL_STATS wd_prev): a second
+ *  freeze while rejoining no longer hides where the first one was. */
+static uint32_t g_watchdog_prev = 0u;
+#ifndef CL_HOST_TEST
+/** scratch[4] as watchdog_enable() left it (see cl_watchdog_feed), and
+ *  the current breadcrumb step (see cl_crumb). */
+static uint32_t g_watchdog_mark = 0u;
+static uint32_t g_crumb         = 0u;
+#endif
 
 static void cl_reset_state (uint32_t bcast_addr, uint64_t now);
-static void cl_pass (void);
-static void cl_beacon_routine (uint64_t now);
-static void cl_scan_heartbeats (uint64_t now);
-static void cl_scan_one (uint32_t index, uint64_t now);
-static void cl_send_due_copy (uint64_t now);
-static void cl_send_status (uint64_t now);
-static void cl_dispatch_one (uint64_t now);
-static void cl_dispatch_entry (cl_rx_entry_t const * p_entry);
-static void cl_from_tile (cl_rx_entry_t const *  p_entry,
-                          proto_header_t const * p_header);
-static void cl_on_register (cl_rx_entry_t const * p_entry);
-static void cl_on_tile_report (cl_rx_entry_t const *  p_entry,
-                               proto_header_t const * p_header);
-static void cl_on_asset_ready (cl_rx_entry_t const * p_entry);
-static void cl_from_pc (cl_rx_entry_t const *  p_entry,
-                        proto_header_t const * p_header);
-static void cl_session_apply (cl_rx_entry_t const * p_entry);
-static bool cl_session_valid (proto_session_config_t const * p_cfg);
-static void cl_pc_command (proto_type_t type);
-static void cl_cmd_start_at (void);
-static void cl_cmd_pause (void);
-static void cl_cmd_resume_at (void);
-static void cl_cmd_stop (void);
-static void cl_issue_resume (void);
+#ifndef CL_HOST_TEST
+static void cl_on_link_lost (uint64_t now);
+#endif
+static void     cl_pass (void);
+static void     cl_beacon_routine (uint64_t now);
+static void     cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
+                             uint16_t acked_seq, uint8_t session_id);
+static void     cl_on_tap (cl_rx_entry_t const *  p_entry,
+                           proto_header_t const * p_header);
+static void     cl_on_tile_ack (cl_rx_entry_t const * p_entry);
+static void     cl_on_game_control (cl_rx_entry_t const *  p_entry,
+                                    proto_header_t const * p_header);
+static void     cl_game_command (proto_game_control_t const * p_msg);
+static void     cl_round_arm (uint64_t now);
+static void     cl_round_countdown (uint64_t now);
+static void     cl_round_play (uint64_t now);
+static void     cl_round_abort (uint64_t now);
+static void     cl_round_to_tiles (uint8_t command, uint64_t now);
+static uint8_t  cl_centre_node (uint16_t mask);
+static uint64_t cl_round_next_due (void);
+static void     cl_send_countdown (uint64_t t_first);
+static void     cl_send_results (uint64_t t_first);
+static void     cl_results_end (uint64_t now);
+static uint8_t  cl_count7 (uint32_t count);
+static uint16_t cl_reaction11 (uint32_t reaction_ms);
+static void     cl_game_start (uint64_t now);
+static void     cl_game_end (uint64_t now);
+static void     cl_game_routine (uint64_t now);
+static void     cl_outbox_routine (uint64_t now);
+static void   cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
+                                uint64_t life_us);
+static void   cl_queue_mole (game_event_t const * p_event, uint64_t now);
+static void   cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now);
+static void   cl_game_sync_active (void);
+static bool   cl_stopped (void);
+static int8_t cl_status_score (void);
+static uint16_t cl_next_cmd_seq (void);
+static uint64_t cl_tile_picture (score_pic_t pic, int32_t value);
+static void     cl_clear_unplaced (uint64_t now);
+static void     cl_scan_heartbeats (uint64_t now);
+static void     cl_scan_one (uint32_t index, uint64_t now);
+static void     cl_send_due_copy (uint64_t now);
+static void     cl_send_status (uint64_t now);
+static void     cl_dispatch_one (uint64_t now);
+static void     cl_dispatch_entry (cl_rx_entry_t const * p_entry);
+static void     cl_from_tile (cl_rx_entry_t const *  p_entry,
+                              proto_header_t const * p_header);
+static void     cl_on_register (cl_rx_entry_t const * p_entry);
+static void     cl_on_tile_report (cl_rx_entry_t const *  p_entry,
+                                   proto_header_t const * p_header);
+static void     cl_on_asset_ready (cl_rx_entry_t const * p_entry);
+static void     cl_from_pc (cl_rx_entry_t const *  p_entry,
+                            proto_header_t const * p_header);
+static void     cl_session_apply (cl_rx_entry_t const * p_entry);
+static bool     cl_session_valid (proto_session_config_t const * p_cfg);
+static void     cl_pc_command (proto_type_t type);
+static void     cl_cmd_start_at (void);
+static void     cl_cmd_pause (void);
+static void     cl_cmd_resume_at (void);
+static void     cl_cmd_stop (void);
+static void     cl_issue_resume (void);
+static void     cl_save_frame (uint64_t now);
+static void     cl_on_telemetry (cl_rx_entry_t const * p_entry);
+static void     cl_turn_routine (uint64_t now);
+static void     cl_turn_after (void);
+static uint16_t cl_turn_known (void);
+static void     cl_turn_new_layout (proto_session_config_t const * p_cfg);
 static void cl_triple_send (proto_type_t type, uint16_t frame, uint32_t addr);
 static void cl_send_copy (cl_send_slot_t * p_slot, uint64_t now);
 static void cl_issue_timeline (cl_send_slot_t * p_slot);
@@ -309,7 +532,8 @@ static void cl_set_state (proto_coord_state_t state);
 static void cl_maybe_rejoin (uint8_t node_id);
 static bool cl_seq_newer (uint16_t seq, uint16_t last);
 static bool cl_tile_seq_ok (uint8_t node_id, uint16_t seq);
-static bool cl_slot_of (uint8_t node_id, uint32_t * p_slot);
+static bool cl_cell_of (uint8_t node_id, uint8_t * p_row, uint8_t * p_col);
+static bool cl_placed (uint8_t node_id);
 static uint16_t     cl_online_bits (void);
 static uint16_t     cl_node_bit (uint8_t node_id);
 static uint32_t     cl_state_code (void);
@@ -327,9 +551,27 @@ static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
                         uint16_t src_port, uint8_t const * p_buf, uint32_t len,
                         uint64_t t_rx);
 static uint64_t cl_now_us (void);
+static void     cl_crumb (uint32_t step);
+static bool cl_port_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                          uint32_t len);
+static void cl_tx_routine (void);
+#ifndef CL_HOST_TEST
+static void cl_crumb_send (bool b_in);
+#endif
 static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
                          uint32_t len);
 static bool cl_send_beacon_bytes (uint8_t * p_buf, uint64_t * p_t_p);
+
+static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
+                              uint8_t colour, uint8_t b_repeat, uint64_t t_show,
+                              uint16_t dur_ms, uint64_t mask);
+
+static void cl_queue_tile (uint8_t node_id, proto_type_t type, uint16_t seq,
+                           uint8_t const * p_buf, uint32_t len, uint64_t now,
+                           uint64_t deadline_us);
+
+static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
+                             uint8_t kind, uint64_t now, uint64_t deadline_us);
 
 /**
  * @brief  Count in one lateness bin.
@@ -360,6 +602,8 @@ static void cl_reset_state (uint32_t bcast_addr, uint64_t now)
     (void)memset(&g_session, 0, sizeof(g_session));  /* Returns its target. */
     (void)memset(g_slots, 0, sizeof(g_slots));       /* Returns g_slots. */
     (void)memset(&g_stats, 0, sizeof(g_stats));      /* Returns &g_stats. */
+    g_txq_head  = 0u;
+    g_txq_count = 0u;
     (void)memset(g_lateness_hist, 0, sizeof(g_lateness_hist)); /* Same. */
     (void)memset(g_cb_hist, 0, sizeof(g_cb_hist));             /* Same. */
     (void)memset(g_dispatch_hist, 0, sizeof(g_dispatch_hist)); /* Same. */
@@ -372,15 +616,36 @@ static void cl_reset_state (uint32_t bcast_addr, uint64_t now)
     g_sync              = 0u;
     g_b_resume_pending  = false;
     g_b_return_to_pause = false;
-    g_b_pc_known        = false;
-    g_b_pc_seq_known    = false;
-    g_b_suppress_done   = false;
-    g_bcast_addr        = bcast_addr;
-    g_next_beacon_us    = now;
-    g_next_scan_us      = now + CL_SCAN_PERIOD_US;
-    g_next_status_us    = now + CL_STATUS_PERIOD_US;
-    g_next_log_us       = now + CL_LOG_PERIOD_US;
-    g_state             = PROTO_COORD_WAITING_FOR_SESSION;
+    g_b_turn_base       = false;
+    g_wall_turn         = 0u;
+    g_b_turn_resume     = false;
+    g_b_turn_pause      = false;
+    wall_turn_init(&g_turn);
+    g_b_pc_known      = false;
+    g_b_pc_seq_known  = false;
+    g_b_suppress_done = false;
+    g_bcast_addr      = bcast_addr;
+    /* Video mode, no round (the game state of steps 1 to 4). */
+    g_b_game_mode     = false;
+    g_round           = PROTO_ROUND_IDLE;
+    g_level           = (uint8_t)PROTO_LEVEL_EASY; /* 3 levels fit. */
+    g_threshold       = 0u;
+    g_start_node      = 0u;
+    g_start_show_us   = 0u;
+    g_arm_deadline_us = 0u;
+    g_play_at_us      = 0u;
+    g_round_mask      = 0u;
+    g_b_tap_test      = false;
+    /* No round yet; the RNG is seeded from the clock. */
+    game_rules_init(&g_game, (uint32_t)now);
+    ack_outbox_init(&g_outbox);
+    (void)memset(g_b_tap_seen, 0, sizeof(g_b_tap_seen)); /* Returns it. */
+    (void)memset(g_tap_seq, 0, sizeof(g_tap_seq));       /* Returns it. */
+    g_next_beacon_us = now;
+    g_next_scan_us   = now + CL_SCAN_PERIOD_US;
+    g_next_status_us = now + CL_STATUS_PERIOD_US;
+    g_next_log_us    = now + CL_LOG_PERIOD_US;
+    g_state          = PROTO_COORD_WAITING_FOR_SESSION;
 }
 
 /**
@@ -391,32 +656,60 @@ static void cl_pass (void)
 {
     uint64_t const now     = cl_now_us();
     uint64_t const cmd_due = cl_earliest_due();
+    bool const b_room = ((now + CL_DISPATCH_GUARD_US) <= g_next_beacon_us) &&
+                        ((now + CL_DISPATCH_GUARD_US) <= cmd_due);
 
     if (now >= g_next_beacon_us)
     {
+        cl_crumb(CL_STEP_BEACON);
         cl_beacon_routine(now);
-    }
-    else if (now >= g_next_scan_us)
-    {
-        cl_scan_heartbeats(now);
     }
     else if (now >= cmd_due)
     {
+        /* Before the send queue: a copy is due at its own time. */
+        cl_crumb(CL_STEP_CMD);
         cl_send_due_copy(now);
+    }
+    else if (0u != g_txq_count)
+    {
+        /* The port (4210 to 4213, or the PC's) in bits 8 to 23. */
+        cl_crumb(CL_STEP_TX | ((uint32_t)g_txq[g_txq_head].port << 8u));
+        cl_tx_routine();
+    }
+    else if (now >= g_next_scan_us)
+    {
+        cl_crumb(CL_STEP_SCAN);
+        cl_scan_heartbeats(now);
+    }
+    else if ((b_room) && (ack_outbox_next_due(&g_outbox) <= now))
+    {
+        cl_crumb(CL_STEP_OUTBOX);
+        cl_outbox_routine(now);
     }
     else if (now >= g_next_status_us)
     {
+        cl_crumb(CL_STEP_STATUS);
         cl_send_status(now);
     }
-    else if ((0u != g_ring_count) &&
-             ((now + CL_DISPATCH_GUARD_US) <= g_next_beacon_us) &&
-             ((now + CL_DISPATCH_GUARD_US) <= cmd_due))
+    else if ((b_room) && (cl_round_next_due() <= now))
     {
+        cl_crumb(CL_STEP_GAME);
+        cl_game_routine(now);
+    }
+    else if ((0u != g_ring_count) && (b_room))
+    {
+        cl_rx_entry_t const * const p_next = &g_ring[g_ring_head];
+
+        /* Port 4210 to 4213 less 4210 fits 8 bits; byte 0 is the header's
+         * first byte (it holds the type). */
+        cl_crumb(CL_STEP_DISPATCH | ((uint32_t)p_next->bytes[0] << 8u) |
+                 ((uint32_t)(p_next->listen_port - CL_PORT_TILE_RX) << 16u));
         cl_dispatch_one(now);
     }
     else if (((now + CL_LOG_GUARD_US) <= g_next_beacon_us) &&
              ((now + CL_LOG_GUARD_US) <= cmd_due))
     {
+        cl_crumb(CL_STEP_LOG);
         cl_log_routine(now);
     }
     else
@@ -513,12 +806,13 @@ static void cl_scan_heartbeats (uint64_t now)
         cl_set_state(PROTO_COORD_FAULT);
     }
 
+    cl_turn_routine(now);
+
 #ifndef CL_HOST_TEST
     if (CYW43_LINK_UP != cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA))
     {
-        /* Router lost: FAULT until reset (W6 statechart 2). */
         cl_log_event(CL_EV_LINK_DOWN, 0u, 0u, now);
-        cl_set_state(PROTO_COORD_FAULT);
+        cl_on_link_lost(now);
     }
 #endif
 
@@ -538,10 +832,13 @@ static void cl_scan_one (uint32_t index, uint64_t now)
         ((now - p_node->last_heard) > CL_HEARTBEAT_TIMEOUT_US))
     {
         /* index < 9, so index + 1 is a Node ID that fits uint8_t. */
+        /* index < 9. */
+        /* index < 9. */
         uint8_t const node_id = (uint8_t)(index + 1u);
 
         p_node->b_online     = false;
         p_node->loss_time_us = now;
+        cl_game_sync_active();
         cl_log_event(CL_EV_LOSS, node_id,
                      /* The silence is below 2^32 us after 2.6 s. */
                      (uint32_t)(now - p_node->last_heard), now);
@@ -668,7 +965,8 @@ static void cl_send_copy (cl_send_slot_t * p_slot, uint64_t now)
         len = proto_encode_stop(&msg, buf, sizeof(buf));
     }
 
-    if (!cl_udp_send(p_slot->addr, CL_PORT_TILE_RX, buf, len))
+    /* Sent at once, not queued: the times in it were read just now. */
+    if (!cl_port_send(p_slot->addr, CL_PORT_TILE_RX, buf, len))
     {
         g_stats.cmd_fail++;
     }
@@ -733,12 +1031,22 @@ static void cl_send_status (uint64_t now)
     {
         uint8_t              buf[PROTO_STATUS_BYTES];
         proto_status_t const msg = {
-            .header    = {.type       = PROTO_TYPE_STATUS,
-                          .session_id = g_session.session_id,
-                          .seq        = g_status_seq},
-            .readiness = g_readiness,
-            .online    = cl_online_bits(),
-            .state     = (uint8_t)g_state, /* 12 states fit uint8_t. */
+            .header      = {.type       = PROTO_TYPE_STATUS,
+                            .session_id = g_session.session_id,
+                            .seq        = g_status_seq},
+            .readiness   = g_readiness,
+            .online      = cl_online_bits(),
+            .state       = (uint8_t)g_state, /* 13 states fit uint8_t. */
+            .score       = cl_status_score(),
+            .round_state = (uint8_t)g_round, /* 5 states fit uint8_t. */
+            .level       = g_level,
+            .missed      = cl_count7(g_game.missed),
+            .wrong       = cl_count7(g_game.wrong),
+            .shown       = cl_count7(g_game.shown),
+            /* At most 30 s: fits uint8_t. */
+            .time_left_s = (uint8_t)game_rules_time_left_s(&g_game, now),
+            .reaction_ms = cl_reaction11(game_rules_reaction_ms(&g_game)),
+            .wall_turn   = g_wall_turn,
         };
         uint32_t const len = proto_encode_status(&msg, buf, sizeof(buf));
 
@@ -747,8 +1055,7 @@ static void cl_send_status (uint64_t now)
         g_status_seq++;
     }
 
-    g_next_status_us += CL_STATUS_PERIOD_US;
-    (void)now; /* The schedule is absolute. */
+    g_next_status_us += CL_STATUS_PERIOD_US; /* An absolute schedule. */
 }
 
 /**
@@ -795,6 +1102,10 @@ static void cl_dispatch_entry (cl_rx_entry_t const * p_entry)
     {
         cl_from_pc(p_entry, &header);
     }
+    else if (CL_PORT_TELEMETRY == p_entry->listen_port)
+    {
+        cl_on_telemetry(p_entry);
+    }
     else
     {
         g_stats.rx_bad++;
@@ -814,6 +1125,15 @@ static void cl_from_tile (cl_rx_entry_t const *  p_entry,
         /* REGISTER restarts the sender's seq baseline and needs no
          * session: a tile registers before it knows the session. */
         cl_on_register(p_entry);
+    }
+    else if (PROTO_TYPE_TAP == cl_type_of(p_header))
+    {
+        /* TAP is ACKed and relayed whatever the session (tap-to-place). */
+        cl_on_tap(p_entry, p_header);
+    }
+    else if (PROTO_TYPE_ACK == cl_type_of(p_header))
+    {
+        cl_on_tile_ack(p_entry);
     }
     else if (p_header->session_id != g_session.session_id)
     {
@@ -840,7 +1160,6 @@ static void cl_from_tile (cl_rx_entry_t const *  p_entry,
 static void cl_on_register (cl_rx_entry_t const * p_entry)
 {
     proto_register_t msg;
-    uint32_t         slot = 0u;
 
     if (!proto_decode_register(p_entry->bytes, p_entry->len, &msg))
     {
@@ -862,10 +1181,16 @@ static void cl_on_register (cl_rx_entry_t const * p_entry)
         p_node->last_seq    = msg.header.seq;
         g_sync &= (uint16_t)~bit; /* 9-bit mask. */
 
+        /* A REGISTER restarts the baseline of every counter of this tile
+         * (layout_table.md section 10 item 13), the TAP counter too: a tile
+         * that restarted counts its TAPs from 0 again, and those would be
+         * dropped as stale (bench 11 Nov 2026, host test C23). */
+        g_b_tap_seen[msg.node_id - 1u] = false;
+
         if ((g_session.b_active) &&
             (msg.cached_session_id == g_session.session_id) &&
-            (cl_slot_of(msg.node_id, &slot)) &&
-            (msg.cached_crc32 == g_session.crc32[slot]))
+            (cl_placed(msg.node_id)) &&
+            (msg.cached_crc32 == g_session.crc32[msg.node_id - 1u]))
         {
             g_readiness |= bit;
         }
@@ -887,7 +1212,6 @@ static void cl_on_register (cl_rx_entry_t const * p_entry)
 static void cl_on_asset_ready (cl_rx_entry_t const * p_entry)
 {
     proto_asset_ready_t msg;
-    uint32_t            slot = 0u;
 
     if (!proto_decode_asset_ready(p_entry->bytes, p_entry->len, &msg))
     {
@@ -897,8 +1221,8 @@ static void cl_on_asset_ready (cl_rx_entry_t const * p_entry)
     {
         g_stats.stale++;
     }
-    else if ((cl_slot_of(msg.node_id, &slot)) &&
-             (msg.crc32 == g_session.crc32[slot]))
+    else if ((cl_placed(msg.node_id)) &&
+             (msg.crc32 == g_session.crc32[msg.node_id - 1u]))
     {
         g_readiness |= cl_node_bit(msg.node_id);
         cl_node_seen(msg.node_id, p_entry->src_addr, p_entry->t_rx_us);
@@ -996,6 +1320,12 @@ static void cl_from_pc (cl_rx_entry_t const *  p_entry,
     {
         cl_session_apply(p_entry);
     }
+    else if (PROTO_TYPE_GAME_CONTROL == cl_type_of(p_header))
+    {
+        /* Mode and round commands need no session, so a website can switch
+         * mode before SESSION_CONFIG. */
+        cl_on_game_control(p_entry, p_header);
+    }
     else if ((!g_session.b_active) ||
              (p_header->session_id != g_session.session_id) ||
              ((g_b_pc_seq_known) && (!cl_seq_newer(p_header->seq, g_pc_seq))))
@@ -1014,17 +1344,26 @@ static void cl_from_pc (cl_rx_entry_t const *  p_entry,
  * @brief  SESSION_CONFIG: VALIDATING SESSION. A new session_id is accepted
  *         only while stopped (W6 statechart 2: "New session or layout while
  *         stopped"); it clears readiness and restarts the PC's seq baseline.
- *         The same session_id again is a repeat and is ignored.
+ *         The same session_id again is a repeat and is ignored. A new
+ *         session also ends the tap test (bench 12 Nov 2026: a tap test
+ *         left on by an interrupted PC run flashed taps during the next
+ *         run's upload).
+ *         "Stopped" is an explicit allow-list, WAITING FOR SESSION through
+ *         READY, so a state added later (as COORDINATING GAME was) refuses
+ *         SESSION_CONFIG until it is listed here (decision of 6 Nov 2026).
  * @param  p_entry  The datagram.
  */
 static void cl_session_apply (cl_rx_entry_t const * p_entry)
 {
     proto_session_config_t cfg;
 
-    bool const b_stopped = (PROTO_COORD_COORDINATING_PLAYBACK != g_state) &&
-                           (PROTO_COORD_PAUSED != g_state) &&
-                           (PROTO_COORD_RECOVERING != g_state) &&
-                           (PROTO_COORD_FAULT != g_state);
+    bool const b_stopped =
+        (PROTO_COORD_WAITING_FOR_SESSION == g_state) ||
+        (PROTO_COORD_VALIDATING_SESSION == g_state) ||
+        (PROTO_COORD_WAITING_FOR_NODES == g_state) ||
+        (PROTO_COORD_WAITING_FOR_TILE_READINESS == g_state) ||
+        (PROTO_COORD_SYNCHRONISING == g_state) ||
+        (PROTO_COORD_READY == g_state);
 
     if (!proto_decode_session_config(p_entry->bytes, p_entry->len, &cfg))
     {
@@ -1048,13 +1387,20 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
         /* The decoder checked policy < 2. */
         g_session.policy      = (proto_policy_t)cfg.policy;
         g_session.frame_count = cfg.frame_count;
+        g_session.rows        = cfg.rows;
+        g_session.cols        = cfg.cols;
         g_session.required    = 0u;
 
-        for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+        for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
         {
-            g_session.node_map[slot] = cfg.node_map[slot];
-            g_session.crc32[slot]    = cfg.crc32[slot];
-            g_session.required |= cl_node_bit(cfg.node_map[slot]);
+            g_session.cell[node]  = cfg.cell[node];
+            g_session.crc32[node] = cfg.crc32[node];
+
+            if (0u != cfg.cell[node].b_placed)
+            {
+                /* node < 9: Node ID node + 1 fits uint8_t. */
+                g_session.required |= cl_node_bit((uint8_t)(node + 1u));
+            }
         }
 
         g_readiness         = 0u;
@@ -1063,42 +1409,37 @@ static void cl_session_apply (cl_rx_entry_t const * p_entry)
         g_b_return_to_pause = false;
         g_b_pc_seq_known    = true;
         g_pc_seq            = cfg.header.seq;
+        cl_turn_new_layout(&cfg);
+
+        if (g_b_tap_test)
+        {
+            g_b_tap_test = false;
+            cl_round_to_tiles(PROTO_GAME_TAP_TEST_OFF, p_entry->t_rx_us);
+        }
+
+        cl_clear_unplaced(p_entry->t_rx_us); /* A tile switched off. */
         cl_evaluate();
     }
 }
 
 /**
- * @brief  Check a SESSION_CONFIG beyond the codec's ranges: session_id 0 is
- *         reserved for "no session", positions outside the layout are
- *         blank, at least one tile is required and no Node ID appears twice.
- *         Blank positions inside the layout are allowed (OD-21).
+ * @brief  Check a SESSION_CONFIG beyond the codec's rules: session_id 0 is
+ *         reserved for "no session" and at least one tile is placed. The
+ *         codec already refused a cell outside the grid and two tiles in
+ *         one cell (step 4d, DS-15); empty cells are allowed (OD-21).
  * @param  p_cfg  The decoded message.
  * @return true when valid.
  */
 static bool cl_session_valid (proto_session_config_t const * p_cfg)
 {
-    static uint16_t const used_by_layout[PROTO_LAYOUT_COUNT] = {
-        CL_USED_1X1, CL_USED_2X2, CL_USED_3X3};
+    bool b_any = false;
 
-    uint16_t const used = used_by_layout[p_cfg->layout];
-    uint16_t       seen = 0u;
-    bool           b_ok = (0u != p_cfg->header.session_id);
-
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+    for (uint32_t node = 0u; node < PROTO_NODE_MAX; node++)
     {
-        uint8_t const  node_id = p_cfg->node_map[slot];
-        uint16_t const bit     = cl_node_bit(node_id);
-        bool const     b_in    = (0u != (used & (UINT16_C(1) << slot)));
-
-        if ((0u != node_id) && ((!b_in) || (0u != (seen & bit))))
-        {
-            b_ok = false;
-        }
-
-        seen |= bit;
+        b_any = b_any || (0u != p_cfg->cell[node].b_placed);
     }
 
-    return (b_ok) && (0u != seen);
+    return (0u != p_cfg->header.session_id) && (b_any);
 }
 
 /**
@@ -1107,6 +1448,13 @@ static bool cl_session_valid (proto_session_config_t const * p_cfg)
  */
 static void cl_pc_command (proto_type_t type)
 {
+    if ((PROTO_TYPE_START_AT == type) || (PROTO_TYPE_STOP == type))
+    {
+        /* The user's Start or Stop replaces a resume after a wall turn. */
+        g_b_turn_resume = false;
+        g_b_turn_pause  = false;
+    }
+
     if (PROTO_TYPE_START_AT == type)
     {
         cl_cmd_start_at();
@@ -1135,13 +1483,15 @@ static void cl_pc_command (proto_type_t type)
 }
 
 /**
- * @brief  Start: accepted only in READY, which means every required tile
- *         sent a matching ASSET_READY and SYNC_READY (T-B2-04). START_AT
- *         goes to every tile 3 times; t_start is fixed at copy 1.
+ * @brief  Start: accepted only in READY in video mode, which means every
+ *         required tile sent a matching ASSET_READY and SYNC_READY
+ *         (T-B2-04); in game mode READY needs no asset (A14), so video does
+ *         not start. START_AT goes to every tile 3 times; t_start is fixed
+ *         at copy 1.
  */
 static void cl_cmd_start_at (void)
 {
-    if (PROTO_COORD_READY == g_state)
+    if ((PROTO_COORD_READY == g_state) && (!g_b_game_mode))
     {
         cl_triple_send(PROTO_TYPE_START_AT, 0u, g_bcast_addr);
         cl_set_state(PROTO_COORD_COORDINATING_PLAYBACK);
@@ -1160,10 +1510,7 @@ static void cl_cmd_pause (void)
 {
     if (PROTO_COORD_COORDINATING_PLAYBACK == g_state)
     {
-        uint64_t const tick = cl_ticks_since(g_origin_us, cl_now_us());
-
-        /* frame_count is 1 to 1023, so the remainder fits uint16_t. */
-        g_saved_frame = (uint16_t)(tick % (uint64_t)g_session.frame_count);
+        cl_save_frame(cl_now_us());
         cl_triple_send(PROTO_TYPE_PAUSE, 0u, g_bcast_addr);
     }
 }
@@ -1203,6 +1550,187 @@ static void cl_cmd_stop (void)
 
         cl_set_state(PROTO_COORD_READY);
         cl_evaluate();
+    }
+}
+
+/**
+ * @brief  Save the frame shown now, which a later RESUME_AT carries.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_save_frame (uint64_t now)
+{
+    uint64_t const tick = cl_ticks_since(g_origin_us, now);
+
+    /* frame_count is 1 to 1023, so the remainder fits uint16_t. */
+    g_saved_frame = (uint16_t)(tick % (uint64_t)g_session.frame_count);
+}
+
+/**
+ * @brief  A tile's TELEMETRY broadcast (D-17): only its orientation is read,
+ *         for the wall-turn detector; the PC still ACKs it.
+ * @param  p_entry  The datagram.
+ */
+static void cl_on_telemetry (cl_rx_entry_t const * p_entry)
+{
+    proto_telemetry_t msg;
+
+    if (proto_decode_telemetry(p_entry->bytes, p_entry->len, &msg))
+    {
+        g_stats.tel_rx++;
+        wall_turn_report(&g_turn, msg.node_id, msg.orientation,
+                         p_entry->t_rx_us);
+    }
+    else
+    {
+        g_stats.rx_bad++;
+    }
+}
+
+/**
+ * @brief  Close a due wall-turn window (D-17, every scan). In video mode a
+ *         turn of the whole wall adds to STATUS wall_turn; playing, the
+ *         frame is saved and the tiles stop until the PC sends the turned
+ *         layout; paused, the tiles stop and return to PAUSED after it.
+ *         Turned back before that, the session's layout fits again and the
+ *         wall goes on at once. Turns are ignored in game mode.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_turn_routine (uint64_t now)
+{
+    /* Bits 0 to 8, so the narrowing keeps them. */
+    uint16_t const active = (uint16_t)(g_session.required & cl_online_bits());
+    uint8_t const  turn   = wall_turn_poll(&g_turn, active, now);
+
+    if ((0u != turn) && (g_session.b_active) && (!g_b_game_mode))
+    {
+        cl_log_event(CL_EV_WALL_TURN, 0u, turn, now);
+        /* Both are 0 to 3, so the remainder fits uint8_t. */
+        g_wall_turn = (uint8_t)((g_wall_turn + turn) % WALL_TURN_QUARTERS);
+
+        if (PROTO_COORD_COORDINATING_PLAYBACK == g_state)
+        {
+            cl_save_frame(now);
+            cl_cmd_stop();
+            g_b_turn_resume = true;
+        }
+        else if (PROTO_COORD_PAUSED == g_state)
+        {
+            cl_cmd_stop(); /* The paused frame stays saved. */
+            g_b_turn_pause = true;
+        }
+        else
+        {
+            /* Stopped: only the layout changes. */
+        }
+
+        if (0u == g_wall_turn)
+        {
+            cl_turn_after();
+            cl_evaluate();
+        }
+    }
+}
+
+/**
+ * @brief  Tiles whose reference orientation the wall-turn detector holds
+ *         (CL_STATS wt_known).
+ * @return Bit n - 1 for Node ID n.
+ */
+static uint16_t cl_turn_known (void)
+{
+    uint16_t known = 0u;
+
+    for (uint32_t index = 0u; index < PROTO_NODE_MAX; index++)
+    {
+        if (g_turn.b_known[index])
+        {
+            known |= (uint16_t)(UINT16_C(1) << index); /* Bits 0 to 8 fit. */
+        }
+    }
+
+    return known;
+}
+
+/**
+ * @brief  The layout fits the wall again: hand a pending resume or return
+ *         to PAUSED to the automatic path (cl_evaluate).
+ */
+static void cl_turn_after (void)
+{
+    g_b_resume_pending  = g_b_turn_resume;
+    g_b_return_to_pause = g_b_turn_pause;
+    g_b_turn_resume     = false;
+    g_b_turn_pause      = false;
+}
+
+/**
+ * @brief  A new session's layout (D-17). With a turn pending, the turn j
+ *         that maps the previous layout onto it was re-laid out by the PC
+ *         and leaves wall_turn. With none pending, only the same layout
+ *         keeps the references. Any other layout is new: every tile's
+ *         reference is taken again. Once wall_turn is 0, a pending resume
+ *         goes on.
+ * @param  p_cfg  The SESSION_CONFIG being applied.
+ */
+static void cl_turn_new_layout (proto_session_config_t const * p_cfg)
+{
+    wall_turn_layout_t layout;
+    uint8_t            quarters = 0u;
+
+    layout.rows = p_cfg->rows;
+    layout.cols = p_cfg->cols;
+    (void)memcpy(layout.cell, p_cfg->cell, sizeof(layout.cell)); /* Same. */
+
+    bool b_same   = false;
+    bool b_turned = false;
+
+    if ((g_b_turn_base) && (0u != g_wall_turn))
+    {
+        b_turned =
+            wall_turn_match(&g_turn_base, &layout, g_wall_turn, &quarters);
+    }
+    else if (g_b_turn_base)
+    {
+        /* No turn pending: only the same layout keeps the references; a
+         * turned one is the user's new layout, not a re-layout (bench 24
+         * Nov 2026). */
+        b_same = (wall_turn_match(&g_turn_base, &layout, 0u, &quarters)) &&
+                 (0u == quarters);
+    }
+    else
+    {
+        /* The first layout since boot. */
+    }
+
+    if (b_turned)
+    {
+        /* Both are 0 to 3: adding 4 keeps it positive; fits uint8_t. */
+        g_wall_turn = (uint8_t)((g_wall_turn + WALL_TURN_QUARTERS - quarters) %
+                                WALL_TURN_QUARTERS);
+    }
+    else if (!b_same)
+    {
+        g_wall_turn     = 0u;
+        g_b_turn_resume = false;
+        g_b_turn_pause  = false;
+        wall_turn_init(&g_turn);
+    }
+    else
+    {
+        /* The same layout again (a republish): the references stay. */
+    }
+
+    g_turn_base   = layout;
+    g_b_turn_base = true;
+
+    if (g_saved_frame >= p_cfg->frame_count)
+    {
+        g_saved_frame = 0u;
+    }
+
+    if (0u == g_wall_turn)
+    {
+        cl_turn_after();
     }
 }
 
@@ -1288,6 +1816,7 @@ static void cl_node_seen (uint8_t node_id, uint32_t addr, uint64_t t_rx)
 static void cl_node_back (uint8_t node_id)
 {
     cl_log_event(CL_EV_BACK, node_id, 0u, cl_now_us());
+    cl_game_sync_active();
 
     if ((PROTO_COORD_RECOVERING == g_state) &&
         (g_session.required == (cl_online_bits() & g_session.required)))
@@ -1321,10 +1850,10 @@ static void cl_maybe_rejoin (uint8_t node_id)
 
 /**
  * @brief  Move along the automatic part of W6 statechart 2 (solid arrows):
- *         required tiles online, then every ASSET_READY, then every
- *         SYNC_READY, then READY; a pending Resume or a return from
- *         recovery goes on to RESUME_AT or PAUSED. Only the pre-playback
- *         states move here.
+ *         required tiles online, then every ASSET_READY (video mode only:
+ *         a game needs no video, A14), then every SYNC_READY, then READY;
+ *         a pending Resume or a return from recovery goes on to RESUME_AT
+ *         or PAUSED. Only the pre-playback states move here.
  */
 static void cl_evaluate (void)
 {
@@ -1345,8 +1874,9 @@ static void cl_evaluate (void)
     {
         cl_set_state(PROTO_COORD_WAITING_FOR_NODES);
     }
-    else if (required != (g_readiness & required))
+    else if ((!g_b_game_mode) && (required != (g_readiness & required)))
     {
+        /* Video needs every tile's asset; game mode does not (A14). */
         cl_set_state(PROTO_COORD_WAITING_FOR_TILE_READINESS);
     }
     else if (required != (g_sync & required))
@@ -1417,26 +1947,35 @@ static bool cl_tile_seq_ok (uint8_t node_id, uint16_t seq)
 }
 
 /**
- * @brief  Map position of a Node ID in the active session.
- * @param  node_id  1 to 9.
- * @param  p_slot   Receives the position when found.
- * @return true when the Node ID is in the map.
+ * @brief  Whether a Node ID is placed in the active session.
+ * @param  node_id  Any value; only 1 to 9 can be placed.
+ * @return true when placed.
  */
-static bool cl_slot_of (uint8_t node_id, uint32_t * p_slot)
+static bool cl_placed (uint8_t node_id)
 {
-    bool b_found = false;
+    return (g_session.b_active) && (node_id >= 1u) &&
+           (node_id <= PROTO_NODE_MAX) &&
+           (0u != g_session.cell[node_id - 1u].b_placed);
+}
 
-    for (uint32_t slot = 0u; slot < PROTO_MAP_SLOTS; slot++)
+/**
+ * @brief  The cell of a Node ID in the active session (step 4d).
+ * @param  node_id  1 to 9.
+ * @param  p_row    Receives the row when placed.
+ * @param  p_col    Receives the column when placed.
+ * @return true when the Node ID is placed.
+ */
+static bool cl_cell_of (uint8_t node_id, uint8_t * p_row, uint8_t * p_col)
+{
+    bool const b_placed = cl_placed(node_id);
+
+    if (b_placed)
     {
-        if ((!b_found) && (g_session.b_active) &&
-            (node_id == g_session.node_map[slot]))
-        {
-            *p_slot = slot;
-            b_found = true;
-        }
+        *p_row = g_session.cell[node_id - 1u].row;
+        *p_col = g_session.cell[node_id - 1u].col;
     }
 
-    return b_found;
+    return b_placed;
 }
 
 /**
@@ -1594,7 +2133,12 @@ static void cl_log_routine (uint64_t now)
                                                       "TILE_NACK",
                                                       "LINK_DOWN",
                                                       "REJOIN_SENT",
-                                                      "SUPPRESS"};
+                                                      "SUPPRESS",
+                                                      "GAME_REFUSED",
+                                                      "GAME_MOLE",
+                                                      "GAME_TAP",
+                                                      "GAME_FEEDBACK",
+                                                      "WALL_TURN"};
 
     if (0u != g_event_count)
     {
@@ -1635,12 +2179,16 @@ static void cl_print_stats (void)
            " cmd_fail=%" PRIu32 " events_lost=%" PRIu32 " exc_max=%" PRIu32
            " cb_max_us=%" PRIu32 " dispatch_max_us=%" PRIu32
            " online=0x%03" PRIx16 " ready=0x%03" PRIx16 " sync=0x%03" PRIx16
-           "\n",
+           " wd_boot=%u wd_step=0x%08" PRIx32 " wd_prev=0x%08" PRIx32
+           " tx_drop=%" PRIu32 " tx_fail=%" PRIu32 " tel_rx=%" PRIu32
+           " wt_known=0x%03" PRIx16 " wall_turn=%" PRIu8 "\n",
            cl_state_code(), g_stats.sent, g_stats.first_seq, g_stats.last_seq,
            g_stats.send_fail, g_stats.skipped, g_stats.rx_dropped,
            g_stats.rx_bad, g_stats.stale, g_stats.cmd_fail, g_stats.events_lost,
            g_stats.exc_max, g_stats.cb_max_us, g_stats.dispatch_max_us,
-           cl_online_bits(), g_readiness, g_sync);
+           cl_online_bits(), g_readiness, g_sync, g_b_watchdog_boot ? 1u : 0u,
+           g_watchdog_step, g_watchdog_prev, g_stats.tx_drop, g_stats.tx_fail,
+           g_stats.tel_rx, cl_turn_known(), g_wall_turn);
 
     printf("LATE_HIST");
 
@@ -1688,37 +2236,1053 @@ static void cl_hist_add (uint32_t * p_hist, uint32_t bins, uint64_t value_us,
 
 /**
  * @brief  Copy one datagram into the ring (callback context: no decode, no
- *         print). A full ring drops the datagram and counts it.
+ *         print). A full ring drops the datagram and counts it; so does a
+ *         datagram longer than CL_RX_MAX_BYTES, which no accepted message
+ *         is (counted as rx_bad), so no decoder ever reads past the copy.
  * @param  listen_port  Port it arrived on.
  * @param  src_addr     Sender address.
  * @param  src_port     Sender port.
- * @param  p_buf        Bytes.
- * @param  len          Length; above CL_RX_MAX_BYTES it is kept as is so
- *                      the decoder rejects the wrong length.
+ * @param  p_buf        Bytes; at least min(len, CL_RX_MAX_BYTES) of them.
+ * @param  len          The datagram's full length.
  * @param  t_rx         Receive time.
  */
 static void cl_enqueue (uint16_t listen_port, uint32_t src_addr,
                         uint16_t src_port, uint8_t const * p_buf, uint32_t len,
                         uint64_t t_rx)
 {
-    if (g_ring_count < CL_RING_LEN)
+    if (len > CL_RX_MAX_BYTES)
+    {
+        g_stats.rx_bad++;
+    }
+    else if (g_ring_count < CL_RING_LEN)
     {
         cl_rx_entry_t * const p_entry =
             &g_ring[(g_ring_head + g_ring_count) % CL_RING_LEN];
-        uint32_t const copy = (len < CL_RX_MAX_BYTES) ? len : CL_RX_MAX_BYTES;
 
         p_entry->t_rx_us     = t_rx;
         p_entry->src_addr    = src_addr;
         p_entry->src_port    = src_port;
         p_entry->listen_port = listen_port;
         p_entry->len         = len;
-        (void)memcpy(p_entry->bytes, p_buf, copy); /* Returns bytes. */
+        (void)memcpy(p_entry->bytes, p_buf, len); /* Returns bytes. */
         g_ring_count++;
     }
     else
     {
         g_stats.rx_dropped++;
     }
+}
+
+/**
+ * @brief  ACK of a message: header plus node_id and acked_seq, from the ACK
+ *         counter (an ACK is not itself acked, so it has its own seq).
+ * @param  addr        Destination address.
+ * @param  port        Destination port.
+ * @param  node_id     0 for the PC, else the tile.
+ * @param  acked_seq   Header seq of the message acknowledged.
+ * @param  session_id  Session on the header.
+ */
+static void cl_send_ack (uint32_t addr, uint16_t port, uint8_t node_id,
+                         uint16_t acked_seq, uint8_t session_id)
+{
+    uint8_t           buf[PROTO_ACK_BYTES];
+    proto_ack_t const msg = {
+        .header    = {.type       = PROTO_TYPE_ACK,
+                      .session_id = session_id,
+                      .seq        = g_ack_seq},
+        .node_id   = node_id,
+        .acked_seq = acked_seq,
+    };
+    uint32_t const len = proto_encode_ack(&msg, buf, sizeof(buf));
+
+    /* A lost ACK is recovered by the sender's resend. */
+    (void)cl_udp_send(addr, port, buf, len);
+    g_ack_seq++;
+}
+
+/**
+ * @brief  A TAP from a tile: ACKed every time (a repeat too, so the tile
+ *         stops resending), relayed once to the PC on the STATUS path, and
+ *         offered to the game while a round runs.
+ * @param  p_entry   The datagram.
+ * @param  p_header  Its decoded header.
+ */
+static void cl_on_tap (cl_rx_entry_t const *  p_entry,
+                       proto_header_t const * p_header)
+{
+    proto_tap_t msg;
+
+    if (!proto_decode_tap(p_entry->bytes, p_entry->len, &msg))
+    {
+        g_stats.rx_bad++;
+    }
+    else
+    {
+        uint32_t const index = (uint32_t)msg.node_id - 1u; /* 1 to 9. */
+        bool const     b_new = (!g_b_tap_seen[index]) ||
+                           (cl_seq_newer(p_header->seq, g_tap_seq[index]));
+
+        cl_send_ack(p_entry->src_addr, CL_PORT_TILE_RX, msg.node_id,
+                    p_header->seq, g_session.session_id);
+
+        if (b_new)
+        {
+            g_b_tap_seen[index] = true;
+            g_tap_seq[index]    = p_header->seq;
+
+            if (g_b_pc_known)
+            {
+                /* Relayed unchanged (layout_table.md section 11, port 4213). */
+                (void)cl_udp_send(g_pc_addr, g_pc_port, p_entry->bytes,
+                                  p_entry->len);
+            }
+
+            if ((PROTO_ROUND_ARMED == g_round) &&
+                (msg.node_id == g_start_node) &&
+                (msg.t_tap >= (g_start_show_us + CL_START_MIN_US)))
+            {
+                /* The child tapped the start sprite (DS-08). */
+                cl_queue_feedback(msg.node_id, (uint8_t)PROTO_FEEDBACK_HIT,
+                                  p_entry->t_rx_us);
+                cl_round_countdown(p_entry->t_rx_us);
+            }
+            else if ((g_b_tap_test) && (PROTO_COORD_READY == g_state))
+            {
+                /* Tap test (A11): every tap lights its own tile. */
+                cl_queue_feedback(msg.node_id, (uint8_t)PROTO_FEEDBACK_HIT,
+                                  p_entry->t_rx_us);
+            }
+            else if ((PROTO_COORD_COORDINATING_GAME == g_state) &&
+                     (p_header->session_id == g_session.session_id))
+            {
+                game_rules_tap_rx(&g_game, msg.node_id, msg.peak, msg.t_tap,
+                                  p_entry->t_rx_us);
+                /* Modulo 2^32 on purpose: the sign shows in the top bit. */
+                cl_log_event(CL_EV_GAME_TAP, msg.node_id,
+                             (uint32_t)(p_entry->t_rx_us - msg.t_tap),
+                             p_entry->t_rx_us);
+            }
+            else
+            {
+                /* Outside a round: the relay to the PC was all. */
+            }
+        }
+        else
+        {
+            g_stats.stale++;
+        }
+    }
+}
+
+/**
+ * @brief  An ACK from a tile: frees the outbox message it names.
+ * @param  p_entry  The datagram.
+ */
+static void cl_on_tile_ack (cl_rx_entry_t const * p_entry)
+{
+    proto_ack_t msg;
+
+    if ((!proto_decode_ack(p_entry->bytes, p_entry->len, &msg)) ||
+        (0u == msg.node_id))
+    {
+        g_stats.rx_bad++;
+    }
+    else
+    {
+        /* Freed, or nothing waited: either way the ACK is done. */
+        (void)ack_outbox_ack(&g_outbox, msg.node_id, msg.acked_seq);
+    }
+}
+
+/**
+ * @brief  GAME_CONTROL from the PC (node_id 0): a mode switch, START or END.
+ *         Every valid one is ACKed, a repeat too, so the PC stops resending;
+ *         only a new seq acts.
+ * @param  p_entry   The datagram.
+ * @param  p_header  Its decoded header.
+ */
+static void cl_on_game_control (cl_rx_entry_t const *  p_entry,
+                                proto_header_t const * p_header)
+{
+    proto_game_control_t msg;
+
+    if ((!proto_decode_game_control(p_entry->bytes, p_entry->len, &msg)) ||
+        (0u != msg.node_id))
+    {
+        g_stats.rx_bad++;
+    }
+    else
+    {
+        bool const b_new =
+            (!g_b_pc_seq_known) || (cl_seq_newer(p_header->seq, g_pc_seq));
+
+        if (b_new)
+        {
+            g_b_pc_seq_known = true;
+            g_pc_seq         = p_header->seq;
+            cl_game_command(&msg);
+        }
+        else
+        {
+            g_stats.stale++;
+        }
+
+        cl_send_ack(g_pc_addr, g_pc_port, 0u, p_header->seq,
+                    g_session.session_id);
+    }
+}
+
+/**
+ * @brief  Act on one GAME_CONTROL command from the PC (DS-08).
+ * @param  p_msg  The decoded command (node_id 0).
+ */
+static void cl_game_command (proto_game_control_t const * p_msg)
+{
+    uint64_t const now     = cl_now_us();
+    uint8_t const  command = p_msg->command;
+    bool const     b_round = (PROTO_ROUND_ARMED == g_round) ||
+                         (PROTO_ROUND_COUNTDOWN == g_round) ||
+                         (PROTO_ROUND_PLAYING == g_round);
+
+    if ((PROTO_GAME_MODE_VIDEO == command) || (PROTO_GAME_MODE_GAME == command))
+    {
+        /* The mode changes only while stopped (layout_table.md 5.10). */
+        if (cl_stopped())
+        {
+            g_b_game_mode   = (PROTO_GAME_MODE_GAME == command);
+            g_b_tap_test    = false;
+            g_b_turn_resume = false; /* Turns are video only (D-17). */
+            g_b_turn_pause  = false;
+            cl_results_end(now);
+            cl_evaluate(); /* Readiness depends on the mode (A14). */
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
+    }
+    else if (PROTO_GAME_START == command)
+    {
+        /* v1: a round at once, no start sprite and no countdown. */
+        g_level = p_msg->level;
+        cl_game_start(now);
+    }
+    else if (PROTO_GAME_ARM == command)
+    {
+        g_level     = p_msg->level;
+        g_threshold = p_msg->threshold;
+        cl_round_arm(now);
+    }
+    else if (PROTO_GAME_START_NOW == command)
+    {
+        if (PROTO_ROUND_ARMED == g_round)
+        {
+            cl_round_countdown(now);
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
+    }
+    else if (PROTO_GAME_END == command)
+    {
+        if (PROTO_ROUND_PLAYING == g_round)
+        {
+            cl_game_end(now); /* An abort mid-round still shows the score. */
+        }
+        else if (b_round)
+        {
+            cl_round_abort(now);
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
+    }
+    else if ((PROTO_GAME_TAP_TEST_ON == command) ||
+             (PROTO_GAME_TAP_TEST_OFF == command))
+    {
+        if ((PROTO_COORD_READY == g_state) && (!b_round))
+        {
+            g_b_tap_test = (PROTO_GAME_TAP_TEST_ON == command);
+
+            if (g_b_tap_test)
+            {
+                cl_results_end(now); /* Taps light a blank wall. */
+            }
+
+            cl_round_to_tiles(command, now);
+        }
+        else
+        {
+            cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+        }
+    }
+    else
+    {
+        g_stats.rx_bad++;
+    }
+}
+
+/**
+ * @brief  START: from READY, in game mode, with an active session. The round
+ *         starts now, and START goes to every tile of the map.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_game_start (uint64_t now)
+{
+    if ((PROTO_COORD_READY == g_state) && (g_b_game_mode) &&
+        (g_session.b_active))
+    {
+        /* Bits 0 to 8, so the narrowing keeps them. */
+        uint16_t const mask = (uint16_t)(g_session.required & cl_online_bits());
+
+        game_rules_start(&g_game, now, mask, g_level);
+        ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE); /* Results. */
+        cl_clear_unplaced(now);
+        g_round      = PROTO_ROUND_PLAYING;
+        g_round_mask = mask;
+        cl_set_state(PROTO_COORD_COORDINATING_GAME);
+
+        for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+        {
+            /* index < 9. */
+            uint8_t const node_id = (uint8_t)(index + 1u);
+
+            if (0u != (mask & cl_node_bit(node_id)))
+            {
+                cl_queue_control(node_id, PROTO_GAME_START, now,
+                                 CL_CONTROL_LIFE_US);
+            }
+        }
+    }
+    else
+    {
+        cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+    }
+}
+
+/**
+ * @brief  End of a round, by the timer or by the PC's abort: no more moles,
+ *         END to every tile of the map, and the final score drawn across the
+ *         wall as one WALL_PICTURE per tile. Back to READY.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_game_end (uint64_t now)
+{
+    game_rules_stop(&g_game);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_MOLE_ON);
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        /* index < 9. */
+        uint8_t const node_id = (uint8_t)(index + 1u);
+
+        if (0u != (g_session.required & cl_node_bit(node_id)))
+        {
+            cl_queue_control(node_id, PROTO_GAME_END, now, CL_CONTROL_LIFE_US);
+        }
+    }
+
+    g_round = PROTO_ROUND_RESULTS;
+    cl_send_results(now + CL_PIC_LEAD_US);
+    g_round_mask = 0u;
+    cl_set_state(PROTO_COORD_READY);
+    cl_evaluate();
+}
+
+/**
+ * @brief  ARM (DS-08): from READY, in game mode, with an active session: the
+ *         tiles get ARM (with the tap threshold) and the tile nearest the
+ *         wall's centre the start sprite, up until tapped. 60 s with no tap
+ *         returns to GAME IDLE.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_arm (uint64_t now)
+{
+    /* Bits 0 to 8, so the narrowing keeps them. */
+    uint16_t const mask  = (uint16_t)(g_session.required & cl_online_bits());
+    uint8_t const  start = cl_centre_node(mask);
+
+    if ((PROTO_COORD_READY == g_state) && (g_b_game_mode) &&
+        (g_session.b_active) && (0u != start))
+    {
+        g_round_mask    = mask;
+        g_start_node    = start;
+        g_start_show_us = now + (UINT64_C(1000) * GAME_LEAD_MS);
+        g_round         = PROTO_ROUND_ARMED;
+        game_rules_clear(&g_game); /* STATUS: no counts of the last round. */
+        g_arm_deadline_us = now + CL_ARM_TIMEOUT_US;
+        g_b_tap_test      = false;
+        ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE); /* Results. */
+        cl_clear_unplaced(now);
+        cl_set_state(PROTO_COORD_COORDINATING_GAME);
+        cl_round_to_tiles(PROTO_GAME_ARM, now);
+        uint8_t const kind = (uint8_t)PROTO_TARGET_START; /* 5 kinds fit. */
+
+        cl_queue_target(start, g_start_show_us, 0u, kind, now,
+                        now + CL_CONTROL_LIFE_US);
+    }
+    else
+    {
+        cl_log_event(CL_EV_GAME_REFUSED, 0u, cl_state_code(), now);
+    }
+}
+
+/**
+ * @brief  COUNTDOWN (DS-08, DS-09): 3, 2, 1 across the wall, then the round.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_countdown (uint64_t now)
+{
+    uint64_t const t_first = now + CL_PIC_LEAD_US;
+
+    g_round      = PROTO_ROUND_COUNTDOWN;
+    g_play_at_us = t_first + CL_COUNTDOWN_US;
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_MOLE_ON); /* The start sprite. */
+    cl_send_countdown(t_first);
+}
+
+/**
+ * @brief  The countdown is over: the round starts (START to the tiles).
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_play (uint64_t now)
+{
+    /* Tiles that left during the countdown are not chosen for moles. */
+    uint16_t const mask =
+        (uint16_t)(g_round_mask & cl_online_bits()); /* Bits 0 to 8. */
+
+    game_rules_start(&g_game, now, mask, g_level);
+    g_round = PROTO_ROUND_PLAYING;
+    cl_round_to_tiles(PROTO_GAME_START, now);
+}
+
+/**
+ * @brief  Abort before a round plays (DS-08): END to the tiles (they clear),
+ *         no score, back to GAME IDLE in READY.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_round_abort (uint64_t now)
+{
+    game_rules_stop(&g_game);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_MOLE_ON);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE);
+    cl_round_to_tiles(PROTO_GAME_END, now);
+    g_round      = PROTO_ROUND_IDLE;
+    g_round_mask = 0u;
+    cl_set_state(PROTO_COORD_READY);
+    cl_evaluate();
+}
+
+/**
+ * @brief  One GAME_CONTROL to every tile of the round (ARM carries the level
+ *         and the tap threshold); outside a round, to every online tile of
+ *         the map.
+ * @param  command  proto_game_cmd_t value.
+ * @param  now      Current time, microseconds.
+ */
+static void cl_round_to_tiles (uint8_t command, uint64_t now)
+{
+    /* Bits 0 to 8, so the narrowing keeps them. */
+    uint16_t const mask =
+        (0u != g_round_mask)
+            ? g_round_mask
+            : (uint16_t)(g_session.required & cl_online_bits());
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        /* index < 9. */
+        uint8_t const node_id = (uint8_t)(index + 1u);
+
+        if (0u != (mask & cl_node_bit(node_id)))
+        {
+            cl_queue_control(node_id, command, now, CL_CONTROL_LIFE_US);
+        }
+    }
+}
+
+/**
+ * @brief  The tile nearest the centre of the wall among the given tiles
+ *         (the start sprite's tile, B7); ties go to the cell first in
+ *         row-major order.
+ * @param  mask  Node IDs, bit n - 1.
+ * @return Node ID, or 0 when no tile of the mask is in the map.
+ */
+static uint8_t cl_centre_node (uint16_t mask)
+{
+    uint8_t  best      = 0u;
+    uint32_t best_dist = UINT32_MAX;
+    uint32_t best_pos  = UINT32_MAX;
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+        uint8_t       cell_r  = 0u;
+        uint8_t       cell_c  = 0u;
+
+        if ((0u != (mask & cl_node_bit(node_id))) &&
+            (cl_cell_of(node_id, &cell_r, &cell_c)))
+        {
+            /* Doubled coordinates, so the centre is a whole number; row,
+             * col, rows and cols are below 10. */
+            int32_t const row  = (int32_t)cell_r;         /* 0 to 8. */
+            int32_t const col  = (int32_t)cell_c;         /* 0 to 8. */
+            int32_t const rows = (int32_t)g_session.rows; /* 1 to 9. */
+            int32_t const cols = (int32_t)g_session.cols; /* 1 to 9. */
+            int32_t const d_r  = (2 * row) - (rows - 1);
+            int32_t const d_c  = (2 * col) - (cols - 1);
+            /* A sum of squares: non-negative and below 400. */
+            uint32_t const dist = (uint32_t)((d_r * d_r) + (d_c * d_c));
+            /* Widened: row-major position, below 81. */
+            uint32_t const pos = ((uint32_t)cell_r * g_session.cols) + cell_c;
+
+            if ((dist < best_dist) || ((dist == best_dist) && (pos < best_pos)))
+            {
+                best_dist = dist;
+                best_pos  = pos;
+                best      = node_id;
+            }
+        }
+    }
+
+    return best;
+}
+
+/**
+ * @brief  Earliest time the game or a round phase needs a pass: the
+ *         engine's next event, the arm timeout, or the end of the countdown.
+ * @return Microseconds, or UINT64_MAX when nothing is due.
+ */
+static uint64_t cl_round_next_due (void)
+{
+    uint64_t due = game_rules_next_due(&g_game);
+
+    if ((PROTO_ROUND_ARMED == g_round) && (g_arm_deadline_us < due))
+    {
+        due = g_arm_deadline_us;
+    }
+    else if ((PROTO_ROUND_COUNTDOWN == g_round) && (g_play_at_us < due))
+    {
+        due = g_play_at_us;
+    }
+    else
+    {
+        /* Only the engine's own time. */
+    }
+
+    return due;
+}
+
+/**
+ * @brief  One WALL_PICTURE entry for one tile (DS-09).
+ * @param  node_id   Tile, 1 to 9.
+ * @param  slot      List entry, 0 to 3.
+ * @param  effect    proto_pic_effect_t.
+ * @param  colour    proto_colour_t.
+ * @param  b_repeat  1 = loop back to slot 1 after this entry.
+ * @param  t_show    Show time, Pico clock, microseconds.
+ * @param  dur_ms    Duration, ms; 0 = until replaced.
+ * @param  mask      The tile's 8 x 8 piece.
+ */
+static void cl_queue_picture (uint8_t node_id, uint8_t slot, uint8_t effect,
+                              uint8_t colour, uint8_t b_repeat, uint64_t t_show,
+                              uint16_t dur_ms, uint64_t mask)
+{
+    uint16_t const             seq = cl_next_cmd_seq();
+    proto_wall_picture_t const msg = {
+        .header   = {.type       = PROTO_TYPE_WALL_PICTURE,
+                     .session_id = g_session.session_id,
+                     .seq        = seq},
+        .node_id  = node_id,
+        .slot     = slot,
+        .effect   = effect,
+        .colour   = colour,
+        .b_repeat = b_repeat,
+        .t_show   = t_show,
+        .dur_ms   = dur_ms,
+        .mask     = mask,
+    };
+    uint8_t        buf[PROTO_WALL_PICTURE_BYTES];
+    uint32_t const len = proto_encode_wall_picture(&msg, buf, sizeof(buf));
+
+    /* It must arrive before it shows: dropped at its show time. */
+    cl_queue_tile(node_id, PROTO_TYPE_WALL_PICTURE, seq, buf, len, cl_now_us(),
+                  t_show);
+}
+
+/**
+ * @brief  The countdown (DS-09): 3, 2 and 1 in yellow on every tile, one
+ *         second each from t_first, as a timed list on every tile of the
+ *         round, so all tiles change together.
+ * @param  t_first  Show time of the 3, Pico clock, microseconds.
+ */
+static void cl_send_countdown (uint64_t t_first)
+{
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+        uint8_t       row     = 0u;
+        uint8_t       col     = 0u;
+
+        if ((0u != (g_round_mask & cl_node_bit(node_id))) &&
+            (cl_cell_of(node_id, &row, &col)))
+        {
+            for (uint32_t step = 0u; step < CL_COUNTDOWN_STEPS; step++)
+            {
+                /* 3, 2, 1: step < 3, so the digit fits. */
+                int32_t const  digit = (int32_t)(CL_COUNTDOWN_STEPS - step);
+                uint64_t const mask  = cl_tile_picture(SCORE_PIC_NUMBER, digit);
+
+                cl_queue_picture(node_id, (uint8_t)step,       /* step < 3. */
+                                 (uint8_t)PROTO_PIC_PICTURE,   /* 3 fit. */
+                                 (uint8_t)PROTO_COLOUR_YELLOW, /* 7 fit. */
+                                 0u, t_first + (step * CL_STEP_US), CL_STEP_MS,
+                                 mask);
+            }
+        }
+    }
+}
+
+/**
+ * @brief  The results (DS-09): a sparkle (the tile's own end animation),
+ *         then the score in white and the stars in yellow in turn, the same
+ *         whole pictures on every tile, looping
+ *         until the next round or mode change, as a timed list on every tile
+ *         of the map.
+ * @param  t_first  Show time of the sparkle, Pico clock, microseconds.
+ */
+static void cl_send_results (uint64_t t_first)
+{
+    int32_t const score = game_rules_score(&g_game);
+    /* 1 to 3 stars: fits int32_t. */
+    int32_t const  stars   = (int32_t)game_rules_stars(&g_game);
+    uint64_t const t_score = t_first + (UINT64_C(1000) * CL_SPARKLE_MS);
+    uint64_t const t_stars = t_score + (UINT64_C(1000) * CL_RESULT_MS);
+
+    /* The same whole pictures go to every tile. */
+    uint64_t const score_pic = cl_tile_picture(SCORE_PIC_NUMBER, score);
+    uint64_t const stars_pic = cl_tile_picture(SCORE_PIC_STARS, stars);
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+        uint8_t       row     = 0u;
+        uint8_t       col     = 0u;
+
+        if ((0u != (g_session.required & cl_node_bit(node_id))) &&
+            (cl_cell_of(node_id, &row, &col)))
+        {
+            cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_SPARKLE, /* 3. */
+                             (uint8_t)PROTO_COLOUR_YELLOW, /* 8 fit. */
+                             0u, t_first, CL_SPARKLE_MS, 0u);
+            cl_queue_picture(node_id, 1u, (uint8_t)PROTO_PIC_PICTURE, /* 3. */
+                             (uint8_t)PROTO_COLOUR_WHITE, /* 8 fit. */
+                             0u, t_score, CL_RESULT_MS, score_pic);
+            cl_queue_picture(node_id, 2u, (uint8_t)PROTO_PIC_PICTURE, /* 3. */
+                             (uint8_t)PROTO_COLOUR_YELLOW, /* 8 fit. */
+                             1u, t_stars, CL_RESULT_MS, stars_pic);
+        }
+    }
+}
+
+/**
+ * @brief  The results leave the wall and STATUS (a mode command or the tap
+ *         test, decided 12 Nov 2026 after bench round 7: the tap test lit
+ *         tiles on top of the looping score): GAME IDLE with no counts of
+ *         the last round, and every tile of the map clears its picture
+ *         list. Sent whatever the round state, since a restarted Pico does
+ *         not know what the tiles still show.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_results_end (uint64_t now)
+{
+    g_round = PROTO_ROUND_IDLE;
+    game_rules_clear(&g_game);
+    ack_outbox_cancel(&g_outbox, PROTO_TYPE_WALL_PICTURE);
+
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+
+        if (0u != (g_session.required & cl_node_bit(node_id)))
+        {
+            /* Resent until ACKed or the control life ends. */
+            cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_CLEAR, /* 3. */
+                             (uint8_t)PROTO_COLOUR_WHITE,           /* 8 fit. */
+                             0u, now + CL_CONTROL_LIFE_US, 0u, 0u);
+        }
+    }
+
+    cl_clear_unplaced(now);
+}
+
+/**
+ * @brief  Clear the picture list of every tile the Pico knows that is not
+ *         placed (A3: a tile switched off goes blank). The Pico sends game
+ *         messages only to placed tiles, so a tile switched off after a
+ *         round kept looping its results while the others played the next
+ *         round (bench 19 Nov 2026). Sent on a new layout, at ARM and
+ *         START, and when the results end; a blank tile ACKs it unchanged.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_clear_unplaced (uint64_t now)
+{
+    for (uint32_t index = 0u; index < CL_MAX_NODES; index++)
+    {
+        uint8_t const node_id = (uint8_t)(index + 1u); /* index < 9. */
+
+        if ((g_registry[index].b_known) && (!cl_placed(node_id)))
+        {
+            /* Resent until ACKed or the control life ends. */
+            cl_queue_picture(node_id, 0u, (uint8_t)PROTO_PIC_CLEAR, /* 3. */
+                             (uint8_t)PROTO_COLOUR_WHITE,           /* 8 fit. */
+                             0u, now + CL_CONTROL_LIFE_US, 0u, 0u);
+        }
+    }
+}
+
+/**
+ * @brief  A count capped to its 7 STATUS bits.
+ * @param  count  The count.
+ * @return 0 to 127.
+ */
+static uint8_t cl_count7 (uint32_t count)
+{
+    /* Capped first, so the narrowing keeps the value. */
+    return (uint8_t)((count > PROTO_COUNT_MAX) ? PROTO_COUNT_MAX : count);
+}
+
+/**
+ * @brief  A reaction time capped to its 11 STATUS bits.
+ * @param  reaction_ms  Milliseconds.
+ * @return 0 to 2,047.
+ */
+static uint16_t cl_reaction11 (uint32_t reaction_ms)
+{
+    /* Capped first, so the narrowing keeps the value. */
+    return (uint16_t)((reaction_ms > PROTO_REACTION_MAX) ? PROTO_REACTION_MAX
+                                                         : reaction_ms);
+}
+
+/**
+ * @brief  Run the game engine's next event, if one is due: MOLE_ON and
+ *         FEEDBACK go to their tile through the outbox; a round end ends the
+ *         round.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_game_routine (uint64_t now)
+{
+    game_event_t event;
+
+    if ((PROTO_ROUND_ARMED == g_round) && (now >= g_arm_deadline_us))
+    {
+        cl_round_abort(now); /* 60 s with no tap on the start sprite. */
+    }
+    else if ((PROTO_ROUND_COUNTDOWN == g_round) && (now >= g_play_at_us))
+    {
+        cl_round_play(now);
+    }
+    else if (game_rules_poll(&g_game, now, &event))
+    {
+        if (GAME_EV_MOLE_ON == event.kind)
+        {
+            cl_queue_mole(&event, now);
+            cl_log_event(CL_EV_GAME_MOLE, event.node_id, event.up_ms,
+                         event.t_show_us);
+        }
+        else if (GAME_EV_FEEDBACK == event.kind)
+        {
+            cl_queue_feedback(event.node_id, event.result, now);
+            cl_log_event(CL_EV_GAME_FEEDBACK, event.node_id, event.result, now);
+        }
+        else if (GAME_EV_ROUND_END == event.kind)
+        {
+            cl_game_end(now);
+        }
+        else
+        {
+            /* GAME_EV_NONE is never returned with true. */
+        }
+    }
+    else
+    {
+        /* Nothing due yet. */
+    }
+}
+
+/**
+ * @brief  Send the due message of the acked outbox: one datagram, then its
+ *         next resend is set (CL_ACK_RETRY_US later).
+ * @param  now  Current time, microseconds.
+ */
+static void cl_outbox_routine (uint64_t now)
+{
+    uint32_t index = 0u;
+
+    if (ack_outbox_due(&g_outbox, now, &index))
+    {
+        ack_outbox_entry_t const * const p_entry = &g_outbox.slots[index];
+
+        if (!cl_udp_send(p_entry->addr, p_entry->port, p_entry->buf,
+                         p_entry->len))
+        {
+            g_stats.cmd_fail++;
+        }
+
+        ack_outbox_sent(&g_outbox, index, now, CL_ACK_RETRY_US);
+    }
+}
+
+/**
+ * @brief  Queue an acked message to one tile at its REGISTER address.
+ * @param  node_id      Tile, 1 to 9.
+ * @param  type         Message type.
+ * @param  seq          Header seq.
+ * @param  p_buf        Encoded message.
+ * @param  len          Its length.
+ * @param  now          Current time, microseconds.
+ * @param  deadline_us  Dropped at or after this time.
+ */
+static void cl_queue_tile (uint8_t node_id, proto_type_t type, uint16_t seq,
+                           uint8_t const * p_buf, uint32_t len, uint64_t now,
+                           uint64_t deadline_us)
+{
+    uint32_t const addr = g_registry[node_id - 1u].addr;
+
+    if (0u != addr)
+    {
+        /* Message types fit 5 bits, so uint8_t holds them. */
+        if (!ack_outbox_add(&g_outbox, node_id, (uint8_t)type, seq, addr,
+                            CL_PORT_TILE_RX, p_buf, len, now, deadline_us))
+        {
+            g_stats.cmd_fail++;
+        }
+    }
+}
+
+/**
+ * @brief  GAME_CONTROL to one tile (START or END).
+ * @param  node_id  Tile, 1 to 9.
+ * @param  command  proto_game_cmd_t value.
+ * @param  now      Current time, microseconds.
+ * @param  life_us  Lifetime after this send, microseconds.
+ */
+static void cl_queue_control (uint8_t node_id, uint8_t command, uint64_t now,
+                              uint64_t life_us)
+{
+    uint16_t const             seq = cl_next_cmd_seq();
+    proto_game_control_t const msg = {
+        .header    = {.type       = PROTO_TYPE_GAME_CONTROL,
+                      .session_id = g_session.session_id,
+                      .seq        = seq},
+        .node_id   = node_id,
+        .command   = command,
+        .level     = g_level,
+        .threshold = g_threshold,
+    };
+    uint8_t        buf[PROTO_GAME_CONTROL_BYTES];
+    uint32_t const len = proto_encode_game_control(&msg, buf, sizeof(buf));
+
+    cl_queue_tile(node_id, PROTO_TYPE_GAME_CONTROL, seq, buf, len, now,
+                  now + life_us);
+}
+
+/**
+ * @brief  MOLE_ON for one tile. It lives until the show time: a late mole is
+ *         worse than none.
+ * @param  p_event  The engine's MOLE_ON.
+ * @param  now      Current time, microseconds.
+ */
+static void cl_queue_mole (game_event_t const * p_event, uint64_t now)
+{
+    cl_queue_target(p_event->node_id, p_event->t_show_us, p_event->up_ms,
+                    (uint8_t)PROTO_TARGET_MOLE, /* 5 kinds fit. */
+                    now, p_event->t_show_us);
+}
+
+/**
+ * @brief  MOLE_ON (a target) for one tile.
+ * @param  node_id      Tile, 1 to 9.
+ * @param  t_show       Show time, Pico clock, microseconds.
+ * @param  up_ms        Up time, ms; 0 = until tapped or cleared.
+ * @param  kind         proto_target_kind_t.
+ * @param  now          Current time, microseconds.
+ * @param  deadline_us  Dropped at or after this time.
+ */
+static void cl_queue_target (uint8_t node_id, uint64_t t_show, uint16_t up_ms,
+                             uint8_t kind, uint64_t now, uint64_t deadline_us)
+{
+    uint16_t const        seq = cl_next_cmd_seq();
+    proto_mole_on_t const msg = {
+        .header  = {.type       = PROTO_TYPE_MOLE_ON,
+                    .session_id = g_session.session_id,
+                    .seq        = seq},
+        .node_id = node_id,
+        .t_show  = t_show,
+        .up_ms   = up_ms,
+        .kind    = kind,
+    };
+    uint8_t        buf[PROTO_MOLE_ON_BYTES];
+    uint32_t const len = proto_encode_mole_on(&msg, buf, sizeof(buf));
+
+    cl_queue_tile(node_id, PROTO_TYPE_MOLE_ON, seq, buf, len, now, deadline_us);
+}
+
+/**
+ * @brief  FEEDBACK to one tile: green on a hit, red on a miss.
+ * @param  node_id  Tile, 1 to 9.
+ * @param  result   proto_feedback_t value.
+ * @param  now      Current time, microseconds.
+ */
+static void cl_queue_feedback (uint8_t node_id, uint8_t result, uint64_t now)
+{
+    uint16_t const             seq = cl_next_cmd_seq();
+    proto_feedback_msg_t const msg = {
+        .header  = {.type       = PROTO_TYPE_FEEDBACK,
+                    .session_id = g_session.session_id,
+                    .seq        = seq},
+        .node_id = node_id,
+        .result  = result,
+    };
+    uint8_t        buf[PROTO_FEEDBACK_BYTES];
+    uint32_t const len = proto_encode_feedback(&msg, buf, sizeof(buf));
+
+    cl_queue_tile(node_id, PROTO_TYPE_FEEDBACK, seq, buf, len, now,
+                  now + CL_FEEDBACK_LIFE_US);
+}
+
+/**
+ * @brief  Keep the game's tile set in step with the online bitmap while a
+ *         round runs: a tile that drops out is not chosen for moles.
+ */
+static void cl_game_sync_active (void)
+{
+    if (PROTO_COORD_COORDINATING_GAME == g_state)
+    {
+        /* Bits 0 to 8, so the narrowing keeps them. */
+        game_rules_set_active(
+            &g_game, (uint16_t)(g_session.required & cl_online_bits()));
+    }
+}
+
+/**
+ * @brief  Whether the wall is stopped, so the mode may change: no session
+ *         yet, or a session that is not playing, synchronising or running a
+ *         round.
+ * @return true when stopped.
+ */
+static bool cl_stopped (void)
+{
+    return (PROTO_COORD_WAITING_FOR_SESSION == g_state) ||
+           (PROTO_COORD_VALIDATING_SESSION == g_state) ||
+           (PROTO_COORD_WAITING_FOR_NODES == g_state) ||
+           (PROTO_COORD_WAITING_FOR_TILE_READINESS == g_state) ||
+           (PROTO_COORD_READY == g_state);
+}
+
+/**
+ * @brief  Score for STATUS: the live score during a round, 0 otherwise
+ *         (layout_table.md, STATUS score).
+ * @return -99 to 99.
+ */
+static int8_t cl_status_score (void)
+{
+    int8_t score = 0;
+
+    if ((PROTO_ROUND_PLAYING == g_round) || (PROTO_ROUND_RESULTS == g_round))
+    {
+        score = (int8_t)game_rules_score(&g_game); /* -99 to 99. */
+    }
+
+    return score;
+}
+
+/**
+ * @brief  A wall picture as every tile shows it: the whole picture drawn for
+ *         one tile (the 1 x 1 rendering of score_font). Decided 18 Nov 2026
+ *         with Cheston, replacing DS-15 decision 3 (big across the grid when
+ *         it is at least half full): the demo tiles stand apart, so a
+ *         picture cut across them was hard to read; each tile now shows the
+ *         countdown and the results whole.
+ * @param  pic    What to draw.
+ * @param  value  The number, or the star count.
+ * @return The tile's 8 x 8 mask, the same for every tile.
+ */
+static uint64_t cl_tile_picture (score_pic_t pic, int32_t value)
+{
+    score_cells_t one_tile;
+
+    (void)memset(&one_tile, 0, sizeof(one_tile)); /* Returns one_tile. */
+    one_tile.row_bits[0] = 1u;
+
+    return score_font_picture_mask(pic, value, 1u, 1u, &one_tile, 0u, 0u);
+}
+
+/**
+ * @brief  Next seq of the command counter, the one all acked messages share
+ *         (layout_table.md section 10 item 13).
+ * @return The seq to use.
+ */
+static uint16_t cl_next_cmd_seq (void)
+{
+    uint16_t const seq = g_cmd_seq;
+
+    g_cmd_seq++;
+
+    return seq;
+}
+
+/**
+ * @brief  Queue one datagram for sending (see CL_TXQ_LEN); the loop sends
+ *         it in a later pass, one per pass. BEACON is sent at once.
+ * @param  addr   Destination address.
+ * @param  port   Destination port.
+ * @param  p_buf  Bytes.
+ * @param  len    Length, at most CL_TX_MAX_BYTES.
+ * @return true when queued; false (counted in tx_drop) when the queue is
+ *         full or the datagram too long.
+ */
+static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                         uint32_t len)
+{
+    bool b_queued = false;
+
+    if ((g_txq_count < CL_TXQ_LEN) && (len <= CL_TX_MAX_BYTES))
+    {
+        cl_tx_entry_t * const p_entry =
+            &g_txq[(g_txq_head + g_txq_count) % CL_TXQ_LEN];
+
+        p_entry->addr = addr;
+        p_entry->port = port;
+        p_entry->len  = len;
+        (void)memcpy(p_entry->bytes, p_buf, len); /* Returns bytes. */
+        g_txq_count++;
+        b_queued = true;
+    }
+    else
+    {
+        g_stats.tx_drop++;
+    }
+
+    return b_queued;
+}
+
+/**
+ * @brief  Send the oldest queued datagram (one per loop pass).
+ */
+static void cl_tx_routine (void)
+{
+    cl_tx_entry_t const * const p_entry = &g_txq[g_txq_head];
+
+    if (!cl_port_send(p_entry->addr, p_entry->port, p_entry->bytes,
+                      p_entry->len))
+    {
+        g_stats.tx_fail++;
+    }
+
+    g_txq_head = (g_txq_head + 1u) % CL_TXQ_LEN;
+    g_txq_count--;
 }
 
 #ifdef CL_HOST_TEST
@@ -1732,15 +3296,24 @@ static uint64_t cl_now_us (void)
 }
 
 /**
- * @brief  Send one datagram (host test: recorded by the test).
+ * @brief  Breadcrumb (host test: none, there is no watchdog).
+ * @param  step  The step.
+ */
+static void cl_crumb (uint32_t step)
+{
+    (void)step; /* No watchdog on the host. */
+}
+
+/**
+ * @brief  Send one datagram now (host test: recorded by the test).
  * @param  addr   Destination address.
  * @param  port   Destination port.
  * @param  p_buf  Bytes.
  * @param  len    Length.
  * @return true when sent.
  */
-static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
-                         uint32_t len)
+static bool cl_port_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                          uint32_t len)
 {
     return coordinator_port_send(addr, port, p_buf, len);
 }
@@ -1756,8 +3329,8 @@ static bool cl_send_beacon_bytes (uint8_t * p_buf, uint64_t * p_t_p)
     *p_t_p = cl_now_us();
     proto_beacon_set_t_p(p_buf, *p_t_p);
 
-    return cl_udp_send(g_bcast_addr, CL_PORT_TILE_RX, p_buf,
-                       PROTO_BEACON_BYTES);
+    return cl_port_send(g_bcast_addr, CL_PORT_TILE_RX, p_buf,
+                        PROTO_BEACON_BYTES);
 }
 
 /**
@@ -1856,44 +3429,75 @@ uint64_t coordinator_loop_test_loss_time (uint8_t node_id)
 
     return when;
 }
+
+/**
+ * @brief  Test: force the state (no event is logged, nothing is sent).
+ * @param  state  The state to set.
+ */
+void coordinator_loop_test_set_state (proto_coord_state_t state)
+{
+    g_state = state;
+}
 #else
-static struct udp_pcb * g_p_tx_pcb = NULL;
+static struct udp_pcb * g_p_tx_pcb      = NULL;
+static uint32_t         g_join_failures = 0u; /* Retries scheduled so far. */
+static uint64_t         g_next_join_us  = 0u; /* Next join attempt, us. */
+static bool             g_b_pcbs_open   = false;
 
 static bool cl_connect_router (void);
+static bool cl_try_join (void);
+static void cl_schedule_join (uint64_t now);
+static void cl_rejoin_routine (uint64_t now);
+static void cl_watchdog_feed (void);
 static void cl_open_pcbs (void);
 static void cl_rx_cb (void * p_arg, struct udp_pcb * p_pcb,
                       struct pbuf * p_pbuf, ip_addr_t const * p_addr,
                       u16_t port);
 
 /**
- * @brief  Join the router and run forever (see the file comment).
+ * @brief  Join the router and run forever (see the file comment). A failed
+ *         join leaves the coordinator in FAULT, and cl_rejoin_routine()
+ *         retries it on the join_backoff_ms() schedule.
  */
 void coordinator_loop_run (void)
 {
+    bool const b_by_watchdog = watchdog_enable_caused_reboot();
+
+    g_b_watchdog_boot = b_by_watchdog;
+
+    if (b_by_watchdog)
+    {
+        /* The evidence of a freeze: the loop had stopped for 8 s, at the
+         * step the breadcrumb names. */
+        g_watchdog_step         = watchdog_hw->scratch[0];
+        g_watchdog_prev         = watchdog_hw->scratch[1];
+        watchdog_hw->scratch[1] = g_watchdog_step; /* For the next one. */
+        printf("COORDINATOR: restarted by the watchdog, step 0x%08" PRIx32
+               ", the one before 0x%08" PRIx32 "\n",
+               g_watchdog_step, g_watchdog_prev);
+    }
+
+    watchdog_enable(CL_WATCHDOG_MS, true); /* Paused under a debugger. */
+    g_watchdog_mark = watchdog_hw->scratch[4];
     cl_set_state(PROTO_COORD_CONNECTING_TO_ROUTER);
-
-    if (cl_connect_router())
-    {
-        struct netif * const p_netif = &cyw43_state.netif[CYW43_ITF_STA];
-        uint32_t const       addr = ip4_addr_get_u32(netif_ip4_addr(p_netif));
-        uint32_t const mask = ip4_addr_get_u32(netif_ip4_netmask(p_netif));
-
-        cl_open_pcbs();
-        cl_reset_state(addr | ~mask, cl_now_us());
-        printf("COORDINATOR up: ip=%s, beacons on %u, tiles to %u, PC to %u\n",
-               ip4addr_ntoa(netif_ip4_addr(p_netif)), CL_PORT_TILE_RX,
-               CL_PORT_FROM_TILE, CL_PORT_FROM_PC);
-    }
-    else
-    {
-        g_state = PROTO_COORD_FAULT;
-        printf("COORDINATOR FAULT: router join not done in %u ms; reset to "
-               "retry\n",
-               CL_CONNECT_TIMEOUT_MS);
-    }
+    (void)cl_try_join(); /* A failure schedules the next attempt. */
 
     for (;;)
     {
+        cl_watchdog_feed();
+#ifdef CL_TEST_HANG_S
+        if ((!b_by_watchdog) &&
+            (cl_now_us() >= (UINT64_C(1000000) * CL_TEST_HANG_S)))
+        {
+            printf("COORDINATOR: CL_TEST_HANG_S, the loop stops now\n");
+
+            for (;;)
+            {
+                /* A freeze: only the watchdog ends this. */
+            }
+        }
+#endif
+        cl_crumb(CL_STEP_POLL);
         cyw43_arch_poll();
 
         if (PROTO_COORD_FAULT != g_state)
@@ -1902,30 +3506,163 @@ void coordinator_loop_run (void)
         }
         else
         {
-            /* FAULT: report and await reset (W6 statechart 2). The log
-             * routine still prints queued events. */
+            /* FAULT: retry the join when it is due; the log routine still
+             * prints queued events. */
+            cl_rejoin_routine(cl_now_us());
             cl_log_routine(cl_now_us());
         }
     }
 }
 
 /**
+ * @brief  Feed the watchdog, unless a reboot was asked for. watchdog_reboot()
+ *         (picotool reboot, through the USB reset interface) arms the
+ *         watchdog with a short delay and rewrites scratch[4]; feeding it
+ *         then would reload that delay forever and the reboot would never
+ *         happen (bench 19 Nov 2026).
+ */
+static void cl_watchdog_feed (void)
+{
+    if (g_watchdog_mark == watchdog_hw->scratch[4])
+    {
+        watchdog_update();
+    }
+}
+
+/**
+ * @brief  One router join attempt. On success the PCBs are opened once and
+ *         the coordinator starts again from WAITING FOR SESSION: a session
+ *         does not survive a lost link, so the PC sends SESSION_CONFIG
+ *         again. On failure it stays in FAULT and schedules the next try.
+ * @return true when joined with an IP address.
+ */
+static bool cl_try_join (void)
+{
+    bool const b_joined = cl_connect_router();
+
+    if (b_joined)
+    {
+        struct netif * const p_netif = &cyw43_state.netif[CYW43_ITF_STA];
+        uint32_t const       addr = ip4_addr_get_u32(netif_ip4_addr(p_netif));
+        uint32_t const mask = ip4_addr_get_u32(netif_ip4_netmask(p_netif));
+
+        if (!g_b_pcbs_open)
+        {
+            cl_open_pcbs();
+            g_b_pcbs_open = true;
+        }
+
+        g_join_failures = 0u;
+        cl_reset_state(addr | ~mask, cl_now_us());
+        printf("COORDINATOR up: ip=%s, beacons on %u, tiles to %u, PC to %u\n",
+               ip4addr_ntoa(netif_ip4_addr(p_netif)), CL_PORT_TILE_RX,
+               CL_PORT_FROM_TILE, CL_PORT_FROM_PC);
+    }
+    else
+    {
+        cl_set_state(PROTO_COORD_FAULT);
+        cl_schedule_join(cl_now_us());
+    }
+
+    return b_joined;
+}
+
+/**
+ * @brief  Schedule the next join attempt: join_backoff_ms() of the retries
+ *         so far, then one more retry is counted. Reports the wait.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_schedule_join (uint64_t now)
+{
+    uint32_t const wait_ms = join_backoff_ms(g_join_failures);
+
+    g_join_failures++;
+    g_next_join_us = now + ((uint64_t)wait_ms * 1000u); /* ms to us. */
+    printf("COORDINATOR FAULT: router join not done in %u ms; retry in %u ms\n",
+           CL_CONNECT_TIMEOUT_MS, wait_ms);
+}
+
+/**
+ * @brief  In FAULT: retry the router join when it is due.
+ * @param  now  Current time, microseconds.
+ */
+static void cl_rejoin_routine (uint64_t now)
+{
+    if (now >= g_next_join_us)
+    {
+        (void)cl_try_join(); /* The result is in g_state. */
+    }
+}
+
+/**
+ * @brief  The router link dropped: FAULT, then rejoin on the backoff
+ *         schedule. The first retry waits 1 s, as after a cold boot
+ *         (W6 statechart 2).
+ * @param  now  Current time, microseconds.
+ */
+static void cl_on_link_lost (uint64_t now)
+{
+    game_rules_stop(&g_game); /* A round does not survive a lost router. */
+    g_round = PROTO_ROUND_IDLE;
+    cl_set_state(PROTO_COORD_FAULT);
+    g_join_failures = 0u;
+    cl_schedule_join(now);
+}
+
+/**
  * @brief  CONNECTING TO ROUTER, bounded by the 10 s timeout (W6D-2d,
- *         T-B2-03); power save off once joined (SRM-8Mc).
+ *         T-B2-03); power save off once joined (SRM-8Mc). The SDK's
+ *         cyw43_arch_wifi_connect_timeout_ms() loop, with the watchdog fed
+ *         every CL_JOIN_FEED_MS while it waits: no network restarts the
+ *         join, a bad password or a failure ends it.
  * @return true when joined with an IP address.
  */
 static bool cl_connect_router (void)
 {
     uint32_t const auth =
         ('\0' != ROUTER_PASS[0]) ? CYW43_AUTH_WPA2_AES_PSK : CYW43_AUTH_OPEN;
+    char const * const p_pass   = ('\0' != ROUTER_PASS[0]) ? ROUTER_PASS : NULL;
+    absolute_time_t const until = make_timeout_time_ms(CL_CONNECT_TIMEOUT_MS);
+    int32_t               status = CYW43_LINK_JOIN;
 
+    cl_crumb(CL_STEP_STA_MODE);
     cyw43_arch_enable_sta_mode();
     printf("Joining %s (timeout %u ms)\n", ROUTER_SSID, CL_CONNECT_TIMEOUT_MS);
 
-    bool const b_joined =
-        (0 == cyw43_arch_wifi_connect_timeout_ms(
-                  ROUTER_SSID, ('\0' != ROUTER_PASS[0]) ? ROUTER_PASS : NULL,
-                  auth, CL_CONNECT_TIMEOUT_MS));
+    cl_crumb(CL_STEP_CONNECT);
+    if (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass, auth))
+    {
+        status = CYW43_LINK_FAIL;
+    }
+
+    while ((status >= 0) && (CYW43_LINK_UP != status) && (!time_reached(until)))
+    {
+        absolute_time_t const step = make_timeout_time_ms(CL_JOIN_FEED_MS);
+
+        cl_watchdog_feed();
+        cl_crumb(CL_STEP_JOIN);
+        cyw43_arch_poll();
+        cyw43_arch_wait_for_work_until(
+            (absolute_time_diff_us(step, until) > 0) ? step : until);
+        /* The link codes are -3 to 3: int32_t holds them. */
+        status = (int32_t)cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+
+        if (CYW43_LINK_NONET == status)
+        {
+            /* No network yet: join again. */
+            cl_crumb(CL_STEP_CONNECT);
+            status =
+                (0 != cyw43_arch_wifi_connect_async(ROUTER_SSID, p_pass, auth))
+                    ? CYW43_LINK_FAIL
+                    : CYW43_LINK_JOIN;
+        }
+        else
+        {
+            /* Joining, up, or failed: the loop condition decides. */
+        }
+    }
+
+    bool const b_joined = (CYW43_LINK_UP == status);
 
     if (b_joined)
     {
@@ -1936,16 +3673,21 @@ static bool cl_connect_router (void)
     return b_joined;
 }
 
+/* One send and three receive pcbs plus DHCP's and DNS's (lwipopts.h). */
+_Static_assert(MEMP_NUM_UDP_PCB >= 6, "UDP pcbs for the coordinator");
+
 /**
- * @brief  One send pcb and the two receive pcbs (tiles and PC).
+ * @brief  One send pcb and the three receive pcbs (tiles, PC, and the tiles'
+ *         TELEMETRY broadcast for the wall turn, D-17).
  */
 static void cl_open_pcbs (void)
 {
-    static uint16_t const ports[2] = {CL_PORT_FROM_TILE, CL_PORT_FROM_PC};
+    static uint16_t const ports[3] = {CL_PORT_FROM_TILE, CL_PORT_FROM_PC,
+                                      CL_PORT_TELEMETRY};
 
     g_p_tx_pcb = udp_new();
 
-    for (uint32_t index = 0u; index < 2u; index++)
+    for (uint32_t index = 0u; index < 3u; index++)
     {
         struct udp_pcb * const p_pcb = udp_new();
 
@@ -2019,15 +3761,36 @@ static uint64_t cl_now_us (void)
 }
 
 /**
- * @brief  Send one datagram from the send pcb.
+ * @brief  Breadcrumb: the step the loop is in, in watchdog scratch[0],
+ *         which survives a watchdog reset (see CL_STEP_POLL).
+ * @param  step  The step and its detail bits.
+ */
+static void cl_crumb (uint32_t step)
+{
+    g_crumb                 = step;
+    watchdog_hw->scratch[0] = step;
+}
+
+/**
+ * @brief  Mark the breadcrumb as inside a UDP send, or no longer: plain
+ *         writes of the step kept in RAM, with or without CL_STEP_IN_SEND.
+ * @param  b_in  true on entry, false on return.
+ */
+static void cl_crumb_send (bool b_in)
+{
+    watchdog_hw->scratch[0] = b_in ? (g_crumb | CL_STEP_IN_SEND) : g_crumb;
+}
+
+/**
+ * @brief  Send one datagram now from the send pcb (cl_tx_routine).
  * @param  addr   Destination (network order u32).
  * @param  port   Destination port.
  * @param  p_buf  Bytes.
  * @param  len    Length.
  * @return true when lwIP accepted it.
  */
-static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
-                         uint32_t len)
+static bool cl_port_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
+                          uint32_t len)
 {
     bool b_sent = false;
 
@@ -2041,7 +3804,9 @@ static bool cl_udp_send (uint32_t addr, uint16_t port, uint8_t const * p_buf,
 
         ip_addr_set_ip4_u32(&dest, addr);
         (void)memcpy(p_pbuf->payload, p_buf, len); /* Returns payload. */
+        cl_crumb_send(true);
         b_sent = (ERR_OK == udp_sendto(g_p_tx_pcb, p_pbuf, &dest, port));
+        cl_crumb_send(false);
     }
 
     if (NULL != p_pbuf)
@@ -2075,10 +3840,13 @@ static bool cl_send_beacon_bytes (uint8_t * p_buf, uint64_t * p_t_p)
 
         ip_addr_set_ip4_u32(&dest, g_bcast_addr);
         (void)memcpy(p_payload, p_buf, PROTO_BEACON_BYTES); /* Returns it. */
+        cl_crumb_send(true); /* Before t_p: nothing more between it and the
+                              * send. */
         *p_t_p = time_us_64();
         proto_beacon_set_t_p(p_payload, *p_t_p);
         b_sent =
             (ERR_OK == udp_sendto(g_p_tx_pcb, p_pbuf, &dest, CL_PORT_TILE_RX));
+        cl_crumb_send(false);
     }
     else
     {

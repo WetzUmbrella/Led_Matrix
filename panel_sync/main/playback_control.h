@@ -106,6 +106,16 @@ void playback_control_init (void);
 void playback_control_step (playback_control_inputs_t const * p_in);
 
 /**
+ * @brief  The coordinator restarted (tile_net saw its beacons start over):
+ *         its timeline and its command seq are gone, so at the next step a
+ *         playing, armed or paused tile goes back to READY (and accepts
+ *         uploads again), and the next command's seq is taken as new. Bench
+ *         24 Nov 2026: tiles played on after a Pico restart and refused
+ *         every upload as BUSY. Any task may call this.
+ */
+void playback_control_pico_restart (void);
+
+/**
  * @brief  Act on one command, once per (session_id, seq). Another
  *         session_id or an older seq is rejected; a repeat of the last seq
  *         is ignored.

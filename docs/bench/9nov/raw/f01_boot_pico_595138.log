@@ -1,0 +1,10 @@
+Joining <network> (timeout 10000 ms)
+COORDINATOR up: ip=192.168.1.154, beacons on 4210, tiles to 4211, PC to 4212
+CL_EVENT t_ms=5576 JOIN node=5 value=234989760
+CL_EVENT t_ms=5577 BACK node=5 value=0
+CL_EVENT t_ms=5589 JOIN node=4 value=100772032
+CL_EVENT t_ms=5589 BACK node=4 value=0
+CL_STATS state=2 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=0 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=25 dispatch_max_us=129 online=0x018 ready=0x000 sync=0x018
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+CB_HIST,80,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,79,1,0,0,0,0,0,0,0,0,0

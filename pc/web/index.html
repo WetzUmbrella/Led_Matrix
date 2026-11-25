@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SE15 Wall</title>
+<!--
+  SE15 wall control page (step 4e, DS-16, 18 Nov 2026). Plain JS, no CDN:
+  phones and laptops on the Matrix router have no internet. Polls
+  /api/state 4 times a second (no WebSockets). Tabs: Setup (grid editor,
+  tile health, tap test, sensitivity), Video (GIF library, preview, upload
+  progress, play/pause/stop), Game (level, arm, start now, abort, live
+  panel, results, best per level). The scoreboard for a TV is /score.
+-->
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --text: #1b1d21; --muted: #626873;
+    --line: #dcdfe4; --line-strong: #b9bec7; --accent: #2457d6;
+    --accent-text: #ffffff; --ok: #1f8a4c; --warn: #b26a00; --bad: #c4352b;
+    --cell: #eceef1; --cell-on: #dcefe2; --cell-on-line: #2f8f57;
+    --cell-off: #f6f6f7; --armed: #fff1c2; --armed-line: #c99400;
+    --bar: #e3e6ea; --shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111316; --panel: #1a1d21; --text: #e8eaed; --muted: #9aa1ab;
+      --line: #2c3037; --line-strong: #444a53; --accent: #5b8cff;
+      --accent-text: #0b0d10; --ok: #4cc27f; --warn: #e0a440; --bad: #f0695e;
+      --cell: #23272d; --cell-on: #1d3527; --cell-on-line: #4cc27f;
+      --cell-off: #1d2025; --armed: #3d3214; --armed-line: #e0b440;
+      --bar: #2a2e35; --shadow: none;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111316; --panel: #1a1d21; --text: #e8eaed; --muted: #9aa1ab;
+    --line: #2c3037; --line-strong: #444a53; --accent: #5b8cff;
+    --accent-text: #0b0d10; --ok: #4cc27f; --warn: #e0a440; --bad: #f0695e;
+    --cell: #23272d; --cell-on: #1d3527; --cell-on-line: #4cc27f;
+    --cell-off: #1d2025; --armed: #3d3214; --armed-line: #e0b440;
+    --bar: #2a2e35; --shadow: none;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  button, input, select { font: inherit; color: inherit; }
+
+  /* Status bar and tabs. */
+  .top {
+    position: sticky; top: 0; z-index: 5; background: var(--panel);
+    border-bottom: 1px solid var(--line); box-shadow: var(--shadow);
+  }
+  .bar {
+    max-width: 64rem; margin: 0 auto; padding: 0.6rem 1rem 0;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.2rem;
+  }
+  .brand { font-weight: 700; font-size: 1.05rem; margin-right: auto; }
+  .chip { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.9rem; }
+  .chip b { color: var(--text); font-weight: 600; }
+  .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--line-strong); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  .problems {
+    max-width: 64rem; margin: 0 auto; padding: 0.35rem 1rem 0; color: var(--bad);
+    font-size: 0.88rem; min-height: 0;
+  }
+  .problems:empty { display: none; }
+  .tabs { max-width: 64rem; margin: 0 auto; padding: 0.3rem 1rem 0; display: flex; gap: 0.2rem; }
+  .tab {
+    border: 0; background: none; padding: 0.55rem 0.9rem; cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent; font-weight: 600;
+  }
+  .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+
+  main { max-width: 64rem; margin: 0 auto; padding: 1rem; }
+  .view[hidden] { display: none; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+  @media (max-width: 52rem) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  section.card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 0.9rem 1rem 1rem; box-shadow: var(--shadow); margin-bottom: 1rem;
+  }
+  .cols > div > section.card:last-child { margin-bottom: 0; }
+  h2 { font-size: 0.95rem; margin: 0 0 0.6rem; display: flex; align-items: center; gap: 0.5rem; min-height: 1.5rem; }
+  .muted { color: var(--muted); font-size: 0.87rem; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .row + .row, .row + .muted, .muted + .row, .wall + .muted, .slider + .row, table + .row { margin-top: 0.6rem; }
+
+  .btn {
+    display: inline-flex; align-items: center; border: 1px solid var(--line-strong); background: var(--panel);
+    border-radius: 7px; padding: 0.4rem 0.85rem; cursor: pointer; font-weight: 600; line-height: 1.3;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.danger { color: var(--bad); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:focus-visible, .cell:focus-visible, .file:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=number] {
+    width: 4rem; padding: 0.35rem 0.4rem; border: 1px solid var(--line-strong);
+    border-radius: 7px; background: var(--panel);
+  }
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; background: var(--panel); padding: 0.4rem 0.85rem; cursor: pointer; font-weight: 600; }
+  .seg button + button { border-left: 1px solid var(--line-strong); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+  .seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .banner {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; justify-content: space-between;
+    border: 1px solid var(--armed-line); background: var(--armed); border-radius: 10px;
+    padding: 0.6rem 0.9rem; margin-bottom: 1rem;
+  }
+  .banner[hidden] { display: none; }
+
+  /* Grid editor. */
+  .wall { display: grid; gap: 6px; margin-top: 0.2rem; }
+  .cell {
+    aspect-ratio: 1; border: 2px solid var(--line); border-radius: 8px; background: var(--cell);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; padding: 0; color: var(--muted); position: relative; min-width: 0;
+  }
+  .cell:hover { border-color: var(--line-strong); }
+  .cell .num { font-weight: 700; color: var(--text); font-size: var(--num, 1.25rem); line-height: 1; }
+  .cell .sub { font-size: 0.7rem; margin-top: 0.15rem; white-space: nowrap; }
+  .cell.on { background: var(--cell-on); border-color: var(--cell-on-line); }
+  .cell.offline .num { color: var(--bad); }
+  .cell.parked { background: var(--cell-off); border-style: dashed; }
+  .cell.parked .num { color: var(--muted); }
+  .cell.armed { background: var(--armed); border-color: var(--armed-line); animation: pulse 1.1s ease-in-out infinite; }
+  .cell .led { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+  .cell.on .led.ok { background: var(--ok); } .cell .led.bad { background: var(--bad); }
+  .cell .remove {
+    position: absolute; top: 2px; left: 4px; border: 0; background: none; padding: 0 2px;
+    color: var(--muted); font-size: 0.9rem; line-height: 1; cursor: pointer; font-weight: 700;
+  }
+  .cell .remove:hover { color: var(--bad); }
+  .cell.small .remove { font-size: 0.75rem; top: 0; left: 2px; }
+  .cell.small .sub { display: none; }
+  .cell.small .led { top: 3px; right: 3px; width: 5px; height: 5px; }
+  @keyframes pulse { 50% { border-color: var(--line-strong); } }
+  @media (prefers-reduced-motion: reduce) { .cell.armed { animation: none; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--line); }
+  td { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; }
+  .tag { display: inline-block; padding: 0.05rem 0.45rem; border-radius: 99px; font-size: 0.78rem; font-weight: 600; background: var(--bar); color: var(--muted); }
+  .tag.ok { color: var(--ok); } .tag.bad { color: var(--bad); } .tag.warn { color: var(--warn); }
+  .empty { color: var(--muted); font-size: 0.87rem; padding: 0.3rem 0; }
+
+  /* Tap test and progress bars. */
+  .meter { height: 0.5rem; background: var(--bar); border-radius: 99px; overflow: hidden; min-width: 4rem; }
+  .meter > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+  .meter.done > i { background: var(--ok); } .meter.failed > i { background: var(--bad); }
+  .slider { display: flex; align-items: center; gap: 0.6rem; }
+  .slider input { flex: 1; min-width: 8rem; accent-color: var(--accent); }
+  .slider output { min-width: 5.5rem; text-align: right; font-weight: 600; }
+
+  /* Video. */
+  .lib { list-style: none; margin: 0; padding: 0; }
+  .lib li { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid var(--line); }
+  .lib li:last-child { border-bottom: 0; }
+  .lib .what { flex: 1; min-width: 0; }
+  .lib .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .lib .in-use { color: var(--ok); font-size: 0.78rem; font-weight: 600; margin-left: 0.4rem; }
+  .preview {
+    display: flex; align-items: center; justify-content: center; min-height: 10rem;
+    background: #262626; border-radius: 8px; padding: 0.75rem; overflow: hidden;
+  }
+  .preview img { max-width: 100%; height: auto; image-rendering: pixelated; display: block; }
+  .preview .empty { color: #8b929c; }
+  .file { position: relative; }
+  .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  /* Game. */
+  .state-line { font-size: 1.15rem; font-weight: 700; margin: 0.1rem 0 0.7rem; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; }
+  .stat { background: var(--bg); border-radius: 8px; padding: 0.55rem 0.7rem; }
+  .stat .k { color: var(--muted); font-size: 0.8rem; }
+  .stat .v { font-size: 1.6rem; font-weight: 700; line-height: 1.15; }
+  @media (max-width: 30rem) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stars { color: #e3a008; letter-spacing: 0.1em; font-size: 1.5rem; }
+  .stars .off { color: var(--line-strong); }
+  .newbest { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 99px; background: var(--ok); color: var(--panel); font-size: 0.8rem; font-weight: 700; vertical-align: middle; }
+
+  .log { list-style: none; margin: 0; padding: 0; font-size: 0.82rem; }
+  .log li { padding: 0.2rem 0; border-bottom: 1px solid var(--line); display: flex; gap: 0.6rem; }
+  .log li:last-child { border-bottom: 0; }
+  .log time { color: var(--muted); flex: none; }
+  a { color: var(--accent); }
+  .error { color: var(--bad); font-size: 0.88rem; font-weight: 600; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <span class="brand">SE15 Wall</span>
+    <span class="chip"><span class="dot" id="pico-dot"></span>Pico <b id="pico-state">connecting</b></span>
+    <span class="chip">Tiles online <b id="online">0 of 0</b></span>
+    <span class="chip">Mode <b id="mode">-</b></span>
+    <span class="chip" id="job-chip" hidden><span class="dot warn"></span><b id="job">-</b></span>
+  </div>
+  <div class="problems" id="problems" role="status" aria-live="polite"></div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-setup" aria-controls="view-setup" aria-selected="true">Setup</button>
+    <button class="tab" role="tab" id="tab-video" aria-controls="view-video" aria-selected="false">Video</button>
+    <button class="tab" role="tab" id="tab-game" aria-controls="view-game" aria-selected="false">Game</button>
+  </nav>
+</header>
+
+<main>
+  <!-- Setup -->
+  <div class="view" id="view-setup" role="tabpanel" aria-labelledby="tab-setup">
+    <div class="cols">
+      <div>
+        <section class="card">
+          <h2>Grid</h2>
+          <div class="row">
+            <label>Rows <input id="rows" type="number" min="1" max="9" value="1"></label>
+            <label>Columns <input id="cols" type="number" min="1" max="9" value="1"></label>
+            <button class="btn" id="set-grid">Set grid</button>
+          </div>
+          <div class="muted">Up to 9 x 9 cells, with up to 9 tiles placed in any of them.</div>
+        </section>
+        <section class="card">
+          <h2>Tiles on the wall</h2>
+          <div class="wall" id="wall"></div>
+          <div class="muted" id="wall-note">Empty cell: click it, then tap the tile that belongs there.
+            Tile: click to switch it off. Dashed: switched off, click to switch it back on.</div>
+        </section>
+      </div>
+      <div>
+        <section class="card">
+          <h2>Tile health</h2>
+          <table>
+            <thead><tr><th>Tile</th><th>Cell</th><th>Status</th><th>Turned</th><th>Faults</th></tr></thead>
+            <tbody id="health"></tbody>
+          </table>
+        </section>
+        <section class="card">
+          <h2>Tap test</h2>
+          <div class="row">
+            <button class="btn" id="tap-toggle">Start tap test</button>
+            <span class="muted" id="tap-note"></span>
+          </div>
+          <table style="margin-top: 0.6rem">
+            <thead><tr><th>Tile</th><th>Strength</th><th class="num">Peak</th><th class="num">When</th></tr></thead>
+            <tbody id="taps"></tbody>
+          </table>
+          <div class="muted" id="tap-log"></div>
+        </section>
+        <section class="card">
+          <h2>Tap sensitivity</h2>
+          <div class="slider">
+            <input id="threshold" type="range" min="60" max="2000" step="20" value="300" aria-label="Tap threshold">
+            <output id="threshold-out">default</output>
+          </div>
+          <div class="row">
+            <button class="btn" id="threshold-default">Use tile default</button>
+          </div>
+          <div class="muted">A tap must be at least this hard. Lower is more sensitive. Sent with the next round.</div>
+        </section>
+      </div>
+    </div>
+    <section class="card" style="margin-top: 1rem">
+      <h2>Activity</h2>
+      <ul class="log" id="log"></ul>
+    </section>
+  </div>
+
+  <!-- Video -->
+  <div class="view" id="view-video" role="tabpanel" aria-labelledby="tab-video" hidden>
+    <div class="banner" id="video-banner" hidden>
+      <span>The wall is in game mode.</span>
+      <button class="btn" data-mode="video">Switch to video mode</button>
+    </div>
+    <div class="cols">
+      <div>
+        <section class="card">
+          <h2>Playback</h2>
+          <div class="row">
+            <button class="btn primary" id="play">Play</button>
+            <button class="btn" id="pause">Pause</button>
+            <button class="btn" id="resume">Resume</button>
+            <button class="btn danger" id="stop">Stop</button>
+          </div>
+          <div class="muted" id="play-note"></div>
+        </section>
+        <section class="card">
+          <h2>Preview</h2>
+          <div class="preview" id="preview"><span class="empty">Choose a GIF to see how it is cut.</span></div>
+          <div class="muted" style="margin-top: 0.5rem">First frame, cut exactly as each tile gets it. Grey cells show nothing.</div>
+        </section>
+      </div>
+      <div>
+        <section class="card">
+          <h2>GIF library</h2>
+          <div class="row">
+            <label class="btn file"><input type="file" id="gif-file" accept=".gif,image/gif">Add GIF</label>
+            <button class="btn" id="no-video">No video</button>
+          </div>
+          <ul class="lib" id="library" style="margin-top: 0.5rem"></ul>
+        </section>
+        <section class="card">
+          <h2>Upload to the wall</h2>
+          <table>
+            <thead><tr><th>Tile</th><th>Progress</th><th>State</th><th class="num">Time</th></tr></thead>
+            <tbody id="uploads"></tbody>
+          </table>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game -->
+  <div class="view" id="view-game" role="tabpanel" aria-labelledby="tab-game" hidden>
+    <div class="banner" id="game-banner" hidden>
+      <span>The wall is in video mode.</span>
+      <button class="btn" data-mode="game">Switch to game mode</button>
+    </div>
+    <div class="cols">
+      <div>
+        <section class="card">
+          <h2>Round</h2>
+          <div class="state-line" id="round-state">-</div>
+          <div class="row">
+            <span class="seg" id="level" role="group" aria-label="Level">
+              <button data-level="easy" aria-pressed="true">Easy</button>
+              <button data-level="normal" aria-pressed="false">Normal</button>
+              <button data-level="hard" aria-pressed="false">Hard</button>
+            </span>
+          </div>
+          <div class="row">
+            <button class="btn primary" id="arm">Arm round</button>
+            <button class="btn" id="start-now">Start now</button>
+            <button class="btn danger" id="abort">Abort</button>
+          </div>
+          <div class="row error" id="game-error" role="alert" hidden></div>
+          <div class="muted">Arm shows the start arrow on the wall; the child's tap on it starts the countdown.
+            Start now skips the arrow.</div>
+        </section>
+        <section class="card">
+          <h2>Live</h2>
+          <div class="stats">
+            <div class="stat"><div class="k">Score</div><div class="v" id="live-score">0</div></div>
+            <div class="stat"><div class="k">Missed</div><div class="v" id="live-missed">0</div></div>
+            <div class="stat"><div class="k">Wrong</div><div class="v" id="live-wrong">0</div></div>
+            <div class="stat"><div class="k">Time left</div><div class="v" id="live-left">-</div></div>
+          </div>
+        </section>
+      </div>
+      <div>
+        <section class="card">
+          <h2>Last round<span id="new-best" class="newbest" hidden>New best!</span></h2>
+          <div id="result" class="empty">No round yet.</div>
+        </section>
+        <section class="card">
+          <h2>Best today</h2>
+          <table>
+            <tbody id="best"></tbody>
+          </table>
+          <div class="row"><a href="/score" target="_blank" rel="noopener">Open the scoreboard</a><span class="muted">for a TV or projector</span></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const LEVELS = ["easy", "normal", "hard"];
+const ROUND_TEXT = {
+  "GAME IDLE": "Ready",
+  "ARMED": "Armed: waiting for the tap on the start arrow",
+  "COUNTDOWN": "Counting down",
+  "PLAYING": "Playing",
+  "RESULTS": "Showing the results",
+};
+let state = null;
+let level = "easy";
+let problemNote = "";
+let problemUntil = 0;
+let libraryVersion = 0;
+let previewKey = "";
+let lastError = "";
+
+function store(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* Private window. */ }
+}
+function recall(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  for (const child of children) node.append(child);
+  return node;
+}
+function replace(target, nodes) {
+  target.replaceChildren(...nodes);
+}
+/* A section is rebuilt only when what it shows changed: rebuilding buttons
+   4 times a second would drop clicks that land between press and release. */
+const drawn = {};
+function changed(name, ...parts) {
+  const key = JSON.stringify(parts);
+  if (drawn[name] === key) return false;
+  drawn[name] = key;
+  return true;
+}
+function say(text) {
+  problemNote = text;
+  problemUntil = Date.now() + 6000;
+  renderProblems();
+}
+
+async function post(path, body) {
+  try {
+    const res = await fetch(path, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body || {}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      lastError = data.error || ("refused (" + res.status + ")");
+      say(lastError);
+      return null;
+    }
+    if (data && data.rows !== undefined) { state = data; render(); }
+    return data;
+  } catch (e) {
+    say("The PC did not answer: " + e.message);
+    return null;
+  }
+}
+
+/* Tabs. */
+const TABS = ["setup", "video", "game"];
+function showTab(name) {
+  if (!TABS.includes(name)) name = "setup";
+  for (const tab of TABS) {
+    $("tab-" + tab).setAttribute("aria-selected", String(tab === name));
+    $("view-" + tab).hidden = tab !== name;
+  }
+  store("se15-tab", name);
+  if (name === "video") loadLibrary();
+}
+for (const tab of TABS) $("tab-" + tab).addEventListener("click", () => showTab(tab));
+
+/* Status bar. */
+function placedNodes() {
+  return state ? state.node_map.filter((n) => n > 0) : [];
+}
+function isOnline(node) {
+  return Boolean(state.online & (1 << (node - 1)));
+}
+function renderBar() {
+  const pico = state.pico_state;
+  $("pico-state").textContent = pico;
+  const dot = $("pico-dot");
+  dot.className = "dot " + (pico === "NO STATUS YET" ? "bad"
+    : ["READY", "COORDINATING PLAYBACK", "COORDINATING GAME"].includes(pico) ? "ok"
+    : pico === "FAULT" ? "bad" : "warn");
+  const placed = placedNodes();
+  $("online").textContent = placed.filter(isOnline).length + " of " + placed.length;
+  $("mode").textContent = state.mode;
+  $("job-chip").hidden = !state.job;
+  if (state.job) $("job").textContent = state.job === "upload" ? "Uploading" : state.job;
+}
+function renderProblems() {
+  const items = [];
+  if (state) {
+    const offline = placedNodes().filter((n) => !isOnline(n));
+    if (state.pico_state === "NO STATUS YET") items.push("No STATUS from the Pico yet");
+    else if (offline.length) items.push("Offline: tile " + offline.join(", "));
+    const failed = state.uploads.filter((u) => u.state === "failed").map((u) => u.node);
+    if (failed.length) items.push("Upload failed: tile " + failed.join(", "));
+    const faulty = state.tiles.filter((t) => t.faults && t.faults !== "none");
+    if (faulty.length) items.push("Faults: " + faulty.map((t) => "tile " + t.node + " " + t.faults).join("; "));
+  } else {
+    items.push("The PC is not answering");
+  }
+  if (problemNote && Date.now() < problemUntil) items.unshift(problemNote);
+  $("problems").textContent = items.join("  ·  ");
+}
+
+/* Setup: grid editor. */
+function renderGrid() {
+  const rows = state.rows, cols = state.cols;
+  for (const [id, value] of [["rows", rows], ["cols", cols]]) {
+    if (document.activeElement !== $(id)) $(id).value = value;
+  }
+  const wall = $("wall");
+  const side = Math.max(rows, cols);
+  const width = Math.min(wall.parentElement.clientWidth - 32, 33 * 16);
+  const cell = Math.max(30, Math.min(86, Math.floor((width - 6 * (side - 1)) / side)));
+  wall.style.gridTemplateColumns = "repeat(" + cols + ", " + cell + "px)";
+  wall.style.setProperty("--num", (cell < 46 ? 0.9 : cell < 64 ? 1.05 : 1.3) + "rem");
+  const busy = Boolean(state.job) || !state.stopped;
+  $("set-grid").disabled = busy;
+  if (!changed("grid", rows, cols, state.node_map, state.parked, state.armed, state.online, busy, cell)) return;
+  const cells = [];
+  for (let slot = 0; slot < rows * cols; slot++) {
+    const node = state.node_map[slot] || 0;
+    const parked = state.parked[slot] || 0;
+    const armed = state.armed === slot;
+    const r = Math.floor(slot / cols) + 1, c = (slot % cols) + 1;
+    let cls = "cell", num = "", sub = "", label, action;
+    if (armed) {
+      cls += " armed"; num = "?"; sub = "tap a tile";
+      label = "Row " + r + ", column " + c + ": waiting for a tap";
+    } else if (node) {
+      const online = isOnline(node);
+      cls += " on" + (online ? "" : " offline"); num = String(node);
+      sub = online ? "on" : "offline";
+      label = "Tile " + node + " at row " + r + ", column " + c + ". Click to switch off.";
+      action = () => post("/api/slot", {slot: slot, on: false});
+    } else if (parked) {
+      cls += " parked"; num = String(parked); sub = "off";
+      label = "Tile " + parked + " switched off at row " + r + ", column " + c + ". Click to switch on.";
+      action = () => post("/api/slot", {slot: slot, on: true});
+    } else {
+      sub = "empty";
+      label = "Empty cell at row " + r + ", column " + c + ". Click, then tap a tile.";
+      action = () => post("/api/place", {slot: slot});
+    }
+    if (cell < 52) cls += " small";
+    const attrs = {class: cls, title: label, "aria-label": label, style: "width:" + cell + "px"};
+    if (busy || armed) attrs.disabled = "";
+    const button = el("div", attrs);
+    button.setAttribute("role", "button");
+    button.tabIndex = busy || armed ? -1 : 0;
+    if (node) button.append(el("span", {class: "led " + (isOnline(node) ? "ok" : "bad")}));
+    button.append(el("span", {class: "num", text: num}), el("span", {class: "sub", text: sub}));
+    if ((node || parked) && !busy && !armed) {
+      /* Remove (19 Nov 2026): the tile leaves the grid, the cell is freed. */
+      const tile = node || parked;
+      const remove = el("button", {class: "remove", text: "×", title: "Remove tile " + tile + " from the grid",
+                                   "aria-label": "Remove tile " + tile + " from the grid"});
+      remove.addEventListener("click", (event) => {
+        event.stopPropagation();
+        post("/api/remove", {slot: slot});
+      });
+      button.append(remove);
+    }
+    if (action && !busy && !armed) {
+      button.addEventListener("click", action);
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); action(); }
+      });
+    }
+    cells.push(button);
+  }
+  replace(wall, cells);
+  $("wall-note").textContent = state.armed !== null && state.armed !== undefined
+    ? "Tap the tile that belongs in the highlighted cell (30 s)."
+    : !state.stopped ? "Stop the wall to change the layout."
+    : state.job ? "Uploading: the layout can change when it finishes."
+    : "Empty cell: click it, then tap the tile that belongs there. Tile: click to switch it off, × to remove it from the grid. Dashed: switched off, click to switch it back on.";
+}
+$("set-grid").addEventListener("click", () => {
+  post("/api/grid", {rows: Number($("rows").value), cols: Number($("cols").value)});
+});
+
+/* Setup: tile health (A8). */
+const TURNS = ["upright", "90°", "180°", "270°"];
+function renderHealth() {
+  if (!changed("health", state.tiles.map((t) => [t.node, t.cell, t.on, t.orientation, t.faults]), state.online, state.cols)) return;
+  const rows = state.tiles.map((t) => {
+    const cellText = t.cell === null || t.cell === undefined ? "-"
+      : (Math.floor(t.cell / state.cols) + 1) + ", " + (t.cell % state.cols + 1);
+    const status = !t.on ? el("span", {class: "tag", text: t.cell === null || t.cell === undefined ? "not placed" : "off"})
+      : isOnline(t.node) ? el("span", {class: "tag ok", text: "online"})
+      : el("span", {class: "tag bad", text: "offline"});
+    const faults = t.faults === null ? "-" : t.faults;
+    return el("tr", {},
+      el("td", {text: "Tile " + t.node}), el("td", {text: cellText}), el("td", {}, status),
+      el("td", {text: t.orientation === null ? "-" : (TURNS[t.orientation] || String(t.orientation))}),
+      el("td", {class: faults !== "none" && faults !== "-" ? "" : "muted", text: faults}));
+  });
+  if (!rows.length) rows.push(el("tr", {}, el("td", {colspan: "5", class: "empty", text: "No tile heard yet."})));
+  replace($("health"), rows);
+}
+
+/* Setup: tap test (A11) and sensitivity (A12). */
+const PEAK_FULL_MG = 2000;
+function renderTaps() {
+  const allowed = state.mode === "game" && state.pico_state === "READY";
+  const toggle = $("tap-toggle");
+  toggle.textContent = state.tap_test ? "Stop tap test" : "Start tap test";
+  toggle.disabled = !(allowed || state.tap_test);
+  $("tap-note").textContent = state.tap_test ? "Tap any tile: it lights up and shows here."
+    : state.mode !== "game" ? "Needs game mode." : allowed ? "" : "Needs the wall READY.";
+  const rows = state.taps.map((t) => el("tr", {},
+    el("td", {text: "Tile " + t.node}),
+    el("td", {}, el("div", {class: "meter"}, el("i", {style: "width:" + Math.min(100, 100 * t.peak_mg / PEAK_FULL_MG) + "%"}))),
+    el("td", {class: "num", text: t.peak_mg + " mg"}),
+    el("td", {class: "num muted", text: t.age_s < 1 ? "now" : Math.round(t.age_s) + " s ago"})));
+  if (!rows.length) rows.push(el("tr", {}, el("td", {colspan: "4", class: "empty", text: "No taps yet."})));
+  replace($("taps"), rows);
+  const slider = $("threshold");
+  if (document.activeElement !== slider) {
+    if (state.threshold_mg) slider.value = state.threshold_mg;
+    $("threshold-out").textContent = state.threshold_mg ? state.threshold_mg + " mg" : "tile default";
+  }
+  $("threshold-default").disabled = state.threshold_mg === 0;
+  $("tap-log").textContent = state.tap_log ? "Every tap is saved to pc/logs/" + state.tap_log + "." : "";
+}
+$("tap-toggle").addEventListener("click", () => post("/api/game/tap_test", {on: !state.tap_test}));
+$("threshold").addEventListener("input", () => { $("threshold-out").textContent = $("threshold").value + " mg"; });
+$("threshold").addEventListener("change", () => post("/api/game/threshold", {mg: Number($("threshold").value)}));
+$("threshold-default").addEventListener("click", () => post("/api/game/threshold", {mg: 0}));
+
+function renderLog() {
+  if (!changed("log", state.messages)) return;
+  const items = state.messages.slice().reverse().map((line) => {
+    const space = line.indexOf(" ");
+    const seconds = Number(line.slice(0, space));
+    const when = new Date(seconds * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false});
+    return el("li", {}, el("time", {text: when}), el("span", {text: line.slice(space + 1)}));
+  });
+  if (!items.length) items.push(el("li", {class: "empty", text: "Nothing yet."}));
+  replace($("log"), items);
+}
+
+/* Video (A13). */
+for (const button of document.querySelectorAll("[data-mode]")) {
+  button.addEventListener("click", () => post("/api/mode", {mode: button.dataset.mode}));
+}
+async function loadLibrary() {
+  try {
+    const res = await fetch("/api/gifs");
+    const data = await res.json();
+    if (res.ok) renderLibrary(data);
+  } catch (e) { /* The state poll reports the PC. */ }
+}
+function renderLibrary(data) {
+  const busy = !state || Boolean(state.job) || !state.stopped;
+  const items = data.gifs.map((g) => {
+    const chosen = g.name === data.chosen;
+    const use = el("button", {class: "btn", text: chosen ? "Re-upload" : "Use"});
+    use.disabled = busy;
+    use.addEventListener("click", () => post("/api/gif", {name: g.name}).then(loadLibrary));
+    const remove = el("button", {class: "btn danger", text: "Delete", "aria-label": "Delete " + g.name});
+    remove.disabled = chosen;
+    remove.addEventListener("click", () => {
+      if (confirm("Delete " + g.name + " from the library?")) post("/api/gifs/delete", {name: g.name}).then(loadLibrary);
+    });
+    const name = el("div", {class: "name", title: g.name, text: g.name});
+    if (chosen) name.append(el("span", {class: "in-use", text: "in use"}));
+    return el("li", {},
+      el("div", {class: "what"}, name,
+        el("div", {class: "muted", text: g.frames + " frames, " + g.width + " x " + g.height + " px"})),
+      use, remove);
+  });
+  if (!items.length) items.push(el("li", {class: "empty", text: "No GIFs yet. Add one from this computer."}));
+  replace($("library"), items);
+  $("no-video").disabled = busy || data.chosen === null;
+}
+$("no-video").addEventListener("click", () => post("/api/gif", {name: null}).then(loadLibrary));
+$("gif-file").addEventListener("change", async () => {
+  const file = $("gif-file").files[0];
+  $("gif-file").value = "";
+  if (!file) return;
+  let name = file.name.replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9 ._-]/g, "_").replace(/^[^A-Za-z0-9]+/, "");
+  name = (name || "gif").slice(0, 60) + ".gif";
+  try {
+    const res = await fetch("/api/gifs?name=" + encodeURIComponent(name), {
+      method: "POST", headers: {"Content-Type": "image/gif"}, body: file,
+    });
+    const data = await res.json();
+    if (!res.ok) { say(data.error || "upload refused"); return; }
+    libraryVersion++;
+    renderLibrary(data);
+    say("Added " + name + ". Press Use to send it to the wall.");
+  } catch (e) {
+    say("The GIF did not reach the PC: " + e.message);
+  }
+});
+function renderVideo() {
+  $("video-banner").hidden = state.mode === "video";
+  $("play").disabled = !state.play_enabled;
+  $("pause").disabled = !state.pause_enabled;
+  $("resume").disabled = !state.resume_enabled;
+  $("stop").disabled = !state.stop_enabled;
+  const playing = ["COORDINATING PLAYBACK", "SYNCHRONISING", "RECOVERING"].includes(state.pico_state);
+  $("play-note").textContent = state.mode !== "video" ? "Switch to video mode to play."
+    : !state.gif ? "Choose a GIF from the library."
+    : state.job ? "Uploading to the tiles..."
+    : playing ? "Playing " + state.gif + "."
+    : state.pico_state === "PAUSED" ? "Paused."
+    : state.play_enabled ? state.gif + " is on every tile. Ready to play."
+    : state.missing.length ? "Waiting for tile " + state.missing.join(", ") + "."
+    : "";
+  const key = state.gif ? [state.gif, state.layout, state.node_map.join(","), state.parked.join(","), libraryVersion].join("|") : "";
+  if (key !== previewKey) {
+    previewKey = key;
+    const box = $("preview");
+    if (!key) {
+      replace(box, [el("span", {class: "empty", text: "Choose a GIF to see how it is cut."})]);
+    } else {
+      const img = el("img", {alt: "Preview of " + state.gif + " cut for the " + state.layout + " grid"});
+      img.addEventListener("error", () => replace(box, [el("span", {class: "empty", text: "The preview could not be drawn."})]));
+      img.src = "/api/preview.png?k=" + encodeURIComponent(key);
+      replace(box, [img]);
+    }
+  }
+  if (!changed("uploads", state.uploads)) return;
+  const rows = state.uploads.map((u) => {
+    const pct = u.state === "done" ? 100 : u.chunks ? Math.round(100 * u.acked / u.chunks) : 0;
+    const tag = u.state === "done" ? "ok" : u.state === "failed" ? "bad" : "warn";
+    return el("tr", {title: u.error || ""},
+      el("td", {text: "Tile " + u.node}),
+      el("td", {}, el("div", {class: "meter " + u.state}, el("i", {style: "width:" + pct + "%"}))),
+      el("td", {}, el("span", {class: "tag " + tag, text: u.state})),
+      el("td", {class: "num", text: u.seconds !== undefined ? u.seconds.toFixed(1) + " s" : ""}));
+  });
+  if (!rows.length) rows.push(el("tr", {}, el("td", {colspan: "4", class: "empty", text: "Nothing uploaded yet."})));
+  replace($("uploads"), rows);
+}
+$("play").addEventListener("click", () => post("/api/video/play"));
+$("pause").addEventListener("click", () => post("/api/video/pause"));
+$("resume").addEventListener("click", () => post("/api/video/resume"));
+$("stop").addEventListener("click", () => post("/api/video/stop"));
+
+/* Game (A5 to A10). */
+function stars(count) {
+  const box = el("span", {class: "stars", "aria-label": count + " of 3 stars"});
+  for (let i = 0; i < 3; i++) box.append(el("span", {class: i < count ? "" : "off", text: "★"}));
+  return box;
+}
+function renderGame() {
+  $("game-banner").hidden = state.mode === "game";
+  const round = state.round_state;
+  $("round-state").textContent = state.mode !== "game" ? "Video mode" : (ROUND_TEXT[round] || round);
+  /* During a round the buttons show the round's level, else the choice. */
+  const shown = state.game_running && state.round ? state.round.level : level;
+  for (const button of $("level").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.level === shown));
+    button.disabled = state.game_running;
+  }
+  $("arm").disabled = !state.game_start_enabled;
+  $("start-now").disabled = !state.start_now_enabled;
+  $("abort").disabled = !state.game_running;
+  const live = state.round;
+  const inRound = state.game_running && live;
+  $("live-score").textContent = inRound ? live.hits : 0;
+  $("live-missed").textContent = inRound ? live.missed : 0;
+  $("live-wrong").textContent = inRound ? live.wrong : 0;
+  $("live-left").textContent = inRound && round === "PLAYING" ? live.time_left_s + " s" : "-";
+  const r = state.last_result;
+  $("new-best").hidden = !(r && r.new_best);
+  if (!changed("game", r, state.best)) return;
+  if (r) {
+    replace($("result"), [el("div", {class: "stats"},
+      ...[["Hits of " + r.shown, r.hits], ["Missed", r.missed], ["Wrong", r.wrong], ["Accuracy", r.accuracy_pct + "%"]]
+        .map(([k, v]) => el("div", {class: "stat"}, el("div", {class: "k", text: k}), el("div", {class: "v", text: String(v)})))),
+      el("div", {class: "row"}, stars(r.stars),
+        el("span", {class: "muted", text: (r.level || "") + ", average reaction " + (r.hits ? r.reaction_ms + " ms" : "-")}))]);
+    $("result").className = "";
+  } else {
+    replace($("result"), ["No round yet."]);
+    $("result").className = "empty";
+  }
+  replace($("best"), LEVELS.map((name) => el("tr", {},
+    el("td", {text: name[0].toUpperCase() + name.slice(1)}),
+    el("td", {class: "num", text: state.best[name] === undefined ? "-" : String(state.best[name])}))));
+}
+for (const button of $("level").querySelectorAll("button")) {
+  button.addEventListener("click", () => { level = button.dataset.level; store("se15-level", level); renderGame(); });
+}
+/* A round command's error also shows next to the buttons (bench 19 Nov
+   2026: an arm the Pico refused looked like nothing happened). */
+function roundCommand(path, body) {
+  const note = $("game-error");
+  post(path, body).then((reply) => {
+    note.hidden = reply !== null;
+    note.textContent = reply === null ? lastError : "";
+  });
+}
+$("arm").addEventListener("click", () => roundCommand("/api/game/arm", {level: level}));
+$("start-now").addEventListener("click", () => roundCommand("/api/game/now"));
+$("abort").addEventListener("click", () => roundCommand("/api/game/abort"));
+
+function render() {
+  renderBar();
+  renderProblems();
+  renderGrid();
+  renderHealth();
+  renderTaps();
+  renderLog();
+  renderVideo();
+  renderGame();
+  if (changed("library", state.job, state.stopped, state.gif) && !$("view-video").hidden) loadLibrary();
+}
+
+async function poll() {
+  try {
+    const res = await fetch("/api/state", {cache: "no-store"});
+    if (res.ok) {
+      const first = state === null && !recall("se15-level");
+      state = await res.json();
+      if (first && LEVELS.includes(state.level)) level = state.level;
+      render();
+    }
+    else { state = null; renderProblems(); }
+  } catch (e) {
+    state = null;
+    renderProblems();
+  }
+  setTimeout(poll, 250);
+}
+
+level = LEVELS.includes(recall("se15-level")) ? recall("se15-level") : "easy";
+showTab(location.hash.slice(1) || recall("se15-tab") || "setup");
+window.addEventListener("resize", () => { if (state) renderGrid(); });
+poll();
+</script>
+</body>
+</html>

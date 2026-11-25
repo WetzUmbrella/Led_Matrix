@@ -85,43 +85,78 @@
  },
  {
   "fields": {
+   "col": [
+    0,
+    4,
+    0,
+    2,
+    1,
+    0,
+    4,
+    0,
+    0
+   ],
+   "cols": 5,
    "crc32": [
     286331153,
     572662306,
     0,
-    858993459,
     1145324612,
+    1431655765,
     0,
-    0,
+    2004318071,
     0,
     0
    ],
    "frame_count": 600,
-   "layout": 1,
-   "node_map": [
+   "placed": [
     1,
-    2,
+    1,
     0,
-    3,
-    4,
+    1,
+    1,
     0,
-    0,
+    1,
     0,
     0
    ],
    "policy": 1,
+   "row": [
+    0,
+    0,
+    0,
+    1,
+    2,
+    0,
+    2,
+    0,
+    0
+   ],
+   "rows": 3,
    "seq": 4660,
    "session_id": 60
   },
   "file": "session_config_typical.bin",
-  "hex": "828746a22130040080654444448488888808000000c0cccccc0c1111111100000000000000000000000000000000",
+  "hex": "828746626a804000869400500800002c23222222444444440000000088888888aaaaaaaa00000000eeeeeeee000000000000000000",
   "kind": "message",
-  "length": 46,
+  "length": 53,
   "message": "SESSION_CONFIG",
   "name": "session_config_typical"
  },
  {
   "fields": {
+   "col": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "cols": 1,
    "crc32": [
     0,
     0,
@@ -134,8 +169,7 @@
     0
    ],
    "frame_count": 1,
-   "layout": 0,
-   "node_map": [
+   "placed": [
     0,
     0,
     0,
@@ -147,18 +181,42 @@
     0
    ],
    "policy": 0,
+   "row": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "rows": 1,
    "seq": 0,
    "session_id": 0
   },
   "file": "session_config_min.bin",
-  "hex": "02000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "hex": "0200002002000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000",
   "kind": "message",
-  "length": 46,
+  "length": 53,
   "message": "SESSION_CONFIG",
   "name": "session_config_min"
  },
  {
   "fields": {
+   "col": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "cols": 9,
    "crc32": [
     4294967295,
     4294967295,
@@ -171,26 +229,37 @@
     4294967295
    ],
    "frame_count": 1023,
-   "layout": 2,
-   "node_map": [
-    9,
-    9,
-    9,
-    9,
-    9,
-    9,
-    9,
-    9,
-    9
+   "placed": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
    ],
    "policy": 1,
+   "row": [
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8
+   ],
+   "rows": 9,
    "seq": 65535,
    "session_id": 255
   },
   "file": "session_config_max.bin",
-  "hex": "e2ffffdf99999999f9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3f",
+  "hex": "e2ffff3f73841851e2448a152d5ec4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01",
   "kind": "message",
-  "length": 46,
+  "length": 53,
   "message": "SESSION_CONFIG",
   "name": "session_config_max"
  },
@@ -685,46 +754,73 @@
  },
  {
   "fields": {
+   "level": 1,
+   "missed": 5,
    "online": 346,
+   "reaction_ms": 431,
    "readiness": 165,
+   "round_state": 3,
+   "score": -7,
    "seq": 4660,
    "session_id": 60,
-   "state": 8
+   "shown": 17,
+   "state": 12,
+   "time_left_s": 21,
+   "wall_turn": 3,
+   "wrong": 2
   },
   "file": "status_typical.bin",
-  "hex": "8f8746a2945604",
+  "hex": "8f8746a29456ce5f0541a47acd",
   "kind": "message",
-  "length": 7,
+  "length": 13,
   "message": "STATUS",
   "name": "status_typical"
  },
  {
   "fields": {
+   "level": 0,
+   "missed": 0,
    "online": 0,
+   "reaction_ms": 0,
    "readiness": 0,
+   "round_state": 0,
+   "score": -99,
    "seq": 0,
    "session_id": 0,
-   "state": 0
+   "shown": 0,
+   "state": 0,
+   "time_left_s": 0,
+   "wall_turn": 0,
+   "wrong": 0
   },
   "file": "status_min.bin",
-  "hex": "0f000000000000",
+  "hex": "0f0000000000e8040000000000",
   "kind": "message",
-  "length": 7,
+  "length": 13,
   "message": "STATUS",
   "name": "status_min"
  },
  {
   "fields": {
+   "level": 2,
+   "missed": 127,
    "online": 511,
+   "reaction_ms": 2047,
    "readiness": 511,
+   "round_state": 4,
+   "score": 99,
    "seq": 65535,
    "session_id": 255,
-   "state": 11
+   "shown": 127,
+   "state": 12,
+   "time_left_s": 63,
+   "wall_turn": 3,
+   "wrong": 127
   },
   "file": "status_max.bin",
-  "hex": "efffffffffff05",
+  "hex": "efffffffff7f1ea3ffffffffff",
   "kind": "message",
-  "length": 7,
+  "length": 13,
   "message": "STATUS",
   "name": "status_max"
  },
@@ -814,6 +910,291 @@
   "length": 6,
   "message": "TELEMETRY_ACK",
   "name": "telemetry_ack_max"
+ },
+ {
+  "fields": {
+   "node_id": 5,
+   "peak": 10844,
+   "seq": 4660,
+   "session_id": 60,
+   "t_tap": 1250999896491
+  },
+  "file": "tap_typical.bin",
+  "hex": "928746a2b8545613cf8a4602000000",
+  "kind": "message",
+  "length": 15,
+  "message": "TAP",
+  "name": "tap_typical"
+ },
+ {
+  "fields": {
+   "node_id": 1,
+   "peak": 0,
+   "seq": 0,
+   "session_id": 0,
+   "t_tap": 0
+  },
+  "file": "tap_min.bin",
+  "hex": "120000200000000000000000000000",
+  "kind": "message",
+  "length": 15,
+  "message": "TAP",
+  "name": "tap_min"
+ },
+ {
+  "fields": {
+   "node_id": 9,
+   "peak": 65535,
+   "seq": 65535,
+   "session_id": 255,
+   "t_tap": 18446744073709551615
+  },
+  "file": "tap_max.bin",
+  "hex": "f2ffff3fffffffffffffffffffff01",
+  "kind": "message",
+  "length": 15,
+  "message": "TAP",
+  "name": "tap_max"
+ },
+ {
+  "fields": {
+   "kind": 1,
+   "node_id": 3,
+   "seq": 4660,
+   "session_id": 60,
+   "t_show": 1234567890123,
+   "up_ms": 1200
+  },
+  "file": "mole_on_typical.bin",
+  "hex": "938746629609f6e33e0200006029",
+  "kind": "message",
+  "length": 14,
+  "message": "MOLE_ON",
+  "name": "mole_on_typical"
+ },
+ {
+  "fields": {
+   "kind": 0,
+   "node_id": 1,
+   "seq": 0,
+   "session_id": 0,
+   "t_show": 0,
+   "up_ms": 0
+  },
+  "file": "mole_on_min.bin",
+  "hex": "1300002000000000000000000000",
+  "kind": "message",
+  "length": 14,
+  "message": "MOLE_ON",
+  "name": "mole_on_min"
+ },
+ {
+  "fields": {
+   "kind": 4,
+   "node_id": 9,
+   "seq": 65535,
+   "session_id": 255,
+   "t_show": 18446744073709551615,
+   "up_ms": 4000
+  },
+  "file": "mole_on_max.bin",
+  "hex": "f3ffff3fffffffffffffffff419f",
+  "kind": "message",
+  "length": 14,
+  "message": "MOLE_ON",
+  "name": "mole_on_max"
+ },
+ {
+  "fields": {
+   "node_id": 6,
+   "result": 1,
+   "seq": 4660,
+   "session_id": 60
+  },
+  "file": "feedback_typical.bin",
+  "hex": "948746c202",
+  "kind": "message",
+  "length": 5,
+  "message": "FEEDBACK",
+  "name": "feedback_typical"
+ },
+ {
+  "fields": {
+   "node_id": 1,
+   "result": 0,
+   "seq": 0,
+   "session_id": 0
+  },
+  "file": "feedback_min.bin",
+  "hex": "1400002000",
+  "kind": "message",
+  "length": 5,
+  "message": "FEEDBACK",
+  "name": "feedback_min"
+ },
+ {
+  "fields": {
+   "node_id": 9,
+   "result": 2,
+   "seq": 65535,
+   "session_id": 255
+  },
+  "file": "feedback_max.bin",
+  "hex": "f4ffff3f05",
+  "kind": "message",
+  "length": 5,
+  "message": "FEEDBACK",
+  "name": "feedback_max"
+ },
+ {
+  "fields": {
+   "command": 4,
+   "level": 1,
+   "node_id": 2,
+   "seq": 4660,
+   "session_id": 60,
+   "threshold": 10
+  },
+  "file": "game_control_typical.bin",
+  "hex": "958746422805",
+  "kind": "message",
+  "length": 6,
+  "message": "GAME_CONTROL",
+  "name": "game_control_typical"
+ },
+ {
+  "fields": {
+   "command": 0,
+   "level": 0,
+   "node_id": 0,
+   "seq": 0,
+   "session_id": 0,
+   "threshold": 0
+  },
+  "file": "game_control_min.bin",
+  "hex": "150000000000",
+  "kind": "message",
+  "length": 6,
+  "message": "GAME_CONTROL",
+  "name": "game_control_min"
+ },
+ {
+  "fields": {
+   "command": 7,
+   "level": 2,
+   "node_id": 9,
+   "seq": 65535,
+   "session_id": 255,
+   "threshold": 250
+  },
+  "file": "game_control_max.bin",
+  "hex": "f5ffff3f4f7d",
+  "kind": "message",
+  "length": 6,
+  "message": "GAME_CONTROL",
+  "name": "game_control_max"
+ },
+ {
+  "fields": {
+   "colour": 1,
+   "dur_ms": 1000,
+   "effect": 0,
+   "mask": 1746410393481133080,
+   "node_id": 7,
+   "repeat": 1,
+   "seq": 4660,
+   "session_id": 60,
+   "slot": 2,
+   "t_show": 9876543210987
+  },
+  "file": "wall_picture_typical.bin",
+  "hex": "968746e224d70bb31ff7110000d007068fdfffbf1f0f06",
+  "kind": "message",
+  "length": 23,
+  "message": "WALL_PICTURE",
+  "name": "wall_picture_typical"
+ },
+ {
+  "fields": {
+   "colour": 0,
+   "dur_ms": 0,
+   "effect": 0,
+   "mask": 0,
+   "node_id": 1,
+   "repeat": 0,
+   "seq": 0,
+   "session_id": 0,
+   "slot": 0,
+   "t_show": 0
+  },
+  "file": "wall_picture_min.bin",
+  "hex": "1600002000000000000000000000000000000000000000",
+  "kind": "message",
+  "length": 23,
+  "message": "WALL_PICTURE",
+  "name": "wall_picture_min"
+ },
+ {
+  "fields": {
+   "colour": 7,
+   "dur_ms": 8191,
+   "effect": 2,
+   "mask": 18446744073709551615,
+   "node_id": 9,
+   "repeat": 1,
+   "seq": 65535,
+   "session_id": 255,
+   "slot": 3,
+   "t_show": 18446744073709551615
+  },
+  "file": "wall_picture_max.bin",
+  "hex": "f6ffff3ff7ffffffffffffffffffffffffffffffffff3f",
+  "kind": "message",
+  "length": 23,
+  "message": "WALL_PICTURE",
+  "name": "wall_picture_max"
+ },
+ {
+  "fields": {
+   "acked_seq": 42330,
+   "node_id": 4,
+   "seq": 4660,
+   "session_id": 60
+  },
+  "file": "ack_typical.bin",
+  "hex": "97874682b44a01",
+  "kind": "message",
+  "length": 7,
+  "message": "ACK",
+  "name": "ack_typical"
+ },
+ {
+  "fields": {
+   "acked_seq": 0,
+   "node_id": 0,
+   "seq": 0,
+   "session_id": 0
+  },
+  "file": "ack_min.bin",
+  "hex": "17000000000000",
+  "kind": "message",
+  "length": 7,
+  "message": "ACK",
+  "name": "ack_min"
+ },
+ {
+  "fields": {
+   "acked_seq": 65535,
+   "node_id": 9,
+   "seq": 65535,
+   "session_id": 255
+  },
+  "file": "ack_max.bin",
+  "hex": "f7ffff3fffff01",
+  "kind": "message",
+  "length": 7,
+  "message": "ACK",
+  "name": "ack_max"
  },
  {
   "fields": {

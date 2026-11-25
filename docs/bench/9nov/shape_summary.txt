@@ -1,0 +1,6 @@
+taps  soft tap  ms over 150 mg: n=38  min  20  median  80  p90 170  max 190
+taps  soft tap  ms over 300 mg: n=37  min  10  median  50  p90  80  max 120
+taps  palm slap ms over 150 mg: n=40  min 140  median 410  p90 600  max 610
+taps  palm slap ms over 300 mg: n=40  min  30  median 365  p90 530  max 590
+turns turn      ms over 150 mg: n=40  min 140  median 355  p90 410  max 510
+turns turn      ms over 300 mg: n=40  min  60  median 160  p90 370  max 370

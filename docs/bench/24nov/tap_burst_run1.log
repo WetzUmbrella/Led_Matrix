@@ -1,0 +1,14 @@
+13:55:58 burst 10, status age 0.1
+13:56:05 burst 20, status age 0.1
+13:56:12 burst 30, status age 0.2
+13:56:19 burst 40, status age 0.2
+13:56:26 burst 50, status age 0.0
+13:56:33 burst 60, status age 0.0
+13:56:40 burst 70, status age 0.1
+13:56:47 burst 80, status age 0.1
+13:56:54 burst 90, status age 0.1
+13:57:01 burst 100, status age 0.2
+13:57:08 burst 110, status age 0.2
+13:57:15 burst 120, status age 0.3
+13:57:20 burst 127, status age 3.2
+FROZE: no STATUS for over 3 s

@@ -46,7 +46,10 @@ NEEDS = "[NEEDS MEASUREMENT]"
 MESSAGES = ["REGISTER", "HEARTBEAT", "SESSION_CONFIG", "MANIFEST",
             "ASSET_CHUNK", "CHUNK_ACK", "NACK", "BUSY", "ASSET_READY",
             "SYNC_READY", "BEACON", "START_AT", "RESUME_AT", "PAUSE", "STOP",
-            "STATUS", "TELEMETRY", "TELEMETRY_ACK"]
+            "STATUS", "TELEMETRY", "TELEMETRY_ACK",
+            # Whack-a-mole (from 11 Nov 2026), types 18 to 23.
+            "TAP", "MOLE_ON", "FEEDBACK", "GAME_CONTROL", "WALL_PICTURE",
+            "ACK"]
 
 #: Before sizes not in before_after.md section 3.2: (bytes, label, note).
 BEFORE_EXTRA = {
@@ -55,6 +58,35 @@ BEFORE_EXTRA = {
     "HEARTBEAT": ("13 B", "derived (T-B4-01 typing rule)",
                   "9 B header + Node ID `uint32_t` 4; the prototype's "
                   "HELLO (9 B, measured) did both jobs"),
+    # 25 Nov 2026: rows added or grown after the 3 Nov run, by the same
+    # typing rule (before_after.md section 3.1); they replace section 3.2.
+    "SESSION_CONFIG": ("79 B", "derived (T-B4-01 typing rule)",
+                       "9 B header + rows, cols, policy `uint8_t` 3 + per "
+                       "Node ID placed, row, col `uint8_t` 9 x 3 = 27 + "
+                       "frame_count `uint32_t` 4 + CRC32 9 x 4 = 36 (sparse "
+                       "grid of step 4d replaced the 3 Nov layout enum and "
+                       "Node ID map, 87 B)"),
+    "STATUS": ("52 B", "derived (T-B4-01 typing rule)",
+               "28 B of section 3.2 + score `int8_t` 1 + round state, level, "
+               "wall turn `uint8_t` 3 + missed, wrong, shown, time left, "
+               "reaction `uint32_t` 5 x 4 = 20 (game fields, 11 to 24 Nov)"),
+    "TAP": ("23 B", "derived (T-B4-01 typing rule)",
+            "9 B header + Node ID `uint32_t` 4 + peak `uint16_t` 2 + t_tap "
+            "`uint64_t` 8"),
+    "MOLE_ON": ("24 B", "derived (T-B4-01 typing rule)",
+                "9 B header + Node ID 4 + t_show `uint64_t` 8 + up_ms "
+                "`uint16_t` 2 + kind `uint8_t` 1"),
+    "FEEDBACK": ("14 B", "derived (T-B4-01 typing rule)",
+                 "9 B header + Node ID 4 + result `uint8_t` 1"),
+    "GAME_CONTROL": ("17 B", "derived (T-B4-01 typing rule)",
+                     "9 B header + Node ID 4 + command, level `uint8_t` 2 "
+                     "+ threshold `uint16_t` 2"),
+    "WALL_PICTURE": ("37 B", "derived (T-B4-01 typing rule)",
+                     "9 B header + Node ID 4 + slot, effect, colour, repeat "
+                     "`uint8_t` 4 + t_show `uint64_t` 8 + duration `uint32_t`"
+                     " 4 + mask `uint64_t` 8"),
+    "ACK": ("17 B", "derived (T-B4-01 typing rule)",
+            "9 B header + Node ID 4 + acked seq `uint32_t` 4"),
 }
 
 
@@ -88,7 +120,7 @@ def before_sizes(text: str) -> Dict[str, Tuple[str, str]]:
         if len(cells) >= 5 and cells[0] in MESSAGES:
             sizes[cells[0]] = (cells[3], cells[4])
     for name, (size, label, _note) in BEFORE_EXTRA.items():
-        sizes.setdefault(name, (size, label))
+        sizes[name] = (size, label)
     return sizes
 
 

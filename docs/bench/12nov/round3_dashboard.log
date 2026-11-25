@@ -1,0 +1,119 @@
+>>> config docs/bench/9nov/numbered_1x2.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794416396.449 configuration accepted
+>>> build
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+>>> upload
+failed: none
+1794416401.685 uploaded to 172.20.10.4: 57 of 57 chunks ACKed, resent 0, 5.19 s
+1794416406.872 uploaded to 172.20.10.5: 57 of 57 chunks ACKed, resent 0, 5.19 s
+1794416406.873 all tiles ready
+>>> upload
+failed: none
+1794416409.876 all tiles ready
+>>> status
+pico READY readiness=0x018 online=0x018 score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> mode game
+1794416412.878 mode game
+>>> tap on
+tap test: tap the tiles for 20 s
+   0.0 s  READY / GAME IDLE score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+>>> tap off
+tap test over: stop tapping; arming in 3 s
+>>> threshold 0
+1794416436.957 tap threshold default
+>>> game arm normal
+1794416436.957 level normal
+armed: tap the start sprite (60 s)
+   0.0 s  READY / GAME IDLE score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+   0.3 s  COORDINATING GAME / ARMED score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+   3.3 s  COORDINATING GAME / COUNTDOWN score=0 hits=0 missed=0 wrong=0 shown=0 left=0 reaction=0 online=0x018
+   6.8 s  COORDINATING GAME / PLAYING score=0 hits=0 missed=0 wrong=0 shown=0 left=30 reaction=0 online=0x018
+   7.0 s  COORDINATING GAME / PLAYING score=0 hits=0 missed=0 wrong=0 shown=1 left=30 reaction=0 online=0x018
+   7.8 s  COORDINATING GAME / PLAYING score=0 hits=0 missed=0 wrong=0 shown=1 left=29 reaction=0 online=0x018
+   8.0 s  COORDINATING GAME / PLAYING score=1 hits=1 missed=0 wrong=0 shown=2 left=29 reaction=692 online=0x018
+   8.5 s  COORDINATING GAME / PLAYING score=2 hits=2 missed=0 wrong=0 shown=2 left=29 reaction=541 online=0x018
+   8.8 s  COORDINATING GAME / PLAYING score=2 hits=2 missed=0 wrong=0 shown=3 left=28 reaction=541 online=0x018
+   9.8 s  COORDINATING GAME / PLAYING score=3 hits=3 missed=0 wrong=0 shown=3 left=27 reaction=684 online=0x018
+  10.0 s  COORDINATING GAME / PLAYING score=3 hits=3 missed=0 wrong=1 shown=4 left=27 reaction=684 online=0x018
+  10.5 s  COORDINATING GAME / PLAYING score=4 hits=4 missed=0 wrong=2 shown=5 left=27 reaction=615 online=0x018
+  10.8 s  COORDINATING GAME / PLAYING score=4 hits=4 missed=0 wrong=2 shown=5 left=26 reaction=615 online=0x018
+  11.3 s  COORDINATING GAME / PLAYING score=5 hits=5 missed=0 wrong=2 shown=6 left=26 reaction=551 online=0x018
+  11.8 s  COORDINATING GAME / PLAYING score=5 hits=5 missed=0 wrong=2 shown=6 left=25 reaction=551 online=0x018
+  12.0 s  COORDINATING GAME / PLAYING score=6 hits=6 missed=0 wrong=3 shown=7 left=25 reaction=545 online=0x018
+  12.3 s  COORDINATING GAME / PLAYING score=6 hits=6 missed=0 wrong=4 shown=7 left=25 reaction=545 online=0x018
+  12.8 s  COORDINATING GAME / PLAYING score=7 hits=7 missed=0 wrong=4 shown=8 left=24 reaction=531 online=0x018
+  13.0 s  COORDINATING GAME / PLAYING score=7 hits=7 missed=0 wrong=5 shown=8 left=24 reaction=531 online=0x018
+  13.3 s  COORDINATING GAME / PLAYING score=7 hits=7 missed=0 wrong=6 shown=8 left=24 reaction=531 online=0x018
+  13.5 s  COORDINATING GAME / PLAYING score=8 hits=8 missed=0 wrong=6 shown=8 left=24 reaction=538 online=0x018
+  13.8 s  COORDINATING GAME / PLAYING score=8 hits=8 missed=0 wrong=6 shown=9 left=23 reaction=538 online=0x018
+  14.3 s  COORDINATING GAME / PLAYING score=9 hits=9 missed=0 wrong=6 shown=10 left=23 reaction=514 online=0x018
+  14.8 s  COORDINATING GAME / PLAYING score=9 hits=9 missed=0 wrong=6 shown=10 left=22 reaction=514 online=0x018
+  15.0 s  COORDINATING GAME / PLAYING score=10 hits=10 missed=0 wrong=6 shown=11 left=22 reaction=500 online=0x018
+  15.5 s  COORDINATING GAME / PLAYING score=11 hits=11 missed=0 wrong=6 shown=12 left=22 reaction=486 online=0x018
+  15.8 s  COORDINATING GAME / PLAYING score=11 hits=11 missed=0 wrong=6 shown=12 left=21 reaction=486 online=0x018
+  16.3 s  COORDINATING GAME / PLAYING score=12 hits=12 missed=0 wrong=6 shown=13 left=21 reaction=476 online=0x018
+  16.8 s  COORDINATING GAME / PLAYING score=13 hits=13 missed=0 wrong=6 shown=13 left=20 reaction=465 online=0x018
+  17.0 s  COORDINATING GAME / PLAYING score=13 hits=13 missed=0 wrong=6 shown=14 left=20 reaction=465 online=0x018
+  17.5 s  COORDINATING GAME / PLAYING score=14 hits=14 missed=0 wrong=6 shown=15 left=20 reaction=457 online=0x018
+  17.8 s  COORDINATING GAME / PLAYING score=14 hits=14 missed=0 wrong=6 shown=15 left=19 reaction=457 online=0x018
+  18.0 s  COORDINATING GAME / PLAYING score=15 hits=15 missed=0 wrong=6 shown=15 left=19 reaction=448 online=0x018
+  18.3 s  COORDINATING GAME / PLAYING score=15 hits=15 missed=0 wrong=6 shown=16 left=19 reaction=448 online=0x018
+  18.8 s  COORDINATING GAME / PLAYING score=16 hits=16 missed=0 wrong=6 shown=17 left=18 reaction=441 online=0x018
+  19.3 s  COORDINATING GAME / PLAYING score=17 hits=17 missed=0 wrong=6 shown=17 left=18 reaction=433 online=0x018
+  19.5 s  COORDINATING GAME / PLAYING score=17 hits=17 missed=0 wrong=6 shown=18 left=18 reaction=433 online=0x018
+  19.8 s  COORDINATING GAME / PLAYING score=17 hits=17 missed=0 wrong=6 shown=18 left=17 reaction=433 online=0x018
+  20.0 s  COORDINATING GAME / PLAYING score=18 hits=18 missed=0 wrong=6 shown=19 left=17 reaction=425 online=0x018
+  20.5 s  COORDINATING GAME / PLAYING score=19 hits=19 missed=0 wrong=6 shown=19 left=17 reaction=419 online=0x018
+  20.8 s  COORDINATING GAME / PLAYING score=19 hits=19 missed=0 wrong=6 shown=20 left=16 reaction=419 online=0x018
+  21.3 s  COORDINATING GAME / PLAYING score=20 hits=20 missed=0 wrong=6 shown=21 left=16 reaction=415 online=0x018
+  21.8 s  COORDINATING GAME / PLAYING score=21 hits=21 missed=0 wrong=6 shown=21 left=15 reaction=412 online=0x018
+  22.0 s  COORDINATING GAME / PLAYING score=21 hits=21 missed=0 wrong=6 shown=22 left=15 reaction=412 online=0x018
+  22.5 s  COORDINATING GAME / PLAYING score=22 hits=22 missed=0 wrong=6 shown=23 left=15 reaction=407 online=0x018
+  22.8 s  COORDINATING GAME / PLAYING score=22 hits=22 missed=0 wrong=6 shown=23 left=14 reaction=407 online=0x018
+  23.0 s  COORDINATING GAME / PLAYING score=23 hits=23 missed=0 wrong=6 shown=23 left=14 reaction=404 online=0x018
+  23.3 s  COORDINATING GAME / PLAYING score=23 hits=23 missed=0 wrong=6 shown=24 left=14 reaction=404 online=0x018
+  23.8 s  COORDINATING GAME / PLAYING score=24 hits=24 missed=0 wrong=6 shown=25 left=13 reaction=399 online=0x018
+  24.3 s  COORDINATING GAME / PLAYING score=25 hits=25 missed=0 wrong=6 shown=25 left=13 reaction=398 online=0x018
+  24.5 s  COORDINATING GAME / PLAYING score=25 hits=25 missed=0 wrong=6 shown=26 left=13 reaction=398 online=0x018
+  24.8 s  COORDINATING GAME / PLAYING score=25 hits=25 missed=0 wrong=6 shown=26 left=12 reaction=398 online=0x018
+  25.0 s  COORDINATING GAME / PLAYING score=26 hits=26 missed=0 wrong=6 shown=27 left=12 reaction=395 online=0x018
+  25.8 s  COORDINATING GAME / PLAYING score=27 hits=27 missed=0 wrong=6 shown=28 left=11 reaction=395 online=0x018
+  26.3 s  COORDINATING GAME / PLAYING score=28 hits=28 missed=0 wrong=6 shown=28 left=11 reaction=394 online=0x018
+  26.5 s  COORDINATING GAME / PLAYING score=28 hits=28 missed=0 wrong=6 shown=29 left=11 reaction=394 online=0x018
+  26.8 s  COORDINATING GAME / PLAYING score=28 hits=28 missed=0 wrong=6 shown=29 left=10 reaction=394 online=0x018
+  27.0 s  COORDINATING GAME / PLAYING score=29 hits=29 missed=0 wrong=6 shown=30 left=10 reaction=393 online=0x018
+  27.5 s  COORDINATING GAME / PLAYING score=30 hits=30 missed=0 wrong=6 shown=30 left=10 reaction=390 online=0x018
+  27.8 s  COORDINATING GAME / PLAYING score=30 hits=30 missed=0 wrong=6 shown=31 left=9 reaction=390 online=0x018
+  28.3 s  COORDINATING GAME / PLAYING score=31 hits=31 missed=0 wrong=6 shown=32 left=9 reaction=389 online=0x018
+  28.8 s  COORDINATING GAME / PLAYING score=31 hits=31 missed=0 wrong=6 shown=32 left=8 reaction=389 online=0x018
+  29.0 s  COORDINATING GAME / PLAYING score=32 hits=32 missed=0 wrong=6 shown=33 left=8 reaction=387 online=0x018
+  29.5 s  COORDINATING GAME / PLAYING score=33 hits=33 missed=0 wrong=6 shown=34 left=8 reaction=385 online=0x018
+  29.8 s  COORDINATING GAME / PLAYING score=33 hits=33 missed=0 wrong=6 shown=34 left=7 reaction=385 online=0x018
+  30.3 s  COORDINATING GAME / PLAYING score=34 hits=34 missed=0 wrong=6 shown=35 left=7 reaction=384 online=0x018
+  30.8 s  COORDINATING GAME / PLAYING score=34 hits=34 missed=0 wrong=6 shown=35 left=6 reaction=384 online=0x018
+  31.0 s  COORDINATING GAME / PLAYING score=35 hits=35 missed=0 wrong=6 shown=36 left=6 reaction=387 online=0x018
+  31.5 s  COORDINATING GAME / PLAYING score=36 hits=36 missed=0 wrong=6 shown=37 left=6 reaction=383 online=0x018
+  31.8 s  COORDINATING GAME / PLAYING score=36 hits=36 missed=0 wrong=6 shown=37 left=5 reaction=383 online=0x018
+  32.3 s  COORDINATING GAME / PLAYING score=37 hits=37 missed=0 wrong=6 shown=38 left=5 reaction=381 online=0x018
+  32.8 s  COORDINATING GAME / PLAYING score=37 hits=37 missed=0 wrong=7 shown=38 left=4 reaction=381 online=0x018
+  33.3 s  COORDINATING GAME / PLAYING score=38 hits=38 missed=0 wrong=7 shown=39 left=4 reaction=393 online=0x018
+  33.8 s  COORDINATING GAME / PLAYING score=38 hits=38 missed=0 wrong=7 shown=39 left=3 reaction=393 online=0x018
+  34.3 s  COORDINATING GAME / PLAYING score=39 hits=39 missed=0 wrong=7 shown=39 left=3 reaction=403 online=0x018
+  34.5 s  COORDINATING GAME / PLAYING score=39 hits=39 missed=0 wrong=7 shown=40 left=3 reaction=403 online=0x018
+  34.8 s  COORDINATING GAME / PLAYING score=40 hits=40 missed=0 wrong=7 shown=41 left=2 reaction=397 online=0x018
+  35.5 s  COORDINATING GAME / PLAYING score=40 hits=40 missed=0 wrong=8 shown=41 left=2 reaction=397 online=0x018
+  35.8 s  COORDINATING GAME / PLAYING score=40 hits=40 missed=0 wrong=8 shown=41 left=1 reaction=397 online=0x018
+  36.0 s  COORDINATING GAME / PLAYING score=40 hits=40 missed=1 wrong=9 shown=41 left=1 reaction=397 online=0x018
+  36.8 s  READY / RESULTS score=40 hits=40 missed=1 wrong=9 shown=41 left=0 reaction=397 online=0x018
+>>> status
+pico READY readiness=0x018 online=0x018 score=40
+round RESULTS level=normal hits=40 missed=1 wrong=9 shown=41 left=0 s reaction=397 ms
+pc READY; start enabled; missing []
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+1794416473.762 round over, score 40, 40 of 41 moles, 9 wrong, 3 stars

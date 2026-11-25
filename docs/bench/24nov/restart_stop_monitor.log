@@ -1,0 +1,18 @@
+1795510371.913 READY session=1 job=None ready=0b111111111 | 1795510344.658 all tiles ready
+1795510373.746 READY session=1 job=None ready=0b111111111 | 1795510373.696 video play
+1795510373.948 COORDINATING PLAYBACK session=1 job=None ready=0b111111111 | 1795510373.696 video play
+1795510379.944 NO STATUS session=1 job=None ready=0b111111111 | 1795510373.696 video play
+1795510384.214 WAITING FOR TILE READINESS session=1 job=upload ready=0b0 | 1795510384.207 Pico back: publishing again
+1795510384.578 WAITING FOR TILE READINESS session=40 job=upload ready=0b0 | 1795510384.495 session 40
+1795510388.034 WAITING FOR TILE READINESS session=40 job=upload ready=0b0 | 1795510387.968 uploaded to 192.168.1.51: 60 of 60 chunks ACKed, resent 1, 3.22 s
+1795510388.237 WAITING FOR TILE READINESS session=40 job=upload ready=0b1000100 | 1795510388.193 uploaded to 192.168.1.75: 60 of 60 chunks ACKed, resent 0, 3.04 s
+1795510388.643 WAITING FOR TILE READINESS session=40 job=upload ready=0b1000100 | 1795510388.581 uploaded to 192.168.1.144: 60 of 60 chunks ACKed, resent 0, 2.98 s
+1795510388.745 WAITING FOR TILE READINESS session=40 job=upload ready=0b1000110 | 1795510388.693 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 3.54 s
+1795510388.948 WAITING FOR TILE READINESS session=40 job=upload ready=0b1001110 | 1795510388.693 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 3.54 s
+1795510389.253 WAITING FOR TILE READINESS session=40 job=upload ready=0b11001110 | 1795510388.693 uploaded to 192.168.1.6: 60 of 60 chunks ACKed, resent 0, 3.54 s
+1795510389.354 WAITING FOR TILE READINESS session=40 job=upload ready=0b11001110 | 1795510389.275 uploaded to 192.168.1.219: 60 of 60 chunks ACKed, resent 0, 4.02 s
+1795510389.659 WAITING FOR TILE READINESS session=40 job=upload ready=0b11001110 | 1795510389.623 uploaded to 192.168.1.86: 60 of 60 chunks ACKed, resent 0, 4.17 s
+1795510389.761 WAITING FOR TILE READINESS session=40 job=upload ready=0b111001110 | 1795510389.727 uploaded to 192.168.1.14: 60 of 60 chunks ACKed, resent 0, 4.32 s
+1795510389.964 WAITING FOR TILE READINESS session=40 job=upload ready=0b111011111 | 1795510389.727 uploaded to 192.168.1.14: 60 of 60 chunks ACKed, resent 0, 4.32 s
+1795510390.065 WAITING FOR TILE READINESS session=40 job=None ready=0b111011111 | 1795510390.017 uploaded to 192.168.1.130: 60 of 60 chunks ACKed, resent 0, 4.46 s
+1795510390.268 READY session=40 job=None ready=0b111111111 | 1795510390.205 all tiles ready

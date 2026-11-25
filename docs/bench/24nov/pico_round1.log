@@ -1,0 +1,175 @@
+## open 14:52:21
+CL_EVENT t_ms=1540579 STATE node=0 value=12
+CL_EVENT t_ms=1545472 GAME_TAP node=9 value=85093
+CL_STATS state=12 sent=15401 first_seq=0 last_seq=15400 send_fail=0 skipped=0 rx_dropped=7 rx_bad=0 stale=4308 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,15390,10,0,1,0,0,0,0,0,0,0
+CB_HIST,93191,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,85628,7546,5,1,0,0,3,1,0,0,0
+CL_EVENT t_ms=1547341 GAME_TAP node=9 value=44085
+CL_STATS state=12 sent=15501 first_seq=0 last_seq=15500 send_fail=0 skipped=0 rx_dropped=7 rx_bad=0 stale=4319 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,15490,10,0,1,0,0,0,0,0,0,0
+CB_HIST,93551,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,85987,7547,5,1,0,0,3,1,0,0,0
+CL_EVENT t_ms=1557008 GAME_TAP node=9 value=136076
+CL_EVENT t_ms=1557480 GAME_TAP node=9 value=137751
+CL_EVENT t_ms=1557966 GAME_TAP node=9 value=197298
+CL_EVENT t_ms=1558857 GAME_TAP node=9 value=673898
+CL_STATS state=12 sent=15601 first_seq=0 last_seq=15600 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4431 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,15590,10,0,1,0,0,0,0,0,0,0
+CB_HIST,94038,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,86454,7550,5,1,0,0,3,1,0,0,0
+CL_STATS state=12 sent=15701 first_seq=0 last_seq=15700 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4432 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,15690,10,0,1,0,0,0,0,0,0,0
+CB_HIST,94398,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,86814,7550,5,1,0,0,3,1,0,0,0
+CL_STATS state=12 sent=15801 first_seq=0 last_seq=15800 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4432 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,15790,10,0,1,0,0,0,0,0,0,0
+CB_HIST,94757,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,87173,7550,5,1,0,0,3,1,0,0,0
+CL_EVENT t_ms=1591421 GAME_TAP node=9 value=100563
+CL_STATS state=12 sent=15901 first_seq=0 last_seq=15900 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4438 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,15890,10,0,1,0,0,0,0,0,0,0
+CB_HIST,95117,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,87530,7553,5,1,0,0,3,1,0,0,0
+CL_EVENT t_ms=1600579 STATE node=0 value=7
+CL_STATS state=7 sent=16001 first_seq=0 last_seq=16000 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4438 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,15990,10,0,1,0,0,0,0,0,0,0
+CB_HIST,95512,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,87925,7553,5,1,0,0,3,1,0,0,0
+CL_STATS state=7 sent=16101 first_seq=0 last_seq=16100 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4438 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,16090,10,0,1,0,0,0,0,0,0,0
+CB_HIST,95869,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,88282,7553,5,1,0,0,3,1,0,0,0
+CL_STATS state=7 sent=16201 first_seq=0 last_seq=16200 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4438 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,16190,10,0,1,0,0,0,0,0,0,0
+CB_HIST,96229,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,88642,7553,5,1,0,0,3,1,0,0,0
+CL_STATS state=7 sent=16301 first_seq=0 last_seq=16300 send_fail=0 skipped=0 rx_dropped=24 rx_bad=0 stale=4438 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=55 dispatch_max_us=728 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=1 wd_step=0x0000000b wd_prev=0x0000000b tx_drop=0 tx_fail=0
+LATE_HIST,16290,10,0,1,0,0,0,0,0,0,0
+CB_HIST,96592,0,0,0,0,0,0,0,0,0,0
+DISPATCH_HIST,89005,7553,5,1,0,0,3,1,0,0,0
+## open 14:54:09
+## open 14:54:09
+## open 14:54:09
+Joining MATRIX (timeout 10000 ms)
+
+COORDINATOR up: ip=192.168.1.154, beacons on 4210, tiles to 4211, PC to 4212
+
+CL_EVENT t_ms=5606 STATE node=0 value=3
+
+CL_EVENT t_ms=5606 STATE node=0 value=4
+
+CL_EVENT t_ms=5611 JOIN node=4 value=100772032
+
+CL_EVENT t_ms=5611 BACK node=4 value=0
+
+CL_EVENT t_ms=5616 JOIN node=3 value=1627498688
+
+CL_EVENT t_ms=5616 BACK node=3 value=0
+
+CL_EVENT t_ms=5633 JOIN node=2 value=2416027840
+
+CL_EVENT t_ms=5633 BACK node=2 value=0
+
+CL_EVENT t_ms=5656 JOIN node=1 value=1442949312
+
+CL_EVENT t_ms=5656 BACK node=1 value=0
+
+CL_EVENT t_ms=5670 JOIN node=6 value=2181146816
+
+CL_EVENT t_ms=5670 BACK node=6 value=0
+
+CL_EVENT t_ms=5699 JOIN node=7 value=855746752
+
+CL_EVENT t_ms=5700 BACK node=7 value=0
+
+CL_EVENT t_ms=5701 JOIN node=5 value=234989760
+
+CL_EVENT t_ms=5701 BACK node=5 value=0
+
+CL_EVENT t_ms=5710 JOIN node=9 value=3674319040
+
+CL_EVENT t_ms=5710 BACK node=9 value=0
+
+CL_EVENT t_ms=5765 JOIN node=8 value=1258399936
+
+CL_EVENT t_ms=5765 BACK node=8 value=0
+
+CL_EVENT t_ms=5765 STATE node=0 value=6
+
+CL_EVENT t_ms=5909 GAME_REFUSED node=0 value=6
+
+CL_EVENT t_ms=6249 STATE node=0 value=3
+
+CL_EVENT t_ms=6249 STATE node=0 value=5
+
+CL_STATS state=5 sent=101 first_seq=0 last_seq=100 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=340 online=0x1ff ready=0x0ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,101,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,352,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,344,6,1,1,0,0,0,0,0,0,0
+
+CL_EVENT t_ms=16767 STATE node=0 value=7
+
+CL_STATS state=7 sent=201 first_seq=0 last_seq=200 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=340 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,201,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,727,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,719,6,1,1,0,0,0,0,0,0,0
+
+CL_EVENT t_ms=27550 GAME_REFUSED node=0 value=7
+
+CL_STATS state=7 sent=301 first_seq=0 last_seq=300 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=340 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,301,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,1088,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,1078,8,1,1,0,0,0,0,0,0,0
+
+CL_EVENT t_ms=36694 GAME_REFUSED node=0 value=7
+
+CL_STATS state=7 sent=401 first_seq=0 last_seq=400 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=340 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,401,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,1446,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,1435,9,1,1,0,0,0,0,0,0,0
+
+CL_STATS state=7 sent=501 first_seq=0 last_seq=500 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=340 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,501,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,1806,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,1794,10,1,1,0,0,0,0,0,0,0
+
+CL_STATS state=7 sent=601 first_seq=0 last_seq=600 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=340 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,601,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,2170,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,2158,10,1,1,0,0,0,0,0,0,0
+
+CL_STATS state=7 sent=701 first_seq=0 last_seq=700 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=340 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,701,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,2528,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,2516,10,1,1,0,0,0,0,0,0,0
+
+CL_STATS state=7 sent=801 first_seq=0 last_seq=800 send_fail=0 skipped=0 rx_dropped=0 rx_bad=0 stale=8 cmd_fail=0 events_lost=0 exc_max=0 cb_max_us=32 dispatch_max_us=603 online=0x1ff ready=0x1ff sync=0x1ff wd_boot=0 wd_step=0x00000000 wd_prev=0x00000000 tx_drop=0 tx_fail=0
+
+LATE_HIST,801,0,0,0,0,0,0,0,0,0,0
+
+CB_HIST,2938,0,0,0,0,0,0,0,0,0,0
+
+DISPATCH_HIST,2924,10,1,1,0,1,1,0,0,0,0
+

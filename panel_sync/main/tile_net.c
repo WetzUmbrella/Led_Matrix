@@ -44,7 +44,10 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "ack_outbox.h"
 #include "asset_store.h"
+#include "game_tile.h"
+#include "orientation.h"
 #include "playback_control.h"
 #include "coord_lock.h"
 #include "fault_word.h"
@@ -84,8 +87,24 @@
 #define TN_STATS_EVERY 100u
 
 /** Receive buffer: one byte more than the longest message on port 4210
- *  (RESUME_AT, 13 B), so a longer datagram is seen as the wrong length. */
-#define TN_RX_BYTES (PROTO_RESUME_AT_BYTES + 1u)
+ *  (WALL_PICTURE, 23 B, since step 3), so a longer datagram is seen as the
+ *  wrong length. It was RESUME_AT + 1 (14 B) until 12 Nov 2026, which cut
+ *  every WALL_PICTURE short: the tile could not decode, store or ACK it, so
+ *  no countdown or results showed (bench 12 Nov 2026, round 1). The check
+ *  below keeps every message of the port inside it. */
+#define TN_RX_BYTES (PROTO_WALL_PICTURE_BYTES + 1u)
+
+_Static_assert((PROTO_BEACON_BYTES < TN_RX_BYTES) &&
+                   (PROTO_START_AT_BYTES < TN_RX_BYTES) &&
+                   (PROTO_PAUSE_BYTES < TN_RX_BYTES) &&
+                   (PROTO_RESUME_AT_BYTES < TN_RX_BYTES) &&
+                   (PROTO_STOP_BYTES < TN_RX_BYTES) &&
+                   (PROTO_MOLE_ON_BYTES < TN_RX_BYTES) &&
+                   (PROTO_FEEDBACK_BYTES < TN_RX_BYTES) &&
+                   (PROTO_GAME_CONTROL_BYTES < TN_RX_BYTES) &&
+                   (PROTO_WALL_PICTURE_BYTES < TN_RX_BYTES) &&
+                   (PROTO_ACK_BYTES < TN_RX_BYTES),
+               "every port 4210 message must fit the receive buffer");
 
 /** Receive buffer for port 4214: one byte more than the longest message
  *  there (ASSET_CHUNK, 5 + 1,024 B), so a longer datagram is seen as the
@@ -94,6 +113,11 @@
 
 /** Heartbeat period 0.5 s (proposed, VA-2.7). */
 #define TN_HEARTBEAT_US INT64_C(500000)
+
+/** A TAP is resent every 50 ms until its ACK and dropped after 1 s (plan
+ *  choice, the same as the Pico's ACK retries). */
+#define TN_TAP_RETRY_US INT64_C(50000)
+#define TN_TAP_LIFE_US  INT64_C(1000000)
 
 /** Heartbeat stagger: (Node ID - 1) x 500 / 9 ms (derived, VA-2.10). */
 #define TN_STAGGER_US (TN_HEARTBEAT_US / (int64_t)PROTO_NODE_MAX)
@@ -135,11 +159,23 @@
 /** Kinds of log record. */
 #define TN_REC_BEACON 1u
 #define TN_REC_NACK   2u
+#define TN_REC_GAME   3u
+#define TN_REC_TAP    4u /* Wake only: a tap waits (tile_net_tap_ready()). */
+
+/** Largest game datagram a record carries (WALL_PICTURE, 23 bytes). */
+#define TN_GAME_MAX_BYTES 24u
+
+_Static_assert((PROTO_MOLE_ON_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_FEEDBACK_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_GAME_CONTROL_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_WALL_PICTURE_BYTES <= TN_GAME_MAX_BYTES) &&
+                   (PROTO_ACK_BYTES <= TN_GAME_MAX_BYTES),
+               "every game datagram must fit a log record");
 
 /** One record from the receive context to the Network Task. */
 typedef struct
 {
-    uint8_t  kind;       /**< TN_REC_BEACON or TN_REC_NACK. */
+    uint8_t  kind;       /**< TN_REC_BEACON, NACK, GAME or TAP. */
     uint8_t  session_id; /**< Beacon: its session; NACK: the command's. */
     uint16_t seq;        /**< Beacon seq, or the rejected command's seq. */
     uint32_t src_addr;   /**< Sender address (the Pico). */
@@ -149,7 +185,9 @@ typedef struct
     uint32_t dropped;
     uint32_t lost;
     uint32_t log_dropped;
-    uint32_t foreign; /**< Beacons from another coordinator (lock). */
+    uint32_t foreign;  /**< Beacons from another coordinator (lock). */
+    uint32_t game_len; /**< Game: datagram length. */
+    uint8_t  game[TN_GAME_MAX_BYTES]; /**< Game: the datagram. */
 } tn_record_t;
 
 /** One Telemetry Queue item: the status and the producer's drop count. */
@@ -223,6 +261,16 @@ static bool             g_b_had_ip     = false;
 static uint32_t         g_comms        = 0u; /* tile_net_comms_t. */
 static uint32_t         g_upload_nacks = 0u;
 static uint32_t         g_upload_wrong_session = 0u;
+static uint32_t         g_tap_unsynced = 0u; /* TAPs dropped: no clock. */
+
+/* Whack-a-mole (build step 7). The game state is published for the Display
+ * Engine (game_tile.h). The TAPs of this tile wait in g_tap_box until the
+ * Pico's ACK (layout_table.md section 10 item 13: one TAP seq counter). */
+static game_tile_state_t g_game;
+static ack_outbox_t      g_tap_box;
+static timesync_reader_t g_game_reader; /* Network Task only. */
+static uint16_t          g_tap_seq      = 0u;
+static uint16_t          g_game_ack_seq = 0u; /* ACK header seq, not acked. */
 #ifdef TN_TEST_INJECT_FAULTS
 static int64_t  g_next_inject_us = 0;
 static uint32_t g_injected       = 0u;
@@ -235,6 +283,10 @@ static void      tn_wifi_event (void * p_arg, esp_event_base_t base,
                                 int32_t event_id, void * p_data);
 static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
                             uint32_t src_addr);
+static void tn_on_game (uint8_t const * p_buf, uint32_t len, int64_t t_l,
+                        proto_type_t type);
+static void tn_send_game_ack (uint16_t acked_seq);
+static void tn_game_service (int64_t now);
 static void tn_on_beacon (uint8_t const * p_buf, uint32_t len, int64_t t_l,
                           uint32_t src_addr);
 static void tn_on_command (uint8_t const * p_buf, uint32_t len,
@@ -245,7 +297,9 @@ static bool tn_decode_command (uint8_t const * p_buf, uint32_t len,
 static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
                                  uint32_t * p_drops);
 static void tn_service (TickType_t wait);
+static void tn_post_game (uint8_t const * p_buf, uint32_t len, int64_t t_l);
 static bool tn_pico_restarted (tn_record_t const * p_record);
+static void tn_game_new_pico (void);
 static void tn_handle_record (tn_record_t const * p_record);
 static void tn_housekeeping (void);
 static void tn_send_heartbeat (int64_t now);
@@ -283,6 +337,9 @@ static int tn_rx_socket (void); /* DEVIATION D-2: lwIP int socket. */
 bool tile_net_start (void)
 {
     bool b_ok = false;
+
+    game_tile_init(&g_game);
+    ack_outbox_init(&g_tap_box);
 
     g_p_q_timesync =
         xQueueCreate(TILE_NET_TIMESYNC_QUEUE_LEN, sizeof(timesync_pair_t));
@@ -649,10 +706,165 @@ static void tn_on_datagram (uint8_t const * p_buf, uint32_t len, int64_t t_l,
         {
             tn_on_beacon(p_buf, len, t_l, src_addr);
         }
+        else if ((PROTO_TYPE_MOLE_ON == type) ||
+                 (PROTO_TYPE_FEEDBACK == type) ||
+                 (PROTO_TYPE_GAME_CONTROL == type) ||
+                 (PROTO_TYPE_WALL_PICTURE == type) || (PROTO_TYPE_ACK == type))
+        {
+            tn_post_game(p_buf, len, t_l);
+        }
         else
         {
             tn_on_command(p_buf, len, &header, src_addr);
         }
+    }
+}
+
+/**
+ * @brief  Hand a game datagram to the Network Task (receive context). With
+ *         TN_RX_HOOK_LWIP the receive context is lwIP's tcpip thread, where
+ *         a socket call (the ACK's sendto) waits on that same thread for ever
+ *         (bench 11 Nov 2026: both tiles left the network 3 s into the first
+ *         round). The game state and the TAP outbox are also the Network
+ *         Task's, so all game handling runs there, as NACK sending does.
+ * @param  p_buf  Datagram.
+ * @param  len    Length.
+ * @param  t_l    Local receive time (the flash clock).
+ */
+static void tn_post_game (uint8_t const * p_buf, uint32_t len, int64_t t_l)
+{
+    if (len <= TN_GAME_MAX_BYTES)
+    {
+        tn_record_t record = {
+            .kind        = TN_REC_GAME,
+            .t_l         = t_l,
+            .received    = g_received,
+            .dropped     = g_dropped,
+            .lost        = g_lost,
+            .log_dropped = g_log_dropped,
+            .game_len    = len,
+        };
+
+        (void)memcpy(record.game, p_buf, len); /* Returns record.game. */
+        tn_post_drop_oldest(g_p_q_log, &record, &g_log_dropped);
+    }
+}
+
+/**
+ * @brief  A game message from the Pico on port 4210 (whack-a-mole build step
+ *         7), in the Network Task: MOLE_ON, FEEDBACK, GAME_CONTROL and
+ *         WALL_PICTURE go to the game state and are ACKed when they are for
+ *         this tile; an ACK frees the TAP it names.
+ * @param  p_buf  Datagram.
+ * @param  len    Length.
+ * @param  t_l    Local receive time (the flash clock).
+ * @param  type   Message type, already decoded.
+ */
+static void tn_on_game (uint8_t const * p_buf, uint32_t len, int64_t t_l,
+                        proto_type_t type)
+{
+    if (PROTO_TYPE_ACK == type)
+    {
+        proto_ack_t msg;
+
+        if ((proto_decode_ack(p_buf, len, &msg)) && (g_node_id == msg.node_id))
+        {
+            /* Freed, or nothing waited: either way the ACK is done. */
+            (void)ack_outbox_ack(&g_tap_box, g_node_id, msg.acked_seq);
+        }
+    }
+    else
+    {
+        uint16_t acked_seq = 0u;
+
+        if (game_tile_on_pico(&g_game, g_node_id, p_buf, len, t_l, &acked_seq))
+        {
+            tn_send_game_ack(acked_seq);
+        }
+
+        /* ARM's tap threshold (A12); unchanged values cost one store. */
+        orientation_set_tap_threshold(game_tile_threshold_mg(&g_game));
+        game_tile_publish(&g_game);
+    }
+}
+
+/**
+ * @brief  ACK a message of the Pico to the Pico (port 4211). Sent once: the
+ *         Pico resends a message whose ACK is lost.
+ * @param  acked_seq  Header seq acknowledged.
+ */
+static void tn_send_game_ack (uint16_t acked_seq)
+{
+    uint8_t        buf[PROTO_ACK_BYTES];
+    uint32_t const len = game_tile_encode_ack(buf, g_session, g_game_ack_seq,
+                                              g_node_id, acked_seq);
+
+    g_game_ack_seq++;
+    tn_send(buf, len);
+}
+
+/**
+ * @brief  Game service, every housekeeping pass: each tap the Orientation
+ *         Task accepted becomes a TAP (time in the Pico's clock) in the
+ *         outbox, and the outbox sends what is due: each TAP is resent every
+ *         TN_TAP_RETRY_US until its ACK, and dropped after TN_TAP_LIFE_US.
+ * @param  now  Local time, microseconds.
+ */
+static void tn_game_service (int64_t now)
+{
+    tap_detect_event_t event;
+    uint32_t           taken = 0u;
+
+    while ((taken < ACK_OUTBOX_SLOTS) && (orientation_tap_take(&event)))
+    {
+        uint8_t buf[PROTO_TAP_BYTES];
+
+        taken++;
+
+        if (!timesync_read_snapshot(&g_game_reader))
+        {
+            /* No clock to map the tap to Pico time: the local time would
+             * mis-score it, so the tap is dropped and counted. */
+            g_tap_unsynced++;
+        }
+        else
+        {
+            int64_t const t_pico =
+                timesync_pico_from_local(&g_game_reader.snap, event.t_us);
+            uint32_t const len = game_tile_encode_tap(
+                buf, g_session, g_tap_seq, g_node_id, event.peak, t_pico);
+
+            if ((0u != len) && (g_b_pico_known))
+            {
+                /* Times are microseconds from boot: non-negative. */
+                (void)ack_outbox_add(&g_tap_box, g_node_id, PROTO_TYPE_TAP,
+                                     g_tap_seq, g_pico_addr, TN_PICO_PORT, buf,
+                                     len, (uint64_t)now,
+                                     (uint64_t)(now + TN_TAP_LIFE_US));
+                /* DS-13 event log: the TAP and its time in the Pico clock. */
+                printf("TN_TAP seq=%" PRIu16 " peak=%" PRIu16 " t_pico=%" PRId64
+                       "\n",
+                       g_tap_seq, event.peak, t_pico);
+            }
+        }
+
+        g_tap_seq++;
+    }
+
+    for (uint32_t count = 0u; count < ACK_OUTBOX_SLOTS; count++)
+    {
+        uint32_t index = 0u;
+
+        /* now is non-negative (microseconds from boot). */
+        if (!ack_outbox_due(&g_tap_box, (uint64_t)now, &index))
+        {
+            break;
+        }
+
+        tn_send(g_tap_box.slots[index].buf, g_tap_box.slots[index].len);
+        /* The retry interval is 50 ms, positive. */
+        ack_outbox_sent(&g_tap_box, index, (uint64_t)now,
+                        (uint64_t)TN_TAP_RETRY_US);
     }
 }
 
@@ -853,6 +1065,22 @@ static void tn_post_drop_oldest (QueueHandle_t p_queue, void const * p_item,
 }
 
 /**
+ * @brief  A tap is waiting: wake the Network Task (see tile_net.h). The
+ *         record carries nothing; the housekeeping pass after it sends the
+ *         TAP.
+ */
+void tile_net_tap_ready (void)
+{
+    if (NULL != g_p_q_log)
+    {
+        tn_record_t const record = {.kind = TN_REC_TAP};
+
+        /* Full: the task is busy and sends the TAP on its next pass. */
+        (void)xQueueSend(g_p_q_log, &record, 0);
+    }
+}
+
+/**
  * @brief  Network Task: wait up to wait for one record and handle it.
  * @param  wait  Ticks to wait.
  */
@@ -893,6 +1121,25 @@ static bool tn_pico_restarted (tn_record_t const * p_record)
 }
 
 /**
+ * @brief  Network Task: a new or restarted Pico. Playback stops (its
+ *         timeline went with the old Pico, and a playing tile refuses
+ *         uploads; bench 24 Nov 2026), the time sync starts a new window on
+ *         the next beacon (its clock is another one), the game state starts
+ *         over, every seq
+ *         baseline included (game_tile_new_pico), and the cleared state is
+ *         published, so the display drops the old Pico's round and pictures
+ *         at once.
+ */
+static void tn_game_new_pico (void)
+{
+    playback_control_pico_restart(); /* Its timeline is gone. */
+    timesync_pico_restart();         /* And its clock: start over. */
+    game_tile_new_pico(&g_game);
+    orientation_set_tap_threshold(game_tile_threshold_mg(&g_game));
+    game_tile_publish(&g_game);
+}
+
+/**
  * @brief  Network Task: one record. A beacon updates the Pico address and
  *         the session, and prints the spread line; a NACK request is sent.
  * @param  p_record  The record.
@@ -906,14 +1153,26 @@ static void tn_handle_record (tn_record_t const * p_record)
             g_b_pico_known    = true;
             g_pico_addr       = p_record->src_addr;
             g_b_need_register = true;
+            tn_game_new_pico(); /* A new Pico: its command seq starts. */
         }
         else if (tn_pico_restarted(p_record))
         {
             g_b_need_register = true; /* R1-1: same IP, Pico rebooted. */
+            /* A restarted Pico counts its commands from 0 again: without this
+             * the tile would drop them as stale (mirror of host test C23). */
+            tn_game_new_pico();
         }
         else
         {
             /* Same Pico, no restart seen. */
+        }
+
+        if (p_record->session_id != g_session)
+        {
+            /* A new session (bench bug of 6 Nov 2026): drop the old upload
+             * queue and the overflow it left behind. */
+            asset_store_drop_uploads();
+            fault_word_new_session();
         }
 
         g_b_bcn_seen       = true;
@@ -929,11 +1188,12 @@ static void tn_handle_record (tn_record_t const * p_record)
                    " lost=%" PRIu32 " log_dropped=%" PRIu32 " tel_sent=%" PRIu32
                    " tel_acked=%" PRIu32 " ack_unknown=%" PRIu32
                    " tel_q_dropped=%" PRIu32 " upload_nacks=%" PRIu32
-                   " upload_wrong_session=%" PRIu32 " foreign=%" PRIu32 "\n",
+                   " upload_wrong_session=%" PRIu32 " tap_unsynced=%" PRIu32
+                   " foreign=%" PRIu32 "\n",
                    p_record->received, p_record->dropped, p_record->lost,
                    p_record->log_dropped, g_tel_sent, g_tel_acked,
                    g_ack_unknown, g_tel_status.dropped, g_upload_nacks,
-                   g_upload_wrong_session, p_record->foreign);
+                   g_upload_wrong_session, g_tap_unsynced, p_record->foreign);
         }
     }
     else if (TN_REC_NACK == p_record->kind)
@@ -942,9 +1202,24 @@ static void tn_handle_record (tn_record_t const * p_record)
         tn_send_nack((uint8_t)PROTO_NACK_COMMAND_QUEUE_FULL,
                      p_record->session_id, p_record->seq, false);
     }
+    else if (TN_REC_GAME == p_record->kind)
+    {
+        proto_header_t header;
+
+        if (proto_decode_header(p_record->game, p_record->game_len, &header))
+        {
+            /* DS-13 event log: every game datagram the tile handles. */
+            printf("TN_GAME type=%" PRIu32 " seq=%" PRIu32 " t_l=%" PRId64 "\n",
+                   (uint32_t)header.type, (uint32_t)header.seq, p_record->t_l);
+            /* Posted only for game types, below 24: a valid proto_type_t. */
+            tn_on_game(p_record->game, p_record->game_len, p_record->t_l,
+                       (proto_type_t)header.type);
+        }
+    }
     else
     {
-        /* No other kind is produced. */
+        /* TN_REC_TAP only wakes the task: the housekeeping pass that follows
+         * every record sends the TAP. No other kind is produced. */
     }
 }
 
@@ -956,6 +1231,8 @@ static void tn_housekeeping (void)
 {
     int64_t const     now  = esp_timer_get_time();
     EventBits_t const bits = xEventGroupGetBits(g_p_events);
+
+    tn_game_service(now);
 
     if (0u == (bits & TN_EV_HAVE_IP))
     {
@@ -1235,10 +1512,20 @@ static void tn_on_new_ip (void)
 static void tn_telemetry_service (int64_t now)
 {
     tn_status_item_t item;
+    bool             b_turned = false;
 
     while (pdTRUE == xQueueReceive(g_p_q_telemetry, &item, 0))
     {
+        b_turned = (b_turned) ||
+                   (item.status.orientation != g_tel_status.status.orientation);
         g_tel_status = item;
+    }
+
+    if (b_turned)
+    {
+        /* A new orientation goes out at once (D-17: the Pico decides a wall
+         * turn within 1.5 s of the first tile's change). */
+        g_next_tel_us = now;
     }
 
     tn_poll_pc();

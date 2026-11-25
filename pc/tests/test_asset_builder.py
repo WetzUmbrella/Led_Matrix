@@ -100,7 +100,7 @@ def test_partition_2x2_cuts_four_regions() -> None:
         for y in range(8):
             for x in range(8):
                 wall.putpixel((col * 8 + x, row * 8 + y), colour)
-    tiles = ab.partition_tiles([wall], "2x2", [1, 2, 0, 3, 4, 0, 0, 0, 0])
+    tiles = ab.partition_tiles([wall], "2x2", [1, 2, 3, 4, 0, 0, 0, 0, 0])
     assert tiles[1][0][0] == (255, 0, 0)
     assert tiles[2][0][0] == (0, 255, 0)
     assert tiles[3][0][0] == (0, 0, 255)
@@ -109,11 +109,13 @@ def test_partition_2x2_cuts_four_regions() -> None:
 
 def test_bad_maps_refused() -> None:
     with pytest.raises(ab.AssetError):
-        ab.parse_layout("2x2", [1, 2, 3, 0, 0, 0, 0, 0, 0])  # column 2
+        ab.parse_layout("2x2", [1, 2, 3, 4, 5, 0, 0, 0, 0])  # position 4
     with pytest.raises(ab.AssetError):
         ab.parse_layout("1x1", [1, 1, 0, 0, 0, 0, 0, 0, 0])
     with pytest.raises(ab.AssetError):
-        ab.parse_layout("4x4", [1] + [0] * 8)
+        ab.parse_layout("4x4", [1] + [0] * 8)  # 16 tiles
+    with pytest.raises(ab.AssetError):
+        ab.parse_layout("2x5", [1] + [0] * 8)  # 10 tiles
 
 
 def test_8bit_asset_is_115200_bytes_values_0_to_8() -> None:

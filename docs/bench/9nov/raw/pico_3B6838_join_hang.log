@@ -1,0 +1,10 @@
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 start 16:43:42
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 16:43:42.020
+16:43:42.220 COORDINATOR up: ip=172.20.10.2, beacons on 4210, tiles to 4211, PC to 4212
+16:43:42.220 CL_EVENT t_ms=1852413 JOIN node=5 value=84546732
+16:43:42.220 CL_EVENT t_ms=1852413 BACK node=5 value=0
+16:43:42.220 CL_EVENT t_ms=1852413 JOIN node=4 value=67769516
+16:43:42.220 CL_EVENT t_ms=1852413 BACK node=4 value=0
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 gone 16:43:43.131
+# /dev/serial/by-id/usb-Raspberry_Pi_Pico_E66430A64B3B6838-if00 open 16:43:43.633
+16:43:44.034 Joining <network> (timeout 10000 ms)

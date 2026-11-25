@@ -108,6 +108,14 @@ uint32_t fault_word_snapshot (void);
  */
 void fault_word_clear_events (uint32_t sent_bits);
 
+/**
+ * @brief  A new session has started (its id changed; bench bug of 6 Nov
+ *         2026): the Upload Queue of the old session is dropped, so its
+ *         overflow no longer applies. Clears FAULT_BIT_QUEUE_OVERFLOW through
+ *         fault_word_clear_events(); every other bit stays as it is.
+ */
+void fault_word_new_session (void);
+
 #endif /* FAULT_WORD_H */
 
 /*** end of file ***/

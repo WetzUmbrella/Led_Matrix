@@ -13,10 +13,15 @@ T-B1-02 (resample and partition):
   * Delays of 0 and 10 ms are read as 100 ms, as most browsers do
     (PROVISIONAL, OD-06 option (a), owner Jolyn).
   * More than 1023 frames is refused: frame_count is 10 bits on the wire.
-  * Each frame is resized to (columns x 8) by (rows x 8) and cut into one
-    8 x 8 region per Node ID from the layout and Node ID map
-    (layout_table.md SESSION_CONFIG: position k is row k // 3, column
-    k % 3; 0 = blank).
+  * Each frame is centre-cropped to the layout's aspect ratio (cols : rows),
+    resized to (cols x 8) by (rows x 8) and cut into one 8 x 8 region per
+    Node ID from the layout and Node ID map (build step 4: position k is row
+    k // cols, column k % cols over rows x cols; 0 = an empty cell). Step 4d
+    (DS-15, 12 Nov 2026): rows and cols are 1 to 9 each, so up to 81 cells,
+    with up to 9 tiles in any of them; the GIF is cut over the whole grid
+    and only the placed tiles get their section. The map has rows x cols
+    entries; the 9-entry form of the bench tools is still taken for a grid
+    of fewer than 9 cells when the entries past the grid are 0.
 
 T-B1-03 (pack and manifest):
   * Each channel value v becomes round(v x b / 255) on the PC only, where b
@@ -29,8 +34,13 @@ T-B1-03 (pack and manifest):
   * Manifest {session_id, format_version 2, frame_count, crc32}; frame_rate
     60 is not on the wire (layout_table.md MANIFEST).
 
+Website preview (step 4e, 18 Nov 2026): ``render_preview`` draws a frame
+cut for the grid as a PNG, from the same ``wall_image`` the tiles' sections
+are cut from, so the preview shows exactly what each tile gets; empty and
+switched-off cells are greyed.
+
 Usage:
-    python3 pc/asset_builder.py in.gif --layout 2x2 --map 1,2,0,3,4,0,0,0,0
+    python3 pc/asset_builder.py in.gif --layout 2x2 --map 1,2,3,4,0,0,0,0,0
         [--brightness 8] [--session 1] --out assets/
 """
 
@@ -71,11 +81,17 @@ FORMAT_8BIT = 1
 #: Tile side in LEDs.
 TILE = 8
 
-#: Layout name -> (code, rows, columns) (layout_table.md section 5.2).
-LAYOUTS = {"1x1": (0, 1, 1), "2x2": (1, 2, 2), "3x3": (2, 3, 3)}
+#: Preview colours: the gaps between tiles, an empty cell and a cell whose
+#: tile is switched off (step 4e).
+PREVIEW_GAP = (38, 38, 38)
+PREVIEW_EMPTY = (62, 62, 62)
+PREVIEW_OFF = (104, 104, 104)
 
-#: Map slots per row in SESSION_CONFIG.
-MAP_COLUMNS = 3
+#: Preview size: the longer side aims at this many pixels, each LED drawn
+#: 4 to 16 px wide, with this gap between tiles.
+PREVIEW_TARGET_PX = 480
+PREVIEW_LED_MIN, PREVIEW_LED_MAX = 4, 16
+PREVIEW_GAP_PX = 3
 
 #: One RGB frame of a tile: 64 (r, g, b) tuples, LED 8 x row + column.
 Pixels = List[Tuple[int, int, int]]
@@ -155,47 +171,136 @@ def load_gif(path: str):  # type: ignore[no-untyped-def]
     return frames, delays
 
 
-def parse_layout(layout: str, node_map: Sequence[int]) -> Tuple[int, int, int]:
-    """Check the layout and map; returns (code, rows, columns)."""
-    if layout not in LAYOUTS:
-        raise AssetError("layout must be 1x1, 2x2 or 3x3 (FR3)")
-    code, rows, cols = LAYOUTS[layout]
-    if len(node_map) != pl.MAP_SLOTS:
-        raise AssetError("the Node ID map has 9 positions")
+def load_first_frame(path: str):  # type: ignore[no-untyped-def]
+    """The first frame of a GIF as an RGB PIL image (the preview)."""
+    from PIL import Image
+    with Image.open(path) as gif:
+        return gif.convert("RGB")
+
+
+def parse_shape(layout: str) -> Tuple[int, int]:
+    """'RxC' to (rows, cols): each 1 to 9, so up to 81 cells (layout_table
+    section 5.2, step 4d)."""
+    parts = layout.lower().split("x")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise AssetError("layout must be RxC, for example 2x2 or 1x9")
+    rows, cols = int(parts[0]), int(parts[1])
+    if not (1 <= rows <= pl.GRID_MAX and 1 <= cols <= pl.GRID_MAX):
+        raise AssetError("rows and cols are 1 to 9")
+    return rows, cols
+
+
+def normalise_map(layout: str, node_map: Sequence[int]) -> List[int]:
+    """The map as rows x cols row-major cells. A 9-entry map for a grid of
+    fewer cells (the bench tools' form) is cut to the grid when the entries
+    past it are 0. Checks every rule; raises AssetError."""
+    rows, cols = parse_shape(layout)
+    cells = rows * cols
+    entries = list(node_map)
+    if len(entries) == pl.NODE_MAX and cells < pl.NODE_MAX:
+        for slot, node in enumerate(entries[cells:], start=cells):
+            if node:
+                raise AssetError("position %d is outside the %s layout"
+                                 % (slot, layout))
+        entries = entries[:cells]
+    if len(entries) != cells:
+        raise AssetError("the %s map has %d cells, not %d"
+                         % (layout, cells, len(entries)))
     used = []
-    for slot, node in enumerate(node_map):
-        row, col = divmod(slot, MAP_COLUMNS)
+    for node in entries:
         if not 0 <= node <= pl.NODE_MAX:
-            raise AssetError("Node IDs are 1 to 9, 0 for blank")
-        if node and (row >= rows or col >= cols):
-            raise AssetError("position %d is outside the %s layout"
-                             % (slot, layout))
+            raise AssetError("Node IDs are 1 to 9, 0 for an empty cell")
         if node:
             used.append(node)
     if len(used) != len(set(used)):
         raise AssetError("a Node ID appears twice in the map")
     if not used:
         raise AssetError("the map has no Node ID")
-    return code, rows, cols
+    return entries
+
+
+def parse_layout(layout: str, node_map: Sequence[int]) -> Tuple[int, int]:
+    """Check the layout and map; returns (rows, cols)."""
+    normalise_map(layout, node_map)
+    return parse_shape(layout)
+
+
+def centre_crop(frame, rows: int, cols: int):  # type: ignore[no-untyped-def]
+    """Largest box with the wall's aspect ratio (cols : rows), centred."""
+    width, height = frame.size
+    if width * rows > height * cols:  # Too wide: trim the sides.
+        new_w = max(1, height * cols // rows)
+        left = (width - new_w) // 2
+        box = (left, 0, left + new_w, height)
+    else:  # Too tall (or exact): trim top and bottom.
+        new_h = max(1, width * rows // cols)
+        top = (height - new_h) // 2
+        box = (0, top, width, top + new_h)
+    return frame.crop(box)
+
+
+def wall_image(frame, rows: int, cols: int):  # type: ignore[no-untyped-def]
+    """The frame centre-cropped and resized to the whole grid, one pixel per
+    LED: (cols x 8) by (rows x 8)."""
+    from PIL import Image
+    return centre_crop(frame, rows, cols).resize(
+        (cols * TILE, rows * TILE), Image.BOX)
 
 
 def partition_tiles(frames, layout: str,  # type: ignore[no-untyped-def]
                     node_map: Sequence[int]) -> Dict[int, List[Pixels]]:
-    """Resize each frame to the wall and cut one 8x8 region per Node ID."""
-    from PIL import Image
-    _code, rows, cols = parse_layout(layout, node_map)
+    """Centre-crop and resize each frame to the wall, then cut one 8x8
+    region per Node ID (row-major over rows x cols)."""
+    rows, cols = parse_layout(layout, node_map)
+    node_map = normalise_map(layout, node_map)
     tiles: Dict[int, List[Pixels]] = {n: [] for n in node_map if n}
     for frame in frames:
-        wall = frame.resize((cols * TILE, rows * TILE), Image.BOX)
-        data = wall.load()
+        data = wall_image(frame, rows, cols).load()
         for slot, node in enumerate(node_map):
             if not node:
                 continue
-            row, col = divmod(slot, MAP_COLUMNS)
+            row, col = divmod(slot, cols)
             pixels = [data[col * TILE + x, row * TILE + y]
                       for y in range(TILE) for x in range(TILE)]
             tiles[node].append(pixels)
     return tiles
+
+
+def preview_led_px(rows: int, cols: int) -> int:
+    """How wide the preview draws one LED for a rows x cols grid."""
+    led = PREVIEW_TARGET_PX // (TILE * max(rows, cols))
+    return max(PREVIEW_LED_MIN, min(PREVIEW_LED_MAX, led))
+
+
+def render_preview(frame, layout: str, node_map: Sequence[int],  # type: ignore
+                   off_slots: Sequence[int] = ()) -> bytes:
+    """PNG of ``frame`` as the wall shows it: each placed tile's 8x8 section
+    in its cell, an empty cell in PREVIEW_EMPTY, a switched-off tile's cell
+    (``off_slots``) in PREVIEW_OFF, the tiles PREVIEW_GAP_PX apart."""
+    import io
+    from PIL import Image
+    rows, cols = parse_layout(layout, node_map)
+    node_map = normalise_map(layout, node_map)
+    led = preview_led_px(rows, cols)
+    side = TILE * led
+    pitch = side + PREVIEW_GAP_PX
+    canvas = Image.new("RGB", (cols * pitch - PREVIEW_GAP_PX,
+                               rows * pitch - PREVIEW_GAP_PX), PREVIEW_GAP)
+    wall = wall_image(frame, rows, cols)
+    off = set(off_slots)
+    for slot, node in enumerate(node_map):
+        row, col = divmod(slot, cols)
+        corner = (col * pitch, row * pitch)
+        if node:
+            section = wall.crop((col * TILE, row * TILE,
+                                 (col + 1) * TILE, (row + 1) * TILE))
+            canvas.paste(section.resize((side, side), Image.NEAREST), corner)
+        else:
+            colour = PREVIEW_OFF if slot in off else PREVIEW_EMPTY
+            canvas.paste(colour, corner + (corner[0] + side, corner[1] + side))
+    out = io.BytesIO()
+    canvas.save(out, "PNG")
+    return out.getvalue()
 
 
 def check_brightness(brightness: int) -> None:
@@ -284,9 +389,11 @@ def main(argv: List[str] = None) -> int:  # type: ignore[assignment]
     """Command line entry point; exit 1 with the reason on a refusal."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("gif")
-    parser.add_argument("--layout", default="1x1", choices=sorted(LAYOUTS))
+    parser.add_argument("--layout", default="1x1",
+                        help="RxC, rows and cols 1 to 9, rows x cols <= 9")
     parser.add_argument("--map", default="1,0,0,0,0,0,0,0,0",
-                        help="9 Node IDs, row by row in 3 columns, 0 = blank")
+                        help="9 Node IDs, row by row over rows x cols, "
+                             "0 = blank")
     parser.add_argument("--brightness", type=int, default=BRIGHTNESS_MAX)
     parser.add_argument("--session", type=int, default=1)
     parser.add_argument("--out", default="assets")

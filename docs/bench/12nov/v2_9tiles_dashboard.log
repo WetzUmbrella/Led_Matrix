@@ -1,0 +1,55 @@
+>>> mode video
+1794478280.885 mode video
+>>> config docs/bench/12nov/numbered_cells_3x3.gif 3x3 1,2,3,4,5,6,7,8,9 pause 8
+1794478281.251 configuration accepted
+>>> build
+node 1: 600 frames, crc32 0x96b418c2
+node 2: 600 frames, crc32 0x73094d2d
+node 3: 600 frames, crc32 0x4b027eb8
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+node 6: 600 frames, crc32 0x2d108027
+node 7: 600 frames, crc32 0x8e5901f3
+node 8: 600 frames, crc32 0xd6ba339a
+node 9: 600 frames, crc32 0x0c609d07
+>>> upload
+failed: none
+1794478285.062 uploaded to 192.168.1.86: 57 of 57 chunks ACKed, resent 3, 3.02 s
+1794478287.620 uploaded to 192.168.1.144: 57 of 57 chunks ACKed, resent 0, 2.56 s
+1794478290.132 uploaded to 192.168.1.97: 57 of 57 chunks ACKed, resent 0, 2.52 s
+1794478292.590 uploaded to 192.168.1.6: 57 of 57 chunks ACKed, resent 0, 2.45 s
+1794478294.859 uploaded to 192.168.1.14: 57 of 57 chunks ACKed, resent 0, 2.27 s
+1794478297.063 uploaded to 192.168.1.130: 57 of 57 chunks ACKed, resent 0, 2.20 s
+1794478299.445 uploaded to 192.168.1.51: 57 of 57 chunks ACKed, resent 0, 2.39 s
+1794478302.865 uploaded to 192.168.1.75: 57 of 57 chunks ACKed, resent 0, 3.42 s
+1794478305.163 uploaded to 192.168.1.219: 57 of 57 chunks ACKed, resent 0, 2.30 s
+>>> status
+pico WAITING FOR TILE READINESS readiness=0x07f online=0x1ff score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc VERIFYING UPLOADS; start disabled; missing [8, 9]
+tile 1 192.168.1.86 faults=none orient=0 display=1
+tile 2 192.168.1.144 faults=none orient=0 display=1
+tile 3 192.168.1.97 faults=none orient=0 display=1
+tile 4 192.168.1.6 faults=none orient=0 display=1
+tile 5 192.168.1.14 faults=none orient=0 display=1
+tile 6 192.168.1.130 faults=none orient=0 display=1
+tile 7 192.168.1.51 faults=none orient=0 display=1
+tile 8 192.168.1.75 faults=none orient=0 display=1
+tile 9 192.168.1.219 faults=none orient=0 display=1
+>>> start
+start disabled: not ready [8, 9]
+playing for 15 s
+>>> stop
+>>> status
+pico WAITING FOR TILE READINESS readiness=0x07f online=0x1ff score=0
+round GAME IDLE level=easy hits=0 missed=0 wrong=0 shown=0 left=0 s reaction=0 ms
+pc VERIFYING UPLOADS; start disabled; missing [8, 9]
+tile 1 192.168.1.86 faults=none orient=0 display=1
+tile 2 192.168.1.144 faults=none orient=0 display=1
+tile 3 192.168.1.97 faults=none orient=0 display=1
+tile 4 192.168.1.6 faults=none orient=0 display=1
+tile 5 192.168.1.14 faults=none orient=0 display=1
+tile 6 192.168.1.130 faults=none orient=0 display=1
+tile 7 192.168.1.51 faults=none orient=0 display=1
+tile 8 192.168.1.75 faults=none orient=0 display=1
+tile 9 192.168.1.219 faults=none orient=0 display=1

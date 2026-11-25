@@ -1,0 +1,42 @@
+>>> config docs/bench/9nov/numbered_1x2.gif 1x2 4,5,0,0,0,0,0,0,0 pause 8
+1794453045.716 configuration accepted
+>>> build
+node 4: 600 frames, crc32 0x197d5a12
+node 5: 600 frames, crc32 0xbe659763
+>>> upload
+failed: node 4 (0 of 57 chunks ACKed after 20 rounds), node 5 (0 of 57 chunks ACKed after 20 rounds)
+1794453048.834 node 4: no TELEMETRY in session 23 yet, uploading anyway
+1794453079.491 node 5: no TELEMETRY in session 23 yet, uploading anyway
+1794453107.137 node 4 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+1794453107.137 node 5 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+>>> upload
+failed: node 4 (0 of 57 chunks ACKed after 20 rounds), node 5 (0 of 57 chunks ACKed after 20 rounds)
+1794453113.154 node 4: no TELEMETRY in session 23 yet, uploading anyway
+1794453143.815 node 5: no TELEMETRY in session 23 yet, uploading anyway
+1794453171.454 node 4 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+1794453171.454 node 5 not uploaded: 0 of 57 chunks ACKed after 20 rounds
+>>> status
+pico: no STATUS yet
+pc ERROR; start disabled; missing [4, 5]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1
+>>> mode game
+mode refused: the Pico did not acknowledge the mode change
+1794453174.459 mode game
+>>> tap on
+tap test refused: switch to game mode before the tap test
+tap test: tap the tiles for 20 s
+>>> tap off
+tap test refused: switch to game mode before the tap test
+tap test over: stop tapping; arming in 3 s
+>>> threshold 300
+1794453199.490 tap threshold 300 mg
+>>> game arm easy
+game refused: switch to game mode before starting a round
+1794453199.491 level easy
+armed: tap the start sprite (60 s)
+>>> status
+pico: no STATUS yet
+pc ERROR; start disabled; missing [4, 5]
+tile 4 172.20.10.4 faults=none orient=0 display=1
+tile 5 172.20.10.5 faults=none orient=0 display=1

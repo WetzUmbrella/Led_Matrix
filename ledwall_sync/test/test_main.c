@@ -14,6 +14,12 @@
 #include <stdio.h>
 
 #include "test_coord.h"
+#include "test_coord_game.h"
+#include "test_ack_outbox.h"
+#include "test_game_rules.h"
+#include "test_join_backoff.h"
+#include "test_score_font.h"
+#include "test_wall_turn.h"
 
 /** One test. */
 typedef struct
@@ -40,6 +46,9 @@ static test_case_t const g_cases[] = {
     {"C8 T-B2-04: ASSET_READY with the wrong CRC32 is not counted",
      test_coord_crc_mismatch},
     {"C9 T-B2-04: SESSION_CONFIG validation", test_coord_session_validation},
+    {"C9b re-plan: new SESSION_CONFIG refused in COORDINATING GAME and "
+     "COORDINATING PLAYBACK",
+     test_coord_session_while_busy},
     {"C10 T-B2-04: STATUS every 250 ms to the PC address", test_coord_status},
     {"C11 T-B2-05: START_AT 3 copies, one seq, t_start = copy 1 + 600 ms",
      test_coord_start_copies},
@@ -49,6 +58,70 @@ static test_case_t const g_cases[] = {
      test_coord_pause_policy},
     {"C14 T-B2-04: continue policy, others keep playing, rejoin RESUME_AT",
      test_coord_continue_rejoin},
+    {"C15 re-plan: router join retried with 1, 2, 4, 8, then 10 s backoff",
+     test_join_backoff_schedule},
+    {"C16 re-plan: acked outbox resends until ACK, expires, refuses when full",
+     test_ack_outbox_limits},
+    {"C17 re-plan: 30 s round, mole 1200 to 500 ms, 300 ms gap, no repeats",
+     test_game_rules_timing},
+    {"C18 re-plan: hit +1, miss -1, dedupe within 30 ms by highest peak",
+     test_game_rules_scoring},
+    {"C18b re-plan: tap in flight at the hide still hits, tap after it misses, "
+     "timeout keeps the score",
+     test_game_rules_grace},
+    {"C18c re-plan: a late tap and its late echo are one group, one HIT",
+     test_game_rules_late_echo},
+    {"C18d 24 Nov: a real tap 140 ms behind its echoes wins, a 1 s late "
+     "echo is a duplicate",
+     test_game_rules_slow_echo},
+    {"C35 24 Nov: a wall turn turns the layout, 4 turns give it back, "
+     "the match finds the turn",
+     test_wall_turn_layout},
+    {"C36 24 Nov: wall turn when every tile turns alike within 1.5 s; "
+     "partial, mixed and unheard tiles are not",
+     test_wall_turn_detect},
+    {"C37 24 Nov: a wall turn while playing stops, then resumes at the saved "
+     "frame in the turned layout",
+     test_coord_wall_turn_play},
+    {"C38 24 Nov: one tile turned, a turn undone, game mode and a new grid "
+     "leave no wall turn",
+     test_coord_wall_turn_not},
+    {"C19 re-plan: score font pixel counts, centring and tile slices",
+     test_score_font_slices},
+    {"C19b step 3: wall pictures at the largest scale per shape, sparse",
+     test_score_font_pictures},
+    {"C19c step 4d: grids of more than 9 cells, sparse and dense",
+     test_score_font_cells},
+    {"C20 re-plan: START refused in video mode, mode and START ACKed, repeat "
+     "ACKed only",
+     test_coord_game_mode_and_start},
+    {"C21 re-plan: round: MOLE_ON resent until ACK, hit, STATUS score, END and "
+     "WALL_PICTURE",
+     test_coord_game_round},
+    {"C22 re-plan: TAP ACKed and relayed once, SESSION_CONFIG refused in round",
+     test_coord_game_taps},
+    {"C23 re-plan: a re-registered tile's TAPs from a low seq are new",
+     test_coord_game_tap_restart},
+    {"C24 step 3: ARM, start sprite on the centre tile, countdown, level",
+     test_coord_game_arm},
+    {"C25 step 3: START_NOW, abort in the countdown, 60 s arm timeout",
+     test_coord_game_abort},
+    {"C26 step 3: tap test lights the tapped tile, refused while armed",
+     test_coord_game_tap_test},
+    {"C27 step 3: STATUS level, time left, wrong, missed, shown, reaction",
+     test_coord_game_status},
+    {"C28 step 4: game mode READY without a video, video START refused",
+     test_coord_game_no_video},
+    {"C29 step 4: a new session ends the tap test (bench 12 Nov 2026)",
+     test_coord_game_new_session},
+    {"C30 step 4d: a sparse layout plays, small pictures on each tile",
+     test_coord_game_sparse},
+    {"C31 9-tile SESSION_CONFIG keeps every byte; a longer datagram dropped",
+     test_coord_full_config},
+    {"C32: a tile switched off is sent a picture clear (layout, ARM)",
+     test_coord_game_unplaced_clear},
+    {"C33: a burst of nine TAPs: one send per pass, every ACK and relay",
+     test_coord_game_paced_sends},
 };
 
 /** Number of tests: the element count of a short array fits uint32_t. */

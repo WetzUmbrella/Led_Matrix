@@ -19,7 +19,9 @@
  *   when 1 ms is left before the next beacon (OD-08); registry of 9 Node IDs
  *   (cl_registry[9]); heartbeat scan every 100 ms on its own absolute
  *   schedule with the 2.5 s timeout; router join bounded by the 10 s
- *   CONNECTING timeout, then FAULT until reset (cl_connect_router()).
+ *   CONNECTING timeout, retried forever on the 1, 2, 4, 8, 10 s backoff of
+ *   join_backoff.h while in FAULT, and rejoined the same way after a link
+ *   loss (cl_try_join(), cl_on_link_lost()).
  * - T-B2-04: the 12 states of W6 statechart 2; slots only from
  *   SESSION_CONFIG; one readiness bitmap per session written only in poll
  *   context; ASSET_READY counted only for the session and the manifest
@@ -30,6 +32,12 @@
  * - T-B2-05: START_AT and RESUME_AT 600 ms ahead, PAUSE and STOP, each sent
  *   3 times at 0, 100 and 200 ms with one seq; STOP from PAUSED.
  * - T-B2-06 instrumentation: callback and dispatch time histograms.
+ * - Build step 7 (whack-a-mole re-plan): COORDINATING GAME, entered from
+ *   READY by GAME_CONTROL START in game mode and left by END (the PC's abort
+ *   or the 30 s round end). The rules are in game_rules.c, the score drawing
+ *   in score_font.c, and the acked messages to tiles wait in the outbox of
+ *   common/proto/ack_outbox.c. Every TAP is ACKed and relayed to the PC on
+ *   port 4213 (once per TAP seq). GAME_CONTROL from the PC is ACKed on 4213.
  * Not yet implemented: CL_TEST_SUPPRESS_MS is a build option for T-B4-05
  *   (see coordinator_loop.c); the nine-sender load itself is
  *   pc/tools/sim_nodes.py (T-B2-06).
@@ -73,10 +81,15 @@
 #define CL_PORT_TILE_RX   4210u /**< Tiles listen: beacons and commands. */
 #define CL_PORT_FROM_TILE 4211u /**< Pico listens: tile messages. */
 #define CL_PORT_FROM_PC   4212u /**< Pico listens: SESSION_CONFIG, commands. */
+#define CL_PORT_TELEMETRY                                                      \
+    4215u /**< Pico listens: tiles' TELEMETRY broadcast
+                                      (orientation, D-17). */
 
 /**
  * @brief  Join the router and run the coordinator forever. Never returns.
- *         On a CONNECTING timeout the coordinator stays in FAULT until reset.
+ *         A failed join stays in FAULT and is retried with backoff; a
+ *         joined coordinator leaves FAULT and starts from WAITING FOR
+ *         SESSION.
  */
 void coordinator_loop_run (void);
 
@@ -155,6 +168,12 @@ uint32_t coordinator_loop_test_skipped (void);
  * @return Detection time, or 0 if none.
  */
 uint64_t coordinator_loop_test_loss_time (uint8_t node_id);
+
+/**
+ * @brief  Force the coordinator state (no event is logged, nothing is sent).
+ * @param  state  The state to set.
+ */
+void coordinator_loop_test_set_state (proto_coord_state_t state);
 #endif
 
 #endif /* COORDINATOR_LOOP_H */
