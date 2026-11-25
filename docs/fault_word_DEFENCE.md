@@ -1,6 +1,6 @@
 # fault_word: design defence (T-B3-06)
 
-Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston, task T-B3-06. Files: `panel_sync/main/fault_word.c/.h`; host tests `panel_sync/test/test_fault_word.c/.h`, run by `make -C panel_sync/test` (line "Fault word: Pass = 5 of 5"). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviation D-1 only).
+Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston, task T-B3-06. Files: `panel_sync/main/fault_word.c/.h`; host tests `panel_sync/test/test_fault_word.c/.h`, run by `make -C panel_sync/test` (line "Fault word: Pass = 6 of 6", 25 Nov). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviation D-1 only). Updated 25 Nov 2026 against `a6d4902`: the design below is unchanged since October; section 8 now records what was built after it.
 
 **Names.** Barr-C 6.1.i requires the module prefix on every public function, and the module file is `fault_word.c`, so the plan's names are implemented as: `fault_set(bits)` = `fault_word_set()`, `fault_clear_condition(bits)` = `fault_word_clear_condition()`, `fault_snapshot()` = `fault_word_snapshot()`. The plan describes the ACK clear in words ("clears (sent bits AND `EVENT_MASK`) with an atomic fetch-and") without a function name; it is `fault_word_clear_events(sent_bits)`. The plan's `EVENT_MASK` is `FAULT_EVENT_MASK`; `FAULT_CONDITION_MASK` is added as its complement over the bits in use. Bit names are `FAULT_BIT_<source>`. Quotations below keep the plan's wording.
 
@@ -49,26 +49,24 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - Choice: bits 0 to 8: WIFI (condition), CRC_FAIL (event), QUEUE_OVERFLOW (event), BEACON_LOSS (condition), IMU (condition), MISSED_DEADLINE (event), ASSET_FORMAT (condition), DISPLAY (condition), SYNC_STALE (event). 23 bits stay free.
 - Examiner: "Is a CRC failure an event or a condition? What changes on the dashboard if you pick the other?"
 
-## 8. Not yet in this task
+## 8. Built since, and used on the wall
 
-- `tn_telemetry_send()` and `tn_on_telemetry_ack()` in `tile_net.c`: snapshot, send TELEMETRY {seq, fault word, orientation, display state}, remember (seq, sent bits), call `fault_word_clear_events()` on the ACK with that seq. They need the TELEMETRY and TELEMETRY_ACK rows of T-B2-01.
-- The Telemetry Queue `q_telemetry` (drop-oldest with a drop counter, VA-3.7) and the Fault Queue `q_fault`, their lengths and the telemetry period (OD-11).
-- The VC-4 acceptance (PC drops every third telemetry packet for 10 min) and T-X-02 on the two cores. Host test F5 (two POSIX setter threads, 100,000 sets each with wait-until-cleared, one reporter: 0 lost) is a host forerunner of T-X-02, not T-X-02 itself (plan choice: 100,000 is one tenth of T-X-02's 1,000,000 so the host test stays short).
+- `tn_telemetry_send()` and `tn_on_telemetry_ack()` in `tile_net.c` do exactly the cycle in section 4: snapshot, send TELEMETRY {seq, fault word, orientation, display state} every 1 s, remember (seq, sent bits) in the 4-entry `telemetry_book`, and call `fault_word_clear_events()` on the ACK with that seq (host tests T1 to T5; T5 drops every third packet: 100% of events reported, 0 flickers of a held condition).
+- The website shows each tile's fault bits. The bench scripts refuse to arm a round while a tile reports a fault (12 Nov 2026, after a DISPLAY fault went unnoticed and froze the LEDs). Since 24 Nov they warn, but still arm, on one-off event bits (user's decision 2).
+- The Telemetry Queue is length 2, drop-oldest, with its drop count carried in each item. There is no separate Fault Queue: the fault word is the only path, so its length question is closed.
+- Host test F5 (two POSIX setter threads, 100,000 sets each, one reporter: 0 lost) stands in for T-X-02. The 1,000,000-set run on the two cores (T-X-02) and the fault-word stress log of Week 13 were **not run on hardware**. Say so if asked.
 
-## PROVISIONAL list for Cheston to confirm
+## Settled values (25 Nov 2026)
 
-1. Bit numbers 0 to 8 (OD-12).
-2. CRC_FAIL is an event: each failed verify is one occurrence and a retry follows.
-3. QUEUE_OVERFLOW is an event: each drop is one occurrence; the per-queue drop counters keep the count. One bit for all queues, not one per queue.
-4. BEACON_LOSS is a condition owned by `playback_control`: it stays true until beacons return within the 1 s holdover.
-5. SYNC_STALE is an event: VC-1 makes each stale read one occurrence; the reader keeps the count in `stale_count`.
-6. Release on set, acquire on snapshot, relaxed on clears (section 3).
-7. `fault_word_clear_events()` as the plan's unnamed ACK clear.
+1. Bits 0 to 8: WIFI (condition), CRC_FAIL (event), QUEUE_OVERFLOW (event), BEACON_LOSS (condition), IMU (condition), MISSED_DEADLINE (event), ASSET_FORMAT (condition), DISPLAY (condition), SYNC_STALE (event). 23 bits free.
+2. CRC_FAIL, QUEUE_OVERFLOW and SYNC_STALE are events: each is one occurrence, and the count lives in the source's own counter. QUEUE_OVERFLOW is one bit for all queues.
+3. BEACON_LOSS is a condition owned by `playback_control`. It stays set until beacons return.
+4. Release on set, acquire on snapshot, relaxed on clears (section 3).
 
-## Questions for Cheston before Tribunal 2
+## Questions to practise before the demo
 
 Answer each in your own words, without reading the code.
 
-1. Explain why a fetch-and that clears only `(sent bits AND EVENT_MASK)` cannot lose a first-time event (one whose bit was not set in the sent snapshot) raised after the snapshot, and what would be lost if the Network Task cleared the whole snapshot instead.
-2. A condition bit and an event bit are raised together, and the TELEMETRY packet carrying both is dropped twice before an ACK arrives. Describe exactly what the dashboard shows for each bit over those three packets.
-3. Why does this module use C11 atomics (deviation D-1) instead of a FreeRTOS critical section around `word |= bit`, given that the Display Engine on core 1 raises MISSED_DEADLINE from its tick path?
+1. Explain why a fetch-and that clears only `(sent bits AND EVENT_MASK)` cannot lose an event raised after the snapshot, and what would be lost if the Network Task cleared the whole snapshot.
+2. A condition bit and an event bit are raised together, and the TELEMETRY packet carrying both is dropped twice before an ACK arrives. What does the website show for each bit over those three packets?
+3. Why C11 atomics (deviation D-1) and not a FreeRTOS critical section around `word |= bit`, when the Display Engine on core 1 raises MISSED_DEADLINE from its tick path?

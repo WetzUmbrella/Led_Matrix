@@ -1,6 +1,6 @@
 # asset_store: design defence (T-B3-04, T-B3-05, T-B3-01)
 
-Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston: the heap probe (T-B3-01) in Ben's session (29 Oct 2026); the Asset Storage Task, RAM copy and upload path (T-B3-04, T-B3-05) in Jia Jun's session (29 to 30 Oct 2026), for Cheston to review, change where they disagree, and defend. Files: `panel_sync/main/asset_store.c/.h`, `panel_sync/main/asset_rx.c/.h`; host tests `panel_sync/test/test_asset_rx.c` ("Asset: Pass = 5 of 5"). Coding standard: Barr-C:2018, deviations D-1 (published pointer and phase word, PROVISIONAL extension for Ahsanul to confirm) and D-2.
+Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston: the heap probe (T-B3-01) in Ben's session (29 Oct 2026); the Asset Storage Task, RAM copy and upload path (T-B3-04, T-B3-05) in Jia Jun's session (29 to 30 Oct 2026), for Cheston to review, change where they disagree, and defend. Files: `panel_sync/main/asset_store.c/.h`, `panel_sync/main/asset_rx.c/.h`; host tests `panel_sync/test/test_asset_rx.c` ("Asset: Pass = 6 of 6", 25 Nov). Coding standard: Barr-C:2018, deviations D-1 (published pointer and phase word) and D-2. Updated 25 Nov 2026 against `a6d4902`: sections 1 to 8 are the October design, still in the code with the values checked; section 9 is what changed for the game and the 9-tile wall.
 
 **Names.** Public: `asset_store_start()`, `asset_store_probe_heap()`, `asset_store_post_upload()`, `asset_store_take_reply()`, `asset_store_active()`, `asset_store_get()`, `asset_store_cached()`, `asset_store_flash_allowed()`, `asset_store_phase()`. The plan's `asset_store_task()`, `asset_store_load_to_ram()` keep their names as statics; the plan's `asset_store_rx_chunk()` and `asset_store_verify()` are `as_on_chunk()` and `as_verify()`, with the pure rules in `asset_rx` (`asset_rx_check_manifest()`, `asset_rx_chunk()`, `asset_rx_crc32()`) so they run in the host tests.
 
@@ -53,16 +53,31 @@ Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston: the heap prob
 - Choice: the manifest erases about 16 sectors before the first chunk; this can only happen while not playing, and the tick ISR is IRAM-safe, but the Display Engine task can still miss ticks during the erase (shown as `missed=`). The uploader waits 1 s after the manifest (PROVISIONAL). T-B5-07 (c) sizes the stall.
 - Examiner: "What does the wall show during an upload, and why is that acceptable?"
 
-## PROVISIONAL list for Cheston to confirm
+## 9. What changed for the game and the 9-tile wall (11 to 24 Nov 2026)
 
-- OD-11: Upload Queue 4 (reject and NACK reason 3), Reply Queue 8 (drop-oldest).
-- BUSY also in PAUSED and CLOCK HOLDOVER.
-- Frames partition layout: 16 B header sector, payload from 4 KB.
-- A wrong-length chunk drops the whole upload.
-- D-1 extended to this module (Ahsanul to confirm).
+- **A held upload for an asset already in RAM** (step 4c, DS-12, 12 Nov 2026). Before, a MANIFEST for the asset already published was answered only to the Pico, so the PC waited for CHUNK_ACKs that never came, and the re-upload hung. Now `as_on_manifest()` announces the asset to the Pico again and opens a *held* upload (`asset_rx_open_held()`). Every chunk is ACKed as a repeat and nothing is written to flash (log `already held`, flash counters unchanged; host test A6). Round 9 on 12 Nov: 57 of 57 ACKed on both tiles with no write.
+- **The upload race is gone.** Before 4c, tile 4 failed the first upload of nearly every new session. After 4c the first upload passed on both tiles in every session, at about 2.5 s per tile. On 18 Nov the website uploads all 9 tiles in parallel in about 3 s.
+- **A game needs no asset** (A14, step 4a). In game mode the Pico counts a tile ready when it is online and clock-synced, so this module is not on the game's path at all.
+- **The website re-uploads a tile that lost its video** (`7f500c7`, 24 Nov). A tile that ACKed its asset in this session but stays online and not ready for 5 s (`LOST_ASSET_S`), while the Pico waits for readiness, gets its section again (tiles 1, 2 and 6 had lost theirs after a reflash).
+- **A restarted Pico stops playback first** (24 Nov). A playing tile answers BUSY to every upload (section 4), so `tn_game_new_pico()` stops playback when the Pico restarts. The website can then publish the wall again.
 
-## Questions for Cheston before Tribunal 2
+## Settled values (25 Nov 2026)
 
-1. Draw the life of one asset from MANIFEST to the Display Engine's first read, marking every point where the published pointer changes and the ordering that protects it.
-2. Explain why a repeated chunk is ACKed but not written, using what you know about NOR flash.
-3. Give the numbers behind the OD-04 decision on your bench tiles and say which region the RAM copy went to.
+| Item | Value | Why |
+|---|---|---|
+| RAM rule | internal RAM when the largest internal block holds the payload + 32,768 B (90,368 B for a 600-frame asset) | the display never reads flash; refused with NACK reason 1 and ASSET_FORMAT when it cannot fit (PSRAM is off) |
+| Upload Queue | 4, reject and NACK reason 3 | |
+| Reply Queue | 8, drop-oldest | the PC resends a chunk with no ACK |
+| BUSY states | ARMED, PLAYING, PAUSED, CLOCK HOLDOVER | RESUME_AT plays the same asset, so PAUSED and holdover must keep it too |
+| Frames partition | 16 B header sector, payload from 4 KB | |
+| Wrong-length chunk | drops the whole upload | a short write cannot be patched without an erase |
+| Formats | 2 (packed, 4 bits per channel) only; 1 (8-bit) only in the `DE_PROFILE` build | Tribunal 1 change requirement |
+
+## Questions to practise before the demo
+
+Answer each in your own words, without reading the code.
+
+1. Draw the life of one asset from MANIFEST to the Display Engine's first read. Mark every point where the published pointer changes and the ordering that protects it.
+2. Why is a repeated chunk ACKed but not written? Use what you know about NOR flash.
+3. The PC uploads the same video again to a tile that already holds it. What does the tile send, and why did this hang before 12 Nov?
+4. Why copy the asset to RAM at all, and what would the display lose if it played from flash?

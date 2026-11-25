@@ -1,6 +1,6 @@
 # common/proto: design defence (T-B2-01)
 
-Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Files: `protocol/layout_table.md` (the single source of every field), `common/proto/proto.c/.h` (C codec, an ESP-IDF component for the tiles through `EXTRA_COMPONENT_DIRS` and a source file in `ledwall_sync/CMakeLists.txt` for the Pico), `common/proto/test/` (host tests, `make -C common/proto/test`). Coding standard: Barr-C:2018, `docs/coding_standard.md` (D-2 only for `int main`). The Python twin is `pc/proto_layout.py` (T-B1-01, Jolyn).
+Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Files: `protocol/layout_table.md` (the single source of every field), `common/proto/proto.c/.h` (C codec, an ESP-IDF component for the tiles through `EXTRA_COMPONENT_DIRS` and a source file in `ledwall_sync/CMakeLists.txt` for the Pico), `common/proto/test/` (host tests, `make -C common/proto/test`). Coding standard: Barr-C:2018, `docs/coding_standard.md` (D-2 only for `int main`). The Python twin is `pc/proto_layout.py` (T-B1-01, Jolyn). Updated 25 Nov 2026 against `a6d4902`: 24 message types (the game added types 18 to 23, section 12); host tests 8 of 8 plain and with ASan.
 
 **Names.** The plan names the files `proto_layout.c/.h` and the functions `proto_put_bits()`, `proto_get_bits()`, `proto_put_u16_le/u32_le/u64_le`, `proto_get_*_le` and `proto_encode_<msg>()` / `proto_decode_<msg>()`. Barr-C 6.1.i requires a public function to start with its module name, and `tools/barr_check.py` takes the module name from the file name, so the files are `proto.c/.h` and every plan function name is kept unchanged. Plan `proto_layout.h` = `proto.h`; plan `proto_layout.c` = `proto.c`; plan `test_proto.c` = `test_proto.c` (bit packing and BEACON) plus `test_messages.c` (every other row). Added beyond the plan: `proto_decode_header()` (dispatch on type before choosing a decoder) and `proto_beacon_set_t_p()` (T-B2-02 reads t_p after encoding). Message types are `proto_<msg>_t`; PAUSE and STOP share `proto_command_t` because both are header only.
 
@@ -21,7 +21,7 @@ Each entry gives the choice, the PostTri row it comes from (inventory ID and wor
 ## 3. Common header: type 5 bits, session_id 8, seq 16
 
 - Source: IFM-2a, "every message carries session_id and seq"; W6D-2f, "Every command carries a session ID and a sequence number."; Round 0 ruling SC-10, widths sized "by the valid-range rule ... labelled (plan choice, valid-range rule)"; OD-07 brief.
-- Choice: 5 + 8 + 16 = 29 bits on every message. 18 types need 5 bits (14 spare for OD-14 and OD-20). 16-bit seq wraps after 109.2 min at 10 Hz, so "newer" is wrap-aware: (uint16_t)(s - last) in 1 to 32,767. PROVISIONAL (OD-07).
+- Choice: 5 + 8 + 16 = 29 bits on every message. 24 types need 5 bits (8 spare; there were 18 types, 14 spare, before the game). 16-bit seq wraps after 109.2 min at 10 Hz, so "newer" is wrap-aware: (uint16_t)(s - last) in 1 to 32,767. (OD-07, see the status note at the end).
 - Examiner: "A show runs for two hours. Show that your seq comparison still rejects a beacon from 50 minutes ago and accepts the next one."
 
 ## 4. Contiguous packing, padded to a whole byte
@@ -69,17 +69,36 @@ Each entry gives the choice, the PostTri row it comes from (inventory ID and wor
 ## 11. Message type codes in row order
 
 - Source: T-B2-01 message rows, REGISTER to TELEMETRY_ACK.
-- Choice: codes 0 to 17 in the order of the plan row (BEACON = 10). PROVISIONAL (OD-07).
-- Examiner: "What does your tile do with a datagram whose type code is 20?"
+- Choice: codes 0 to 17 in the order of the plan row (BEACON = 10); the game rows took 18 to 23 (TAP, MOLE_ON, FEEDBACK, GAME_CONTROL, WALL_PICTURE, ACK) with no existing code changed.
+- Examiner: "What does your tile do with a datagram whose type code is 26?"
 
-## Open items
+## 12. The game rows, 18 to 23 (11 Nov 2026, one batch)
 
-`protocol/layout_table.md` section 10 lists the ten items Benjamin confirms before the freeze; item 9 (how the Pico learns each Node ID's CRC32 for the T-B2-04 ASSET_READY check) blocks T-B2-04.
+- Source: whack-a-mole re-plan; DS-10 "protocol changes, one batch"; Tribunal 1 change requirement (fewest bits for each valid range).
+- Choice: the table, both codecs and the vectors changed in one commit, with no existing type code moved. Each game message is unicast to one device with a seq and an ACK, never broadcast (a broadcast is not retried by the WiFi layer). Widths follow the valid-range rule: node_id 4 bits (1 to 9), FEEDBACK result 2 bits (3 codes), level 2 bits, GAME_CONTROL command 4 bits, the ARM tap threshold 8 bits in 20 mg steps (0 to 250, so 20 to 5,000 mg), and the TAP peak 16 bits in mg.
 
-## Questions for Benjamin before Tribunal 2
+| Type | Message | Bits | Bytes | Byte-aligned before |
+| --- | --- | --- | --- | --- |
+| 18 | TAP | 113 | 15 | 23 |
+| 19 | MOLE_ON | 112 | 14 | 24 |
+| 20 | FEEDBACK | 35 | 5 | 14 |
+| 21 | GAME_CONTROL | 47 | 6 | 17 |
+| 22 | WALL_PICTURE | 182 | 23 | 37 |
+| 23 | ACK | 49 | 7 | 17 |
+
+- STATUS grew for the game: round state, level, score (-99 to 99 in 8 bits), targets shown, missed, wrong, time left, reaction time (11 bits, 0 to 2,047 ms) and the wall turn (2 bits). SESSION_CONFIG gives each Node ID a cell in a grid of up to 9 x 9 (sparse grid, DS-15) and a CRC32 per Node ID.
+- Sizes are derived from the bit layout (`docs/week13/message_sizes.md`, all 24 types). No packet capture of on-air bytes was taken.
+- Examiner: "Why is the TAP's time 64 bits when a round lasts 30 s?" (It is the Pico's microsecond clock since boot, the same field as the BEACON's t_p, so no wrap and no conversion.)
+
+## Status of the table
+
+`protocol/layout_table.md` still carries its October heading "PROVISIONAL, not frozen": the formal freeze (OD-07) was never signed off. Every row is built, both codecs agree on all 77 vector files (cross-language tests pass, 25 Nov), and no field has changed since 24 Nov. If asked, say: "The layout is the one in the code and the vectors; the freeze sign-off was never written down."
+
+## Questions to practise before the demo
 
 Answer each in your own words, without reading the code.
 
-1. Why would a `__attribute__((packed))` struct with a 5-bit type bit-field give different bytes on the RP2040 compiler and in Python, and how do your test vectors prove that `proto.c` and `proto_layout.py` agree?
-2. Take the STATUS row. Derive each field's width from its valid range, add up the bits, and say how many bytes go on air and why that is smaller than the before size.
-3. The seq field wraps every 109 minutes at 10 Hz. Explain the wrap-aware "newer" test, and give one stale message it rejects and one fresh message a plain `>` comparison would wrongly reject.
+1. Why would a `__attribute__((packed))` struct with a 5-bit type bit-field give different bytes on the RP2040 compiler and in Python, and how do the test vectors prove that `proto.c` and `proto_layout.py` agree?
+2. Take FEEDBACK. Derive each field's width from its valid range, add up the bits, and say how many bytes go on air and why that is smaller than before.
+3. The seq field wraps. Explain the wrap-aware "newer" test, and give one stale message it rejects and one fresh message a plain `>` would wrongly reject.
+4. Why are game messages unicast with an ACK, when the BEACON is a broadcast with none?

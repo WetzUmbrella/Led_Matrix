@@ -1,6 +1,6 @@
 # tile_tasks: design defence (T-B5-04)
 
-Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun, task T-B5-04. Files: `panel_sync/main/tile_tasks.h` (task table), `panel_sync/main/tile_tasks.c` (boot log), `panel_sync/sdkconfig.defaults` (the six options of the row). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviation D-2 only, for FreeRTOS names and the `vTaskList()` char buffer).
+Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun, task T-B5-04. Files: `panel_sync/main/tile_tasks.h` (task table), `panel_sync/main/tile_tasks.c` (boot log), `panel_sync/sdkconfig.defaults` (the six options of the row). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviation D-2 only, for FreeRTOS names and the `vTaskList()` char buffer). Updated 25 Nov 2026 against `a6d4902`: the table is unchanged since October; section 8 records how the game changed the load on each core.
 
 **Names.** The plan names one file, "`panel_sync/main/tile_tasks.h` (name, priority, core, stack per task)", and no functions. Each task row is four macros with the `TILE_` prefix (Barr-C 6.1.i applies the module name to public names; macros are upper case, 6.1.h): Display Engine Task = `TILE_DISPLAY_NAME/_PRIO/_CORE/_STACK`; Orientation Task = `TILE_ORIENT_*`; Time Sync Task = `TILE_TIMESYNC_*`; Playback Control Task = `TILE_PLAYBACK_*`; Network Task = `TILE_NET_*`; Asset Storage Task = `TILE_ASSET_*`. The cores are `TILE_CORE_NET` (0) and `TILE_CORE_DISPLAY` (1). The boot log that the acceptance needs is `tile_tasks_log_boot()`, a name this module adds because the plan gives none. The recorded CPU frequency is `TILE_CPU_FREQ_MHZ`.
 
@@ -48,17 +48,38 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - Choice: 4096 B for every task (plan choice), the value the prototype's render and sync tasks used. Unmeasured: the stack column of `vTaskList()` is the high-water mark (the least free stack seen), so the boot log and a log taken after 10 min of running give the data to set each size.
 - Examiner: "What is the high-water mark of the Display Engine after 10 minutes, and how much margin would you keep above it?"
 
-## PROVISIONAL for Jia Jun to confirm
+## 8. What the game changed (11 to 24 Nov 2026)
 
-1. Every priority and core in the table: (proposed, W6D-4a) until the boot log on a tile shows them.
-2. Stack 4096 B for every task, unmeasured.
-3. `vTaskList()` buffer: 64 B per line and 4 spare lines (plan choice, section 5).
-4. The boot log is printed from `app_main` right after the three Week 10 tasks are created; Orientation, Playback Control and Asset Storage are checked the same way in T-B5-05, T-B4-04 and T-B3-04.
+The six rows are the same numbers as in October, and every task is still created from them:
 
-## Questions for Jia Jun before Tribunal 2
+| Task | Priority | Core |
+| --- | --- | --- |
+| Display Engine | 20 | 1 |
+| Orientation (now also tap detection) | 5 | 1 |
+| Time Sync | 16 | 0 |
+| Playback Control | 15 | 0 |
+| Network | 12 | 0 |
+| Asset Storage | 8 | 0 |
+
+What changed is the work inside them:
+
+- **Orientation reads the IMU at 1 kHz** (11 Nov), woken by a 1 ms `esp_timer` because the 100 Hz FreeRTOS tick cannot time it. It runs the tap detector on every sample. At priority 5 it is still below the Display Engine on the same core, so a slow I2C read can never delay a tick.
+- **The Network Task handles every game message and the TAP outbox** (11 Nov). A send from lwIP's tcpip thread (18) deadlocked, so game handling moved to the Network Task (12) on core 0 (`tile_net_DEFENCE.md` section 11).
+- **The Display Engine draws the game** on the same tick and buffers, and RMT uses DMA since 12 Nov, so a WiFi burst on core 0 no longer delays the LED refill (`display_engine_DEFENCE.md` section 3).
+- Measured on the wall in game mode: 1 missed tick in about 23,000 per tile (12 Nov, round 5).
+
+## Settled values (25 Nov 2026)
+
+1. The priorities and cores in the table above are the shipped build.
+2. Stack 4096 B for every task. The high-water marks after a long run were never logged: say "not measured" if asked.
+3. `vTaskList()` buffer: 64 B per line and 4 spare lines.
+4. CPU 160 MHz (checked at build time), power management off, tcpip pinned to core 0, IRAM-safe gptimer and RMT interrupts.
+
+## Questions to practise before the demo
 
 Answer each in your own words, without reading the code.
 
 1. Why is the Display Engine at priority 20 on core 1 rather than above WiFi (23) on core 0, and what would a priority above WiFi on core 0 break?
-2. A flash erase stalls the cache for tens of milliseconds. Which parts of the 60 Hz path still run during it with the options in this table, and which do not?
-3. The cycle counter wraps every 26.8 s at 160 MHz. Explain why an unsigned 32-bit subtraction still gives the right preparation time across a wrap, and when it would not.
+2. The Orientation Task now wakes 1,000 times a second on the display's core. Prove it cannot make a tick late.
+3. A flash erase stalls the cache for tens of milliseconds. Which parts of the 60 Hz path still run during it, and which do not?
+4. The cycle counter wraps every 26.8 s at 160 MHz. Why does an unsigned 32-bit subtraction still give the right preparation time across a wrap?

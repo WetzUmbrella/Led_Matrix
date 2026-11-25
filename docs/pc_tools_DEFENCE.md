@@ -1,6 +1,6 @@
 # PC tools: design defence (T-B1-02 to T-B1-07)
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn in Jia Jun's session (29 to 30 Oct 2026), to review, change where they disagree, and defend. Files: `pc/asset_builder.py`, `pc/uploader.py`, `pc/telemetry.py`, `pc/pico_link.py`, `pc/dashboard.py`, `pc/tests/numbered_pattern.py`, `pc/tests/check_assets.py`, `pc/tools/evidence_index.py`; pytest in `pc/tests/` (`python3 -m pytest -q tools/tests pc/tests`). Style: PEP 8 with type hints (`pycodestyle` clean), standard library plus Pillow for GIFs.
+Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn in Jia Jun's session (29 to 30 Oct 2026), to review, change where they disagree, and defend. Files: `pc/asset_builder.py`, `pc/uploader.py`, `pc/telemetry.py`, `pc/pico_link.py`, `pc/dashboard.py`, `pc/tests/numbered_pattern.py`, `pc/tests/check_assets.py`, `pc/tools/evidence_index.py`; pytest in `pc/tests/` (`python3 -m pytest -q tools/tests pc/tests`). Style: PEP 8 with type hints (`pycodestyle` clean), standard library plus Pillow for GIFs. Updated 25 Nov 2026 against `a6d4902`: sections 1 to 8 are the October tools, still in the code with the values checked; section 9 covers the website and what the game and the 9-tile wall added (`pc/web.py`, `pc/web/index.html`, `pc/web/score.html`, `pc/gif_library.py`, `pc/tap_log.py`). pytest: 518 passed, 1 skipped (25 Nov).
 
 **Names.** The plan's functions keep their names: `load_gif()`, `resample_60fps()`, `partition_tiles()`, `check_frame_limit()`, `pack_frame()`, `build_manifest()` (asset_builder); `upload_asset()`, `retry_missing()`, `RateLimiter` (uploader). The dashboard's rules are the class `DashboardModel`, so pytest checks them without sockets; `DashboardShell` is the interactive front end.
 
@@ -52,15 +52,33 @@ Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn in Jia Jun's sessi
 - Choice: generated from the inventory and the plan; a row is "evidence present" only when the plan's artefact file exists and is not a procedure still waiting for its run; Green readiness only with such an artefact. Commitment text stays outside the public repository.
 - Examiner: "Who decides a readiness row is Green, and could a template document make it Green?"
 
-## PROVISIONAL list for Jolyn to confirm
+## 9. The website and what the game added (12 to 25 Nov 2026)
 
-- OD-06 option (a); OD-02 option (b).
-- Upload window 4, 1 s manifest pause, 100 chunks/s, 20 rounds.
-- Numbered-pattern encoding (Node ID as red LEDs from the top left, frame number in 10 green bits).
-- Dashboard as a command-line shell over a tested model.
+- **A website over the tested model** (step 4e, 18 Nov). `pc/web.py` serves the control page and a `/score` page for a TV, with a small JSON API over `DashboardShell`. It uses only the Python standard library (`http.server`): no CDN, no WebSockets, and it works on the router's subnet with no internet. The pages poll `/api/state` every 250 ms. A pump thread calls `shell.pump()` every 20 ms, so STATUS, TAPs and TELEMETRY are read and ACKed even with no browser open. Uploads run in the background, so a request never waits on one.
+- **Any layout** (A1, A2, DS-15). A grid of 1 to 9 rows and columns with up to 9 tiles. Tap-to-place: choose a cell, then tap a tile, and that tile goes into the cell. Placing a tile already on the grid moves it. A tile can be switched off (blank, keeps its cell) or removed.
+- **Parallel uploads** (A13, 18 Nov). One worker per tile (`UPLOAD_WORKERS` = 9), so a whole wall uploads in about 3 s. Each worker keeps the October rules: window 4, 1 s after the MANIFEST, ACK timeout 0.25 s, 100 chunks/s, at most 20 rounds. A tile not heard on TELEMETRY for 5 s is offline and not uploaded to: on 18 Nov an upload to an unplugged tile retried for 27 s and held up every layout change.
+- **Game controls** (A4 to A12). Video or game mode (only while stopped), level, ARM with the tap threshold, Start now, Abort, and the tap test, which shows every tap's peak so the operator can tune the threshold. An ARM waits up to 1.5 s for STATUS to show the round armed, because the Pico ACKs a refused GAME_CONTROL too (19 Nov: ARM pressed, nothing happened, no error). Results show hits, missed, wrong, accuracy, average reaction, stars and the best score per level. Every tap goes to a CSV log (`pc/tap_log.py`).
+- **Recovery from a Pico restart with no operator action** (18 to 24 Nov). After 2 s with no STATUS the website treats the Pico as silent, disables the buttons, and resends the last SESSION_CONFIG every 1 s until the Pico answers. It then publishes the wall again and restores the mode, but only once the Pico is READY: a restarted Pico refuses a mode change while SYNCHRONISING but still ACKs it, so an earlier resend was lost (24 Nov). The PC's command seq is saved in `pc/.last_seq`, so a restarted PC is not dropped as stale (step 4b).
+- **Re-upload of a tile that lost its video** (`7f500c7`, 24 Nov). A tile that ACKed its asset this session but is online and not ready for 5 s (`LOST_ASSET_S`), while the Pico waits for readiness, gets its section again.
+- **Failure policy on the command line** (`--policy pause|continue`, 25 Nov). The demo uses `continue`, because the pause policy restarts the Pico after a tile is away more than 5 s (`coordinator_loop_DEFENCE.md` section 6).
+- **GIF library.** GIFs are uploaded through the page (at most 8 MB, checked name and magic bytes) and kept in `pc/gifs/`. That folder is git-ignored, so a fresh clone has no demo GIF.
 
-## Questions for Jolyn before Tribunal 2
+## Settled values (25 Nov 2026)
+
+| Item | Value |
+|---|---|
+| OD-06 (0 and 10 ms delays) | option (a): played as 100 ms, like most browsers |
+| OD-02 (brightness) | option (b): a control from 1 to 8; above 8 refused |
+| Upload | window 4, 1 s after the MANIFEST, 0.25 s ACK timeout, 100 chunks/s, 20 rounds, 9 tiles in parallel |
+| Pico silent, resend | 2 s without STATUS, SESSION_CONFIG resent every 1 s |
+| Tile offline (website) | 5 s without TELEMETRY |
+| Website | port 8080 on 0.0.0.0, pages poll every 250 ms, pump every 20 ms |
+
+## Questions to practise before the demo
+
+Answer each in your own words, without reading the code.
 
 1. Work the 30 ms example by hand for the first 5 source frames and show where each tick boundary falls.
-2. Explain how the uploader learns a tile's IP address and why MANIFEST carries no Node ID.
-3. Show the dashboard refusing Start with one tile missing, and explain where that decision is made.
+2. The Pico restarts in the middle of the demo. List what the website does, in order, until the wall is back.
+3. Why does the website wait for STATUS after an ARM instead of trusting the ACK?
+4. Why are the uploads parallel now, and what stops one dead tile from holding up the other eight?

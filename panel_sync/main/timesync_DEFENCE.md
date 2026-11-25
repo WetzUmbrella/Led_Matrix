@@ -1,6 +1,6 @@
 # timesync: design defence (T-B4-02)
 
-Owner: Ahsanul (Buddy 4). Files: `timesync.c/.h` (pure C core plus the Time Sync Task under `#ifndef TIMESYNC_HOST_TEST`), `panel_sync/test/test_main.c/.h` and `test_timesync.c/.h` (host tests, `make -C panel_sync/test`). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviations D-1 and D-2 only).
+Owner: Ahsanul (Buddy 4). Files: `timesync.c/.h` (pure C core plus the Time Sync Task under `#ifndef TIMESYNC_HOST_TEST`), `panel_sync/test/test_main.c/.h` and `test_timesync.c/.h` (host tests, `make -C panel_sync/test`). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviations D-1 and D-2 only). Updated 25 Nov 2026 against `a6d4902`: sections 3 and 4a are corrected to the current code (drift limit, re-seed rule), section 17 records the bench findings that changed them, and the open interface items are closed. Host suite on 25 Nov: every group passes, plain and with ASan.
 
 **Names.** Barr-C 6.1.i and 5.1.c require the module prefix on every public function and type, so the plan's names are implemented as: `now_corrected()` = `timesync_now_corrected()`, `frame_index(t)` = `timesync_frame_index()`, `deadline_local(n)` = `timesync_deadline_local()`, `ts_publish()` = `timesync_publish()`, `ts_read_snapshot()` = `timesync_read_snapshot()`. Quotations below keep the plan's wording.
 
@@ -22,6 +22,7 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 
 - Source: VA-4.7, "Drift estimate kept alongside the offset (holdover sized from drift: 50 ppm worst case uses a 2 ms share of the 5 ms budget in 40 s)."; T-B4-02, "Drift: estimated from the filtered offsets across the window and held with offset and reference."
 - Choice: once the window is full, the minimum-delay sample of the older 8 and of the newer 8 give two filtered offsets; drift = their difference over their t_l difference, in parts per billion (ppb). Splitting into halves is a (plan choice): it adds no new constant beyond the plan's 16. ppb units are a (plan choice): 50 ppm is 50,000 ppb, which fits `int32_t` at 1 ppb resolution. If drift cannot be computed (zero span or out of range) the previous value is held.
+- **Limited to plus or minus 50 ppm** (`TIMESYNC_DRIFT_MAX_PPB`, `cbe7763`, 24 Nov 2026). The two half-window minima are only 0.8 s apart, so a change of beacon delay between them reads as a clock rate. On the old Matrix router the estimates had a median of about 1,500 ppm and put tiles 7 and 8 up to 8.6 ms apart (NR-07 failed). A crystal cannot drift faster than 50 ppm (VA-4.7's worst case), so a larger estimate is cut to it. The host test "24 Nov drift limit" failed on the old code first. A replay of 19 min of logged beacons: skew p99 9.0 ms before, 0.4 ms after.
 - Examiner: "Over a 0.8 s baseline, how large is the drift error caused by a 100 us difference in the two minimum delays, and is that acceptable for a 1 s holdover?"
 
 ## 4. Slew of at most 100 us per tick, `int8_t`, never stepped
@@ -30,12 +31,15 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - Choice: `timesync_slew_clamp()` limits each request to -100..+100 and returns `int8_t`. Every tick publishes `applied + slew`. Host test 1 checks -100, 0, +100 unchanged and -101, +101 limited.
 - Examiner: "Why `int8_t` and not 7 bits, and what is the largest correction rate in ppm that a 100 us per tick slew can follow at 60 fps?"
 
-### 4a. The one exception: re-seed on another Pico clock (review round 1, R1-2; PROVISIONAL, owner Ahsanul)
+### 4a. The one exception: re-seed on another Pico clock (R1-2, changed 12 and 24 Nov 2026)
 
-- Source: review round 1 R1-2 (`docs/status/review_log.md`). With the patch 17 coordinator lock a tile can switch Pico, and a Pico can reboot on the same address. Either way `t_p` comes from a different epoch, often seconds or minutes away. At 100 us per tick the offset would take minutes to hours to converge while SYNC_READY stayed true.
-- Choice: `timesync_add_sample()` compares each sample's offset `t_l - t_p` with the current estimate. More than `TIMESYNC_RESEED_US` (500 ms, plan choice) away means another clock: the window, both estimates and the published offset are forgotten, the sample starts a new window, and the next tick publishes it directly, as at boot. SYNC_READY is false until the window is full again (1.6 s). 500 ms sits above the 307 ms DTIM 3 buffering behind the START_AT lead, so delay alone never triggers it; host test "R1-2 re-seed" checks a 400 ms late sample does not. `timesync_reseed_count()` counts re-seeds.
-- Limit: one sample delayed by more than 500 ms would re-seed twice (out and back) and cost 1.6 s of readiness. Not seen in the 29 Oct logs; watch the count on the bench.
-- Examiner: "Why is stepping acceptable here when VA-4.6 says slew? What does a tile that is PLAYING do at the moment of the step?" (Answer: the old offset belongs to a clock that no longer exists, so there is nothing to slew towards; the timeline origin from the old Pico is meaningless too, which is why SYNC_READY drops and the new coordinator must send START_AT again.)
+- Source: review round 1 R1-2. A tile can switch Pico, and a Pico can reboot on the same address. Either way `t_p` comes from a different epoch, often seconds or minutes away. At 100 us per tick the offset would take minutes to hours to converge while SYNC_READY stayed true.
+- Choice now (`630c390`, 24 Nov): **a re-seed happens when the Pico restarts.** tile_net sees the restart (a new beacon address, the session falling to 0, or the seq jumping back more than 16) and calls `timesync_pico_restart()`. The next sample then empties the window and starts a new one, whatever its offset. The next tick publishes it directly, as at boot, and SYNC_READY is false until the window is full again (1.6 s).
+- Fallback: a sample more than `TIMESYNC_RESEED_US` = **5 s** off the estimate, for `TIMESYNC_RESEED_SAMPLES` = 3 samples in a row, also re-seeds. A single off sample is dropped and counted (`timesync_dropped_count()`).
+- History, both bench-found:
+    - 12 Nov, decided with Cheston: on the Matrix router with 10 devices, single beacons arrived up to 514 ms late and re-seeded every few seconds at the old 500 ms rule, each a burst of missed ticks. Now 3 in a row are needed.
+    - 24 Nov, 19:06:50: a 0.65 s WiFi stall delivered beacons 540 to 648 ms late in a row. Every tile re-seeded on the same beacon and the video jumped 667 ms on the whole wall. The beacon seq was unbroken, so it was not a restart. Late beacons never move the minimum-delay estimate, so below 5 s they are harmless. Replay of tiles 7 to 9: max skew 665 ms before, 1.26 ms after. Host tests "24 Nov WiFi stall" and "24 Nov Pico restart" each fail without their part. Slewing toward the false offset was rejected, because it would have moved the video about 650 ms off and back.
+- Examiner: "Why is stepping acceptable here when VA-4.6 says slew? What does a tile that is PLAYING do at the moment of the step?" (The old offset belongs to a clock that no longer exists, so there is nothing to slew towards. The old timeline is meaningless too, so tile_net also stops playback, `playback_control_pico_restart()`, and the new Pico must send START_AT again.)
 
 ## 5. What "absorbed in exactly 20 ticks" means
 
@@ -117,18 +121,29 @@ Each entry gives the design choice, the PostTri row it comes from (inventory ID 
 - Choice: kept until their callers went, so every commit built. `95aaf07` (T-B4-03 wiring) removed `lock`, `get_render_state` and `sync_rx_task` once `tile_net` (T-B3-03) and `display_engine` (T-B5-01) replaced them; the unbuilt `render.c/.h` were deleted afterwards on `b5/t-b5-01-delete-render`. The portMUX snapshot (superseded by VC-1) no longer exists anywhere in the tile code.
 - Examiner: "Which code path reads the corrected clock now, and can any of it still take a portMUX section on core 1?"
 
-## Open interface items
+## 17. What the bench changed (12 to 24 Nov 2026), and NR-07
 
-These are Ahsanul's proposed interface, to be agreed with Jia Jun (T-B5-01) and, for item 3, with the T-B4-04 test wording. None is settled.
+| Date | Finding | Change | Proof |
+| --- | --- | --- | --- |
+| 12 Nov | single late beacons (up to 514 ms) re-seeded every few seconds | re-seed only after 3 off samples in a row | wall rounds after it |
+| 24 Nov | drift estimate about 1,500 ppm from beacon delay; tiles 7 and 8 up to 8.6 ms apart | drift limited to 50 ppm (`cbe7763`) | host test; replay p99 9.0 to 0.4 ms; camera: under 5 ms |
+| 24 Nov | 0.65 s WiFi stall re-seeded every tile, video jumped 667 ms | re-seed on a Pico restart only, 5 s fallback (`630c390`) | host tests; replay max 665 to 1.26 ms |
 
-1. Signatures: `timesync_now_corrected(timesync_reader_t * p_reader)`, `timesync_deadline_local(timesync_reader_t * p_reader, int64_t origin_us, uint64_t tick)` and `timesync_frame_index(int64_t t_us, int64_t origin_us, uint32_t frame_count)` differ from the row's bare `now_corrected()`, `deadline_local(n)` and `frame_index(t)`: they carry the `timesync_` prefix (Barr-C 6.1.i) and a reader parameter (section 10). The T-B5-01 stub signature follows whatever is agreed.
-2. `timesync_notify_tick()` called once per tick from `de_task` (task context, not the ISR), so the slew runs one step per tick. The T-B5-01 row does not list this call.
-3. Tick deadline rounded up, origin + ceil(n x 1,000,000 / 60) (plan choice), so that `timesync_frame_index(timesync_deadline_pico(o, n), o, fc) == n mod fc`. With truncation, k = 1 gives origin + 16,666 us and `timesync_frame_index` returns 0, so the T-B4-04 host test wording "t = origin + k x 1,000,000 / 60" holds only if t is taken from `timesync_deadline_pico()` or rounded up.
+**NR-07 (video skew at most 5 ms, never over 16.67 ms) is met on the wall.** Measured 24 Nov 21:07 with a 240 fps camera, two tiles at a time, because the tiles have no GPIO access for the logic analyser. With `cbe7763`, pairs 7-8 (twice), 8-9 and 5-6 had no step at or over 5 ms, with medians -0.38 to +0.31 ms. Limits: about 15 s of real time per recording, steps timed to about one frame (4.17 ms), tiles 1 to 3 not filmed. Record: `docs/bench/24nov/freeze_old_router.md`.
 
-## Questions for Ahsanul before Tribunal 2
+## Interface items: closed
+
+1. The reader-parameter signatures (`timesync_now_corrected(p_reader)`, `timesync_deadline_local(p_reader, origin, tick)`, `timesync_frame_index(t, origin, frame_count)`) are what the Display Engine and Playback Control use.
+2. `timesync_notify_tick()` is called once per tick from `de_task`.
+3. Tick deadlines are rounded up, origin + ceil(n x 1,000,000 / 60).
+4. New since October: `timesync_pico_restart()`, called by tile_net (section 4a), and `timesync_pico_from_local()`, used to stamp TAPs in the Pico clock.
+
+## Questions to practise before the demo
 
 Answer each in your own words, without reading the code.
 
-1. In the seqlock reader, why must the acquire fence sit between copying the fields and reloading the sequence counter, and what wrong value could the Display Engine on core 1 use for a tick deadline if that fence were missing?
-2. The Pico restarts mid-show and the minimum-delay estimate jumps by several seconds. At 100 us per tick, how long would the slew take to absorb it, what would the tiles show meanwhile, and which state in statechart 4 should take over instead?
-3. A broadcast beacon reaches all tiles in one transmission, yet each tile's (t_l - t_p) minimum still contains a per-tile constant. Where does that constant come from, why can the filter not remove it, and how does the two-tile skew rig in T-B4-03 expose it?
+1. Why the minimum-delay beacon and not the average? What part of the delay does the minimum not remove, and why does that not matter for skew between two tiles?
+2. What was wrong with the drift estimate on 24 Nov, and how did you prove the 50 ppm limit fixed it?
+3. Beacons arrive 600 ms late for half a second. What does the tile do now, and what did it do before 24 Nov?
+4. In the seqlock reader, why must the acquire fence sit between copying the fields and reloading the counter?
+5. How did you measure skew without a logic analyser on the tiles, and what are the limits of that measurement?

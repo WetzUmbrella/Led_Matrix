@@ -1,6 +1,6 @@
 # playback_control: design defence (T-B4-04)
 
-Owner: Ahsanul (Buddy 4). Written for Ahsanul in Ben's session (29 Oct 2026); the atomic state copy and the header update added in Jia Jun's session (30 Oct 2026). For Ahsanul to review, change where they disagree, and defend. Files: `panel_sync/main/playback_control.c/.h`; host tests `panel_sync/test/test_playback.c` ("Playback: Pass = 6 of 6"). Coding standard: Barr-C:2018, deviations D-1 (timeline seqlock and the state copy) and D-2 (the FreeRTOS wrapper).
+Owner: Ahsanul (Buddy 4). Written for Ahsanul in Ben's session (29 Oct 2026); the atomic state copy and the header update added in Jia Jun's session (30 Oct 2026). For Ahsanul to review, change where they disagree, and defend. Files: `panel_sync/main/playback_control.c/.h`; host tests `panel_sync/test/test_playback.c` ("Playback: Pass = 7 of 7", 25 Nov). Coding standard: Barr-C:2018, deviations D-1 (timeline seqlock and the state copy) and D-2 (the FreeRTOS wrapper). Updated 25 Nov 2026 against `a6d4902`: sections 1 to 7 are unchanged in the code; section 8 covers what changed for the game and the 9-tile wall.
 
 **Names.** The plan's Playback Control Task is `playback_task()` (static), started by `playback_control_start()`. The pure core is public so the host tests drive it: `playback_control_init()`, `playback_control_step()`, `playback_control_on_command()`, `playback_control_frame_at()`, `playback_control_state()`, `playback_control_read_timeline()`, `playback_control_rejected()`. State names are those of W6 statechart 4.
 
@@ -47,15 +47,25 @@ Owner: Ahsanul (Buddy 4). Written for Ahsanul in Ben's session (29 Oct 2026); th
 - Choice (30 Oct 2026): `playback_control_state()` returns an atomic copy written with release wherever the state changes, because asset_store (the BUSY gate) and tile_net (the comms statechart) call it from their own tasks.
 - Examiner: "asset_store reads READY while you move to ARMED. What is the worst case?"
 
-## PROVISIONAL list for Ahsanul to confirm
+## 8. What changed for the game and the 9-tile wall (12 to 25 Nov 2026)
 
-- Holdover entry at 200 ms.
+- **A new or restarted Pico stops playback** (`playback_control_pico_restart()`, 24 Nov; host test P7). The timeline belongs to the Pico that sent START_AT. After a restart its origin means nothing, and a playing tile answers BUSY to every upload, so the website could not publish the wall again. `tile_net` calls this whenever it sees a new Pico (`tn_game_new_pico()`), together with `timesync_pico_restart()`.
+- **Game mode does not use this module.** In game mode the Pico never sends START_AT, and the tile's display draws the game state (`game_tile.c`) instead of the video. The countdown, moles and results are timed by Pico times in each message (MOLE_ON 200 ms ahead, WALL_PICTURE 500 ms ahead), on the same corrected clock.
+- **Continue policy on the wall** (25 Nov). A tile pulled for 3 s and for 10 s during playback rejoined in step with its neighbours (by eye, no re-upload) through RESUME_AT in READY (section 5). The wall never stopped. Under the pause policy the Pico restarts after a 5 s loss (a coordinator bug, `coordinator_loop_DEFENCE.md` section 6), so the demo runs `--policy continue`.
+- **Video skew measured** (NR-07, 24 Nov). With the drift limit in time sync (`cbe7763`), every pair filmed on tiles 4 to 9 at 240 fps stepped together within 5 ms (medians -0.38 to +0.31 ms). See `timesync_DEFENCE.md`.
+
+## Settled values (25 Nov 2026)
+
+- Holdover entry at 200 ms without a beacon; pause with BEACON_LOSS at 1 s.
 - FAULT on an invalid frame_count; a new valid session leaves it.
-- START_AT accepted in READY and every playing or paused state; RESUME_AT also in READY.
+- START_AT accepted in READY and every playing or paused state; RESUME_AT also in READY (a rejoining tile).
 - D-1 for the timeline seqlock and the state copy.
 
-## Questions for Ahsanul before Tribunal 2
+## Questions to practise before the demo
 
-1. Show on the statechart which transitions host tests P1 to P6 exercise and which have no test yet.
-2. Explain why the state copy uses release and acquire rather than relaxed ordering.
-3. Say what the BEACON_LOSS bit looks like on the dashboard during a 10 s Pico power cut.
+Answer each in your own words, without reading the code.
+
+1. A tile is unplugged for 10 s during a video and plugged back in. Walk through how it lands on the same frame as its neighbours.
+2. Why must a restarted Pico stop playback on every tile? What broke on 24 Nov before it did?
+3. What does the wall look like at 0.5 s and at 1.5 s without beacons, and which bit shows on the website?
+4. Why does the state copy use release and acquire rather than relaxed ordering?

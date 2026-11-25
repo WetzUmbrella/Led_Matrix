@@ -1,6 +1,6 @@
 # display_engine: design defence (T-B5-01, T-B5-02, T-B5-03, T-B5-07 test builds)
 
-Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-03 rig; the frame path (T-B5-02, T-B5-03) and the test builds written in Jia Jun's session (29 to 30 Oct 2026), for Jia Jun to review, change where needed, and defend. Files: `panel_sync/main/display_engine.c/.h`, `panel_sync/main/display_frame.c/.h`; host tests `panel_sync/test/test_display.c` D1 to D6 ("Display: Pass = 9 of 9" with the orientation tests). Coding standard: Barr-C:2018, deviation D-2.
+Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-03 rig; the frame path (T-B5-02, T-B5-03) and the test builds written in Jia Jun's session (29 to 30 Oct 2026), for Jia Jun to review, change where needed, and defend. Files: `panel_sync/main/display_engine.c/.h`, `panel_sync/main/display_frame.c/.h`; host tests `panel_sync/test/test_display.c` D1 to D6 ("Display: Pass = 9 of 9" with the orientation tests). Coding standard: Barr-C:2018, deviation D-2. Updated 25 Nov 2026 against `a6d4902`: section 3 is corrected (RMT now uses DMA, since 12 Nov), and section 9 covers the game and the bench fixes. Host tests: "Display: Pass = 9 of 9" on 25 Nov.
 
 **Names.** Public: `display_engine_start()`. The plan's `de_task()`, `de_tick_isr()`, `de_arm_next()`, `de_swap()`, `de_start_rmt()`, `de_prepare_frame()` keep their names as statics. The plan's `de_state` is `g_state` (7.1.j). The unpack, remap and frame-index rules are a separate pure module, `display_frame` (`display_frame_unpack()`, `display_frame_source_led()`, `display_frame_index()`), so T-B5-02's host test runs without a tile. The plan's `de_dump_back_buffer()` (T-X-01) is the `DE_DUMP_FRAMES` test build.
 
@@ -16,10 +16,11 @@ Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-0
 - Choice: two 192 B buffers, both written only in `display_engine.c` (the owner). On tick n: if RMT is still sending, count a missed deadline and raise MISSED_DEADLINE; otherwise swap front and back in a critical section, start RMT on the front, then prepare n + 1 into the back. Preparation time never moves the presentation time.
 - Examiner: "What does a slow preparation do to the tick that follows it? Show it with the T-B5-07 (b) build."
 
-## 3. RMT driven directly, no DMA (OD-16)
+## 3. RMT with DMA, one refill per frame (OD-16, changed 12 Nov 2026)
 
-- Source: T-B5-03 "RMT transfer uses DMA or an IRAM-safe ISR per OD-16".
-- Choice: an RMT TX channel with a bytes encoder at 10 MHz and the WS2812B timings 0.3/0.9 us, created inside `de_task` on core 1; `rmt_transmit()` returns at once and `rmt_tx_wait_all_done(…, 0)` is the idle check. No DMA: the refill interrupt is IRAM-safe (`CONFIG_RMT_ISR_IRAM_SAFE`). The `led_strip` component is gone because its refresh call blocks until the frame is out. IRAM is unchanged (16,383 of 16,384 B).
+- Source: T-B5-03 "RMT transfer uses DMA or an IRAM-safe ISR per OD-16"; bench 12 Nov 2026, step 3 rounds 3 to 5.
+- Choice: an RMT TX channel with a bytes encoder at 10 MHz and the WS2812B timings 0.3/0.9 us, created inside `de_task` on core 1. `rmt_transmit()` returns at once, and `rmt_tx_wait_all_done(..., 0)` is the idle check. The `led_strip` component is gone because its refresh call blocks until the frame is out.
+- **DMA since 12 Nov.** The October build had no DMA: the channel held 64 symbols and needed a refill every 32 symbols (about 38 us). In game mode the WiFi traffic delayed those refills, and the operator saw random pixels and wrong colours for an instant (round 3). The first DMA attempt asked for 4,096 symbols, which ESP-IDF 5.3 refuses ("mem_block_symbols can't exceed 2046"), so no channel was made and the LEDs froze (round 4). Now `DE_RMT_SYMBOLS` = 2,046, the driver's maximum, checked at compile time. A frame (192 B, 1,536 symbols) needs one refill, due about 1.3 ms in. Round 5: no flicker, tick-to-RMT lateness unchanged (about 99% under 100 us), 1 missed tick in about 23,000.
 - Examiner: "How long does one frame take on the wire, and how much of the 16.67 ms does that leave?" (64 x 24 bits x 1.25 us = 1.92 ms.)
 
 ## 4. Unpack straight to LED values, no scaling on the tile
@@ -52,17 +53,26 @@ Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for the T-B4-0
 - Choice: `DE_DUMP_FRAMES` prints each prepared frame once (T-X-01); `DE_PROFILE` counts CPU cycles around preparation (unsigned 32-bit deltas within one frame, correct across one wrap), keeps a histogram and toggles GPIO5 (T-X-03); `DE_TEST_SLOW_PREP` adds 13 ms to every preparation (T-B5-07 (b)); `DE_TEST_FLASH_ERASE` erases a spare sector every second while PLAYING and logs the stall (T-B5-07 (c)). None is in the shipped build.
 - Examiner: "Why is a 32-bit cycle delta safe when the counter wraps every 26.8 s?"
 
-## PROVISIONAL list for Jia Jun to confirm
+## 9. What the game and the bench added (11 to 24 Nov 2026)
 
-- Test pin GPIO4 (check it is on the header); profiling pin GPIO5.
-- Marker: 1 ms pulse, 4 ms every 64th tick.
-- OD-16: RMT without DMA.
-- LED numbering row by row from the top left, and the rotation direction.
-- Status pattern: LED 0 blue at 2 when synced with no asset.
-- PREPARING FRAME and TRANSMITTING PIXELS not reported.
+- **The game draws through the same tick.** On every tick the engine reads the game state through its seqlock (`game_tile_read()`). When the game owns the tile and no video is running, `game_tile_fill_wire()` draws the frame for that tick's Pico time instead of a video frame. The game uses the same buffers, the same transmit-then-prepare order and the same rotation (`display_frame_mounted()`). See `game_tile_DEFENCE.md` section 6.
+- **Clock-jump guard** (`DE_MAX_LEAD_US` = 100 ms, bench 12 Nov 2026). When the Pico restarts, time sync re-seeds and the corrected clock steps back. The next deadline is then far in the future, and the gptimer waited out the Pico's old uptime with the LEDs frozen. Now a lead over 100 ms (six ticks) is treated as a clock jump: the tick is dropped, the next tick after now is shown, and `jumps=` counts it, with no fault raised. A lead under 200 us is still a missed tick and raises MISSED_DEADLINE.
+- **Game-mode GPIO4 pulses** (DS-13): 10 ms in a mole's first frame, 6 ms in a hit burst's first frame, and 2 ms on a detected tap (`display_engine_tap_pulse()`, called by the Orientation Task, dropped by a one-shot esp_timer). Each event has its own width so one pin carries all three. They were never captured on the bench: NR-03 was measured from the Pico's log and a 240 fps video.
+- **Mount offset and rotation direction** (5 and 9 Nov). The IMU sits a quarter turn from the LED grid, so `DISPLAY_FRAME_MOUNT_TURNS` = 3 is added before the remap. Orientation codes rise with clockwise turns. Host tests D4 to D6 pin both, and whole-wall rotation (NR-08: 10 of 10) relies on them.
 
-## Questions for Jia Jun before Tribunal 2
+## Settled values (25 Nov 2026)
 
-1. Explain, using the tick-to-RMT-start histogram, what the worst case latency between the tick pulse and the first LED bit is on your bench tile, and what causes it.
-2. Explain why only `display_engine.c` may touch the two pixel buffers, and what could go wrong if `asset_store` wrote into the back buffer directly.
-3. Say what the wall shows during an upload, during a PAUSE, and before the first frame's tick after START_AT, and point to the code for each.
+- Test pin GPIO4, profiling pin GPIO5 (test builds only).
+- Marker: 1 ms pulse, 4 ms every 64th tick (video); event pulses 10, 6 and 2 ms (game).
+- OD-16: RMT with DMA, 2,046 symbols.
+- LED numbering row by row from the top left; codes rise with clockwise turns; mount offset 3 quarter turns.
+- A deadline under 200 us away is a missed tick; one over 100 ms away is a clock jump.
+
+## Questions to practise before the demo
+
+Answer each in your own words, without reading the code.
+
+1. Why can two free-running 60 Hz timers be a whole frame apart even when the clocks agree, and how does re-arming from n stop that?
+2. What caused the game-mode flicker on 12 Nov, why did the first DMA fix freeze the LEDs, and what proved the final fix?
+3. The Pico restarts during a video. Why did the LEDs freeze before 12 Nov, and what does the engine do now?
+4. Why may only `display_engine.c` touch the two pixel buffers?

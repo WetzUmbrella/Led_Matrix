@@ -1,6 +1,6 @@
 # tile_net: design defence (T-B3-03, T-B3-05 comms side, T-B3-06)
 
-Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston: T-B3-03 in Ben's session (29 Oct 2026); TELEMETRY (T-B3-06), the PC port, the comms statechart and the upload routing (T-B3-05) in Jia Jun's session (29 to 30 Oct 2026), for Cheston to review, change where they disagree, and defend. Files: `panel_sync/main/tile_net.c/.h`, `panel_sync/main/telemetry_book.c/.h`; host tests `panel_sync/test/test_telemetry_book.c` (`make -C panel_sync/test`, "Telemetry: Pass = 5 of 5"). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviation D-2).
+Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston: T-B3-03 in Ben's session (29 Oct 2026); TELEMETRY (T-B3-06), the PC port, the comms statechart and the upload routing (T-B3-05) in Jia Jun's session (29 to 30 Oct 2026), for Cheston to review, change where they disagree, and defend. Files: `panel_sync/main/tile_net.c/.h`, `panel_sync/main/telemetry_book.c/.h`; host tests `panel_sync/test/test_telemetry_book.c` (`make -C panel_sync/test`, "Telemetry: Pass = 5 of 5"). Coding standard: Barr-C:2018, `docs/coding_standard.md` (deviation D-2). Updated 25 Nov 2026 against `a6d4902`: sections 1 to 10 are the October design, still in the code with the values checked; section 11 is what the game added (9 to 25 Nov).
 
 **Names.** Barr-C 6.1.i puts the module prefix on public functions: `tile_net_start()`, `tile_net_task()` (the plan's Network Task), `tile_net_timesync_queue()`, `tile_net_command_queue()`, `tile_net_node_id()`, `tile_net_has_ip()`, `tile_net_post_status()`. The plan's static names are kept (coding standard interpretation 7): `tn_on_beacon()`, `tn_send_heartbeat()`, `tn_telemetry_send()`, `tn_on_telemetry_ack()`, `tn_comms_sm()`. The plan's `q_timesync`, `q_command`, `q_telemetry` are `g_p_q_timesync`, `g_p_q_command`, `g_p_q_telemetry` (7.1.j). The plan's Upload Queue `q_upload` is created and read by `asset_store` (its only reader), posted to by `tn_on_upload()`. The pending-ACK ring is its own module, `telemetry_book`, so its rules run in the host tests.
 
@@ -15,7 +15,7 @@ Each entry: the design choice, the PostTri row it comes from (inventory ID from 
 ## 2. Beacon receive hook and the Time Sync Queue (OD-09)
 
 - Source: T-B3-03, IFM-3a, VA-3.7 "drop-oldest with a drop counter ... `xQueueReceive(q, &old, 0)` then `xQueueSend()`".
-- Choice: t_l is taken first in the lwIP callback (hook 1, default) or right after `recvfrom` (hook 2, build option `-DTN_RX_HOOK=2`); the (t_p, t_l) pair goes into the length-4 Time Sync Queue drop-oldest. OD-09 is settled by the smaller p99 spread in bench step D4.
+- Choice: t_l is taken first in the lwIP callback (hook 1, default) or right after `recvfrom` (hook 2, build option `-DTN_RX_HOOK=2`); the (t_p, t_l) pair goes into the length-4 Time Sync Queue drop-oldest. The shipped build uses hook 1, the lwIP callback (`TN_RX_HOOK` default in `tile_net.h`); hook 2 stays as a build option.
 - Examiner: "Why is a stale beacon worse than a dropped one for the minimum-delay filter, and how does drop-oldest serve that?"
 
 ## 3. Command Queue: reject and NACK
@@ -68,17 +68,37 @@ Each entry: the design choice, the PostTri row it comes from (inventory ID from 
 - R1-10: the PC reply address is set only when `tn_on_upload()` reports that the item decoded and passed the session check, so a malformed or wrong-session datagram can no longer redirect CHUNK_ACKs. The second half of R1-10 (reject uploads while the session is 0) is not applied: the bench upload tests send straight to a tile while the Pico beacons session 0. PROVISIONAL for Cheston: decide whether to require a session once the dashboard flow is the only upload path.
 - R1-11: `FAULT_BIT_QUEUE_OVERFLOW` is now raised when `tn_post_drop_oldest()` drops an item, when the Command Queue is full (the NACK path) and when `asset_store_post_upload()` fails.
 
-## PROVISIONAL list for Cheston to confirm
+## 11. What the game added (9 to 25 Nov 2026)
 
-- OD-11: Time Sync Queue 4, Command Queue 3, Telemetry Queue 2 (Display Engine its only producer), pending-ACK ring 4, telemetry period 1 s; Upload Queue 4 and Reply Queue 8 (in asset_store).
-- No Fault queue: faults reach the Network Task through the fault word (RAR-1); its length and policy stay open.
-- After the CONNECTING timeout the tile keeps retrying with the WIFI bit set.
-- Port 4214 polled by the Network Task in both OD-09 builds.
-- Wrong-session uploads dropped without a NACK.
-- VC-4 test build `TN_TEST_INJECT_FAULTS`: one CRC_FAIL every 5 s.
+- **Game messages handled in the Network Task, not the receive hook** (bench 11 Nov 2026). With hook 1 the receive context is lwIP's tcpip thread. Sending the game ACK from there with `sendto()` waits on that same thread forever, and both tiles left the network 3 s into the first round. Now `tn_post_game()` copies each MOLE_ON, FEEDBACK, GAME_CONTROL, WALL_PICTURE or ACK (at most `TN_GAME_MAX_BYTES` = 24 B) into the log queue. The Network Task then hands it to `game_tile_on_pico()` and sends the ACK. The game state and the TAP outbox have one owner, as the NACK path already did.
+- **Receive buffer sized by a compile-time check** (bench 12 Nov 2026). `TN_RX_BYTES` was RESUME_AT + 1 (14 B), which cut every 23 B WALL_PICTURE short, so no countdown or results showed. It is now WALL_PICTURE + 1, and a `_Static_assert` checks that every port 4210 message fits.
+- **TAP outbox.** `tn_game_service()` takes each tap from the Orientation Task's queue (length 4), converts its time to the Pico clock through the time-sync snapshot and encodes a TAP. The outbox (`common/proto/ack_outbox.c`, 48 slots) resends it every `TN_TAP_RETRY_US` = 50 ms until the Pico's ACK, for at most `TN_TAP_LIFE_US` = 1 s. A tap with no clock sync yet is dropped and counted (`g_tap_unsynced`), because a local time would mis-score it. The tile's own ACKs are sent once: the Pico resends a message whose ACK is lost. See `game_tile_DEFENCE.md` section 8.
+- **A new or restarted Pico resets the tile's game, clock and playback** (18 and 24 Nov 2026). A beacon from a new address, or `tn_pico_restarted()` on the same address (session fell to 0, or seq more than 16 behind), calls `tn_game_new_pico()`. That stops playback (its timeline went with the old Pico, and a playing tile refuses uploads), starts a new time-sync window (`timesync_pico_restart()`, the only re-seed since `630c390`), clears the game state and every seq baseline (`game_tile_new_pico()`), and publishes the cleared state. On 18 Nov only the message seq was reset, so a restarted Pico's ARM and pictures were dropped as old (host test G7).
+- **Heartbeats offset by Node ID.** `TN_STAGGER_US` = 500 ms / 9, so nine tiles do not heartbeat in the same millisecond.
 
-## Questions for Cheston before Tribunal 2
+## Settled values (25 Nov 2026)
 
-1. Explain, with the queue item in front of you, how the Telemetry Queue's drop count reaches the `TN_STATS` line without a variable shared between two tasks.
-2. Walk through what happens on the tile, step by step, when the PC's TELEMETRY_ACK for seq 41 arrives after TELEMETRY seq 42 has already been sent.
-3. Justify each queue length in the PROVISIONAL list from a message rate.
+| Item | Value | Why |
+|---|---|---|
+| Time Sync Queue | 4, drop-oldest | a stale beacon is worse than a lost one for the minimum-delay filter |
+| Command Queue | 3, reject and NACK reason 2 | one burst of three copies fits |
+| Telemetry Queue | 2, drop-oldest | the Display Engine is its only producer |
+| Upload Queue, Reply Queue | 4 (reject, NACK reason 3), 8 (drop-oldest) | in asset_store |
+| TELEMETRY period, pending-ACK ring | 1 s, 4 entries | 4 s of unACKed packets before the oldest is forgotten; its bits are still in the word |
+| Heartbeat | 500 ms, staggered by Node ID | the Pico times out at 2.5 s |
+| REGISTER | 3 copies, 100 ms apart | like START_AT |
+| Coordinator lock switch | 2 s of silence | twice the 1 s holdover |
+| TAP resend, lifetime | 50 ms, 1 s | four sends fit inside the Pico's 200 ms MOLE_ON lead |
+| CONNECTING timeout | 10 s, then keep retrying with the WIFI bit set | |
+| Wrong-session upload | dropped without a NACK, counted | no NACK code for it; the PC sees no CHUNK_ACK |
+
+No Fault Queue: faults reach the Network Task through the fault word.
+
+## Questions to practise before the demo
+
+Answer each in your own words, without reading the code.
+
+1. Why can the tile not send the game ACK from the lwIP receive callback? What happened on 11 Nov when it did?
+2. The Pico restarts on the same IP address. How does the tile notice, and what four things does it reset?
+3. Explain, with the queue item in front of you, how the Telemetry Queue's drop count reaches the `TN_STATS` line without a variable shared between two tasks.
+4. The PC's TELEMETRY_ACK for seq 41 arrives after TELEMETRY seq 42 has gone out. Walk through what the tile does.
