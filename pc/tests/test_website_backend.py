@@ -236,7 +236,11 @@ def test_every_layout_after_the_first_goes_out_in_a_fresh_session(tmp_path) -> N
     shell.publish()
     sessions = [config[0] for config in shell.link.configs]
     assert sessions[0] == 7
-    assert len(set(sessions)) == 3 and all(1 <= s <= 255 for s in sessions)
+    # Fresh means not the Pico's active session; an older id may come back
+    # (8-bit ids, pick_session_id), so only neighbours must differ. CI
+    # 25 Nov 2026 drew 7, 54, 7.
+    assert len(sessions) == 3 and all(1 <= s <= 255 for s in sessions)
+    assert all(new != old for old, new in zip(sessions, sessions[1:]))
     assert shell.snapshot()["session"] == sessions[-1]
     assert sorted(shell.uploads_log) == sorted(
         ["10.0.0.1", "10.0.0.2", "10.0.0.3"] * 2)
