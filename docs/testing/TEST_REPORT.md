@@ -1,6 +1,6 @@
 # SE15 Distributed LED Matrix Video Wall: test report
 
-Final submission, 25 Nov 2026, branch `feature/whack-a-mole`. Host results below are from commit `8d17446`. Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
+Final submission, 25 Nov 2026, branch `feature/whack-a-mole`. Host results below are from commit `f3022be`. Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
 
 | Level | What runs | Cases | Result | Where |
 |---|---|---|---|---|
@@ -49,6 +49,8 @@ Test 1: slew int8_t round trip and limit at -100/+100
 | pytest (21 files) | website and its API, GIF to tile assets, uploader, Python codec, telemetry, camera skew tools, Barr-C checker, the test case lister | 519 | 518 pass, 1 skipped | not applicable |
 
 The skipped test (`pc/tests/test_skew_analyse.py`, the camera skew plot) needs `matplotlib`, which is not installed on the bench laptop or in CI (`pytest.importorskip`).
+
+One flaky test was found and fixed on 25 Nov: CI drew the session ids 7, 54, 7 and `test_every_layout_after_the_first_goes_out_in_a_fresh_session` failed, because it required three different ids while the website only has to avoid the active one (about 1 run in 254). The test now checks that each publish differs from the one before (`f3022be`).
 
 Selected cases by requirement (full list in `CASES.md`):
 
