@@ -181,9 +181,21 @@ Hold **BOOTSEL**, plug in the Pico and copy `build/ledwall_sync.uf2` onto the
 **RPI-RP2** drive. Its USB serial log shows `COORDINATOR up: ip=...`. Note
 that IP address for the website.
 
+### 4.6 Why no ready-made firmware images are committed
+
+The WiFi name and password are compiled into both images, and anyone who has
+the file can read them back out of it. So the repository ships no `.uf2` or
+`.bin`. Build them on your own machine with your own `wifi_secrets.h`
+(section 4.3):
+
+| Board | Built image | Flash it with |
+|---|---|---|
+| Pico W | `ledwall_sync/build/ledwall_sync.uf2` | hold BOOTSEL, plug in, copy the file onto the RPI-RP2 drive |
+| Each tile | `panel_sync/build/panel_sync.bin` (with its bootloader and partition table) | `idf.py -p /dev/ttyACM0 flash` from `panel_sync/` |
+
 CI also uploads `ledwall_sync.uf2` and `panel_sync.bin` for every push, but
-they carry placeholder WiFi credentials, so use them to check the build, not
-to flash.
+those carry the placeholder credentials from the example files, so they
+prove the build and cannot join a network.
 
 ## 5. Running the demo
 
