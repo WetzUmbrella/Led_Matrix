@@ -2,7 +2,7 @@
 """List every test case of one host test run with its verdict.
 
 Usage:
-    python3 tools/test_cases.py docs/testing/results/2026-11-25
+    python3 tools/test_cases.py docs/testing/results/2026-11-27
 
 Reads the logs that tools/run_all_tests.sh wrote into that folder and writes
 CASES.md beside them: one table per C suite (each case's name, which states

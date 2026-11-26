@@ -6,7 +6,7 @@
 # Usage (Linux or WSL, from anywhere in the repo; gcc, make and Python 3
 # with pytest and pillow, as in CI):
 #   ./tools/run_all_tests.sh                       # docs/testing/results/<today>
-#   ./tools/run_all_tests.sh docs/testing/results/2026-11-25
+#   ./tools/run_all_tests.sh docs/testing/results/2026-11-27
 #
 # Each suite writes <suite>.log into the output folder, SUMMARY.md lists
 # the command, the exit code and the pass count of each, and CASES.md

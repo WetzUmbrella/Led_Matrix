@@ -228,7 +228,7 @@ C16 re-plan: acked outbox resends until ACK, expires, refuses when full
 C17 re-plan: 30 s round, mole 1200 to 500 ms, 300 ms gap, no repeats
     26 moles in a 30 s round with no taps
   PASS
-C18 re-plan: hit +1, miss -1, dedupe within 30 ms by highest peak
+C18 re-plan: hit +1, wrong tap 0, dedupe within 30 ms by highest peak
   PASS
 C18b re-plan: tap in flight at the hide still hits, tap after it misses, timeout keeps the score
   PASS

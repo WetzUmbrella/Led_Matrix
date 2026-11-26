@@ -1,14 +1,14 @@
 # SE15 Distributed LED Matrix Video Wall: test report
 
-Final submission, 25 Nov 2026, branch `master`. Host results below are from commit `f3022be`. Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
+Final submission, branch `master`. Host results below are from commit `fa7a923` (run 27 Nov 2026; the code is the build demonstrated on 26 Nov). Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
 
 | Level | What runs | Cases | Result | Where |
 |---|---|---|---|---|
-| Unit and integration, C | 4 host suites (tile, Pico, protocol, tap logger), plain and sanitized | 117 | 117 pass | [results/2026-11-25](results/2026-11-25/SUMMARY.md) |
-| Unit and integration, Python | pytest: website, GIF build, upload, protocol, tools | 519 | 518 pass, 1 skipped | [results/2026-11-25](results/2026-11-25/SUMMARY.md) |
+| Unit and integration, C | 4 host suites (tile, Pico, protocol, tap logger), plain and sanitized | 117 | 117 pass | [results/2026-11-27](results/2026-11-27/SUMMARY.md) |
+| Unit and integration, Python | pytest: website, GIF build, upload, protocol, tools | 522 | 521 pass, 1 skipped | [results/2026-11-27](results/2026-11-27/SUMMARY.md) |
 | System, on the wall | 9 ESP32-S3 tiles, 1 Pico W, the website, router `MATRIX` | 14 | 12 pass, 1 fail, 1 partly | [section 4](#4-system-tests-on-the-wall) |
 
-Every case with its verdict: [results/2026-11-25/CASES.md](results/2026-11-25/CASES.md). Which tests cover which requirement (FR1 to FR21, NFR1 to NFR16): [TRACEABILITY.md](TRACEABILITY.md); run one requirement's tests with `python3 tools/traceability.py FR14`.
+Every case with its verdict: [results/2026-11-27/CASES.md](results/2026-11-27/CASES.md). Which tests cover which requirement (FR1 to FR21, NFR1 to NFR16): [TRACEABILITY.md](TRACEABILITY.md); run one requirement's tests with `python3 tools/traceability.py FR14`.
 
 ## 1. How to run the tests
 
@@ -28,7 +28,7 @@ It runs every suite, writes each full log into `docs/testing/results/<date>/`, w
 | Integration | Modules and boards agree with each other | C and Python must produce the same bytes for every message (`pc/tests/test_cross_lang.py`); the Pico coordinator runs against 9 simulated tiles (`ledwall_sync/test`, cases C3 to C38); the website runs against a fake Pico link (`pc/tests/test_website_backend.py`) |
 | System | The requirements, on the real wall | Bench cards with a stated input and a pass rule fixed before the run; each test's record and raw logs are in `evidence/ST-xx/` |
 
-A C case prints its name, which states the input and the expected output ("A2: 600 frames = 57 chunks, the last 256 B"), then the values it saw, then `PASS` or `FAIL`. Example from `results/2026-11-25/panel_sync.log`:
+A C case prints its name, which states the input and the expected output ("A2: 600 frames = 57 chunks, the last 256 B"), then the values it saw, then `PASS` or `FAIL`. Example from `results/2026-11-27/panel_sync.log`:
 
 ```
 Test 1: slew int8_t round trip and limit at -100/+100
@@ -38,7 +38,7 @@ Test 1: slew int8_t round trip and limit at -100/+100
   PASS
 ```
 
-## 3. Unit and integration results (25 Nov 2026)
+## 3. Unit and integration results (27 Nov 2026)
 
 | Suite | Modules under test | Cases | Plain | ASan and UBSan |
 |---|---|---|---|---|
@@ -46,7 +46,7 @@ Test 1: slew int8_t round trip and limit at -100/+100
 | `panel_sync/test` | tile: time sync (incl. seqlock and drift limit), fault word, playback, telemetry book, asset receive, coordinator lock, display and orientation, tap detector, game tile | 62 (56 counted + 6 supplementary) | 62 pass | 62 pass |
 | `ledwall_sync/test` | Pico: beacons, registry, heartbeats, session, failure policies, uploads readiness, game rules, whole-wall turn | 43 | 43 pass | 43 pass |
 | `tools/pico_tap/test` | tap logger edge ring | 4 | 4 pass | 4 pass |
-| pytest (21 files) | website and its API, GIF to tile assets, uploader, Python codec, telemetry, camera skew tools, Barr-C checker, the test case lister | 519 | 518 pass, 1 skipped | not applicable |
+| pytest (22 files) | website and its API, GIF to tile assets, uploader, Python codec, telemetry, camera skew tools, Barr-C checker, the test case lister, the requirement map | 522 | 521 pass, 1 skipped | not applicable |
 
 The skipped test (`pc/tests/test_skew_analyse.py`, the camera skew plot) needs `matplotlib`, which is not installed on the bench laptop or in CI (`pytest.importorskip`).
 
