@@ -4,9 +4,8 @@
  *          game_sprites (its drawings), upright (orientation 0) unless a
  *          test says otherwise.
  *
- * Owner: Cheston (Buddy 3) and Jia Jun (Buddy 5). Written for the
- * whack-a-mole re-plan, build step 7; sprites, round phases and the picture
- * list for step 3.
+ * Written for the whack-a-mole re-plan, build step 7; sprites, round phases
+ * and the picture list for step 3.
  */
 #include "test_game_tile.h"
 

@@ -2,8 +2,7 @@
  * @file    ack_outbox.c
  * @brief   Acked unicast outbox (see ack_outbox.h).
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #include "ack_outbox.h"
 

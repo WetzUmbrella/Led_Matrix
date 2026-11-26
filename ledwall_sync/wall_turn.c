@@ -2,7 +2,7 @@
  * @file    wall_turn.c
  * @brief   Whole-wall rotation on the Pico (see wall_turn.h for the rules).
  *
- * Owner: Benjamin (Buddy 2), Pico coordinator. Written for D-17.
+ * Written for D-17.
  */
 #include "wall_turn.h"
 

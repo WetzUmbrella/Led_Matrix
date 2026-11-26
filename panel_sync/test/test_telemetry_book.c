@@ -3,10 +3,9 @@
  * @brief   Host tests of telemetry_book and the VC-4 send/ACK rule (T-B3-06),
  *          run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-06. Build and run:
- * make -C panel_sync/test. T5 drives telemetry_book and fault_word the way
- * tn_telemetry_send() and tn_on_telemetry_ack() in tile_net.c do; the radio
- * and the PC are simulated.
+ * Build and run: make -C panel_sync/test. T5 drives telemetry_book and
+ * fault_word the way tn_telemetry_send() and tn_on_telemetry_ack() in
+ * tile_net.c do; the radio and the PC are simulated.
  */
 #include "test_telemetry_book.h"
 

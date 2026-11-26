@@ -1,8 +1,7 @@
 """pytest: pc/tests/upload_faults.py (T-X-08) helpers.
 
-Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston. The cases
-themselves need a tile (bench checklist Part G); these tests check the
-pieces that do not.
+The cases themselves need a tile (bench checklist Part G); these tests check
+the pieces that do not.
 """
 
 from __future__ import annotations

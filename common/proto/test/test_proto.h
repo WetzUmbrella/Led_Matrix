@@ -3,8 +3,8 @@
  * @brief   Host tests of common/proto (T-B2-01, beacon row), run by
  *          test_main.c.
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Bit packing and
- * the BEACON reference bytes; every other row is in test_messages.h.
+ * Bit packing and the BEACON reference bytes; every other row is in
+ * test_messages.h.
  */
 #ifndef TEST_PROTO_H
 #define TEST_PROTO_H

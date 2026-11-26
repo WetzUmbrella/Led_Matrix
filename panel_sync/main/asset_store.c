@@ -3,7 +3,6 @@
  * @brief   Asset Storage Task (T-B3-04, T-B3-05, T-B3-01). See asset_store.h
  *          for what is implemented and the PROVISIONAL choices.
  *
- * Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston.
  *
  * Contexts:
  * - the Asset Storage Task is the only reader of the Upload Queue, the only

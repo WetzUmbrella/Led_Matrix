@@ -2,7 +2,6 @@
  * @file    coord_lock.c
  * @brief   Coordinator lock (R1-5, R1-6). See coord_lock.h.
  *
- * Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston.
  *
  * No ESP-IDF includes: this module is host-testable.
  */

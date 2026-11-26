@@ -3,7 +3,6 @@
  * @brief   Host tests of telemetry_book and the VC-4 send/ACK rule (T-B3-06),
  *          run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-06.
  */
 #ifndef TEST_TELEMETRY_BOOK_H
 #define TEST_TELEMETRY_BOOK_H

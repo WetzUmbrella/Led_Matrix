@@ -3,7 +3,6 @@
  * @brief   Host test port of coordinator_loop: a fake clock and a recorder
  *          of every datagram the coordinator sends (CL_HOST_TEST build).
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  */
 #ifndef COORDINATOR_PORT_H
 #define COORDINATOR_PORT_H

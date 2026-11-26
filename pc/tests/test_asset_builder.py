@@ -1,6 +1,5 @@
 """pytest: pc/asset_builder.py (T-B1-02 resample, T-B1-03 pack).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn.
 """
 
 from __future__ import annotations

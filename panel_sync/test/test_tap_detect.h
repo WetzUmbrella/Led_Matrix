@@ -2,7 +2,7 @@
  * @file    test_tap_detect.h
  * @brief   Host tests of tap_detect (software detection, build step 2), run
  *          by test_main.c. Signals are synthetic, shaped like the 9 Nov bench
- *          data (docs/bench/9nov: F-05, F-10), at 1 kHz with gravity on Z.
+ *          data (F-05, F-10), at 1 kHz with gravity on Z.
  *
  * Rewritten 11 Nov 2026 with the detector; the old K1 to K6 tested the
  * QMI8658 tap engine interface, which is gone.

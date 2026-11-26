@@ -1,6 +1,5 @@
 """pytest: pc/tools/telemetry_ack.py (T-B3-06 VC-4 receiver).
 
-Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston.
 No network: the tests drive ``handle()`` with encoded TELEMETRY bytes.
 """
 

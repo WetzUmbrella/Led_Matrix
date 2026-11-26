@@ -3,7 +3,6 @@
  * @brief   Host test runner for ledwall_sync: check and run functions shared
  *          by the test modules (Barr-C 4.2.a: the header of test_main.c).
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  * Build and run: make -C ledwall_sync/test
  */
 #ifndef TEST_MAIN_H

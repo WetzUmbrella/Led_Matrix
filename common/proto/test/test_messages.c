@@ -4,7 +4,6 @@
  *          boundary set, the encoded lengths of layout_table.md section 4,
  *          the valid-range rejections and the byte-aligned helpers.
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01.
  *
  * Boundary set (T-B2-01 acceptance): frame index 0 and 1023; t_p and every
  * timestamp 0 and 2^64 - 1; fault word 0 and 0xFFFFFFFF; bitmap 0 and

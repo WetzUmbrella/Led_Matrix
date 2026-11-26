@@ -3,8 +3,6 @@
 the frame number, so assets can be checked on the PC and photographed on
 the tiles.
 
-Owner: Jolyn (Buddy 1), task T-B1-06. Implemented by Ahsanul (B4) for
-Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session.
 
 Region encoding (plan choice), per 8x8 tile region, LED = 8 x row + column:
   * Node ID: LEDs 0 to (Node ID - 1) red at 255 (1 to 9 LEDs from the top

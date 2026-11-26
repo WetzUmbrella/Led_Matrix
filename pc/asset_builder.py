@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """Build per-tile packed assets from a GIF (T-B1-02, T-B1-03).
 
-Owner: Jolyn (Buddy 1), tasks T-B1-02 and T-B1-03. Implemented by Ahsanul
-(B4) for Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session. Replaces
-``panel_sync/tools/make_frames.py`` (mean delay, 30 fps cap).
+Replaces ``panel_sync/tools/make_frames.py`` (mean delay, 30 fps cap).
 
 T-B1-02 (resample and partition):
   * GIF delays are accumulated and mapped onto the 1,000,000 / 60 us grid by
     cumulative time: source frame i covers the ticks up to
     ceil(cumulative_ms(i) x 60 / 1000), so a 30 ms frame becomes 2, 2, 2,
     2, 1 ticks with no build-up. frame_count = round(duration x 60).
-  * Delays of 0 and 10 ms are read as 100 ms, as most browsers do
-    (PROVISIONAL, OD-06 option (a), owner Jolyn).
+  * Delays of 0 and 10 ms are read as 100 ms, as most browsers do (PROVISIONAL,
+    OD-06 option (a)).
   * More than 1023 frames is refused: frame_count is 10 bits on the wire.
   * Each frame is centre-cropped to the layout's aspect ratio (cols : rows),
     resized to (cols x 8) by (rows x 8) and cut into one 8 x 8 region per
@@ -24,11 +22,10 @@ T-B1-02 (resample and partition):
     of fewer than 9 cells when the entries past the grid are 0.
 
 T-B1-03 (pack and manifest):
-  * Each channel value v becomes round(v x b / 255) on the PC only, where b
-    is the brightness cap, 1 to 8; values above 8 are refused (PROVISIONAL,
-    OD-02 option (b), owners Jolyn and Jia Jun). The cap is baked into the
-    asset, so a brightness change means rebuilding and re-uploading every
-    tile (VC-6).
+  * Each channel value v becomes round(v x b / 255) on the PC only, where b is
+    the brightness cap, 1 to 8; values above 8 are refused (PROVISIONAL, OD-02
+    option (b)). The cap is baked into the asset, so a brightness change means
+    rebuilding and re-uploading every tile (VC-6).
   * 4 bits per channel, nibble order per OD-05 (``proto_layout.pack_frame``):
     96 B per frame, payload = frame_count x 96 B; CRC32 (zlib) over it.
   * Manifest {session_id, format_version 2, frame_count, crc32}; frame_rate

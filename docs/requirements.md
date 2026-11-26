@@ -2,10 +2,11 @@
 
 The functional (FR) and non-functional (NFR) requirements of the final
 system, as submitted for Tribunal 2 (23 Nov 2026). The tag in brackets after
-each row names the rows it came from: `A1` to `G9` and `NR-01` to `NR-14` are
-the game requirements in [`plan/game_plan_v2.md`](plan/game_plan_v2.md),
-`W6` the Week 6 video-wall design, and `CR1` the Tribunal 1 change
-requirement (minimum-bit data, evidence in [`week13/`](week13/)).
+each row names the earlier rows it came from: `A1` to `G9` and `NR-01` to
+`NR-14` are the game requirements frozen on 9 Nov 2026, `W6` the Week 6
+video-wall design, `DS-xx` a design decision ([`design.md`](design.md)) and
+`CR1` the Tribunal 1 change requirement (minimum-bit data,
+[`tribunal1/`](tribunal1/)).
 
 How each requirement is tested, and the result:
 [`testing/TRACEABILITY.md`](testing/TRACEABILITY.md). To run the tests of one
@@ -16,9 +17,9 @@ tests use the new ones:
 
 - **FR14** judges a tap group 150 ms after the first TAP arrives
   (`GAME_COLLECT_MS`), not 20 ms. At 20 ms, 25 of 84 taps on the wall were
-  judged on a neighbour's echo; at 150 ms, 5 of 84 (bench 24 Nov).
+  judged on a neighbour's echo; at 150 ms, 5 of 84 ([`testing/evidence/ST-03/`](testing/evidence/ST-03/)).
 - **NFR3** is under 300 ms, not under 100 ms. The longer collect wait trades
-  latency for accuracy (`docs/bench/25nov/nr03.md`).
+  latency for accuracy ([`testing/evidence/ST-02/`](testing/evidence/ST-02/)).
 
 ## Functional requirements
 

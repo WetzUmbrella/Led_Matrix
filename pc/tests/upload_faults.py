@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Upload fault cases against a real tile (T-X-08).
 
-Owner: Cheston (Buddy 3), task T-X-08 (support Jolyn, Benjamin). Implemented
-by Ahsanul (B4) for Cheston, written 30 Oct 2026 in Jia Jun's (B5) session.
 
 Plan row, five cases: "(1) one corrupted chunk byte: CRC fails, retry,
 ASSET_READY only after a valid asset; (2) WiFi interrupted mid-upload: only

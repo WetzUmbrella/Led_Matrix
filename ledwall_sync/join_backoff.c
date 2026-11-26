@@ -2,7 +2,6 @@
  * @file    join_backoff.c
  * @brief   Router join retry schedule (see join_backoff.h).
  *
- * Owner: Benjamin (Buddy 2), coordinator.
  *
  * The schedule doubles from JOIN_BACKOFF_FIRST_MS until it reaches
  * JOIN_BACKOFF_MAX_MS and stays there. The loop runs at most four times, so

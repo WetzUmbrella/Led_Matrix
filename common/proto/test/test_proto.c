@@ -2,9 +2,9 @@
  * @file    test_proto.c
  * @brief   Host tests of common/proto (T-B2-01, beacon row).
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Bit packing and
- * the BEACON reference bytes; every other row is in test_messages.c and the
- * cross-language vectors are pc/tests/test_cross_lang.py (T-B1-01).
+ * Bit packing and the BEACON reference bytes; every other row is in
+ * test_messages.c and the cross-language vectors are
+ * pc/tests/test_cross_lang.py (T-B1-01).
  */
 #include "test_proto.h"
 

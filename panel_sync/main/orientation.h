@@ -4,8 +4,6 @@
  *          I2C, publishes the debounced orientation (50 Hz) to the Display
  *          Engine through a length-1 mailbox, and detects taps (1 kHz).
  *
- * Owner: Jia Jun (Buddy 5), task T-B5-05. Implemented by Ahsanul (B4) for
- * Jia Jun, written 29 Oct 2026 in Jia Jun's session.
  *
  * Implemented: orientation_start() (priority 5 on core 1, tile_tasks.h, below
  * the Display Engine's 20), a 1 ms esp_timer that wakes the task (the

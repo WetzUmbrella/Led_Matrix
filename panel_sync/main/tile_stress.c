@@ -2,8 +2,6 @@
  * @file    tile_stress.c
  * @brief   Stress test builds T-X-02 and T-X-05. See tile_stress.h.
  *
- * Owners: Cheston (T-X-02) and Ahsanul (T-X-05). Implemented by Ahsanul (B4)
- * for them.
  *
  * DEVIATION D-1 (module-wide): C11 stdatomic.h for the finished counter.
  * DEVIATION D-2 (module-wide): FreeRTOS names and types (TaskHandle_t,

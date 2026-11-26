@@ -3,8 +3,8 @@
  * @brief   The wall pictures: a 3 x 5 digit font and two star sizes, scaled
  *          to the wall and cut per tile (see score_font.h).
  *
- * Owner: Benjamin (Buddy 2). Written for build step 7; scaled pictures and
- * stars for the step 3 game (DS-09).
+ * Written for build step 7; scaled pictures and stars for the step 3 game
+ * (DS-09).
  *
  * A picture is first drawn small into a source bitmap (score_src_t), then
  * placed on the wall: the largest whole-number scale that fits the box of

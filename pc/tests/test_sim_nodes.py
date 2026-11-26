@@ -1,6 +1,6 @@
 """pytest: pc/tools/sim_nodes.py (T-B2-06 load generator).
 
-Owner: Benjamin (Buddy 2). Written 29 Oct 2026 in Benjamin's session.
+Written 29 Oct 2026.
 The load itself is measured on the Pico; these tests check that the tool
 sends what the plan row says: nine REGISTERs together, then one HEARTBEAT
 per node every 0.5 s, staggered by (Node ID - 1) x 500 / 9 ms or in bursts.

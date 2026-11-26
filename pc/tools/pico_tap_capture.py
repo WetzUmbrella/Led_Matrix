@@ -24,7 +24,7 @@ malformed lines, dropped total and duration.
 
 Usage:
     python pc/tools/pico_tap_capture.py --port COM7 --channels 2 \\
-        --seconds 600 --out docs/week10/skew_2tile/skew_2tile.csv
+        --seconds 600 --out skew_2tile.csv
     python pc/tools/pico_tap_capture.py --from-log raw.log --channels 2 \\
         --out skew_2tile.csv
 

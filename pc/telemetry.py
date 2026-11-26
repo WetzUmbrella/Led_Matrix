@@ -1,7 +1,5 @@
 """TELEMETRY receive and TELEMETRY_ACK for the dashboard (T-B1-05, VC-4).
 
-Owner: Jolyn (Buddy 1), task T-B1-05. Implemented by Ahsanul (B4) for
-Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session.
 
 Every tile broadcasts TELEMETRY {seq, node_id, fault word, orientation,
 display state} to UDP 4215 once per telemetry period (1 s, PROVISIONAL,

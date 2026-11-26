@@ -1,6 +1,5 @@
 """pytest: pc/dashboard.py model and pc/pico_link.py (T-B1-05).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn.
 """
 
 from __future__ import annotations

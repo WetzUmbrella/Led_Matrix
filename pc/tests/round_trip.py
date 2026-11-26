@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """PC to tile round trip of a packed asset (T-X-01).
 
-Owner: Jolyn (Buddy 1), task T-X-01 (support Cheston, Jia Jun). Implemented
-by Ahsanul (B4) for Jolyn, written 30 Oct 2026 in Jia Jun's (B5) session.
 
 Plan row: "Known pattern (every channel value 0 to 255 present across the
 frames) is packed on the PC, uploaded, stored, unpacked and dumped from the

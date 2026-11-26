@@ -6,9 +6,9 @@
  *          interval until then, and dropped at its deadline. Pure C with no
  *          hardware call, shared by the Pico coordinator and the tiles.
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7. The retry interval and deadlines are plan choices made by the
- * caller; this module only keeps the table.
+ * Written for the whack-a-mole re-plan, build step 7. The retry interval and
+ * deadlines are plan choices made by the caller; this module only keeps the
+ * table.
  *
  * - A send is identified by (node_id, seq), because all acked messages from
  *   one sender share one seq counter (layout_table.md section 10 item 13).

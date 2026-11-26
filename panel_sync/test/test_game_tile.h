@@ -2,8 +2,7 @@
  * @file    test_game_tile.h
  * @brief   Host tests of the tile's whack-a-mole handling (game_tile.c).
  *
- * Owner: Cheston (Buddy 3) and Jia Jun (Buddy 5). Written for the
- * whack-a-mole re-plan, build step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #ifndef TEST_GAME_TILE_H
 #define TEST_GAME_TILE_H

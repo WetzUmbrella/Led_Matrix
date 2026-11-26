@@ -3,8 +3,8 @@
  * @brief   Shared wire layout (T-B2-01): bit packing and one encode/decode
  *          pair per message row of protocol/layout_table.md.
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Implemented and not
- * yet implemented: see proto.h. PROVISIONAL choices: see proto.h.
+ * Implemented and not yet implemented: see proto.h. PROVISIONAL choices: see
+ * proto.h.
  *
  * Every field is written with proto_put_bits() in the order of its row in
  * layout_table.md, starting at bit PROTO_HEADER_BITS after the common

@@ -28,13 +28,12 @@ PASS is only conditional (exit code 3).
 Marker mode (--marker): tick identity from the test pin itself. Under
 DE_W10_TEST_PATTERN the pin gives a short pulse at every tick and a wider
 marker pulse at every tick n with n mod N == 0 (N and the widths are plan
-choices to be agreed with Jia Jun against T-B5-01; see RIG.md). The tool
-finds the markers on each channel (high time at or above --marker-min-us),
-numbers every rising edge as cycle x N + ticks since the preceding marker,
-matches the first marker of tile B to the nearest marker of tile A (so the
-two tiles must be within N/2 ticks of each other), and pairs edges by equal
-tick number. The skew is then the true skew of any size, so a whole-tick
-slip and any skew at or above 16.67 ms fail.
+choices against T-B5-01; see RIG.md). The tool finds the markers on each
+channel (high time at or above --marker-min-us), numbers every rising edge as
+cycle x N + ticks since the preceding marker, matches the first marker of tile
+B to the nearest marker of tile A (so the two tiles must be within N/2 ticks of
+each other), and pairs edges by equal tick number. The skew is then the true
+skew of any size, so a whole-tick slip and any skew at or above 16.67 ms fail.
 
 Edge modes: 'rising' (default, the T-B4-03 wording) uses rising edges only.
 'both' treats every edge as a tick and is meant only for a pin that toggles
@@ -74,10 +73,10 @@ EXIT_FAIL = 1
 EXIT_BAD_INPUT = 2
 EXIT_PASS_CONDITIONAL = 3
 
-# Marker mode defaults (plan choice, to be agreed with Jia Jun against
-# T-B5-01): marker every N = 64 ticks, matching the n mod 64 moving pixel of
-# DE_W10_TEST_PATTERN; a pulse whose high time is at least 2.5 ms is a marker
-# (halfway between the proposed 1 ms tick pulse and 4 ms marker pulse).
+# Marker mode defaults (plan choice against T-B5-01): marker every N = 64
+# ticks, matching the n mod 64 moving pixel of DE_W10_TEST_PATTERN; a pulse
+# whose high time is at least 2.5 ms is a marker (halfway between the proposed
+# 1 ms tick pulse and 4 ms marker pulse).
 MARKER_PERIOD_TICKS = 64
 MARKER_MIN_US = 2_500.0
 NO_TICK_ID = ("TICK IDENTITY NOT CHECKED: skew measured modulo one tick "

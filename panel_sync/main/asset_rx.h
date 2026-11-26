@@ -4,8 +4,6 @@
  *          the zlib CRC32. Pure C with no ESP-IDF dependency, so the rules
  *          run in the host tests; asset_store owns the only instance.
  *
- * Owner: Cheston (Buddy 3), task T-B3-05. Implemented by Ahsanul (B4) for
- * Cheston, written 29 Oct 2026 in Jia Jun's (B5) session.
  *
  * Rules from the T-B3-05 row and protocol/layout_table.md (MANIFEST,
  * ASSET_CHUNK, sections 5.4 and 5.5):

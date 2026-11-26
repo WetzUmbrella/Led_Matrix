@@ -2,7 +2,7 @@
  * @file    tap_ring.c
  * @brief   pico_tap edge ring. See tap_ring.h.
  *
- * Owner: Ahsanul (Buddy 4). Bench tool, not shipped firmware.
+ * Bench tool, not shipped firmware.
  *
  * No Pico SDK includes: this module is host-testable.
  */

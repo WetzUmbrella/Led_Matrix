@@ -10,7 +10,7 @@ This file is the single source of every wire field (plan section 0.1). `common/p
 
 | Rule | Value | Source |
 |---|---|---|
-| Bit numbering | Bit 0 is the least significant bit of byte 0; bit 8k + j is bit j of byte k. A field of width w at offset o occupies bits o to o + w - 1, its least significant bit at o. | plan choice (OD-07, owner Benjamin); it fixes the byte order VB-2a and LDC-4 require ("little-endian") and makes OD-05 option (a) the matching nibble order |
+| Bit numbering | Bit 0 is the least significant bit of byte 0; bit 8k + j is bit j of byte k. A field of width w at offset o occupies bits o to o + w - 1, its least significant bit at o. | plan choice (OD-07); it fixes the byte order VB-2a and LDC-4 require ("little-endian") and makes OD-05 option (a) the matching nibble order |
 | Byte order | Every multi-byte field is little-endian (a consequence of the bit numbering). | VB-2a, LDC-4 |
 | Packing | Explicit shifts and masks only (`proto_put_bits()`, `proto_get_bits()`; Python `int.to_bytes(..., "little")`). No wire struct is passed to `sendto`, `udp_sendto` or `recvfrom`; no `__attribute__((packed))`; no bit-field in any wire type. | VB-2a, VB-2b, VC-9 |
 | Layout | Fields follow one another with no gap, starting at bit 0; the message is padded with zero bits to a whole byte. Exception: the ASSET_CHUNK payload starts on the next byte boundary. | plan choice (OD-07) |
@@ -95,7 +95,7 @@ Offsets are absolute bit offsets in the message. Direction: T = tile, P = Pico, 
 | crc32[7] | 353 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 8; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
 | crc32[8] | 385 | 32 | 0 to 2^32 - 1 | manifest CRC32 of Node ID 9; 0 when it is not placed | W6D-7a, T-B2-04; field PROVISIONAL (section 10 item 9); indexed by Node ID since step 4d |
 
-**Cells (step 4d, DS-15, decided 12 Nov 2026; replaces the 9-position row-major node_map of the whack-a-mole re-plan):** the grid is rows x cols cells, each 1 to 9, so up to 81 cells, and up to 9 tiles sit in any of them (a 5x5 diagonal, an L, a ring). Each Node ID n has one entry, `placed[n-1]`, `row[n-1]`, `col[n-1]`, so a tile cannot appear twice. Both codecs refuse (an encoder refuses it and a decoder rejects it) a placed tile outside the grid, two placed tiles in one cell, and a tile not placed with a row or column other than 0 (one encoding per layout). The Pico, not the codec, checks that at least one tile is placed. A tile switched off on the website is simply not placed; the PC remembers its cell. `crc32[n-1]` belongs to Node ID n (by map position before step 4d). Only the PC and the Pico read this message, so the tiles did not change. A full grid of up to 9 tiles still gives every tile the cell it had: row = position / cols, col = position mod cols. **PROVISIONAL (OD-07 item 9, owner Benjamin):** `frame_count` and `crc32[]` were added on 29 Oct 2026 so the Pico can check ASSET_READY against the manifest CRC32 of each Node ID (T-B2-04) and compute the saved frame index it sends in RESUME_AT and in a rejoin (T-B2-05, OD-14). Every tile of a session plays the same GIF duration, so one frame_count serves all of them.
+**Cells (step 4d, DS-15, decided 12 Nov 2026; replaces the 9-position row-major node_map of the whack-a-mole re-plan):** the grid is rows x cols cells, each 1 to 9, so up to 81 cells, and up to 9 tiles sit in any of them (a 5x5 diagonal, an L, a ring). Each Node ID n has one entry, `placed[n-1]`, `row[n-1]`, `col[n-1]`, so a tile cannot appear twice. Both codecs refuse (an encoder refuses it and a decoder rejects it) a placed tile outside the grid, two placed tiles in one cell, and a tile not placed with a row or column other than 0 (one encoding per layout). The Pico, not the codec, checks that at least one tile is placed. A tile switched off on the website is simply not placed; the PC remembers its cell. `crc32[n-1]` belongs to Node ID n (by map position before step 4d). Only the PC and the Pico read this message, so the tiles did not change. A full grid of up to 9 tiles still gives every tile the cell it had: row = position / cols, col = position mod cols. **PROVISIONAL (OD-07 item 9):** `frame_count` and `crc32[]` were added on 29 Oct 2026 so the Pico can check ASSET_READY against the manifest CRC32 of each Node ID (T-B2-04) and compute the saved frame index it sends in RESUME_AT and in a rejoin (T-B2-05, OD-14). Every tile of a session plays the same GIF duration, so one frame_count serves all of them.
 
 ### MANIFEST (type 3, C to T)
 
@@ -278,7 +278,7 @@ Replaces SCORE_MASK (same type code 22, renamed 11 Nov 2026, DS-09). The Pico dr
 
 ## 4. Encoded lengths, before and after
 
-"Before" is copied from `docs/week13/before_after.md` (T-B4-01) with its label; T-X-04 measures the on-air "after" values.
+"Before" is copied from `docs/tribunal1/change_requirement/before_after.md` (T-B4-01) with its label; T-X-04 measures the on-air "after" values.
 
 | Message | Bits | Bytes after | Bytes before | Before label |
 |---|---|---|---|---|
@@ -382,7 +382,7 @@ rows and cols are each 1 to 9, so a grid has 1 to 81 cells; since step 4d (12 No
 
 ## 6. Packed asset frame (OD-05)
 
-**PROVISIONAL (OD-05, owners Jolyn and Jia Jun, recorded by Benjamin): option (a).** A frame is 64 pixels in LED order, each R, G, B, so 192 channel values of 0 to 8, one 4-bit nibble each. Nibble k (k = 0 to 191, in R0 G0 B0 R1 G1 B1 ... order) is the 4-bit field at bit 4k of the frame, the same bit numbering as section 1. So byte 0 holds R0 in its low nibble and G0 in its high nibble, byte 1 holds B0 and R1, and so on.
+**PROVISIONAL (OD-05, recorded by Benjamin): option (a).** A frame is 64 pixels in LED order, each R, G, B, so 192 channel values of 0 to 8, one 4-bit nibble each. Nibble k (k = 0 to 191, in R0 G0 B0 R1 G1 B1 ... order) is the 4-bit field at bit 4k of the frame, the same bit numbering as section 1. So byte 0 holds R0 in its low nibble and G0 in its high nibble, byte 1 holds B0 and R1, and so on.
 
 | Item | Value | Source |
 |---|---|---|
@@ -458,7 +458,7 @@ The receiver checks session_id against its session and seq against the last acce
 
 ## 9. Pico servicing mode citation (OD-01)
 
-**PROVISIONAL (OD-01, owner Benjamin).** `ledwall_sync` links `pico_cyw43_arch_lwip_poll` (`ledwall_sync/CMakeLists.txt:10`). Citation, Raspberry Pi Pico SDK 2.3.1 (the CI version), `src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h`, https://github.com/raspberrypi/pico-sdk/blob/2.3.1/src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h, quoted in `Week10_Kickoff/decision_briefs.md`:
+**PROVISIONAL (OD-01).** `ledwall_sync` links `pico_cyw43_arch_lwip_poll` (`ledwall_sync/CMakeLists.txt:10`). Citation, Raspberry Pi Pico SDK 2.3.1 (the CI version), `src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h`, https://github.com/raspberrypi/pico-sdk/blob/2.3.1/src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h, quoted in `Week10_Kickoff/decision_briefs.md`:
 
 - line 56, poll: "This is not multi-core/IRQ safe, and requires the user to call `cyw43_arch_poll` periodically from their main loop";
 - lines 98-99, threadsafe background: "lwIP callbacks happen in a (low priority) IRQ context";
@@ -491,7 +491,7 @@ The receiver checks session_id against its session and seq against the last acce
 
 17. **Whole-wall rotation (D-17, 24 Nov 2026, video mode only):** the Pico also listens on 4215 for the tiles' broadcast TELEMETRY and reads only node_id and orientation (the PC still ACKs it). A tile sends TELEMETRY as soon as its orientation changes, besides its 1 s period. When every placed, online tile has turned by the same quarter turns k from its reference within 1.5 s of the first change, the Pico adds k to STATUS wall_turn and, if it was playing, saves the frame and sends STOP; if it was paused, it stops too and returns to PAUSED after the new layout. The PC turns its layout by wall_turn (a cell at row r, column c of a rows x cols grid goes to row c, column rows - 1 - r for each quarter turn clockwise, and rows and cols swap), re-cuts and re-uploads, and sends a new SESSION_CONFIG. With a turn pending, the Pico finds the turn j (0 to 3) that maps its previous layout onto the new one and subtracts it from wall_turn; with none pending only the same layout keeps the references; any other layout is new and every tile's reference is taken again. A wall turn moves the reference of every known tile, an offline one too. A pending resume then sends RESUME_AT with the saved frame once every tile is ready. Turns are ignored in game mode.
 
-## 11. Transport (PROVISIONAL, section 10 item 12, owner Benjamin)
+## 11. Transport (PROVISIONAL, section 10 item 12)
 
 All messages are single UDP datagrams on the dedicated router's subnet. Port numbers are plan choices; 4210 and 4211 keep the prototype's beacon and HELLO ports.
 

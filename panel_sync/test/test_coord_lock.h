@@ -2,7 +2,6 @@
  * @file    test_coord_lock.h
  * @brief   Host tests of coord_lock (R1-5, R1-6), run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston.
  */
 #ifndef TEST_COORD_LOCK_H
 #define TEST_COORD_LOCK_H

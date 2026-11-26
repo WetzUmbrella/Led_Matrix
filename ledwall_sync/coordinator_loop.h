@@ -5,9 +5,6 @@
  *          9-node registry and heartbeat scan, runs the W6 statechart 2
  *          session and readiness logic, and sends the timed commands.
  *
- * Owner: Benjamin (Buddy 2), tasks T-B2-02, T-B2-03, T-B2-04 and T-B2-05.
- * Implemented by Ahsanul (B4) for Benjamin; T-B2-03 to T-B2-05 written on
- * 29 Oct 2026 in Ahsanul's working copy for Benjamin to review and defend.
  *
  * Implemented:
  * - T-B2-02: cyw43_arch_poll() every pass; BEACON {session_id, seq, t_p}
@@ -42,20 +39,20 @@
  *   (see coordinator_loop.c); the nine-sender load itself is
  *   pc/tools/sim_nodes.py (T-B2-06).
  *
- * OD-01 (owner Benjamin), PROVISIONAL: poll mode. Citation, Raspberry Pi
- * Pico SDK 2.3.1 (the CI version), src/rp2_common/pico_cyw43_arch/include/
- * pico/cyw43_arch.h line 56: poll mode "requires the user to call
- * cyw43_arch_poll periodically from their main loop"; lines 98 to 99: in
- * threadsafe background mode "lwIP callbacks happen in a (low priority) IRQ
- * context"; src/rp2_common/pico_async_context/include/pico/
- * async_context_poll.h line 31: the poll context "processes asynchronous
- * work by polling rather than using interrupts or threads". No SDK sentence
- * states where callbacks run in poll mode, so cl_rx_cb() records the
- * largest __get_current_exception() value it sees (CL_STATS exc_max); the
- * T-B2-02 bench run passes OD-01 when it reads 0 (decision_briefs.md OD-01).
- * PROVISIONAL (owner Benjamin): ports, seq streams and the C to P commands
- * of protocol/layout_table.md sections 10 and 11; the 32-entry receive ring
- * and the 4 command send slots (plan choice, sized in coordinator_loop.c).
+ * OD-01, PROVISIONAL: poll mode. Citation, Raspberry Pi Pico SDK 2.3.1 (the CI
+ * version), src/rp2_common/pico_cyw43_arch/include/ pico/cyw43_arch.h line 56:
+ * poll mode "requires the user to call cyw43_arch_poll periodically from their
+ * main loop"; lines 98 to 99: in threadsafe background mode "lwIP callbacks
+ * happen in a (low priority) IRQ context";
+ * src/rp2_common/pico_async_context/include/pico/ async_context_poll.h line
+ * 31: the poll context "processes asynchronous work by polling rather than
+ * using interrupts or threads". No SDK sentence states where callbacks run in
+ * poll mode, so cl_rx_cb() records the largest __get_current_exception() value
+ * it sees (CL_STATS exc_max); the T-B2-02 bench run passes OD-01 when it reads
+ * 0 (decision_briefs.md OD-01).
+ * PROVISIONAL: ports, seq streams and the C to P commands of
+ * protocol/layout_table.md sections 10 and 11; the 32-entry receive ring and
+ * the 4 command send slots (plan choice, sized in coordinator_loop.c).
  *
  * DEVIATION D-2 (module-wide): Pico SDK and lwIP names and types.
  */

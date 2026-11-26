@@ -10,9 +10,8 @@
  *          playback_control.c), so the host test in panel_sync/test runs it
  *          on a PC.
  *
- * Owner: Cheston (Buddy 3) for the tile comms rows, Jia Jun (Buddy 5) for the
- * display, per the re-plan's report allocation. Written for build step 7;
- * round phases, sprites and the picture list for step 3.
+ * Written for build step 7; round phases, sprites and the picture list for
+ * step 3.
  *
  * Rules on the tile (layout_table.md sections 3 and 5):
  * - A target (MOLE_ON) shows from t_show in the Pico's corrected clock. A

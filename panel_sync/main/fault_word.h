@@ -4,7 +4,6 @@
  *          event bits cleared only on the TELEMETRY_ACK, condition bits
  *          cleared only by their owning task.
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-06.
  * Implemented: the word, fault_word_set(), fault_word_clear_condition(),
  * fault_word_snapshot(), fault_word_clear_events() and the bit map with
  * FAULT_EVENT_MASK; host tests in panel_sync/test/test_fault_word.c.
@@ -15,8 +14,8 @@
  * the telemetry period (OD-11). The TELEMETRY and TELEMETRY_ACK codecs they
  * use exist in common/proto (T-B2-01).
  *
- * PROVISIONAL (OD-12, owner Cheston): bit numbers, and the event or
- * condition class of CRC_FAIL, QUEUE_OVERFLOW, BEACON_LOSS and SYNC_STALE.
+ * PROVISIONAL (OD-12): bit numbers, and the event or condition class of
+ * CRC_FAIL, QUEUE_OVERFLOW, BEACON_LOSS and SYNC_STALE.
  * The class of MISSED_DEADLINE (event) and of WIFI, IMU, ASSET_FORMAT and
  * DISPLAY (conditions) is fixed by the plan rows quoted beside each bit.
  *

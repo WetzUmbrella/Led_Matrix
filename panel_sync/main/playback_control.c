@@ -2,7 +2,6 @@
  * @file    playback_control.c
  * @brief   Playback Control (T-B4-04). See playback_control.h.
  *
- * Owner: Ahsanul (Buddy 4).
  *
  * The core (everything above the wrapper section) runs only in the
  * Playback Control Task, so its state needs no lock. The one thing read
@@ -542,7 +541,7 @@ static void pb_publish (void)
 
 /**
  * @brief  Offset of tick n from origin: ceil(n x 1,000,000 / 60), the
- *         rounded-up deadline (timesync_DEFENCE.md interface item 3).
+ *         rounded-up deadline the tiles use.
  * @param  tick  Tick number, at most 1023 here.
  * @return Microseconds.
  */

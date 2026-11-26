@@ -2,8 +2,7 @@
  * @file    test_main.c
  * @brief   Host test runner for common/proto (T-B2-01).
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Runs the bit
- * packing, BEACON and every-row message tests.
+ * Runs the bit packing, BEACON and every-row message tests.
  * Build and run: make -C common/proto/test
  */
 #include "test_main.h"

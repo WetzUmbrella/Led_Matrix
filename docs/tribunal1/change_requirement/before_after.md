@@ -1,0 +1,117 @@
+# CR1 before/after: RAM and message size
+
+"Before" is the tag `cr1-before` on commit `45e038ca2aa7d8386d5cb895838512d708e45b4d` (T-B4-01). At that commit there is no pack or unpack code: `git grep -n -e proto_put_bits -e proto_encode -e pack_frame -e unpack 45e038c -- '*.c' '*.h' '*.py'` returns 0 lines, and `frames.h:21` stores 3 bytes per pixel. "After" is filled by T-B3-01, T-X-04 and T-X-06 once the packed build exists.
+
+Every before cell carries one of two labels, as the T-B4-01 row requires:
+
+- **measured**: taken at the tag. A blank measured cell points to its procedure in `docs/tribunal1/change_requirement/before/BENCH.md`; it is never filled with an estimate.
+- **derived, W6 8-bit design**: what the prototype never had, computed from PostTri numbers with the arithmetic shown.
+
+The 8-bit timing baseline for STP-3 is not in this file: by the Round 0 ruling on OD-15 it is a `DE_PROFILE` build of the new `display_engine` (T-X-03), and `cr1-before` stays the before reference for RAM and message size.
+
+## 1. Measured at the tag
+
+| Item | Before | Label | Source or procedure | After |
+|---|---|---|---|---|
+| `sizeof(beacon_t)` on the target (Xtensa compiler) | 50 B | measured | `BENCH.md` S-2, `docs/tribunal1/change_requirement/before/sizeof_xtensa.txt` | none: no wire struct (packed by shifts and masks, VB-2a); encoded BEACON 12 B, derived |
+| `sizeof(hello_t)` on the target (Xtensa compiler) | 9 B | measured | `BENCH.md` S-2, `docs/tribunal1/change_requirement/before/sizeof_xtensa.txt` | none: HELLO replaced by REGISTER 10 B and HEARTBEAT 5 B, derived |
+| `sizeof(beacon_t)`, host x86_64 gcc | 50 B | measured on the host, not the target | `docs/tribunal1/change_requirement/before/sizeof.txt` | none on either compiler: no wire struct; encoded BEACON 12 B, derived |
+| `sizeof(hello_t)`, host x86_64 gcc | 9 B | measured on the host, not the target | `docs/tribunal1/change_requirement/before/sizeof.txt` | none on either compiler: REGISTER 10 B and HEARTBEAT 5 B, derived |
+| `beacon_t` field sum (`panel_sync.c:52-63`) | 50 B | derived | magic 4 + version 1 + seq 4 + cmd 1 + frame_no 4 + layout_ver 1 + count 1 + cols 1 + rows 1 + ids 8 x 4 = 18 + 32 = 50 | 12 B, derived (encoder) |
+| `hello_t` field sum (`panel_sync.c:65-69`) | 9 B | derived | magic 4 + id 4 + board 1 = 9 | REGISTER 10 B, HEARTBEAT 5 B, derived |
+| Beacon, on-air UDP payload bytes | | measured | `BENCH.md` B-2, `docs/tribunal1/change_requirement/before/onair_before.pcapng` and `onair_before_beacon.txt` | [NEEDS MEASUREMENT] (T-X-04 capture) |
+| HELLO, on-air UDP payload bytes (`p->tot_len`, `ledwall_sync/main.c:123`) | | measured | `BENCH.md` B-3, `docs/tribunal1/change_requirement/before/onair_before_hello.log` | [NEEDS MEASUREMENT] (T-X-04 capture of REGISTER and HEARTBEAT) |
+| `panel_sync` static DRAM used (DIRAM `.data` + `.bss`) | 34,864 B (19,416 + 15,448) | measured | `BENCH.md` S-1, `docs/tribunal1/change_requirement/before/idf_size.txt` | 40,576 B (19,448 + 21,128), measured (build, `docs/tribunal1/change_requirement/after/idf_size.txt`) |
+| `panel_sync` static IRAM used (IRAM region + DIRAM `.text`) | 90,750 B (16,383 + 74,367) | measured | `BENCH.md` S-1, `docs/tribunal1/change_requirement/before/idf_size.txt` | 94,406 B (16,383 + 78,023), measured (build, `docs/tribunal1/change_requirement/after/idf_size.txt`) |
+| `ledwall_sync.elf` text / data / bss | 340,304 / 0 / 50,944 B | measured | `BENCH.md` S-3, `docs/tribunal1/change_requirement/before/pico_size.txt` | 346,120 / 0 / 50,500 B, measured (build, `docs/tribunal1/change_requirement/after/pico_size.txt`) |
+| Free internal heap after WiFi (`heap_caps_get_free_size(MALLOC_CAP_INTERNAL)`), minimum of 10 boots | | measured | `BENCH.md` B-1, `docs/tribunal1/change_requirement/before/heap_at_tag.log` | [NEEDS MEASUREMENT] (bench Part D, D5) |
+| Largest internal block after WiFi (`heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)`), minimum of 10 boots | | measured | `BENCH.md` B-1, `docs/tribunal1/change_requirement/before/heap_at_tag.log` | [NEEDS MEASUREMENT] (bench Part D, D5) |
+
+Notes on section 1:
+
+- **Target `sizeof` (S-2, 29 Oct 2026).** `xtensa-esp32s3-elf-gcc` 13.2.0 (esp-13.2.0_20240530) gives 50 B and 9 B (`sizeof_xtensa.txt`), equal to the host values and the field sums, as expected: both structs are `__attribute__((packed))` (`panel_sync.c:52`, `:65`) and every field is an exact-width `uint32_t` or `uint8_t`.
+- **How the DRAM and IRAM cells are read (S-1).** On the ESP32-S3 the ESP-IDF v5.3 size report splits internal RAM into a 16,384 B IRAM region, filled first, and the shared DIRAM region, which holds the rest of the IRAM code (`.text`) beside DRAM `.data` and `.bss`. The tag already fills the IRAM region to 16,383 B, so the full region is the normal linker fill on this chip and not a sign of overflow; IRAM code is the IRAM region plus DIRAM `.text`. The after column is taken the same way.
+- The Pico's copies of the two structs (`ledwall_sync/main.c:46-63`) have the same field names, types, order and `packed` attribute as the tile's, so the beacon the Pico sends (`sizeof(b)` at `main.c:278-280`) has the same field sum.
+- Heap statistic: the minimum over 10 boots **(plan choice: T-B3-01 decides OD-04 from the minimum internal value, so before and after use the same statistic)**. Prototype state during the probe, from the T-B4-01 row: whole-GIF animation mapped from flash (`frames.c:66-71`) at 30 fps.
+
+## 2. Derived reference, W6 8-bit design: asset and RAM
+
+| Item | Before | Label | Arithmetic and source | After |
+|---|---|---|---|---|
+| Asset per tile | 115,200 B | derived, W6 8-bit design | 64 pixels x 3 channels x 1 B (8 bits per channel) = 192 B per frame; 192 B x 600 frames = 115,200 B (PostTri Version A Buddy 1: "192 B per frame, 600 frames, 115,200 B per tile"; LDC-1) | 57,600 B, derived (600 x 96 B, packed) |
+| Upload chunks of 1,024 B | 113 chunks | derived, W6 8-bit design | 115,200 / 1,024 = 112.5, so 113 chunks; 112 x 1,024 = 114,688 B, last chunk 115,200 - 114,688 = 512 B (LDC-1: "115,200 B, 113 chunks") | 57 chunks, last 256 B, derived |
+| RAM copy plus margin | 147,968 B | derived, W6 8-bit design | 115,200 B + 32,768 B margin **(proposed, RAR-4)** = 147,968 B (RAR-4: "147,968 B falls to 90,368 B") | 90,368 B, derived (57,600 + 32,768) |
+
+## 3. Derived reference, W6 8-bit design: message types that did not exist at the tag
+
+### 3.1 Typing rule and common header
+
+The cr1-before C typing rule, copied from the T-B4-01 row: "`uint32_t` for magic, IDs, seq and counters, `uint8_t` for each enum or flag, `uint64_t` for time, 8 bits per colour channel". Sizes are plain byte sums of the fields, with no padding, as in the packed tag structs.
+
+Common header on every message (T-B2-01 row; IFM-2a, W6D-2f): message type, session_id, seq.
+
+| Header field | C type by the rule | Bytes |
+|---|---|---|
+| message type | `uint8_t` (enum) | 1 |
+| session_id | `uint32_t` (ID) | 4 |
+| seq | `uint32_t` (seq) | 4 |
+| **Header total** | | **9** |
+
+Counting decisions, used in every row below:
+
+1. **magic and version are not counted.** The tag structs carry them (`panel_sync.c:53-54`), but neither is in the T-B2-01 common header or in any T-B2-01 message row. If T-X-04 decides the before cells should keep them, each message gains 4 + 1 = 5 B.
+2. **A field the plan lists inside braces that is the header field is counted once**: session_id in MANIFEST and ASSET_READY, and seq in TELEMETRY (the tile's own telemetry sequence). The `{seq}` of TELEMETRY_ACK is counted as a separate field: it echoes the tile's TELEMETRY seq, while the ACK's own header seq is the PC's sequence, which IFM-2a requires to be newer than the PC's last one.
+3. **Field types the rule does not name**, each taken from the tag structs where they have an equivalent:
+   - format_version: `uint8_t`, as the tag's `version` field (`panel_sync.c:54`);
+   - chunk index and frame index: `uint32_t` (counters), as the tag's `seq` and `frame_no` (`panel_sync.c:55,57`);
+   - frame_rate: no equivalent field at the tag (`FPS` is a `#define`, `panel_sync.c:49`); counted as `uint32_t`, the rule's type for numeric counts **(plan choice)**;
+   - Node ID: `uint32_t` (ID), as the tag's panel `id` (`panel_sync.c:67`). The tag keeps the board number in a `uint8_t` (`panel_sync.c:68`); the rule says IDs are `uint32_t`, so the rule is followed;
+   - CRC32 and the fault word: `uint32_t`, 32 bits by definition (T-B2-01: "CRC32 32 bits", "fault word 32 bits (LDC-2)").
+4. **Bitmaps** (STATUS): the rule says "`uint8_t` for each ... flag". Read literally, a 9-node bitmap is 9 flags = 9 B. The other reading, one 16-bit word per bitmap, is the after design (VC-11b), not the before typing. Both are shown; the literal one is the cell value.
+5. **Arrays sized by node count** use 9 nodes (`CL_MAX_NODES 9`, T-B2-03; 3x3 layout), as the tag beacon's `ids[MAX_NODES]` (`panel_sync.c:62`) is an array of `uint32_t` IDs.
+6. The rule puts counters at `uint32_t`, while the tag beacon keeps its panel `count` in a `uint8_t` (`panel_sync.c:59`). The plan rule is followed.
+7. HEARTBEAT and BEACON are not in the T-B4-01 list because they existed at the tag: their before values are the measured HELLO (the tile heartbeat at the tag, every 0.3 s, `panel_sync.c:147-163`) and beacon in section 1.
+
+### 3.2 Before size per message type
+
+"Field list" says whether the plan fixes the fields: **as listed** means the T-B2-01 row (or the row it cites) names every field; **provisional until T-B2-01 freezes the table** means the plan or PostTri leaves the field list open, so the cell counts only the fields stated in the source column.
+
+| Message | Fields beyond the 9 B header (C type, bytes) | Arithmetic | Before | Label | Field list | Source of the fields | After |
+|---|---|---|---|---|---|---|---|
+| MANIFEST | format_version `uint8_t` 1; frame_count `uint32_t` 4; frame_rate `uint32_t` 4 (decision 3); CRC32 `uint32_t` 4; session_id is the header field | 9 + 1 + 4 + 4 + 4 | 22 B | derived, W6 8-bit design | as listed (frame_rate type is decision 3) | T-B2-01 "MANIFEST (session_id, format_version, frame_count, frame_rate, CRC32)"; VC-5; IFM-1a | 10 B, derived (73 bits, ceil(73 / 8)) |
+| ASSET_CHUNK | chunk index `uint32_t` 4; payload 1,024 B | 9 + 4 + 1,024 | 1,037 B (last of 113 chunks: 9 + 4 + 512 = 525 B) | derived, W6 8-bit design | as listed | T-B2-01 "ASSET_CHUNK (chunk index, 1,024 B payload)"; last chunk 512 B from section 2 | 1029 B, derived (5 B head + 1,024 B (last of 57: 5 + 256 = 261 B)) |
+| CHUNK_ACK | chunk index `uint32_t` 4 | 9 + 4 | 13 B | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 names CHUNK_ACK with no fields; T-B3-05 "each chunk is ACKed by index"; PostTri change log "per-chunk ACK" | 5 B, derived (40 bits, ceil(40 / 8)) |
+| NACK | reason code `uint8_t` 1 (enum) | 9 + 1 | 10 B | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 "NACK (reason code)"; VC-5. Not fixed: whether a NACK also names the chunk index or the seq it refuses | 7 B, derived (51 bits, ceil(51 / 8)) |
+| BUSY | none stated | 9 | 9 B | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 names BUSY with no fields; T-B3-04; PostTri shared resource row "Immutable RAM playback asset" ("rejected with BUSY") | 7 B, derived (49 bits, ceil(49 / 8)) |
+| ASSET_READY | CRC32 `uint32_t` 4; session_id is the header field | 9 + 4 | 13 B | derived, W6 8-bit design | as listed | T-B2-01 "ASSET_READY {session_id, CRC32}"; W6D-7a | 9 B, derived (65 bits, ceil(65 / 8)) |
+| SYNC_READY | none stated | 9 | 9 B | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 names SYNC_READY with no fields; its rule is OD-10 | 5 B, derived (33 bits, ceil(33 / 8)) |
+| START_AT | t_start `uint64_t` 8 | 9 + 8 | 17 B | derived, W6 8-bit design | as listed | T-B2-01 "START_AT {t_start}" | 12 B, derived (93 bits, ceil(93 / 8)) |
+| RESUME_AT | t_resume `uint64_t` 8; saved frame index `uint32_t` 4 | 9 + 8 + 4 | 21 B | derived, W6 8-bit design | as listed | T-B2-01 "RESUME_AT {t_resume, saved frame index}" | 13 B, derived (103 bits, ceil(103 / 8)) |
+| PAUSE | none stated | 9 | 9 B | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 names PAUSE with no fields; IFM-2b; T-B4-04 saves the frame index on the tile, not in the message | 4 B, derived (29 bits, ceil(29 / 8)) |
+| STOP | none stated | 9 | 9 B | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 names STOP with no fields; IFM-2b | 4 B, derived (29 bits, ceil(29 / 8)) |
+| STATUS | readiness bitmap 9 x `uint8_t` = 9; online bitmap 9 x `uint8_t` = 9; coordinator state `uint8_t` 1 (enum) | 9 + 9 + 9 + 1 | 28 B (one 16-bit word per bitmap instead: 9 + 2 + 2 + 1 = 14 B, decision 4) | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 "STATUS (readiness bitmap, online bitmap, coordinator state)"; T-B2-04. Bitmap typing at the before rule is not fixed (decision 4) | 7 B, derived (51 bits, ceil(51 / 8)) |
+| TELEMETRY | fault word `uint32_t` 4; orientation `uint8_t` 1 (enum); display state `uint8_t` 1 (enum); seq is the header field | 9 + 4 + 1 + 1 | 15 B | derived, W6 8-bit design | as listed | T-B2-01 "TELEMETRY {seq, fault word, orientation, display state}"; VC-4; LDC-2 | 9 B, derived (70 bits, ceil(70 / 8)) |
+| TELEMETRY_ACK | acked seq `uint32_t` 4 (decision 2) | 9 + 4 | 13 B | derived, W6 8-bit design | as listed | T-B2-01 "TELEMETRY_ACK {seq} (VC-4)" | 6 B, derived (45 bits, ceil(45 / 8)) |
+| SESSION_CONFIG | layout `uint8_t` 1 (enum: 1x1, 2x2, 3x3); Node ID map 9 x `uint32_t` = 36 (decision 5); failure policy `uint8_t` 1 (enum: pause or continue); frame_count `uint32_t` 4 (counter); CRC32 per position 9 x `uint32_t` = 36 (added 29 Oct 2026, `layout_table.md` section 10 item 9) | 9 + 1 + 36 + 1 + 4 + 36 | 87 B | derived, W6 8-bit design | provisional until T-B2-01 freezes the table | T-B2-01 "SESSION_CONFIG (layout, Node ID map, failure policy)"; T-B1-05. The shape of the Node ID map (fixed 9 entries, one Node ID per position) is not fixed by the plan | 46 B, derived (366 bits, ceil(366 / 8)) |
+| REGISTER | Node ID `uint32_t` 4; cached asset session_id `uint32_t` 4; cached CRC32 `uint32_t` 4 | 9 + 4 + 4 + 4 | 21 B | derived, W6 8-bit design | as listed | T-B2-01 "REGISTER (Node ID, cached asset session_id and CRC32)"; T-B3-05. The cached session_id is a separate field from the header session_id: the tile may hold an asset from an earlier session | 10 B, derived (73 bits, ceil(73 / 8)) |
+
+The check that every message type in the frozen T-B2-01 table has a before cell labelled measured or derived is made in T-X-04 and T-X-06, not here (T-B4-01 row, Round 2 ruling F21).
+
+## 4. Final build, 25 Nov 2026 (the demo firmware)
+
+Measured on the builds flashed for the final demo: tiles `630c390`, Pico `f9d313c` (`docs/tribunal1/change_requirement/final_25nov/`). The "after" column of section 1 stays the 3 Nov build that first carried the packed representation; this section adds the game (11 to 24 Nov) on top.
+
+| Item | Before (`cr1-before`) | After, 3 Nov | Final, 25 Nov | Label |
+|---|---|---|---|---|
+| `panel_sync` static DRAM (DIRAM `.data` + `.bss`) | 34,864 B | 40,576 B | 44,304 B (19,448 + 24,856) | measured (`final_25nov/idf_size.txt`) |
+| `panel_sync` static IRAM (IRAM region + DIRAM `.text`) | 90,750 B | 94,406 B | 94,238 B (16,383 + 77,855) | measured |
+| `ledwall_sync.elf` text / data / bss | 340,304 / 0 / 50,944 B | 346,120 / 0 / 50,500 B | 371,152 / 0 / 57,244 B | measured (`final_25nov/pico_size.txt`) |
+| Free internal heap after WiFi (tile) | not measured at the tag | not measured | 163,488 and 163,664 B (2 boots) | measured (`HEAP` line, `asset_store_probe_heap()` after the first IP; `docs/bench/24nov/long_tile8.log`, `long_tile8_try1.log`) |
+| Largest internal block after WiFi (tile) | not measured at the tag | not measured | 96,256 B (both boots) | measured, same lines |
+| Playback asset in RAM (copy plus 32 KB margin, RAR-4) | 147,968 B (8 bits per channel) | 90,368 B | 90,368 B | derived (section 2) |
+
+How to read it:
+
+- **Static RAM rose** from the tag to the final build because whole subsystems were added after the tag (upload and verify, telemetry, time sync, the game, whole-wall rotation). Static size does not isolate the representation change; the rows that do are the asset and the messages.
+- **The asset is where the change pays off.** The packed asset needs 90,368 B of one internal block; the largest internal block after WiFi is 96,256 B, so it fits with 5,888 B to spare and the tile logs `od04=internal`. The 8-bit asset would need 147,968 B, more than any internal block, so it would need PSRAM, which is off in this build. Packing to 4 bits per channel is what keeps playback in internal RAM.
+- **Messages:** every one of the 24 types is smaller packed than at the 8-bit typing rule (`message_sizes.md`); BEACON, sent 10 times a second, went from 50 B (measured) to 12 B.

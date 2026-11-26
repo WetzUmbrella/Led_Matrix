@@ -2,11 +2,10 @@
  * @file    test_timesync.c
  * @brief   Host tests of timesync (T-B4-02), run by test_main.c.
  *
- * Owner: Ahsanul (Buddy 4). Build and run: make -C panel_sync/test
- * The four tests are the four in the T-B4-02 row, with the row's pass
- * criteria. The supplementary checks cover the integer arithmetic ranges
- * documented in timesync.c. Every time value used here is synthetic test
- * data.
+ * Build and run: make -C panel_sync/test The four tests are the four in the
+ * T-B4-02 row, with the row's pass criteria. The supplementary checks cover
+ * the integer arithmetic ranges documented in timesync.c. Every time value
+ * used here is synthetic test data.
  *
  * DEVIATION D-1 (module-wide): built as C11 with timesync.h (stdatomic.h).
  */

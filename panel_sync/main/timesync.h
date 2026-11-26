@@ -2,9 +2,8 @@
  * @file    timesync.h
  * @brief   Time Sync Task and the corrected Pico clock (T-B4-02).
  *
- * Owner: Ahsanul (Buddy 4). Plan task: T-B4-02. Readers: Playback Control
- * (T-B4-04) and the Display Engine (T-B5-01). Design defence:
- * timesync_DEFENCE.md.
+ * Plan task: T-B4-02. Readers: Playback Control (T-B4-04) and the Display
+ * Engine (T-B5-01). Design: docs/design.md section 4.
  *
  * The filter, drift, slew, seqlock and frame arithmetic are pure C. The
  * FreeRTOS part (Time Sync Task, queue intake, esp_timer) is compiled only
@@ -28,8 +27,7 @@
  * Reader functions read the clock only through timesync_read_snapshot()
  * (RAR-3), and each reading task owns one timesync_reader_t. Never call them
  * from an ISR (PostTri shared-resource row "Corrected Pico time"). Their
- * signatures are the proposed interface to be agreed with Jia Jun (T-B5-01);
- * see timesync_DEFENCE.md, "Open interface items".
+ * signatures are the proposed interface (T-B5-01).
  *
  * DEVIATION D-1 (module-wide): C11 stdatomic.h for the seqlock (VC-1).
  */
@@ -70,24 +68,22 @@
  *  this long without beacons. Changed only by T-B4-05 (OD-19). */
 #define TIMESYNC_HOLDOVER_US INT64_C(1000000)
 
-/** Re-seed threshold, the fallback: a sample whose offset (t_l - t_p)
- *  differs from the current estimate by more than 5 s comes from another
- *  Pico clock, so the window is emptied and the next tick sets the offset
- *  directly (review round 1 R1-2). A Pico restart or switch normally re-seeds
- *  at once through timesync_pico_restart(). Was 500 ms: on the old Matrix
- *  router (bench 24 Nov 2026, 19:06:50) a 0.65 s WiFi stall delivered
- *  beacons 540 to 648 ms late in a row, every tile re-seeded on that delay
- *  and the video jumped 667 ms on the whole wall. Late beacons never move
- *  the minimum-delay estimate, so below this they are harmless (owner
- *  Ahsanul). */
+/** Re-seed threshold, the fallback: a sample whose offset (t_l - t_p) differs
+ *  from the current estimate by more than 5 s comes from another Pico clock,
+ *  so the window is emptied and the next tick sets the offset directly
+ *  (review round 1 R1-2). A Pico restart or switch normally re-seeds at once
+ *  through timesync_pico_restart(). Was 500 ms: on the old Matrix router
+ *  (bench 24 Nov 2026, 19:06:50) a 0.65 s WiFi stall delivered beacons 540 to
+ *  648 ms late in a row, every tile re-seeded on that delay and the video
+ *  jumped 667 ms on the whole wall. Late beacons never move the minimum-delay
+ *  estimate, so below this they are harmless. */
 #define TIMESYNC_RESEED_US INT64_C(5000000)
 
-/** Re-seed only after this many samples in a row are past
- *  TIMESYNC_RESEED_US; until then each such sample is dropped (decided
- *  with Cheston 12 Nov 2026: on the Matrix router with 10 devices single
- *  beacons arrived up to 514 ms late and re-seeded every few seconds, each
- *  step a burst of missed display ticks). A real Pico restart re-seeds 2
- *  beacons (about 200 ms) later. */
+/** Re-seed only after this many samples in a row are past TIMESYNC_RESEED_US;
+ *  until then each such sample is dropped (decided 12 Nov 2026: on the Matrix
+ *  router with 10 devices single beacons arrived up to 514 ms late and
+ *  re-seeded every few seconds, each step a burst of missed display ticks). A
+ *  real Pico restart re-seeds 2 beacons (about 200 ms) later. */
 #define TIMESYNC_RESEED_SAMPLES 3u
 
 /** Largest drift estimate kept: the 50 ppm worst case of VA-4.7, in ppb.
@@ -95,7 +91,7 @@
  *  delay between them reads as a clock rate: on the old Matrix router (bench
  *  24 Nov 2026) the estimates had a median of 1,500 ppm and put neighbouring
  *  tiles up to 10 ms apart (NR-07). The crystals cannot drift faster than
- *  this, so a larger estimate is limited to it (owner Ahsanul). */
+ *  this, so a larger estimate is limited to it. */
 #define TIMESYNC_DRIFT_MAX_PPB INT32_C(50000)
 
 /** Snapshot flag: a published set was copied at least once. */
@@ -276,8 +272,7 @@ int64_t timesync_local_from_pico (timesync_snapshot_t const * p_snap,
                                   int64_t                     t_p);
 
 /**
- * @brief  SYNC_READY rule (OD-10, decided by Ahsanul). True only when all
- *         three hold:
+ * @brief SYNC_READY rule (OD-10). True only when all three hold:
  *         1. the minimum-delay window is full (TIMESYNC_WINDOW samples);
  *         2. a drift estimate is available;
  *         3. the newest (t_p, t_l) sample is no older than
@@ -370,9 +365,9 @@ void timesync_test_set_now_us (int64_t now_us);
 void timesync_task (void * p_queue);
 
 /**
- * @brief  Called by the Display Engine task (de_task, not the ISR) once per
+ * @brief Called by the Display Engine task (de_task, not the ISR) once per
  *         tick, so the Time Sync Task runs one slew step per tick. Safe before
- *         the task starts. Proposed, to be agreed with Jia Jun (T-B5-01).
+ *         the task starts. Proposed (T-B5-01).
  */
 void timesync_notify_tick (void);
 

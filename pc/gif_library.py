@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The website's GIF library (step 4e, decided 18 Nov 2026 with Cheston).
+"""The website's GIF library (step 4e, decided 18 Nov 2026).
 
 GIFs uploaded from the browser are kept in ``pc/gifs/`` (gitignored), so
 they survive a restart of the website. A name is a plain file name ending in

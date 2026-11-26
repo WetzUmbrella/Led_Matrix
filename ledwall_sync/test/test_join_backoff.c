@@ -3,7 +3,6 @@
  * @brief   Host test of join_backoff_ms(): the retry schedule the Pico uses
  *          to rejoin the router (C15).
  *
- * Owner: Benjamin (Buddy 2), coordinator.
  */
 #include "test_join_backoff.h"
 

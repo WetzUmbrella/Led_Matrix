@@ -5,9 +5,6 @@
  *          into one RAM block before ASSET_READY and publishes that block
  *          once for Playback Control and the Display Engine.
  *
- * Owner: Cheston (Buddy 3), tasks T-B3-04, T-B3-05 and T-B3-01. Implemented
- * by Ahsanul (B4) for Cheston; T-B3-01 written 29 Oct 2026 in Ben's (B2)
- * session, T-B3-04 and T-B3-05 the same day in Jia Jun's (B5) session.
  *
  * Implemented:
  * - asset_store_probe_heap() (T-B3-01), called by tile_net once after the
@@ -29,9 +26,9 @@
  *   MALLOC_CAP_INTERNAL when the largest internal block is at least the
  *   payload length plus ASSET_STORE_RAM_MARGIN, otherwise MALLOC_CAP_SPIRAM
  *   (only when PSRAM is enabled). The same check runs at the MANIFEST, before
- *   anything is erased: an asset that cannot fit is refused with NACK reason
- *   1 (wrong payload length) and the ASSET_FORMAT condition bit (R1-3,
- *   PROVISIONAL, owner Cheston: reason 1 reused, no new wire value).
+ *   anything is erased: an asset that cannot fit is refused with NACK reason 1
+ *   (wrong payload length) and the ASSET_FORMAT condition bit (R1-3,
+ *   PROVISIONAL: reason 1 reused, no new wire value).
  *   The copy is filled from flash and checked again before ASSET_READY;
  *   published once with release ordering, constant while ARMED, PLAYING,
  *   PAUSED or in holdover.
@@ -40,15 +37,15 @@
  *   a payload whose CRC32 matches it is copied into RAM again, so REGISTER
  *   carries the cached session_id and CRC32 and a matching asset is reused.
  *
- * PROVISIONAL (OD-11, owner Cheston): Upload Queue length 4 (4 chunks of
- * 1,024 B, about 4 KB of internal RAM; reject and NACK reason 3 when full),
- * Reply Queue length 8 (drop-oldest, single producer).
- * PROVISIONAL (owner Cheston): uploads are refused with BUSY while Playback
- * Control is ARMED, PLAYING, PAUSED or in CLOCK HOLDOVER. The plan row names
- * ARMED and PLAYING; PAUSED and holdover are added because RESUME_AT plays
- * the same asset from the saved frame.
- * PROVISIONAL (owner Ahsanul): deviation D-1 (C11 atomics) extended to this
- * module for the published asset pointer and the phase word.
+ * PROVISIONAL (OD-11): Upload Queue length 4 (4 chunks of 1,024 B, about 4 KB
+ * of internal RAM; reject and NACK reason 3 when full), Reply Queue length 8
+ * (drop-oldest, single producer).
+ * PROVISIONAL: uploads are refused with BUSY while Playback Control is ARMED,
+ * PLAYING, PAUSED or in CLOCK HOLDOVER. The plan row names ARMED and PLAYING;
+ * PAUSED and holdover are added because RESUME_AT plays the same asset from
+ * the saved frame.
+ * PROVISIONAL: deviation D-1 (C11 atomics) extended to this module for the
+ * published asset pointer and the phase word.
  *
  * DEVIATION D-2 (module-wide): ESP-IDF names and types.
  */
@@ -69,10 +66,10 @@
  *  (review round 1 R1-3). */
 #define ASSET_STORE_RAM_NEEDED 90368u
 
-/** Upload Queue length (PROVISIONAL, OD-11, owner Cheston). */
+/** Upload Queue length (PROVISIONAL, OD-11). */
 #define ASSET_STORE_UPLOAD_QUEUE_LEN 4u
 
-/** Reply Queue length (PROVISIONAL, OD-11, owner Cheston). */
+/** Reply Queue length (PROVISIONAL, OD-11). */
 #define ASSET_STORE_REPLY_QUEUE_LEN 8u
 
 /** Upload phase (the asset states of W6 statechart 3). */

@@ -2,7 +2,6 @@
  * @file    test_main.c
  * @brief   Host test runner for ledwall_sync (T-B2-02 to T-B2-05).
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  * Each test is one plan acceptance check that needs no hardware, or a
  * check of a rule the plan row states. Build and run:
  * make -C ledwall_sync/test

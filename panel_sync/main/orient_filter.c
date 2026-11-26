@@ -3,8 +3,6 @@
  * @brief   Orientation classification and debounce (T-B5-05). See
  *          orient_filter.h.
  *
- * Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun, task
- * T-B5-05.
  *
  * No ESP-IDF includes: this module is host-testable.
  */

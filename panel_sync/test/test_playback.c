@@ -4,7 +4,7 @@
  *          the plan row, and the holdover rule run on a fake clock (the row
  *          tests it on 2 tiles; this host form checks the logic first).
  *
- * Owner: Ahsanul (Buddy 4). Written 29 Oct 2026 in Ben's (B2) session.
+ * Written 29 Oct 2026.
  */
 #include "test_playback.h"
 

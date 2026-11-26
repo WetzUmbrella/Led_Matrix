@@ -2,12 +2,12 @@
  * @file    test_main.c
  * @brief   Host test runner for panel_sync (T-B4-02, T-B3-06).
  *
- * Owner: Ahsanul (Buddy 4). Build and run: make -C panel_sync/test
+ * Build and run: make -C panel_sync/test
  * The four counted tests are the four in the T-B4-02 row, with the row's pass
  * criteria. The supplementary checks cover the integer arithmetic ranges
  * documented in timesync.c; they are not part of "Pass = N of 4". The fault
- * word tests (T-B3-06, implemented by Ahsanul (B4) for Cheston) are counted
- * on their own line, "Fault word: Pass = N of 5".
+ * word tests (T-B3-06) are counted on their own line, "Fault word: Pass = N
+ * of 5".
  */
 #include "test_main.h"
 

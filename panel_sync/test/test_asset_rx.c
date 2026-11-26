@@ -2,8 +2,7 @@
  * @file    test_asset_rx.c
  * @brief   Host tests of asset_rx (T-B3-05), run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-05. Build and run:
- * make -C panel_sync/test.
+ * Build and run: make -C panel_sync/test.
  */
 #include "test_asset_rx.h"
 

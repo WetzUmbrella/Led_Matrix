@@ -3,8 +3,6 @@
  * @brief   Orientation Task (T-B5-05) and tap sampling (build step 2). See
  *          orientation.h.
  *
- * Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun, task
- * T-B5-05; the 1 kHz sampling and software taps added 11 Nov 2026 (DS-02).
  *
  * Contexts: the Orientation Task owns the I2C bus, the device handle, the
  * filter and the detector, and is the only writer of the mailbox and the tap

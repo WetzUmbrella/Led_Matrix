@@ -2,7 +2,6 @@
  * @file    coordinator_port.c
  * @brief   Host test port of coordinator_loop: fake clock and send recorder.
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  */
 #include "coordinator_port.h"
 

@@ -6,8 +6,8 @@
  *          one 64-bit mask per tile for WALL_PICTURE. Pure C with no
  *          hardware call.
  *
- * Owner: Benjamin (Buddy 2). Written for build step 7; scaled pictures and
- * stars for the step 3 game (DS-09).
+ * Written for build step 7; scaled pictures and stars for the step 3 game
+ * (DS-09).
  *
  * - Pixel n of a tile is LED n = 8 x row + column, the asset frame order of
  *   layout_table.md section 6, so bit n of the mask is that LED before the

@@ -5,9 +5,6 @@
  *          SYNC_READY, TELEMETRY and its ACK (T-B3-06), and the Time Sync,
  *          Command, and Telemetry Queues.
  *
- * Owner: Cheston (Buddy 3), task T-B3-03. Implemented by Ahsanul (B4) for
- * Cheston; the parts below marked 29 Oct 2026 were written in Ben's (B2)
- * session for Cheston to review and defend.
  * Implemented:
  * - tile_net_start(): NVS, the Node ID (board number) from NVS, esp_netif,
  *   WiFi in station mode with esp_wifi_set_storage(WIFI_STORAGE_RAM) before
@@ -33,49 +30,46 @@
  *   join starts sets the WIFI condition bit (fault_word); the bit clears on
  *   IP_EVENT_STA_GOT_IP.
  * - T-B3-01: asset_store_probe_heap() once, after the first IP address.
- * - T-B3-05 (29 Oct 2026, Jia Jun's session): port 4214 also takes MANIFEST
- *   and ASSET_CHUNK into the Upload Queue (asset_store; full: NACK reason 3
- *   to the PC); CHUNK_ACK, BUSY and NACK go back to the PC's address and
- *   port, ASSET_READY to the Pico; REGISTER carries the cached session_id
- *   and CRC32 of the asset in RAM; the comms statechart (W6 statechart 3)
- *   is derived each pass and logged as "TN_COMMS <state>".
+ * - T-B3-05 (29 Oct 2026): port 4214 also takes MANIFEST and ASSET_CHUNK into
+ *   the Upload Queue (asset_store; full: NACK reason 3 to the PC); CHUNK_ACK,
+ *   BUSY and NACK go back to the PC's address and port, ASSET_READY to the
+ *   Pico; REGISTER carries the cached session_id and CRC32 of the asset in
+ *   RAM; the comms statechart (W6 statechart 3) is derived each pass and
+ *   logged as "TN_COMMS <state>".
  *
- * PROVISIONAL (OD-09, owners Cheston and Ahsanul): TN_RX_HOOK selects the
- * receive hook at compile time. TN_RX_HOOK_LWIP (default, option (a))
- * timestamps in the lwIP udp_recv callback in the tcpip task (priority 18,
- * core 0); TN_RX_HOOK_RECVFROM (option (b)) timestamps when recvfrom returns
- * in the Network Task (priority 12). Compare the 10 min spread logs.
- * PROVISIONAL (OD-11, owner Cheston): Time Sync Queue length 4, Command
- * Queue length 3 (Week10_Kickoff/decision_briefs.md).
- * PROVISIONAL (owner Cheston): after the CONNECTING timeout the tile keeps
- * retrying the join (so a router power cycle recovers) with the WIFI bit
- * set; T-B3-05's statechart decides whether FAULT stops the retries.
- * PROVISIONAL (owner Benjamin): ports 4210 and 4211, layout_table.md
- * section 11.
- * PROVISIONAL (OD-11, owner Cheston): telemetry period 1 s, Telemetry Queue
- * length 2 (one item being read plus the newest), pending-ACK ring of 4
+ * PROVISIONAL (OD-09): TN_RX_HOOK selects the receive hook at compile time.
+ * TN_RX_HOOK_LWIP (default, option (a)) timestamps in the lwIP udp_recv
+ * callback in the tcpip task (priority 18, core 0); TN_RX_HOOK_RECVFROM
+ * (option (b)) timestamps when recvfrom returns in the Network Task (priority
+ * 12). Compare the 10 min spread logs.
+ * PROVISIONAL (OD-11): Time Sync Queue length 4, Command Queue length 3
+ * (Week10_Kickoff/decision_briefs.md).
+ * PROVISIONAL: after the CONNECTING timeout the tile keeps retrying the join
+ * (so a router power cycle recovers) with the WIFI bit set; T-B3-05's
+ * statechart decides whether FAULT stops the retries.
+ * PROVISIONAL: ports 4210 and 4211, layout_table.md section 11.
+ * PROVISIONAL (OD-11): telemetry period 1 s, Telemetry Queue length 2 (one
+ * item being read plus the newest), pending-ACK ring of 4
  * (TELEMETRY_BOOK_CAPACITY: an ACK up to 4 s late still clears its bits).
- * PROVISIONAL (owners Cheston and Benjamin, 30 Oct 2026): a tile keeps the
- * first coordinator it hears and ignores beacons and commands from any other
- * address until the locked one has been silent 2 s; ignored beacons are
- * counted as foreign= in TN_STATS (bench log 29 Oct 2026: two Picos on one
- * SSID were mixed).
- * PROVISIONAL (owner Cheston, R1-1): TN_REGISTER_COPIES 3 REGISTER
- * datagrams TN_REGISTER_GAP_US 100 ms apart (heartbeats start after the
- * first), and a new REGISTER when a beacon from the same Pico address shows
- * session_id 0 after a non-zero one, or a seq more than 16 behind.
- * PROVISIONAL (owner Cheston, R1-9): TN_PC_RX_PER_PASS 8 datagrams read from
- * port 4214 per Network Task pass.
- * PROVISIONAL (OD-11, owner Cheston): no Fault queue q_fault is created;
- * faults reach the Network Task through the fault word (RAR-1), so the
- * Fault queue length and policy stay open.
- * PROVISIONAL (owner Benjamin): TELEMETRY is a subnet broadcast to port
- * 4215 and TELEMETRY_ACK arrives on port 4214 (layout_table.md section 11);
- * TELEMETRY uses the tile's single header seq stream, like REGISTER and
- * HEARTBEAT.
- * PROVISIONAL (owner Cheston): port 4214 is read by the Network Task with a
- * non-blocking socket every pass (at most TN_IDLE_WAIT_MS late) in both
- * OD-09 builds; the OD-09 hook only matters for beacon timestamps.
+ * PROVISIONAL (30 Oct 2026): a tile keeps the first coordinator it hears and
+ * ignores beacons and commands from any other address until the locked one has
+ * been silent 2 s; ignored beacons are counted as foreign= in TN_STATS (bench
+ * log 29 Oct 2026: two Picos on one SSID were mixed).
+ * PROVISIONAL (R1-1): TN_REGISTER_COPIES 3 REGISTER datagrams
+ * TN_REGISTER_GAP_US 100 ms apart (heartbeats start after the first), and a
+ * new REGISTER when a beacon from the same Pico address shows session_id 0
+ * after a non-zero one, or a seq more than 16 behind.
+ * PROVISIONAL (R1-9): TN_PC_RX_PER_PASS 8 datagrams read from port 4214 per
+ * Network Task pass.
+ * PROVISIONAL (OD-11): no Fault queue q_fault is created; faults reach the
+ * Network Task through the fault word (RAR-1), so the Fault queue length and
+ * policy stay open.
+ * PROVISIONAL: TELEMETRY is a subnet broadcast to port 4215 and TELEMETRY_ACK
+ * arrives on port 4214 (layout_table.md section 11); TELEMETRY uses the tile's
+ * single header seq stream, like REGISTER and HEARTBEAT.
+ * PROVISIONAL: port 4214 is read by the Network Task with a non-blocking
+ * socket every pass (at most TN_IDLE_WAIT_MS late) in both OD-09 builds; the
+ * OD-09 hook only matters for beacon timestamps.
  *
  * DEVIATION D-2 (module-wide): ESP-IDF, FreeRTOS and lwIP names and types.
  */
@@ -106,14 +100,13 @@
 /** Command Queue length (PROVISIONAL, OD-11). */
 #define TILE_NET_COMMAND_QUEUE_LEN 3u
 
-/** Telemetry period 1 s (PROVISIONAL, OD-11, owner Cheston: continuation
- *  plan proposal; with critic ruling 23 a setter waits at most 3 periods
- *  = 3 s). */
+/** Telemetry period 1 s (PROVISIONAL, OD-11: continuation plan proposal; with
+ *  critic ruling 23 a setter waits at most 3 periods = 3 s). */
 #define TILE_NET_TELEMETRY_PERIOD_US INT64_C(1000000)
 
-/** Telemetry Queue length (PROVISIONAL, OD-11, owner Cheston): the Display
- *  Engine posts only on a state change, so 2 holds the item being read and
- *  the newest; drop-oldest keeps the newest (VA-3.7). */
+/** Telemetry Queue length (PROVISIONAL, OD-11): the Display Engine posts only
+ *  on a state change, so 2 holds the item being read and the newest;
+ *  drop-oldest keeps the newest (VA-3.7). */
 #define TILE_NET_TELEMETRY_QUEUE_LEN 2u
 
 /** Comms state (W6 statechart 3, T-B3-05), logged as "TN_COMMS <state>". */

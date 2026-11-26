@@ -1,6 +1,5 @@
 """pytest for pc/proto_layout.py (T-B1-01).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn, task T-B1-01.
 Every behaviour in the T-B1-01 and T-B2-01 rows that the Python side can
 show on its own: the boundary set round trip for every row, the OD-05
 worked vector, the 115,200 B payload against a 600-frame manifest, the

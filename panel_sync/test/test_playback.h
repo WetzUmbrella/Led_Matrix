@@ -2,7 +2,7 @@
  * @file    test_playback.h
  * @brief   Host tests of playback_control (T-B4-04).
  *
- * Owner: Ahsanul (Buddy 4). Written 29 Oct 2026 in Ben's (B2) session.
+ * Written 29 Oct 2026.
  */
 #ifndef TEST_PLAYBACK_H
 #define TEST_PLAYBACK_H

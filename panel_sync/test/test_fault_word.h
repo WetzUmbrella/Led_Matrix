@@ -2,7 +2,6 @@
  * @file    test_fault_word.h
  * @brief   Host tests of fault_word (T-B3-06), run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-06.
  */
 #ifndef TEST_FAULT_WORD_H
 #define TEST_FAULT_WORD_H

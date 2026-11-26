@@ -1,7 +1,6 @@
 """pytest: T-B1-06 numbered-pattern assets for 1x1, 2x2 and 3x3 (14 tile
 assets, PC only, VC-11).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn.
 """
 
 from __future__ import annotations

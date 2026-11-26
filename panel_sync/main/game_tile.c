@@ -2,8 +2,8 @@
  * @file    game_tile.c
  * @brief   Whack-a-mole on the tile (see game_tile.h).
  *
- * Owner: Cheston (Buddy 3) and Jia Jun (Buddy 5). Written for build step 7;
- * round phases, sprites and the picture list for step 3.
+ * Written for build step 7; round phases, sprites and the picture list for
+ * step 3.
  *
  * The seqlock follows playback_control.c: one writer (the Network Task),
  * readers on other tasks, 32-bit atomic words, an even seq when the data is

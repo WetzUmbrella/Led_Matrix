@@ -2,7 +2,6 @@
  * @file    test_asset_rx.h
  * @brief   Host tests of asset_rx (T-B3-05), run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-05.
  */
 #ifndef TEST_ASSET_RX_H
 #define TEST_ASSET_RX_H

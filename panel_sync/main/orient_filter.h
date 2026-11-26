@@ -5,16 +5,14 @@
  *          orientation kept on an IMU error. Pure C (fault_word only), so the
  *          T-B5-05 host tests run on a PC.
  *
- * Owner: Jia Jun (Buddy 5), task T-B5-05. Implemented by Ahsanul (B4) for
- * Jia Jun, written 29 Oct 2026 in Jia Jun's session.
  *
  * - Accelerometer only (VA-5.4): an upright tile within 20 degrees of
  *   vertical (proposed, stated in the README) has gravity mostly in X and
  *   Y, so the quadrant needs no gyro integration (SE15 (1).txt bullet 9).
- * - Quadrant (PROVISIONAL, owner Jia Jun, confirm in T-B5-06): +Y dominant
- *   = 0 degrees, +X = 90, -Y = 180, -X = 270. The dominant axis must carry
- *   at least half of 1 g, otherwise there is no candidate (tile flat or
- *   moving) and the count restarts.
+ * - Quadrant (PROVISIONAL, confirm in T-B5-06): +Y dominant = 0 degrees, +X =
+ *   90, -Y = 180, -X = 270. The dominant axis must carry at least half of 1 g,
+ *   otherwise there is no candidate (tile flat or moving) and the count
+ *   restarts.
  * - Debounce (IFM-6b): a candidate different from the stable orientation
  *   is published after ORIENT_FILTER_STABLE_SAMPLES equal samples in a row
  *   (26 = 0.5 s at 50 Hz, plus the first).

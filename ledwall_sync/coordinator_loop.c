@@ -4,7 +4,6 @@
  *          for what is implemented, the OD-01 citation and the PROVISIONAL
  *          choices.
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  *
  * Loop structure (OD-08 ruling: one bounded routine per pass). Each pass
  * calls cyw43_arch_poll(), whose receive callbacks only timestamp, copy and
@@ -35,20 +34,19 @@
  * Build options:
  *   CL_HOST_TEST            host build for ledwall_sync/test (no Pico SDK).
  *   CL_TEST_SUPPRESS_MS=<n> T-B4-05 test build: 20 s into each playback,
- *                           beacons stop for n ms once (bench procedure in
- *                           docs/week13/holdover_sizing.md).
+ *                           beacons stop for n ms once.
  *   CL_TEST_HANG_S=<n>      watchdog test build: n s after boot the loop
  *                           stops once, as in a freeze, unless the watchdog
  *                           caused this boot; the watchdog must restart the
  *                           Pico (bench 19 Nov 2026).
  *
- * Watchdog (decided 19 Nov 2026 with Cheston): the Pico froze three to four
- * times on the 18 Nov bench, once for 144 s inside one datagram's handling
- * (dispatch_max_us), most likely in the CYW43 driver. The hardware watchdog
- * restarts the Pico when the loop has not run for CL_WATCHDOG_MS (8 s); the PC
- * and the tiles take a restarted Pico back by themselves. The loop feeds it
- * every pass, and the router join, which takes up to 10 s, feeds it while
- * it waits (cl_connect_router).
+ * Watchdog (decided 19 Nov 2026): the Pico froze three to four times on the 18
+ * Nov bench, once for 144 s inside one datagram's handling (dispatch_max_us),
+ * most likely in the CYW43 driver. The hardware watchdog restarts the Pico
+ * when the loop has not run for CL_WATCHDOG_MS (8 s); the PC and the tiles
+ * take a restarted Pico back by themselves. The loop feeds it every pass, and
+ * the router join, which takes up to 10 s, feeds it while it waits
+ * (cl_connect_router).
  *
  * DEVIATION D-2 (module-wide): Pico SDK and lwIP names and types
  * (struct udp_pcb, struct pbuf, ip_addr_t, u16_t, err_t, PBUF_RAM).
@@ -2035,8 +2033,8 @@ static proto_type_t cl_type_of (proto_header_t const * p_header)
 
 /**
  * @brief  Pico time of tick n: origin + ceil(n x 1,000,000 / 60), the same
- *         rounded-up deadline the tiles use (timesync_DEFENCE.md interface
- *         item 3), split so n x 10^6 never overflows.
+ *         rounded-up deadline the tiles use (timesync_deadline_local()),
+ *         split so n x 10^6 never overflows.
  * @param  origin  Pico time of frame 0, microseconds.
  * @param  tick    Tick number.
  * @return Deadline, microseconds.
@@ -3199,12 +3197,12 @@ static int8_t cl_status_score (void)
 }
 
 /**
- * @brief  A wall picture as every tile shows it: the whole picture drawn for
- *         one tile (the 1 x 1 rendering of score_font). Decided 18 Nov 2026
- *         with Cheston, replacing DS-15 decision 3 (big across the grid when
- *         it is at least half full): the demo tiles stand apart, so a
- *         picture cut across them was hard to read; each tile now shows the
- *         countdown and the results whole.
+ * @brief A wall picture as every tile shows it: the whole picture drawn for
+ *         one tile (the 1 x 1 rendering of score_font). Decided 18 Nov 2026,
+ *         replacing DS-15 decision 3 (big across the grid when it is at least
+ *         half full): the demo tiles stand apart, so a picture cut across them
+ *         was hard to read; each tile now shows the countdown and the results
+ *         whole.
  * @param  pic    What to draw.
  * @param  value  The number, or the star count.
  * @return The tile's 8 x 8 mask, the same for every tile.

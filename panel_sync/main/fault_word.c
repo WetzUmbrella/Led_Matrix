@@ -2,8 +2,8 @@
  * @file    fault_word.c
  * @brief   Shared 32-bit tile fault word (T-B3-06).
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-06. Implemented and not
- * yet implemented: see fault_word.h. PROVISIONAL choices: see fault_word.h.
+ * Implemented and not yet implemented: see fault_word.h. PROVISIONAL choices:
+ * see fault_word.h.
  *
  * Memory order. Every bit is changed by a read-modify-write on the one
  * atomic word, and all read-modify-writes on one atomic object form a single

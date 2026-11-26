@@ -2,7 +2,7 @@
  * @file    tap_detect.c
  * @brief   Software tap detection (see tap_detect.h for the rules).
  *
- * Owner: Jia Jun (Buddy 5). Rewritten 11 Nov 2026 (build step 2, DS-02).
+ * Rewritten 11 Nov 2026 (build step 2, DS-02).
  *
  * No ESP-IDF includes: this module is host-testable. Integer arithmetic
  * only; the baseline is kept in LSB x 65,536 so the slow average does not

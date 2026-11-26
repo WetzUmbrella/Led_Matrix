@@ -2,10 +2,8 @@
 """SE15 dashboard (T-B1-05): configure, build, upload, check readiness and
 control playback from the PC.
 
-Owner: Jolyn (Buddy 1), task T-B1-05. Implemented by Ahsanul (B4) for
-Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session. Build step 4 (6 Nov
-2026): any rows x cols layout, tap-to-place, resumable uploads, the Pico's
-reported state, and an optional session id.
+Build step 4 (6 Nov 2026): any rows x cols layout, tap-to-place, resumable
+uploads, the Pico's reported state, and an optional session id.
 
 States (W6 statechart 1): IDLE, CONFIGURING, VALIDATING CONFIGURATION,
 PREPARING ASSETS, UPLOADING ASSETS, VERIFYING UPLOADS (waits for Pico

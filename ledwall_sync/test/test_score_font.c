@@ -3,8 +3,7 @@
  * @brief   Host test of score_font (C19): glyph pixel counts, centring over
  *          the active tiles, and the slices of a wall.
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #include "test_score_font.h"
 
