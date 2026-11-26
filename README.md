@@ -32,6 +32,7 @@ the PC.
 8. [Known limits](#8-known-limits)
 9. [Troubleshooting](#9-troubleshooting)
 10. [Team](#10-team)
+11. [AI use](#11-ai-use)
 
 ---
 
@@ -318,3 +319,21 @@ test report.
 An earlier ESP-NOW design (one board pushing pixel data to the others) was
 abandoned before 4-board testing. It is preserved at tag
 [`v0-esp-now-single-node`](../../tree/v0-esp-now-single-node).
+
+## 11. AI use
+
+This project was built with substantial help from AI tools, which the
+module's tribunal process also uses (AI ideation and an AI-vetted gap check).
+
+- **Tribunal 1.** AI was used as a reviewer and challenger. The prompt, its
+  suggestions and the team's decision on each are in the Tribunal 1
+  document. [`docs/tribunal1/`](docs/tribunal1/) lists the gaps we accepted
+  and fixed, and the suggestions we rejected, with reasons.
+- **Code, tests and documents.** Much of the firmware, PC code, tests and
+  documentation was drafted with Claude Code (Anthropic), in sessions run by
+  team members. The team set the requirements, made the design decisions,
+  and reviewed every change. Each change had to pass the host tests, the
+  Barr-C checker and both firmware builds before it was committed.
+- **Hardware results** (every wall test in
+  [`docs/testing/evidence/`](docs/testing/evidence/)) were measured by the
+  team on the real wall. None of them were generated.
