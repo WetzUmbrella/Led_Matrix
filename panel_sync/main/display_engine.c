@@ -275,7 +275,7 @@ static void de_task (void * p_arg)
         de_report(PROTO_DISPLAY_IDLE);
     }
 
-    /* Start-up defect fix (HANDOVER step 11): the first tick is taken
+    /* Start-up defect fix: the first tick is taken
      * from corrected Pico time only once the OD-10 rule holds, so a tile
      * that booted before the Pico does not arm a deadline seconds away. */
     while (!timesync_sync_ready())

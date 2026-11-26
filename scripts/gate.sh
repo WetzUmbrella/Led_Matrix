@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# The test gate, shared by scripts/overnight.sh and the pre-commit hook it
-# installs. One PASS/FAIL line per check; exit 0 only when every check passes.
+# The test gate. One PASS/FAIL line per check; exit 0 only when every check passes.
 #
 #   bash scripts/gate.sh
 #

@@ -1,12 +1,12 @@
-# IRAM budget (HANDOVER step 7)
+# IRAM budget
 
-Owner: Ahsanul (B4) with Jia Jun (B5). Written 29 Oct 2026 in Ben's (B2) session from the measurements Ahsanul took on 29 Oct 2026 (`docs/HANDOVER.md` section 4.1: `panel_sync` on `b4/phase1`, ESP-IDF v5.3, one build per option). Nothing here is a new measurement.
+Owner: Ahsanul (B4) with Jia Jun (B5). Written 29 Oct 2026 in Ben's (B2) session from the measurements Ahsanul took on 29 Oct 2026 (`panel_sync` on `b4/phase1`, ESP-IDF v5.3, one build per option). Nothing here is a new measurement.
 
 ## Why this matters
 
 PostTri SRM-3M and VA-5.2 need the tick and RMT interrupts IRAM-safe, so they keep running while a flash operation disables the cache. Every IRAM-safe function lives in internal RAM. On the ESP32-S3 the first 16,384 B IRAM region is already full at the tag (`cr1-before`: 16,383 of 16,384 B), and the rest of the IRAM code sits in DIRAM `.text`, which shares internal RAM with the heap. The heap must still hold the 90,368 B RAM asset copy (OD-04, T-B3-01 rule: 57,600 B payload plus the 32,768 B margin, proposed, RAR-4) after WiFi starts. So IRAM code and the asset copy compete for the same memory.
 
-## Measured baseline and options (from HANDOVER section 4.1)
+## Measured baseline and options
 
 IRAM code = `.iram0.text` + vectors over all archives. Static DRAM = `.dram0.data` + `.bss`.
 
