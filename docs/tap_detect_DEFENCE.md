@@ -1,6 +1,6 @@
 # tap_detect: design defence (software tap detection, DS-02)
 
-Owner: Jia Jun (Buddy 5). Written 11 Nov 2026 in Cheston's sessions (build step 2) from the 9 Nov bench data, for Jia Jun to defend. Files: `panel_sync/main/tap_detect.c/.h`, run by the Orientation Task (`panel_sync/main/orientation.c`); host tests `panel_sync/test/test_tap_detect.c`, cases K1 to K8 ("Tap: Pass = 15 of 15" on 25 Nov, plain and with ASan). Coding standard: Barr-C:2018. Written 25 Nov 2026 against `a6d4902`.
+Subsystem: tap detection (ESP32-S3 tile). Files: `panel_sync/main/tap_detect.c/.h`, run by the Orientation Task (`panel_sync/main/orientation.c`); host tests `panel_sync/test/test_tap_detect.c`, cases K1 to K8 ("Tap: Pass = 15 of 15" on 25 Nov, plain and with ASan). Coding standard: Barr-C:2018. Written 25 Nov 2026 against `a6d4902`.
 
 **Names.** Public: `tap_detect_init()`, `tap_detect_set_threshold()`, `tap_detect_sample()`, `tap_detect_last_mg()`. Statics: `td_deviation_mg()`, `td_baseline()`, `td_phase()`. The module is pure C with no ESP-IDF include, so every rule runs in the host test on a fake clock.
 
