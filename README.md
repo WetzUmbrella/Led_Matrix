@@ -181,9 +181,21 @@ Hold **BOOTSEL**, plug in the Pico and copy `build/ledwall_sync.uf2` onto the
 **RPI-RP2** drive. Its USB serial log shows `COORDINATOR up: ip=...`. Note
 that IP address for the website.
 
+### 4.6 Why no ready-made firmware images are committed
+
+The WiFi name and password are compiled into both images, and anyone who has
+the file can read them back out of it. So the repository ships no `.uf2` or
+`.bin`. Build them on your own machine with your own `wifi_secrets.h`
+(section 4.3):
+
+| Board | Built image | Flash it with |
+|---|---|---|
+| Pico W | `ledwall_sync/build/ledwall_sync.uf2` | hold BOOTSEL, plug in, copy the file onto the RPI-RP2 drive |
+| Each tile | `panel_sync/build/panel_sync.bin` (with its bootloader and partition table) | `idf.py -p /dev/ttyACM0 flash` from `panel_sync/` |
+
 CI also uploads `ledwall_sync.uf2` and `panel_sync.bin` for every push, but
-they carry placeholder WiFi credentials, so use them to check the build, not
-to flash.
+those carry the placeholder credentials from the example files, so they
+prove the build and cannot join a network.
 
 ## 5. Running the demo
 
@@ -217,6 +229,18 @@ Every host test suite, with logs kept as evidence:
 ./tools/run_all_tests.sh             # writes docs/testing/results/<today>/
 ```
 
+By requirement (the map from each FR and NFR to its tests is
+[`docs/testing/TRACEABILITY.md`](docs/testing/TRACEABILITY.md)):
+
+```bash
+.venv/bin/python tools/traceability.py --list      # every requirement and its tests
+.venv/bin/python tools/traceability.py FR14        # run only FR14's tests
+.venv/bin/python tools/traceability.py all         # every requirement, one by one
+```
+
+Each requirement prints its host test cases with PASS or FAIL, then the
+system tests on the wall that cover it, with their recorded verdict.
+
 Or one suite at a time:
 
 | Suite | Command |
@@ -242,7 +266,9 @@ test report.
 |---|---|
 | **Test report**: unit, integration and system tests with inputs, expected and actual results | [`docs/testing/TEST_REPORT.md`](docs/testing/TEST_REPORT.md) |
 | Test logs of the submitted code, every case with its verdict | [`docs/testing/results/`](docs/testing/results/) |
-| Requirements and their status | [`docs/plan/game_plan_v2.md`](docs/plan/game_plan_v2.md), [`docs/final/requirements_check_24nov.md`](docs/final/requirements_check_24nov.md) |
+| **Requirements** (FR1 to FR21, NFR1 to NFR16) | [`docs/requirements.md`](docs/requirements.md) |
+| **Requirement to test map**, with the result of each | [`docs/testing/TRACEABILITY.md`](docs/testing/TRACEABILITY.md) |
+| Game requirements in detail, and their status | [`docs/plan/game_plan_v2.md`](docs/plan/game_plan_v2.md), [`docs/final/requirements_check_24nov.md`](docs/final/requirements_check_24nov.md) |
 | Change requirement 1 (minimum-bit messages), Week 13 evidence | [`docs/week13/`](docs/week13/) |
 | Message layout: every field, its range and its bits | [`protocol/layout_table.md`](protocol/layout_table.md) |
 | Design defence notes, one per module | `docs/*_DEFENCE.md` |

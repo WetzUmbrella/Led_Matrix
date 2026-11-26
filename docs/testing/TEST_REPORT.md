@@ -1,6 +1,6 @@
 # SE15 Distributed LED Matrix Video Wall: test report
 
-Final submission, 25 Nov 2026, branch `feature/whack-a-mole`. Host results below are from commit `f3022be`. Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
+Final submission, 25 Nov 2026, branch `master`. Host results below are from commit `f3022be`. Every host test passes (C and Python, also under AddressSanitizer and UndefinedBehaviorSanitizer), and the system tests on the 3x3 wall pass except one open failure and one partial result, which are listed with their cause. Three failures found on the wall were fixed and re-tested; they stay in the table.
 
 | Level | What runs | Cases | Result | Where |
 |---|---|---|---|---|
@@ -8,7 +8,7 @@ Final submission, 25 Nov 2026, branch `feature/whack-a-mole`. Host results below
 | Unit and integration, Python | pytest: website, GIF build, upload, protocol, tools | 519 | 518 pass, 1 skipped | [results/2026-11-25](results/2026-11-25/SUMMARY.md) |
 | System, on the wall | 9 ESP32-S3 tiles, 1 Pico W, the website, router `MATRIX` | 14 | 12 pass, 1 fail, 1 partly | [section 4](#4-system-tests-on-the-wall) |
 
-Every case with its verdict: [results/2026-11-25/CASES.md](results/2026-11-25/CASES.md).
+Every case with its verdict: [results/2026-11-25/CASES.md](results/2026-11-25/CASES.md). Which tests cover which requirement (FR1 to FR21, NFR1 to NFR16): [TRACEABILITY.md](TRACEABILITY.md); run one requirement's tests with `python3 tools/traceability.py FR14`.
 
 ## 1. How to run the tests
 
