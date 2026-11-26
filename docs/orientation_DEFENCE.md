@@ -1,6 +1,6 @@
 # orientation: design defence (T-B5-05, T-B5-06)
 
-Owner: Jia Jun (Buddy 5). Written for Jia Jun in Jia Jun's session (29 to 30 Oct 2026), to review, change where needed, and defend. Files: `panel_sync/main/orientation.c/.h`, `panel_sync/main/orient_filter.c/.h`; host tests `panel_sync/test/test_display.c` O1 to O3. Procedure: `docs/week13/orientation_trials.md`. Coding standard: Barr-C:2018, deviation D-2. Updated 25 Nov 2026 against `a6d4902`: section 2 is corrected to the 1 kHz read, tap detection moved to `tap_detect_DEFENCE.md`, and section 8 covers whole-wall rotation.
+Subsystem: tile orientation (ESP32-S3 tile). Files: `panel_sync/main/orientation.c/.h`, `panel_sync/main/orient_filter.c/.h`; host tests `panel_sync/test/test_display.c` O1 to O3. Procedure: `docs/week13/orientation_trials.md`. Coding standard: Barr-C:2018, deviation D-2. Updated 25 Nov 2026 against `a6d4902`: section 2 is corrected to the 1 kHz read, tap detection moved to `tap_detect_DEFENCE.md`, and section 8 covers whole-wall rotation.
 
 **Names.** Public: `orientation_start()`, `orientation_current()`. The plan's `orientation_task()` and `qmi_read_accel()` keep their names as statics. The plan's `or_classify()` is `orient_filter_classify()` in the pure module `orient_filter`, with the debounce and fault rule (`orient_filter_step()`), so T-B5-05's host tests run without a tile.
 

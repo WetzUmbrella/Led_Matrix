@@ -1,6 +1,6 @@
 # playback_control: design defence (T-B4-04)
 
-Owner: Ahsanul (Buddy 4). Written for Ahsanul in Ben's session (29 Oct 2026); the atomic state copy and the header update added in Jia Jun's session (30 Oct 2026). For Ahsanul to review, change where they disagree, and defend. Files: `panel_sync/main/playback_control.c/.h`; host tests `panel_sync/test/test_playback.c` ("Playback: Pass = 7 of 7", 25 Nov). Coding standard: Barr-C:2018, deviations D-1 (timeline seqlock and the state copy) and D-2 (the FreeRTOS wrapper). Updated 25 Nov 2026 against `a6d4902`: sections 1 to 7 are unchanged in the code; section 8 covers what changed for the game and the 9-tile wall.
+Subsystem: tile playback control (ESP32-S3 tile). Files: `panel_sync/main/playback_control.c/.h`; host tests `panel_sync/test/test_playback.c` ("Playback: Pass = 7 of 7", 25 Nov). Coding standard: Barr-C:2018, deviations D-1 (timeline seqlock and the state copy) and D-2 (the FreeRTOS wrapper). Updated 25 Nov 2026 against `a6d4902`: sections 1 to 7 are unchanged in the code; section 8 covers what changed for the game and the 9-tile wall.
 
 **Names.** The plan's Playback Control Task is `playback_task()` (static), started by `playback_control_start()`. The pure core is public so the host tests drive it: `playback_control_init()`, `playback_control_step()`, `playback_control_on_command()`, `playback_control_frame_at()`, `playback_control_state()`, `playback_control_read_timeline()`, `playback_control_rejected()`. State names are those of W6 statechart 4.
 

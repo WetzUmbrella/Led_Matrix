@@ -252,9 +252,9 @@ def buddies(tasks: Dict[str, Task]) -> Tuple[List[str], int]:
                     for t in owned),
                 "- Artefacts present: %s" % (
                     ", ".join("`%s`" % a for a in arts) or "none yet"),
-                "- Decisions taken: see the PROVISIONAL list for %s in "
-                "`docs/status/continuation_plan.md` section 4; each becomes "
-                "a decision only when %s confirms it." % (name, name), ""]
+                "- Decisions taken: recorded in the module's DEFENCE "
+                "document; each becomes a decision only when %s "
+                "confirms it." % name, ""]
     return out, linked
 
 
@@ -277,14 +277,14 @@ def ai_notes() -> List[str]:
             "The plan row asks for the prompt, the output and the accept or "
             "reject reason for any AI output used while implementing. Code "
             "in the hand-off patches was drafted in AI-assisted sessions "
-            "from `docs/prompts/SE15_Complete_All_Prompt.md`; each owner "
+            "from one session prompt; each owner "
             "records here what they kept, changed or rejected and why.", "",
             "| Module or document | Session | Prompt | Owner's accept or "
             "reject reason |", "|---|---|---|---|",
             "| patches 01 to 08 | Ben's session, 29 Oct 2026 | "
-            "`docs/prompts/SE15_Complete_All_Prompt.md` | |",
+            "session prompt | |",
             "| patches 09 to 14 | Jia Jun's session, 29 to 30 Oct 2026 | "
-            "same, resumed from `docs/status/continuation_plan.md` | |", ""]
+            "same prompt, resumed | |", ""]
 
 
 def main(argv: Optional[List[str]] = None) -> int:
