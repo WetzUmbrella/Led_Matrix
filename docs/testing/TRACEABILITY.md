@@ -39,12 +39,12 @@ python3 tools/traceability.py FR14
 | NFR6 | A whole-wall video reaches every tile within 60 s | `test_uploader.py::test_a_fast_tile_does_not_wait_out_the_ack_timeout`, `test_website_backend.py::test_parallel_uploads_send_every_tile_at_the_same_time` | ST-09 (PASS) |  |
 | NFR7 | Power-on to the first armed round in at most 3 minutes | none | ST-10 (PASS) |  |
 | NFR8 | 10 rounds without a restart; a lost tile does not stop the round | `pico C14`, `pico C15` | ST-04 (PASS), ST-06 (PASS), ST-11 (PASS), ST-13 (PARTLY (open)) |  |
-| NFR9 | Pico loop: one routine per pass within 1 ms, beacon at most 5 ms late | `pico C1`, `pico C2`, `pico C5`, `pico C10` | none | Beacon lateness on the hardware was logged for the October build (docs/week10/pico_lateness_10min.log), not for the final one. |
+| NFR9 | Pico loop: one routine per pass within 1 ms, beacon at most 5 ms late | `pico C1`, `pico C2`, `pico C5`, `pico C10` | none | Beacon lateness on the hardware was measured for the October build, not for the final one. |
 | NFR10 | A lost tile is noticed within 3 s | `pico C4` | ST-11 (PASS) |  |
 | NFR11 | Own 2.4 GHz router; game and control messages unicast with ACK | `pico C16`, `pico C21`, `pico C22`, `tile G2`, `test_dashboard.py::test_send_game_control_is_resent_with_its_seq_until_acked` | ST-14 (PASS) |  |
 | NFR12 | Binary, little-endian, fewest bits; C and Python agree | `proto bits`, `proto beacon`, `proto messages`, `proto le helpers`, `test_cross_lang.py`, `test_layout_table.py`, `test_proto_layout.py` | none |  |
 | NFR13 | No lost update, no half-written read | `tile 4`, `tile F5`, `tile G6` | none | Every C suite also runs under AddressSanitizer and UndefinedBehaviorSanitizer (make asan). The torn-read stress on the hardware was never run. |
-| NFR14 | Asset played from internal RAM; it fits with a 32 KB margin | `tile A2` | none | The fit is checked by the tile at boot (asset_store_probe_heap); RAM figures in docs/week13/final_25nov/idf_size.txt. |
+| NFR14 | Asset played from internal RAM; it fits with a 32 KB margin | `tile A2` | none | The fit is checked by the tile at boot (asset_store_probe_heap); RAM figures in docs/tribunal1/change_requirement/final_25nov/. |
 | NFR15 | Wall, Pico STATUS and website show the same final score | `pico C21`, `pico C27`, `test_dashboard.py::test_last_score_keeps_the_final_score_after_the_round_ends` | ST-03 (PASS), ST-14 (PASS) |  |
 | NFR16 | Barr-C with 0 findings; every test and build passes | `test_barr_check.py` | none | CI runs barr_check, clang-format, every suite and both firmware builds on every push. |
 
@@ -52,17 +52,17 @@ python3 tools/traceability.py FR14
 
 | ID | What | Verdict | Record |
 |---|---|---|---|
-| ST-01 | video sync between tiles, 240 fps camera | PASS | `docs/bench/24nov/freeze_old_router.md` |
-| ST-02 | tap to hit feedback, 39 taps | PASS | `docs/bench/25nov/nr03.md` |
-| ST-03 | scoring, one tapper, 9 tiles | PASS | `docs/bench/24nov/freeze_old_router.md` |
-| ST-04 | 13 rounds back to back, no Pico restart | PASS | `docs/bench/25nov/rehearsal.md` |
-| ST-05 | 6 min of TAP bursts, no freeze | PASS | `docs/bench/24nov/freeze_old_router.md` |
-| ST-06 | Pico restart during playback, no operator | PASS | `docs/bench/24nov/freeze_old_router.md` |
-| ST-07 | time sync through a WiFi stall | PASS | `docs/bench/24nov/ts_replay.log` |
-| ST-08 | whole-wall rotation, 10 board and 10 tile turns | PASS | `docs/bench/24nov/freeze_old_router.md` |
-| ST-09 | upload of the packed asset to 9 tiles | PASS | `docs/bench/25nov/coldstart.md` |
-| ST-10 | setup time from power-on | PASS | `docs/bench/25nov/coldstart.md` |
-| ST-11 | continue policy, tile unplugged during video | PASS | `docs/bench/25nov/powerpull.md` |
-| ST-12 | pause policy, tile unplugged during video | FAIL (open) | `docs/bench/25nov/powerpull.md` |
-| ST-13 | tile unplugged mid-round | PARTLY (open) | `docs/bench/25nov/rehearsal.md` |
-| ST-14 | whole demo run from the website | PASS | `docs/bench/25nov/rehearsal.md` |
+| ST-01 | video sync between tiles, 240 fps camera | PASS | `docs/testing/evidence/ST-01/` |
+| ST-02 | tap to hit feedback, 39 taps | PASS | `docs/testing/evidence/ST-02/` |
+| ST-03 | scoring, one tapper, 9 tiles | PASS | `docs/testing/evidence/ST-03/` |
+| ST-04 | 13 rounds back to back, no Pico restart | PASS | `docs/testing/evidence/ST-04/` |
+| ST-05 | 6 min of TAP bursts, no freeze | PASS | `docs/testing/evidence/ST-05/` |
+| ST-06 | Pico restart during playback, no operator | PASS | `docs/testing/evidence/ST-06/` |
+| ST-07 | time sync through a WiFi stall | PASS | `docs/testing/evidence/ST-07/` |
+| ST-08 | whole-wall rotation, 10 board and 10 tile turns | PASS | `docs/testing/evidence/ST-08/` |
+| ST-09 | upload of the packed asset to 9 tiles | PASS | `docs/testing/evidence/ST-09/` |
+| ST-10 | setup time from power-on | PASS | `docs/testing/evidence/ST-10/` |
+| ST-11 | continue policy, tile unplugged during video | PASS | `docs/testing/evidence/ST-11/` |
+| ST-12 | pause policy, tile unplugged during video | FAIL (open) | `docs/testing/evidence/ST-12/` |
+| ST-13 | tile unplugged mid-round | PARTLY (open) | `docs/testing/evidence/ST-13/` |
+| ST-14 | whole demo run from the website | PASS | `docs/testing/evidence/ST-14/` |

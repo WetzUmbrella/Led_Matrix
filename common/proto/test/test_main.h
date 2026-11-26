@@ -4,8 +4,7 @@
  *          modules in common/proto/test (Barr-C 4.2.a: the header of
  *          test_main.c).
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. Check and run
- * functions. Build and run: make -C common/proto/test
+ * Check and run functions. Build and run: make -C common/proto/test
  */
 #ifndef TEST_MAIN_H
 #define TEST_MAIN_H

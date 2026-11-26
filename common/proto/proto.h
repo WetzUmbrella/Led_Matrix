@@ -5,10 +5,9 @@
  *          byte 0, every multi-byte field little-endian, no wire struct is
  *          ever sent.
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01. The field list,
- * offsets and widths are protocol/layout_table.md; this file and
- * pc/proto_layout.py (T-B1-01) follow it, and the cross-language vectors in
- * protocol/vectors/ prove they agree.
+ * The field list, offsets and widths are protocol/layout_table.md; this file
+ * and pc/proto_layout.py (T-B1-01) follow it, and the cross-language vectors
+ * in protocol/vectors/ prove they agree.
  * Implemented: proto_put_bits(), proto_get_bits(), the byte-aligned
  * proto_put_u16_le/u32_le/u64_le and proto_get_*_le helpers, the common
  * header, and an encode/decode pair for each of the 24 message rows (18
@@ -18,20 +17,18 @@
  * Not yet implemented: the OD-01 citation sentence on where poll-mode
  * callbacks run (layout_table.md section 9 records the gap).
  *
- * PROVISIONAL (OD-07, owner Benjamin): every width not fixed by PostTri
- * (type 5, session_id 8, seq 16, Node ID 4, format_version 2, chunk index 7,
- * NACK reason 2, rows 4, cols 4, failure policy 1; coordinator state 4 bits
- * is derived, ceil(log2 13)), the
- * type codes in T-B2-01 row order, contiguous packing from bit 0, a node_id
- * in every message a tile sends, ref_seq in NACK and BUSY, acked_seq in
- * TELEMETRY_ACK, frame_rate left off the wire (one valid value, 0 bits), and
- * the ASSET_CHUNK payload starting on the next byte boundary.
- * PROVISIONAL (OD-05, owners Jolyn and Jia Jun): nibble order (a), so packed
- * nibble k of a frame is the 4-bit field at bit 4k.
+ * PROVISIONAL (OD-07): every width not fixed by PostTri (type 5, session_id 8,
+ * seq 16, Node ID 4, format_version 2, chunk index 7, NACK reason 2, rows 4,
+ * cols 4, failure policy 1; coordinator state 4 bits is derived, ceil(log2
+ * 13)), the type codes in T-B2-01 row order, contiguous packing from bit 0, a
+ * node_id in every message a tile sends, ref_seq in NACK and BUSY, acked_seq
+ * in TELEMETRY_ACK, frame_rate left off the wire (one valid value, 0 bits),
+ * and the ASSET_CHUNK payload starting on the next byte boundary.
+ * PROVISIONAL (OD-05): nibble order (a), so packed nibble k of a frame is the
+ * 4-bit field at bit 4k.
  * PROVISIONAL (plan file names): the plan names the files proto_layout.c/.h;
  * they are proto.c/.h so that the plan's function names (proto_put_bits(),
- * proto_encode_beacon()) carry their module prefix (Barr-C 6.1.i). See
- * docs/proto_DEFENCE.md.
+ * proto_encode_beacon()) carry their module prefix (Barr-C 6.1.i).
  */
 #ifndef PROTO_H
 #define PROTO_H
@@ -493,14 +490,13 @@ typedef struct
     uint8_t col;      /**< 0 to cols - 1 when placed, otherwise 0. */
 } proto_cell_t;
 
-/** SESSION_CONFIG, PC to Pico (T-B2-04, T-B1-05). frame_count and crc32[]
- *  are PROVISIONAL (OD-07 item 9, owner Benjamin): the Pico needs each
- *  tile's manifest CRC32 to check ASSET_READY, and the shared frame_count to
- *  compute the saved frame index for RESUME_AT and a rejoin. Step 4d
- *  (DS-15, 12 Nov 2026): a grid of up to 9 x 9 cells and a cell per Node
- *  ID, replacing the 9-position row-major node_map; the codec refuses a
- *  placed cell outside the grid, two tiles in one cell and a cell on a tile
- *  that is not placed. */
+/** SESSION_CONFIG, PC to Pico (T-B2-04, T-B1-05). frame_count and crc32[] are
+ *  PROVISIONAL (OD-07 item 9): the Pico needs each tile's manifest CRC32 to
+ *  check ASSET_READY, and the shared frame_count to compute the saved frame
+ *  index for RESUME_AT and a rejoin. Step 4d (DS-15, 12 Nov 2026): a grid of
+ *  up to 9 x 9 cells and a cell per Node ID, replacing the 9-position
+ *  row-major node_map; the codec refuses a placed cell outside the grid, two
+ *  tiles in one cell and a cell on a tile that is not placed. */
 typedef struct
 {
     proto_header_t header;

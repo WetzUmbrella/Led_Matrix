@@ -1,11 +1,10 @@
 """Python twin of the SE15 wire layout (T-B1-01).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn, task T-B1-01.
 
-Every field, offset and width comes from ``protocol/layout_table.md`` (T-B2-01,
-owner Benjamin), the same table ``common/proto/proto.c`` follows. A message
-is one little-endian integer: each field value is shifted to its bit offset
-and the sum is written with ``int.to_bytes(n, "little")``. Bit 0 is the least
+Every field, offset and width comes from ``protocol/layout_table.md``
+(T-B2-01), the same table ``common/proto/proto.c`` follows. A message is one
+little-endian integer: each field value is shifted to its bit offset and the
+sum is written with ``int.to_bytes(n, "little")``. Bit 0 is the least
 significant bit of byte 0. No ``ctypes`` or ``struct`` layout is used for a
 wire message.
 
@@ -13,9 +12,8 @@ wire message.
 ``layout_table.md`` section 3; ``pc/tests/test_cross_lang.py`` checks every
 vector in ``protocol/vectors/`` against the C codec byte for byte.
 
-PROVISIONAL (OD-07, owner Benjamin): every width the table marks as a plan
-choice. PROVISIONAL (OD-05, owners Jolyn and Jia Jun): nibble order (a) in
-``pack_frame()`` and ``unpack_frame()``.
+PROVISIONAL (OD-07): every width the table marks as a plan choice. PROVISIONAL
+(OD-05): nibble order (a) in ``pack_frame()`` and ``unpack_frame()``.
 """
 
 from __future__ import annotations

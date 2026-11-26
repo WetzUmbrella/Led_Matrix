@@ -6,8 +6,7 @@
  *          score on the wire. The simulated tiles and the PC feed encoded
  *          datagrams to the coordinator on a fake clock.
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #include "test_coord_game.h"
 

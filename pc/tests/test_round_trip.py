@@ -1,8 +1,7 @@
 """pytest: pc/tests/round_trip.py (T-X-01) with a simulated tile dump.
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn. The tile is
-simulated with the same unpack rule as display_frame.c (nibble k into the
-G, R, B wire order), so the PC side of the check is proven before the
+The tile is simulated with the same unpack rule as display_frame.c (nibble k
+into the G, R, B wire order), so the PC side of the check is proven before the
 bench run.
 """
 

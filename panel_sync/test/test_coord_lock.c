@@ -2,8 +2,7 @@
  * @file    test_coord_lock.c
  * @brief   Host tests of coord_lock (R1-5, R1-6), run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston. Build and run:
- * make -C panel_sync/test.
+ * Build and run: make -C panel_sync/test.
  */
 #include "test_coord_lock.h"
 

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Upload one tile asset over UDP (T-B1-04).
 
-Owner: Jolyn (Buddy 1), task T-B1-04. Implemented by Ahsanul (B4) for
-Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session. Replaces
-``panel_sync/tools/upload_frames.sh`` (USB only).
+Replaces ``panel_sync/tools/upload_frames.sh`` (USB only).
 
 Plan row T-B1-04: "Binary UDP chunks of 1,024 B (57 chunks, last 256 B),
 per-chunk ACK, only missing chunks resent. Uploads run before PLAYING;
@@ -16,7 +14,7 @@ from one socket; the tile answers each chunk with CHUNK_ACK {chunk_index}
 to that socket. NACK reason 3 (Upload Queue full) leaves the chunk missing
 for the next round; NACK reason 0 or 1 and BUSY stop the upload.
 
-PROVISIONAL choices (owner Jolyn):
+PROVISIONAL choices:
   * window of 4 chunks per round, the tile's Upload Queue length (OD-11);
     the next window goes as soon as every chunk of this one is ACKed, or
     after the ACK timeout (12 Nov 2026: waiting the full timeout made every
@@ -27,10 +25,10 @@ PROVISIONAL choices (owner Jolyn):
     T-X-04;
   * at most 20 rounds before giving up.
 
-Upload fixes of 12 Nov 2026 (DS-12 A2, by Cheston): a round in which the
-tile ACKs nothing ends with the MANIFEST sent again and every chunk counted
-as missing, because the tile either never took the MANIFEST (it arrived
-before the tile knew the new session, or was lost) or dropped the upload.
+Upload fixes of 12 Nov 2026 (DS-12 A2): a round in which the tile ACKs nothing
+ends with the MANIFEST sent again and every chunk counted as missing, because
+the tile either never took the MANIFEST (it arrived before the tile knew the
+new session, or was lost) or dropped the upload.
 While nothing is ACKed yet, the round stops after its first silent window,
 so a tile without the MANIFEST is not sent the whole asset first.
 

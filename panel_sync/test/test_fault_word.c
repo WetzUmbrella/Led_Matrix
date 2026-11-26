@@ -2,11 +2,10 @@
  * @file    test_fault_word.c
  * @brief   Host tests of fault_word (T-B3-06), run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Cheston, task T-B3-06. Build and run:
- * make -C panel_sync/test. Tests F1 to F4 check the T-B3-06 row rules on one
- * thread; F5 is the host forerunner of the T-X-02 stress test (two setters
- * and one reporter as POSIX threads), not T-X-02 itself, which runs on the
- * two ESP32-S3 cores.
+ * Build and run: make -C panel_sync/test. Tests F1 to F4 check the T-B3-06 row
+ * rules on one thread; F5 is the host forerunner of the T-X-02 stress test
+ * (two setters and one reporter as POSIX threads), not T-X-02 itself, which
+ * runs on the two ESP32-S3 cores.
  *
  * DEVIATION D-1 (module-wide): C11 stdatomic.h for the shared test flags.
  * The int results of pthread_create(), pthread_join() and sched_yield() are

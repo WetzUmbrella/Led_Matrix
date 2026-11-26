@@ -1,8 +1,7 @@
 """pytest: pc/uploader.py (T-B1-04) against a fake tile on loopback.
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn. The fake
-tile follows the tile rules of panel_sync/main/asset_rx.c: ACK every chunk
-of the open session, repeat ACKs for repeats, NACK reason 3 when its
+The fake tile follows the tile rules of panel_sync/main/asset_rx.c: ACK every
+chunk of the open session, repeat ACKs for repeats, NACK reason 3 when its
 4-slot queue would overflow (optional), BUSY when playing.
 """
 

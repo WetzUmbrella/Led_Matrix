@@ -2,7 +2,6 @@
  * @file    telemetry_book.c
  * @brief   Telemetry pending-ACK ring (T-B3-06). See telemetry_book.h.
  *
- * Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston.
  * Task T-B3-06.
  *
  * No ESP-IDF includes: this module is host-testable.

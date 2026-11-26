@@ -3,8 +3,7 @@
  * @brief   Host tests of game_rules (C17 timing, C18 scoring and dedupe) on a
  *          fake clock with an injected RNG seed.
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #include "test_game_rules.h"
 

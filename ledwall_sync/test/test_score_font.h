@@ -2,8 +2,7 @@
  * @file    test_score_font.h
  * @brief   Host test of the final score font and its per-tile slices (C19).
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #ifndef TEST_SCORE_FONT_H
 #define TEST_SCORE_FONT_H

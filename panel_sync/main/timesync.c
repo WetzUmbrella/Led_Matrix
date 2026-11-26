@@ -2,8 +2,8 @@
  * @file    timesync.c
  * @brief   Time Sync Task and the corrected Pico clock (T-B4-02).
  *
- * Owner: Ahsanul (Buddy 4). See timesync.h for the time base and units, and
- * timesync_DEFENCE.md for where each rule comes from.
+ * See timesync.h for the time base and units, and docs/design.md section 4
+ * for the reasons behind each rule.
  *
  * DEVIATION D-1 (module-wide): C11 stdatomic.h for the seqlock (VC-1).
  * DEVIATION D-2 (module-wide): FreeRTOS and ESP-IDF names and macros in the
@@ -665,11 +665,10 @@ int64_t timesync_now_corrected (timesync_reader_t * p_reader)
 }
 
 /**
- * @brief  Local alarm time for tick n, read only through
+ * @brief Local alarm time for tick n, read only through
  *         timesync_read_snapshot() (RAR-3). With nothing published yet it
  *         returns the Pico-time deadline unchanged, matching the T-B5-01 stub
- *         behaviour (local time). The signature is a proposal to be agreed
- *         with Jia Jun (T-B5-01).
+ *         behaviour (local time). The signature is a proposal (T-B5-01).
  * @param  p_reader   This task's reader.
  * @param  origin_us  Timeline origin in Pico time, microseconds.
  * @param  tick       Tick number n.

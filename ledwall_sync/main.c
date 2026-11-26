@@ -5,7 +5,6 @@
  *          returns (plan section 0.1: "main.c reduced to stdio_init_all(),
  *          cyw43_arch_init() and coordinator_loop_run()").
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  * The prototype's own access point (USE_ROUTER 0) and its DHCP server are
  * removed: the Pico always joins the dedicated router (VA-2.1; the Pico
  * access point is out of scope, OUT-3).

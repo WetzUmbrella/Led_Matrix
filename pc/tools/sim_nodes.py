@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Nine simulated tiles for the T-B2-06 Pico load test.
 
-Owner: Benjamin (Buddy 2), task T-B2-06. Written 29 Oct 2026 in Benjamin's
-session.
+Written 29 Oct 2026.
 
 Plan row T-B2-06: "Nine simulated senders register together, then
 heartbeat for 10 min while the Pico beacons." Acceptance: "Every callback at

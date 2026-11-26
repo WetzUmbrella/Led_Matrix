@@ -2,7 +2,7 @@
  * @file    game_sprites.c
  * @brief   The game's 8 x 8 drawings (see game_sprites.h).
  *
- * Owner: Jia Jun (Buddy 5). Written for build step 3.
+ * Written for build step 3.
  *
  * Sprite rows are strings of 8 characters, one per pixel, row 0 at the top:
  * '.' dark, and one letter per colour of that sprite. Proposed 11 Nov 2026

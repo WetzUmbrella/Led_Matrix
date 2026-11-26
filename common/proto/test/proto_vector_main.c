@@ -5,9 +5,8 @@
  *          on the command line, so pc/tests/test_cross_lang.py can compare
  *          C and Python byte for byte.
  *
- * Implemented by Ahsanul (B4) for Jolyn, task T-B1-01, on the T-B2-01 codec
- * (owner Benjamin). Every message goes through a proto_encode_ or
- * proto_decode_ function; the tool itself knows no offsets.
+ * Every message goes through a proto_encode_ or proto_decode_ function; the
+ * tool itself knows no offsets.
  *
  * Usage (built by make -C common/proto/test vector_tool):
  *   proto_vector decode FILE         one "name=value" line per field

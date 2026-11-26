@@ -48,33 +48,33 @@ SUITES = {
 #: Wall test -> (what it tests, recorded verdict, record).
 WALL = {
     "ST-01": ("video sync between tiles, 240 fps camera", "PASS",
-              "docs/bench/24nov/freeze_old_router.md"),
+              "docs/testing/evidence/ST-01/"),
     "ST-02": ("tap to hit feedback, 39 taps", "PASS",
-              "docs/bench/25nov/nr03.md"),
+              "docs/testing/evidence/ST-02/"),
     "ST-03": ("scoring, one tapper, 9 tiles", "PASS",
-              "docs/bench/24nov/freeze_old_router.md"),
+              "docs/testing/evidence/ST-03/"),
     "ST-04": ("13 rounds back to back, no Pico restart", "PASS",
-              "docs/bench/25nov/rehearsal.md"),
+              "docs/testing/evidence/ST-04/"),
     "ST-05": ("6 min of TAP bursts, no freeze", "PASS",
-              "docs/bench/24nov/freeze_old_router.md"),
+              "docs/testing/evidence/ST-05/"),
     "ST-06": ("Pico restart during playback, no operator", "PASS",
-              "docs/bench/24nov/freeze_old_router.md"),
+              "docs/testing/evidence/ST-06/"),
     "ST-07": ("time sync through a WiFi stall", "PASS",
-              "docs/bench/24nov/ts_replay.log"),
+              "docs/testing/evidence/ST-07/"),
     "ST-08": ("whole-wall rotation, 10 board and 10 tile turns", "PASS",
-              "docs/bench/24nov/freeze_old_router.md"),
+              "docs/testing/evidence/ST-08/"),
     "ST-09": ("upload of the packed asset to 9 tiles", "PASS",
-              "docs/bench/25nov/coldstart.md"),
+              "docs/testing/evidence/ST-09/"),
     "ST-10": ("setup time from power-on", "PASS",
-              "docs/bench/25nov/coldstart.md"),
+              "docs/testing/evidence/ST-10/"),
     "ST-11": ("continue policy, tile unplugged during video", "PASS",
-              "docs/bench/25nov/powerpull.md"),
+              "docs/testing/evidence/ST-11/"),
     "ST-12": ("pause policy, tile unplugged during video", "FAIL (open)",
-              "docs/bench/25nov/powerpull.md"),
+              "docs/testing/evidence/ST-12/"),
     "ST-13": ("tile unplugged mid-round", "PARTLY (open)",
-              "docs/bench/25nov/rehearsal.md"),
+              "docs/testing/evidence/ST-13/"),
     "ST-14": ("whole demo run from the website", "PASS",
-              "docs/bench/25nov/rehearsal.md"),
+              "docs/testing/evidence/ST-14/"),
 }
 
 WS = "pc/tests/test_website_backend.py::"
@@ -278,8 +278,8 @@ REQUIREMENTS: List[Tuple[str, str, List[Case], List[str], str]] = [
     ("NFR9", "Pico loop: one routine per pass within 1 ms, beacon at most "
      "5 ms late",
      _c("pico", "C1", "C2", "C5", "C10"), [],
-     "Beacon lateness on the hardware was logged for the October build "
-     "(docs/week10/pico_lateness_10min.log), not for the final one."),
+     "Beacon lateness on the hardware was measured for the October build, "
+     "not for the final one."),
     ("NFR10", "A lost tile is noticed within 3 s",
      _c("pico", "C4"), ["ST-11"], ""),
     ("NFR11", "Own 2.4 GHz router; game and control messages unicast with "
@@ -301,7 +301,7 @@ REQUIREMENTS: List[Tuple[str, str, List[Case], List[str], str]] = [
     ("NFR14", "Asset played from internal RAM; it fits with a 32 KB margin",
      _c("tile", "Test A2"), [],
      "The fit is checked by the tile at boot (asset_store_probe_heap); RAM "
-     "figures in docs/week13/final_25nov/idf_size.txt."),
+     "figures in docs/tribunal1/change_requirement/final_25nov/."),
     ("NFR15", "Wall, Pico STATUS and website show the same final score",
      _c("pico", "C21", "C27")
      + _py(DASH + "test_last_score_keeps_the_final_score_after_the_round_"

@@ -4,7 +4,6 @@
  *          bookkeeping with no ESP-IDF dependency, so it compiles on the
  *          host for unit tests.
  *
- * Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston.
  * Moved out of tile_net.c unchanged, except that commands are refused while
  * nothing is locked (R1-5).
  *
@@ -18,11 +17,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** A tile keeps the first coordinator it hears and ignores beacons from
- *  any other address until the locked one has been silent this long
- *  (PROVISIONAL, owners Cheston and Benjamin: 2 s, twice the 1 s holdover,
- *  so a Pico reboot is followed but a second Pico on the SSID never mixes
- *  its clock in; bench log 29 Oct 2026). */
+/** A tile keeps the first coordinator it hears and ignores beacons from any
+ *  other address until the locked one has been silent this long (PROVISIONAL:
+ *  2 s, twice the 1 s holdover, so a Pico reboot is followed but a second
+ *  Pico on the SSID never mixes its clock in; bench log 29 Oct 2026). */
 #define COORD_LOCK_SWITCH_US INT64_C(2000000)
 
 /** The lock state. addr 0 means nothing is locked. */

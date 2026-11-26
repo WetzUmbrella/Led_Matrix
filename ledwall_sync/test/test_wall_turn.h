@@ -2,7 +2,7 @@
  * @file    test_wall_turn.h
  * @brief   Host tests of wall_turn (D-17: whole-wall rotation, E3 to E5).
  *
- * Owner: Benjamin (Buddy 2). Written for D-17, 24 Nov 2026.
+ * Written for D-17, 24 Nov 2026.
  */
 #ifndef TEST_WALL_TURN_H
 #define TEST_WALL_TURN_H

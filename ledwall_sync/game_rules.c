@@ -2,7 +2,7 @@
  * @file    game_rules.c
  * @brief   Whack-a-mole rules v1 (see game_rules.h for the rules).
  *
- * Owner: Cheston (Buddy 3), game rules. Written for build step 7.
+ * Written for build step 7.
  *
  * Each call of game_rules_poll() reports at most one event, after the state
  * changes that come before it: a dedupe window that has closed is resolved

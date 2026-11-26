@@ -3,7 +3,7 @@
  * @brief   Host tests of the pico_tap edge ring. Build and run:
  *          make -C tools/pico_tap/test
  *
- * Owner: Ahsanul (Buddy 4). Bench tool, not shipped firmware.
+ * Bench tool, not shipped firmware.
  */
 #include <inttypes.h>
 #include <stdbool.h>

@@ -3,7 +3,6 @@
  * @brief   Telemetry pending-ACK ring (T-B3-06): pure bookkeeping with no
  *          ESP-IDF dependency, so it compiles on the host for unit tests.
  *
- * Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston.
  * Task T-B3-06.
  *
  * The ring stores (seq, sent_bits) for the last TELEMETRY_BOOK_CAPACITY
@@ -17,7 +16,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** Number of pending entries (PROVISIONAL, OD-11, owner Cheston). */
+/** Number of pending entries (PROVISIONAL, OD-11). */
 #define TELEMETRY_BOOK_CAPACITY 4u
 
 /** One pending-ACK record. */

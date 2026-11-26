@@ -5,8 +5,6 @@
  *          the rotation remap, and the frame index of a tick. Pure C with no
  *          ESP-IDF dependency, so the T-B5-02 host test runs on a PC.
  *
- * Owner: Jia Jun (Buddy 5), tasks T-B5-02 and T-B5-03. Implemented by
- * Ahsanul (B4) for Jia Jun, written 29 Oct 2026 in Jia Jun's session.
  *
  * - Packed frame (layout_table.md section 6, OD-05 option (a)): 192 nibbles
  *   in R0 G0 B0 R1 ... order, nibble k at bit 4k. Each nibble (0 to 8) is
@@ -15,8 +13,8 @@
  * - Wire buffer: 64 LEDs x 3 bytes in R, G, B order (the Waveshare panel
  *   is RGB, not the usual WS2812B G, R, B; bench 5 Nov 2026), LED 0 first.
  * - LEDs are numbered row by row from the top-left, LED = 8 x row + column
- *   (PROVISIONAL, owner Jia Jun: matches the prototype's frame_px(); check
- *   on the board in T-B5-06).
+ *   (PROVISIONAL: matches the prototype's frame_px(); check on the board in
+ *   T-B5-06).
  * - Rotation (2-bit orientation, layout_table.md 5.7): a tile turned r
  *   degrees clockwise shows source pixel (column, row) = for 0: (c, r);
  *   90: (7 - r, c); 180: (7 - c, 7 - r); 270: (r, 7 - c), so the picture

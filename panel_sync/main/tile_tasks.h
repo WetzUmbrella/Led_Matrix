@@ -4,7 +4,6 @@
  *          tile task. Every tile task is created with xTaskCreatePinnedToCore
  *          from these constants.
  *
- * Implemented by Ahsanul (B4) for Jia Jun, task T-B5-04.
  * Implemented: the six task rows with the PostTri priorities and cores, the
  * six sdkconfig.defaults options of the T-B5-04 row, and the boot log
  * (tile_tasks_log_boot(): CPU frequency, cycle-counter wrap time and
@@ -23,10 +22,10 @@
  * Time Sync 16, Playback Control 15, Network 12 and Asset Storage 8 on core 0.
  * ESP-IDF WiFi (23) and esp_timer (22) stay on core 0; lwIP tcpip (18) is
  * pinned to core 0 by CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU0.
- * PROVISIONAL (priorities and cores, owner Jia Jun): every value above is
- * (proposed, W6D-4a) until the vTaskList() boot log is checked on a tile.
- * PROVISIONAL (stack sizes, owner Jia Jun): 4096 B for every task, the size
- * the prototype's render and sync_rx tasks used; unmeasured, to be set from
+ * PROVISIONAL (priorities and cores): every value above is (proposed, W6D-4a)
+ * until the vTaskList() boot log is checked on a tile.
+ * PROVISIONAL (stack sizes): 4096 B for every task, the size the prototype's
+ * render and sync_rx tasks used; unmeasured, to be set from
  * uxTaskGetStackHighWaterMark() (the stack column of the boot log).
  */
 #ifndef TILE_TASKS_H

@@ -6,8 +6,6 @@
  *          stop and pauses safely after the 1 s holdover, and publishes the
  *          timeline the Display Engine reads.
  *
- * Owner: Ahsanul (Buddy 4), task T-B4-04. Written 29 Oct 2026 in Ben's (B2)
- * session for Ahsanul to review and defend.
  * Implemented: the 9 states of W6 statechart 4; the pure-C core
  * (playback_control_init(), _step(), _on_command(), _frame_at(), _state())
  * host-tested in panel_sync/test/test_playback.c; the timeline seqlock
@@ -15,22 +13,21 @@
  * BEACON_LOSS condition through fault_word (RAR-1); the FreeRTOS wrapper
  * playback_task() at priority 15 on core 0 (tile_tasks.h), reading the
  * Command Queue of tile_net.
- * Since 29 Oct 2026 (Jia Jun's session): the asset input is the RAM asset
- * of asset_store (T-B3-04, T-B3-05, asset_store_active()); the Display
- * Engine reads the timeline every tick (T-B5-02, T-B5-03); and
- * playback_control_state() reads an atomic copy of the state, because
- * asset_store (upload gate) and tile_net (comms statechart) call it from
- * other tasks.
+ * Since 29 Oct 2026: the asset input is the RAM asset of asset_store (T-B3-04,
+ * T-B3-05, asset_store_active()); the Display Engine reads the timeline every
+ * tick (T-B5-02, T-B5-03); and playback_control_state() reads an atomic copy
+ * of the state, because asset_store (upload gate) and tile_net (comms
+ * statechart) call it from other tasks.
  *
- * PROVISIONAL (owner Ahsanul): CLOCK HOLDOVER is entered when the newest
- * beacon is older than 200 ms (two beacon periods, plan choice) and left
- * when a beacon is newer than that; the pause after the holdover uses the
- * one holdover constant TIMESYNC_HOLDOVER_US (1 s, proposed, W6D-2b),
- * which T-B4-05 alone may change. FAULT is entered when the asset reports
- * a frame_count outside 1 to 1023 (inconsistent session data); a new valid
- * session leaves it. START_AT is accepted in READY and in every playing or
- * paused state (a tile that missed a STOP must follow a new start);
- * RESUME_AT also in READY (a rejoining tile, OD-14 option (a)).
+ * PROVISIONAL: CLOCK HOLDOVER is entered when the newest beacon is older than
+ * 200 ms (two beacon periods, plan choice) and left when a beacon is newer
+ * than that; the pause after the holdover uses the one holdover constant
+ * TIMESYNC_HOLDOVER_US (1 s, proposed, W6D-2b), which T-B4-05 alone may
+ * change. FAULT is entered when the asset reports a frame_count outside 1 to
+ * 1023 (inconsistent session data); a new valid session leaves it. START_AT is
+ * accepted in READY and in every playing or paused state (a tile that missed a
+ * STOP must follow a new start); RESUME_AT also in READY (a rejoining tile,
+ * OD-14 option (a)).
  *
  * DEVIATION D-1 (module-wide): C11 stdatomic.h for the timeline seqlock
  * read on core 1 (same pattern as timesync, VC-1).

@@ -8,8 +8,7 @@
  *          never blocks and every tile draws the same frame at the same
  *          shared time. Pure C with no hardware call.
  *
- * Owner: Jia Jun (Buddy 5) for the display, per the re-plan's report
- * allocation. Written for build step 3.
+ * Written for build step 3.
  *
  * - The canvas is upright: pixel n is row n / 8 (row 0 at the top) and
  *   column n % 8, the asset frame order of layout_table.md section 6. The

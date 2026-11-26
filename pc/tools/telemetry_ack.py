@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """TELEMETRY receiver and ACK sender for the VC-4 test (T-B3-06).
 
-Owner: Cheston (Buddy 3), task T-B3-06. Implemented by Ahsanul (B4) for
-Cheston. A bench tool, not the dashboard (``pc/telemetry.py`` is T-B1-05).
+A bench tool, not the dashboard (``pc/telemetry.py`` is T-B1-05).
 
 Plan row T-B3-06, acceptance: "VC-4 test: the PC receiver drops every third
 telemetry packet for 10 min while faults are injected: 100% of injected
@@ -22,7 +21,7 @@ What it does (``protocol/layout_table.md`` sections 3 and 11):
 
 Usage:
     python3 pc/tools/telemetry_ack.py --drop-every 3 --minutes 10
-        [--condition 3] --log docs/week13/vc4_dashboard.log
+        [--condition 3] --log vc4_dashboard.log
 """
 
 from __future__ import annotations

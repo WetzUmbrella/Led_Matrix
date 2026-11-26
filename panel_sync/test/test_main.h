@@ -4,7 +4,7 @@
  *          modules in panel_sync/test (Barr-C 4.2.a: the header of
  *          test_main.c).
  *
- * Owner: Ahsanul (Buddy 4). Build and run: make -C panel_sync/test
+ * Build and run: make -C panel_sync/test
  */
 #ifndef TEST_MAIN_H
 #define TEST_MAIN_H

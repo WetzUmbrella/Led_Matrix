@@ -2,8 +2,7 @@
  * @file    test_coord_game.h
  * @brief   Host tests of the coordinator's whack-a-mole game (C20 to C22).
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #ifndef TEST_COORD_GAME_H
 #define TEST_COORD_GAME_H

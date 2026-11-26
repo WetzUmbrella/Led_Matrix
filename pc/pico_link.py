@@ -2,16 +2,13 @@
 game's mode, start and end (T-B1-05, whack-a-mole build step 7), and the
 round commands of build step 3 (arm, start now, tap test).
 
-Owner: Jolyn (Buddy 1), task T-B1-05. Implemented by Ahsanul (B4) for
-Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session.
 
-Transport (layout_table.md section 11, PROVISIONAL, owner Benjamin): the PC
-sends to the Pico's UDP 4212 from a socket bound to UDP 4213; the Pico sends
-STATUS every 250 ms to the address and port of the last valid datagram from
-the PC. Commands reuse the START_AT, PAUSE, RESUME_AT and STOP rows with
-t_start, t_resume and frame_index 0, because the Pico chooses them
-(section 10 item 11). One seq counter for everything this PC sends
-(section 10 item 13).
+Transport (layout_table.md section 11, PROVISIONAL): the PC sends to the Pico's
+UDP 4212 from a socket bound to UDP 4213; the Pico sends STATUS every 250 ms to
+the address and port of the last valid datagram from the PC. Commands reuse the
+START_AT, PAUSE, RESUME_AT and STOP rows with t_start, t_resume and frame_index
+0, because the Pico chooses them (section 10 item 11). One seq counter for
+everything this PC sends (section 10 item 13).
 """
 
 from __future__ import annotations

@@ -4,7 +4,6 @@
  *          acceptance reads (CPU frequency, cycle-counter wrap time and
  *          vTaskList() with the core column).
  *
- * Implemented by Ahsanul (B4) for Jia Jun, task T-B5-04.
  * Implemented and not yet implemented: see tile_tasks.h.
  * PROVISIONAL choices: see tile_tasks.h.
  *

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Write the cross-language test vectors (T-B1-01).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn, task T-B1-01.
 
 Writes ``protocol/vectors/vectors.json`` and one ``<name>.bin`` per vector.
 The vectors are fixed values, so running this again gives identical files;

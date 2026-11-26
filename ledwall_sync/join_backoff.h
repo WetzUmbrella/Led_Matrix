@@ -4,9 +4,8 @@
  *          10 s for every later retry. Pure C with no SDK call, so the
  *          schedule has a host test (ledwall_sync/test, C15).
  *
- * Owner: Benjamin (Buddy 2), coordinator. Written for the whack-a-mole
- * re-plan, build step 7 prerequisite: the Pico rejoins the router after a
- * router restart instead of sitting in FAULT.
+ * Written for the whack-a-mole re-plan, build step 7 prerequisite: the Pico
+ * rejoins the router after a router restart instead of sitting in FAULT.
  */
 #ifndef JOIN_BACKOFF_H
 #define JOIN_BACKOFF_H

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Check numbered-pattern tile assets (T-B1-06).
 
-Owner: Jolyn (Buddy 1), task T-B1-06. Implemented by Ahsanul (B4) for
-Jolyn, written 29 Oct 2026 in Jia Jun's (B5) session.
 
 Each tile asset must be 600 frames x 96 B, carry its manifest CRC32, and in
 every frame decode to its own Node ID and the source frame of that tick

@@ -3,7 +3,6 @@
  * @brief   Tile Network Task (T-B3-03). See tile_net.h for what is
  *          implemented and the PROVISIONAL choices.
  *
- * Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston.
  *
  * Two contexts touch this module:
  * - the receive context (the lwIP callback in the tcpip task, option (a), or
@@ -137,19 +136,19 @@ _Static_assert((PROTO_BEACON_BYTES < TN_RX_BYTES) &&
 #endif
 
 /** REGISTER is sent this many times, TN_REGISTER_GAP_US apart, so one lost
- *  datagram does not leave the tile invisible (R1-1; PROVISIONAL, owner
- *  Cheston). Same pattern as the three START_AT copies. */
+ *  datagram does not leave the tile invisible (R1-1; PROVISIONAL). Same
+ *  pattern as the three START_AT copies. */
 #define TN_REGISTER_COPIES 3u
 
-/** Gap between REGISTER copies, 100 ms (R1-1; PROVISIONAL, owner Cheston). */
+/** Gap between REGISTER copies, 100 ms (R1-1; PROVISIONAL). */
 #define TN_REGISTER_GAP_US INT64_C(100000)
 
 /** A beacon seq this far behind the previous one (wrap-aware) means the
  *  Pico restarted: the tile registers again (R1-1). */
 #define TN_BEACON_SEQ_BACK 16
 
-/** Datagrams read from port 4214 in one Network Task pass, so a flood
- *  cannot starve the heartbeats (R1-9; PROVISIONAL, owner Cheston). */
+/** Datagrams read from port 4214 in one Network Task pass, so a flood cannot
+ *  starve the heartbeats (R1-9; PROVISIONAL). */
 #define TN_PC_RX_PER_PASS 8u
 
 /** Event group bits set by the WiFi event handler. */

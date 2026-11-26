@@ -1,6 +1,5 @@
 """pytest: pc/proto_layout.py follows protocol/layout_table.md (T-B1-01).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn, task T-B1-01.
 The plan row says "Python and C read the same layout_table.md field list".
 This test reads the header table (section 2), every message table
 (section 3) and the length table (section 4) and compares them with

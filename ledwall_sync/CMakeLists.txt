@@ -7,7 +7,7 @@ pico_sdk_init()
 
 add_executable(ledwall_sync main.c coordinator_loop.c join_backoff.c game_rules.c wall_turn.c score_font.c ../common/proto/proto.c ../common/proto/ack_outbox.c)
 target_include_directories(ledwall_sync PRIVATE ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/../common/proto)
-# Poll mode: T-B2-02, OD-01 PROVISIONAL (owner Benjamin).
+# Poll mode: T-B2-02, OD-01 PROVISIONAL.
 target_link_libraries(ledwall_sync pico_stdlib pico_cyw43_arch_lwip_poll hardware_watchdog)
 # Name shown in the router's client list (hyphens, not underscores: routers reject "_" in hostnames)
 target_compile_definitions(ledwall_sync PRIVATE CYW43_HOST_NAME="PICO-Main")

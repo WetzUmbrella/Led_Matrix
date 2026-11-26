@@ -2,8 +2,6 @@
  * @file    asset_rx.c
  * @brief   Asset upload checks (T-B3-05). See asset_rx.h.
  *
- * Owner: Cheston (Buddy 3). Implemented by Ahsanul (B4) for Cheston, task
- * T-B3-05.
  *
  * No ESP-IDF includes: this module is host-testable.
  */

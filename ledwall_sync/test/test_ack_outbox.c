@@ -3,8 +3,7 @@
  * @brief   Host test of ack_outbox (C16): the resend interval, the ACK
  *          match, the deadline, cancel by type and the full outbox.
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #include "test_ack_outbox.h"
 

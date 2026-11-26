@@ -4,8 +4,6 @@
  *          Neither flag is set in the shipped firmware; with one set,
  *          app_main starts these tasks instead of the normal tile.
  *
- * Owners: T-X-02 Cheston (Buddy 3), T-X-05 Ahsanul (Buddy 4). Implemented by
- * Ahsanul (B4) for them, written 30 Oct 2026 in Jia Jun's (B5) session.
  *
  * FAULT_STRESS (T-X-02): one setter on core 0 and one on core 1, each with
  * its own event bit (CRC_FAIL, MISSED_DEADLINE), set it with
@@ -14,8 +12,8 @@
  * snapshots, "sends" and clears the snapshot's event bits on a simulated
  * ACK, and counts per bit the snapshots that hold it. Log:
  * "FAULT_STRESS bit=<b> sets=<n> seen=<n> lost=<n> max_wait_us=<n>".
- * PROVISIONAL (owner Cheston): the reporter is a test task at the Network
- * Task's priority and core, not the Network Task itself.
+ * PROVISIONAL: the reporter is a test task at the Network Task's priority and
+ * core, not the Network Task itself.
  *
  * TS_STRESS (T-X-05): a writer on core 0 publishes snapshots whose offset,
  * drift and reference all come from one counter, as fast as the scheduler
@@ -23,8 +21,8 @@
  * core 1 (the Display Engine's priority) read TILE_STRESS_READS snapshots
  * each and count torn ones (fields from different writes). Log:
  * "TS_STRESS reader=<A|B> reads=<n> torn=<n> stale=<n>".
- * PROVISIONAL (owner Ahsanul): the readers are test tasks at the priorities
- * and cores of Playback Control and the Display Engine.
+ * PROVISIONAL: the readers are test tasks at the priorities and cores of
+ * Playback Control and the Display Engine.
  *
  * Every busy loop sleeps one tick every TILE_STRESS_YIELD_EVERY passes so
  * the idle tasks run and the task watchdog stays quiet.

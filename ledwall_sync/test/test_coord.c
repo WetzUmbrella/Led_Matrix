@@ -5,7 +5,6 @@
  *          sends; simulated tiles and a simulated PC feed it datagrams
  *          encoded with common/proto.
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  * Each test cites the plan acceptance it covers. Trial counts copy the plan
  * row (10 of 10 for the heartbeat loss, 100 injected stale messages); time
  * steps of 50 us are a plan choice (fine enough that every scheduled send

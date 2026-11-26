@@ -1,6 +1,5 @@
 """Cross-language test: C codec against pc/proto_layout.py (T-B1-01).
 
-Owner: Jolyn (Buddy 1). Implemented by Ahsanul (B4) for Jolyn, task T-B1-01.
 
 Acceptance (T-B1-01 row): "Python to C and C to Python: byte-for-byte equal
 for 100% of vectors. Pass = 0 mismatches."

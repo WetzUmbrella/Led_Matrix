@@ -22,7 +22,7 @@ Details:
   * the file is flushed after every line, so a crash loses nothing.
 
 Usage:
-    python pc/tools/serial_log.py --port COM5 --out docs/week10/foo.log \\
+    python pc/tools/serial_log.py --port COM5 --out foo.log \\
         --test D1 --who jolyn [--tile 3/9c:13:..] [--image tile_plain_A] \\
         [--net A] [--pico A] [--tag bench-5nov] [--baud 115200] [--minutes N]
 

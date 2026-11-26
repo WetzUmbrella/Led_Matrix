@@ -2,8 +2,7 @@
  * @file    test_timesync.h
  * @brief   Host tests of timesync (T-B4-02), run by test_main.c.
  *
- * Owner: Ahsanul (Buddy 4). Every time value in the tests is synthetic test
- * data.
+ * Every time value in the tests is synthetic test data.
  */
 #ifndef TEST_TIMESYNC_H
 #define TEST_TIMESYNC_H

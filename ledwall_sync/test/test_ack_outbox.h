@@ -2,8 +2,7 @@
  * @file    test_ack_outbox.h
  * @brief   Host test of the acked outbox (C16).
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #ifndef TEST_ACK_OUTBOX_H
 #define TEST_ACK_OUTBOX_H

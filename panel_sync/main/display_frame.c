@@ -3,8 +3,6 @@
  * @brief   Frame preparation for the Display Engine (T-B5-02). See
  *          display_frame.h.
  *
- * Owner: Jia Jun (Buddy 5). Implemented by Ahsanul (B4) for Jia Jun, task
- * T-B5-02.
  *
  * No ESP-IDF includes: this module is host-testable.
  */

@@ -3,7 +3,7 @@
  * @brief   Host tests of wall_turn (C35 layout turns, C36 the detector) on a
  *          fake clock.
  *
- * Owner: Benjamin (Buddy 2). Written for D-17, 24 Nov 2026.
+ * Written for D-17, 24 Nov 2026.
  */
 #include "test_wall_turn.h"
 

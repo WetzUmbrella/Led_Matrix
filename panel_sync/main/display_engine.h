@@ -4,10 +4,6 @@
  *          as a gptimer one-shot re-armed every frame at the deadline from
  *          timesync, and the double-buffered frame path to the WS2812B.
  *
- * Owner: Jia Jun (Buddy 5), tasks T-B5-01 to T-B5-03. T-B5-01 minimal
- * version by Ahsanul (B4) for T-B4-03; T-B5-02 and T-B5-03 implemented by
- * Ahsanul (B4) for Jia Jun, written 29 Oct 2026 in Jia Jun's session.
- *
  * Implemented:
  * - T-B5-01: de_task() on core 1 at priority 20 (tile_tasks.h),
  *   de_tick_isr() (IRAM gptimer alarm callback), de_arm_next(), tick n at
@@ -40,19 +36,18 @@
  * The prototype render.c, frames.c, gif_frames.h, the DE_W10_TEST_PATTERN
  * moving pixel and the led_strip dependency are deleted.
  *
- * PROVISIONAL (test pin, owner Jia Jun): DE_TEST_PIN is GPIO4. Confirm it
- * reaches the board header before wiring (bench step B1).
- * PROVISIONAL (marker, owner Jia Jun): pulse, not toggle; rising edge at tick
- * n, high 1 ms, or 4 ms when n mod 64 == 0 (RIG.md section 4b request). The
- * falling edge is a second one-shot alarm.
- * OD-16 (owner Jia Jun), decided 12 Nov 2026: RMT with DMA, a buffer that
- * holds a whole frame (DE_RMT_SYMBOLS); without DMA, late refills under
- * game-mode WiFi traffic corrupted frames.
- * PROVISIONAL (owner Jia Jun): the tick grid origin is 0 in Pico time; the
- * playback origin (START_AT) selects the first frame's tick on that grid.
- * Open interface items with Ahsanul (timesync_DEFENCE.md): the reader
- * parameter, timesync_notify_tick() from de_task, and the rounded-up deadline
- * are used as proposed.
+ * PROVISIONAL (test pin): DE_TEST_PIN is GPIO4. Confirm it reaches the board
+ * header before wiring (bench step B1).
+ * PROVISIONAL (marker): pulse, not toggle; rising edge at tick n, high 1 ms,
+ * or 4 ms when n mod 64 == 0 (RIG.md section 4b request). The falling edge is
+ * a second one-shot alarm.
+ * OD-16, decided 12 Nov 2026: RMT with DMA, a buffer that holds a whole frame
+ * (DE_RMT_SYMBOLS); without DMA, late refills under game-mode WiFi traffic
+ * corrupted frames.
+ * PROVISIONAL: the tick grid origin is 0 in Pico time; the playback origin
+ * (START_AT) selects the first frame's tick on that grid.
+ * The timesync reader parameter, timesync_notify_tick() from de_task and the
+ * rounded-up deadline are used as proposed.
  *
  * DEVIATION D-2 (module-wide): ESP-IDF and FreeRTOS names, types and macros.
  */

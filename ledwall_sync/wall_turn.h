@@ -8,9 +8,9 @@
  *          and no clock of its own: every function takes the time, so the
  *          host tests run it on a fake clock.
  *
- * Owner: Benjamin (Buddy 2), Pico coordinator. Written for D-17.
+ * Written for D-17.
  *
- * Rules (game_plan_v2.md E3 to E5, layout_table.md section 10 item 17):
+ * Rules (layout_table.md section 10 item 17):
  * - A tile's first orientation report after wall_turn_init() is its
  *   reference. Orientation codes rise with clockwise turns (layout_table.md
  *   section 5.7; bench 9 Nov), so a tile turned k quarter turns clockwise

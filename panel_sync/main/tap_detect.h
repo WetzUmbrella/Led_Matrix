@@ -6,10 +6,9 @@
  *          the tile is quiet again, so a ringing slap counts once. Pure C
  *          (no ESP-IDF includes), host-testable on a PC.
  *
- * Owner: Jia Jun (Buddy 5). Rewritten 11 Nov 2026 from the bench data of
- * docs/bench/9nov (F-05, F-10): the QMI8658 tap engine at 100 Hz caught about
- * 70% of taps, and its 150 ms refractory let a slap that rings up to 600 ms
- * count twice.
+ * Rewritten 11 Nov 2026 from the 9 Nov bench data (F-05, F-10):
+ * the QMI8658 tap engine at 100 Hz caught about 70% of taps, and its 150 ms
+ * refractory let a slap that rings up to 600 ms count twice.
  *
  * - Samples: about 1 kHz, QMI8658 at +/-16 g (2,048 LSB per g): slaps reach
  *   15 to 28 g, and at +/-8 g a slap and its echo would both clip and tie

@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 """Generate the Week 13 data-representation and message-size documents and
-fill the "After" column of ``docs/week13/before_after.md`` (T-X-06, T-X-04).
-
-Owner: Benjamin (Buddy 2), tasks T-X-06 and T-X-04 (size table). Implemented
-by Ahsanul (B4) for Benjamin, written 30 Oct 2026 in Jia Jun's (B5) session.
+fill the "After" column of ``before_after.md`` (T-X-06, T-X-04). Every file
+named here is in ``docs/tribunal1/change_requirement/`` (``CR``).
 
 Inputs, all in the repository:
   * ``protocol/layout_table.md`` section 7 (the data representation table);
   * ``pc/proto_layout.py`` (encoded length of every message, "after");
-  * ``docs/week13/before_after.md`` sections 1 and 3.2 ("before" sizes);
-  * ``docs/week13/after/idf_size.txt`` and ``pico_size.txt`` (measured
-    after sizes of the firmware builds).
-Outputs: ``docs/week13/data_representation.md``,
-``docs/week13/message_sizes.md``, and ``before_after.md`` with its empty
-After cells filled. Every cell carries a label: measured, derived, or
-``[NEEDS MEASUREMENT]`` with the bench step that will measure it. Re-running
-the script after a bench run overwrites only cells that are still empty or
-``[NEEDS MEASUREMENT]``.
+  * ``CR/before_after.md`` sections 1 and 3.2 ("before" sizes);
+  * ``CR/after/idf_size.txt`` and ``pico_size.txt`` (measured after sizes
+    of the firmware builds).
+Outputs: ``CR/data_representation.md``, ``CR/message_sizes.md``, and
+``before_after.md`` with its empty After cells filled. Every cell carries a
+label: measured, derived, or ``[NEEDS MEASUREMENT]`` with the bench step
+that will measure it. Re-running the script after a bench run overwrites
+only cells that are still empty or ``[NEEDS MEASUREMENT]``.
 
 Usage:
     python3 pc/tools/gen_week13_docs.py
@@ -34,11 +31,12 @@ sys.path.insert(0, os.path.join(ROOT, "pc"))
 import proto_layout as pl  # noqa: E402
 
 LAYOUT = os.path.join(ROOT, "protocol", "layout_table.md")
-BEFORE_AFTER = os.path.join(ROOT, "docs", "week13", "before_after.md")
-IDF_AFTER = os.path.join(ROOT, "docs", "week13", "after", "idf_size.txt")
-PICO_AFTER = os.path.join(ROOT, "docs", "week13", "after", "pico_size.txt")
-DATA_REPR = os.path.join(ROOT, "docs", "week13", "data_representation.md")
-MSG_SIZES = os.path.join(ROOT, "docs", "week13", "message_sizes.md")
+CR = os.path.join(ROOT, "docs", "tribunal1", "change_requirement")
+BEFORE_AFTER = os.path.join(CR, "before_after.md")
+IDF_AFTER = os.path.join(CR, "after", "idf_size.txt")
+PICO_AFTER = os.path.join(CR, "after", "pico_size.txt")
+DATA_REPR = os.path.join(CR, "data_representation.md")
+MSG_SIZES = os.path.join(CR, "message_sizes.md")
 
 NEEDS = "[NEEDS MEASUREMENT]"
 
@@ -224,15 +222,15 @@ def after_cells() -> List[Tuple[str, str]]:
         ("| HELLO, on-air", "%s (T-X-04 capture of REGISTER and HEARTBEAT)"
          % NEEDS),
         ("| `panel_sync` static DRAM", "%s B (%s + %s), measured (build, "
-         "`docs/week13/after/idf_size.txt`)" % (
+         "`docs/tribunal1/change_requirement/after/idf_size.txt`)" % (
              format(dram, ","), format(idf["DIRAM.data"], ","),
              format(idf["DIRAM.bss"], ","))),
         ("| `panel_sync` static IRAM", "%s B (%s + %s), measured (build, "
-         "`docs/week13/after/idf_size.txt`)" % (
+         "`docs/tribunal1/change_requirement/after/idf_size.txt`)" % (
              format(iram, ","), format(idf["IRAM"], ","),
              format(idf["DIRAM.text"], ","))),
         ("| `ledwall_sync.elf` text / data / bss", "%s / %d / %s B, measured "
-         "(build, `docs/week13/after/pico_size.txt`)" % (
+         "(build, `docs/tribunal1/change_requirement/after/pico_size.txt`)" % (
              format(text_b, ","), data_b, format(bss_b, ","))),
         ("| Free internal heap after WiFi", "%s (bench Part D, D5)" % NEEDS),
         ("| Largest internal block after WiFi", "%s (bench Part D, D5)"

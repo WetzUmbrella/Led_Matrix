@@ -41,7 +41,7 @@ cd tools/pico_tap && mkdir build && cd build && cmake .. && make
 3. Analyse it:
 
    ```
-   python pc/tools/skew_analyse.py calib.csv --ch-a "Channel 0" --ch-b "Channel 1" --marker --out calib_pairs.csv > docs/week10/skew_2tile/calibration_report.txt
+   python pc/tools/skew_analyse.py calib.csv --ch-a "Channel 0" --ch-b "Channel 1" --marker --out calib_pairs.csv > calibration_report.txt
    ```
 
 4. **Pass:** max skew under 0.05 ms, because it is the same signal on both inputs.
@@ -52,8 +52,8 @@ If it fails, the tool is wrong, not the tiles. Do not use it for evidence.
 ## A real capture (Part B, 10 min)
 
 ```
-python pc/tools/pico_tap_capture.py --port COM<n> --channels 2 --seconds 600 --out docs/week10/skew_2tile/skew_2tile.csv
-python pc/tools/skew_analyse.py docs/week10/skew_2tile/skew_2tile.csv --ch-a "Channel 0" --ch-b "Channel 1" --marker --out docs/week10/skew_2tile/skew_pairs.csv --plot docs/week10/skew_2tile/skew_plot.png > docs/week10/skew_2tile/skew_report.txt
+python pc/tools/pico_tap_capture.py --port COM<n> --channels 2 --seconds 600 --out skew_2tile.csv
+python pc/tools/skew_analyse.py skew_2tile.csv --ch-a "Channel 0" --ch-b "Channel 1" --marker --out skew_pairs.csv --plot skew_plot.png > skew_report.txt
 ```
 
 - Use `--channels 3` for the 3-tile test, and `--channels 5` for the soak.

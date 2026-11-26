@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Website over the dashboard (whack-a-mole re-plan, build step 5).
 
-Owner: Jolyn (Buddy 1). Serves two static pages (pc/web/index.html, the
-control page, and pc/web/score.html, the scoreboard for a TV, A16; plain JS,
-no CDN) and a small JSON API over ``dashboard.DashboardShell``, using only the
-Python standard library (http.server). The pages poll /api/state every
-250 ms; there are no WebSockets. Binds 0.0.0.0, port 8080 by default.
+Serves two static pages (pc/web/index.html, the control page, and
+pc/web/score.html, the scoreboard for a TV, A16; plain JS, no CDN) and a small
+JSON API over ``dashboard.DashboardShell``, using only the Python standard
+library (http.server). The pages poll /api/state every 250 ms; there are no
+WebSockets. Binds 0.0.0.0, port 8080 by default.
 
 Step 4e (18 Nov 2026): a pump thread calls ``shell.pump()`` every 20 ms, so
 STATUS, TAPs and TELEMETRY are read and ACKed with no browser open, and the

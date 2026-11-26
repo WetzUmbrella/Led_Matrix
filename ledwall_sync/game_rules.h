@@ -7,7 +7,7 @@
  *          function takes the time, so the host tests run it on a fake clock
  *          with an injected RNG seed.
  *
- * Owner: Cheston (Buddy 3), game rules. Written for build step 7.
+ * Written for build step 7.
  *
  * Rules (re-plan "v1 rules"):
  * - One mole at a time on a random active tile. Never the same tile twice

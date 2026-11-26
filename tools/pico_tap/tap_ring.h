@@ -3,9 +3,9 @@
  * @brief   pico_tap edge ring: single producer (the GPIO interrupt), single
  *          consumer (the main loop), both on core 0 of the RP2040.
  *
- * Owner: Ahsanul (Buddy 4). Bench tool, not shipped firmware: pico_tap
- * turns a spare Pico W into a timestamping edge recorder for the skew tests
- * when no logic analyser is available (bench plan 5 Nov 2026, section 2.2).
+ * Bench tool, not shipped firmware: pico_tap turns a spare Pico W into a
+ * timestamping edge recorder for the skew tests when no logic analyser is
+ * available (bench plan 5 Nov 2026, section 2.2).
  *
  * The producer and the consumer run on the same core, so the shared fields
  * are volatile (coding standard interpretation 1, rule 1.8.c); no atomics

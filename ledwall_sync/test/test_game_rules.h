@@ -2,8 +2,7 @@
  * @file    test_game_rules.h
  * @brief   Host tests of the whack-a-mole rules (C17, C18).
  *
- * Owner: Benjamin (Buddy 2). Written for the whack-a-mole re-plan, build
- * step 7.
+ * Written for the whack-a-mole re-plan, build step 7.
  */
 #ifndef TEST_GAME_RULES_H
 #define TEST_GAME_RULES_H

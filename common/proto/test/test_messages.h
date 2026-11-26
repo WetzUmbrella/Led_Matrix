@@ -2,7 +2,6 @@
  * @file    test_messages.h
  * @brief   Host tests of every message row of common/proto (T-B2-01).
  *
- * Implemented by Ahsanul (B4) for Benjamin, task T-B2-01.
  */
 #ifndef TEST_MESSAGES_H
 #define TEST_MESSAGES_H

@@ -3,7 +3,7 @@
  * @brief   pico_tap: a spare Pico W as a timestamping edge recorder for the
  *          skew tests (bench plan 5 Nov 2026, section 2.2).
  *
- * Owner: Ahsanul (Buddy 4). Bench tool, not shipped firmware.
+ * Bench tool, not shipped firmware.
  *
  * Wiring: tile test pins (GPIO4 on each tile) to GP2 (channel 0), GP3
  * (channel 1), GP4 (channel 2), GP5 (channel 3) and GP6 (channel 4); every

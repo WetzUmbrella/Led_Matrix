@@ -4,10 +4,7 @@
  *          tick, test pin, double-buffered frame path and RMT start on the
  *          tick.
  *
- * Owner: Jia Jun (Buddy 5). T-B5-01 minimal version by Ahsanul (B4) for
- * T-B4-03; T-B5-02 and T-B5-03 implemented by Ahsanul (B4) for Jia Jun,
- * written 29 Oct 2026 in Jia Jun's session. What is implemented and the
- * PROVISIONAL choices: see display_engine.h.
+ * What is implemented and the PROVISIONAL choices: see display_engine.h.
  *
  * Contexts: de_task (core 1, priority 20) owns both pixel buffers, the RMT
  * channel, the counters and the histogram; the gptimer ISR only writes the
@@ -109,9 +106,9 @@ _Static_assert((DE_RMT_SYMBOLS <= 2046u) && (0u == (DE_RMT_SYMBOLS % 2u)) &&
 #define DE_HIST_BINS   11u
 #define DE_HIST_BIN_US INT64_C(100)
 
-/** T-X-03 DE_PROFILE: preparation-time histogram, 16 bins of 250 us (the
- *  last also holds longer), and the GPIO toggled around preparation
- *  (PROVISIONAL, owner Jia Jun: GPIO5, next to the test pin). */
+/** T-X-03 DE_PROFILE: preparation-time histogram, 16 bins of 250 us (the last
+ *  also holds longer), and the GPIO toggled around preparation (PROVISIONAL:
+ *  GPIO5, next to the test pin). */
 #define DE_PROF_BINS   16u
 #define DE_PROF_BIN_US 250u
 #define DE_PROF_PIN    5u

@@ -2,7 +2,6 @@
  * @file    test_join_backoff.h
  * @brief   Host test of the router join retry schedule (C15).
  *
- * Owner: Benjamin (Buddy 2), coordinator.
  */
 #ifndef TEST_JOIN_BACKOFF_H
 #define TEST_JOIN_BACKOFF_H

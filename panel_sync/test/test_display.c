@@ -3,7 +3,6 @@
  * @brief   Host tests of display_frame (T-B5-02) and orient_filter
  *          (T-B5-05), run by test_main.c.
  *
- * Implemented by Ahsanul (B4) for Jia Jun, tasks T-B5-02 and T-B5-05.
  * Build and run: make -C panel_sync/test (from the repository root, so the
  * vector path below resolves; the Makefile passes it as VECTOR_DIR).
  */

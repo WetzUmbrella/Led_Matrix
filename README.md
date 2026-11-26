@@ -202,7 +202,8 @@ prove the build and cannot join a network.
 1. Power the router, then the Pico, then the tiles. Arrange the tiles in
    number order (1 top left, reading order).
 2. Put a GIF in `pc/gifs/` (any size; it is resampled to 60 fps and cut per
-   tile), or upload one later from the website.
+   tile), for example `mkdir -p pc/gifs && cp docs/demo/test.gif pc/gifs/`, or
+   upload one later from the website.
 3. Start the website on the PC, from the repository root:
 
    ```bash
@@ -256,24 +257,24 @@ files with gcc on the PC; only the network, the other device and the clock are
 faked. CI runs all of them on every push, plus both firmware builds, the
 formatting check and the Barr-C checker (`tools/barr_check.py`).
 
-Hardware tests (game rounds, tap-to-flash timing, sync skew, power pulls,
-uploads) are recorded in [`docs/bench/`](docs/bench/) and summarised in the
+Hardware tests (sync skew, tap-to-flash timing, game rounds, power pulls,
+uploads) are the system tests ST-01 to ST-14: each has a record and its raw
+logs in [`docs/testing/evidence/`](docs/testing/evidence/), summarised in the
 test report.
 
 ## 7. Documentation
 
 | What | Where |
 |---|---|
-| **Test report**: unit, integration and system tests with inputs, expected and actual results | [`docs/testing/TEST_REPORT.md`](docs/testing/TEST_REPORT.md) |
-| Test logs of the submitted code, every case with its verdict | [`docs/testing/results/`](docs/testing/results/) |
 | **Requirements** (FR1 to FR21, NFR1 to NFR16) | [`docs/requirements.md`](docs/requirements.md) |
+| **Design**: how each part works and why | [`docs/design.md`](docs/design.md) |
+| **Tribunal 1**: the feedback, the change requirement and how each subsystem handled them | [`docs/tribunal1/`](docs/tribunal1/) |
+| **Test report**: every test level, the system tests on the wall, open failures, evidence gaps | [`docs/testing/TEST_REPORT.md`](docs/testing/TEST_REPORT.md) |
 | **Requirement to test map**, with the result of each | [`docs/testing/TRACEABILITY.md`](docs/testing/TRACEABILITY.md) |
-| Game requirements in detail, and their status | [`docs/plan/game_plan_v2.md`](docs/plan/game_plan_v2.md), [`docs/final/requirements_check_24nov.md`](docs/final/requirements_check_24nov.md) |
-| Change requirement 1 (minimum-bit messages), Week 13 evidence | [`docs/week13/`](docs/week13/) |
+| Wall test records and raw logs, one folder per test | [`docs/testing/evidence/`](docs/testing/evidence/) |
+| Host test logs of the submitted code, every case with its verdict | [`docs/testing/results/`](docs/testing/results/) |
 | Message layout: every field, its range and its bits | [`protocol/layout_table.md`](protocol/layout_table.md) |
-| Design defence notes, one per module | `docs/*_DEFENCE.md` |
 | Coding standard (Barr-C:2018 and the recorded deviations) | [`docs/coding_standard.md`](docs/coding_standard.md) |
-| Bench records of every hardware test | [`docs/bench/`](docs/bench/) |
 
 ## 8. Known limits
 

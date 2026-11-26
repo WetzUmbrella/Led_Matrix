@@ -2,7 +2,6 @@
  * @file    test_coord.h
  * @brief   Host tests of coordinator_loop (T-B2-02 to T-B2-05).
  *
- * Owner: Benjamin (Buddy 2). Implemented by Ahsanul (B4) for Benjamin.
  */
 #ifndef TEST_COORD_H
 #define TEST_COORD_H
